@@ -1,7 +1,8 @@
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "../global"
-import { Log, Process } from "../util"
+import { Global } from "@opencode-ai/core/global"
+import * as Log from "@opencode-ai/core/util/log"
+import * as Process from "../util/process"
 
 const log = Log.create({ service: "office-installer" })
 
