@@ -12,6 +12,33 @@
 set -e
 
 # ------------------------------------------------------------
+# 0. sync 分支 / merge commit 自动豁免(上游 sync 例外)
+# ------------------------------------------------------------
+# v2 模型(分支策略-v2):上游 sync 走 sync/upstream-<日期> 临时分支,
+# 必然触动 packages/* 大量黑名单文件 + 数千行 diff,4.1 + 4.2 必拦。
+# 这是预期例外,不是"想偷偷改黑名单",自动豁免这两道;
+# 4.4 大小写检查永远保留(Windows/macOS 端崩跟上下文无关)。
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+IS_MERGE=0
+[ -f .git/MERGE_HEAD ] && IS_MERGE=1
+
+if [ "${BRANCH#sync/}" != "$BRANCH" ] || [ "$IS_MERGE" = "1" ]; then
+  reason=""
+  [ "${BRANCH#sync/}" != "$BRANCH" ] && reason="sync 分支 ($BRANCH)"
+  [ "$IS_MERGE" = "1" ] && reason="${reason:+$reason + }merge commit"
+  echo "✅ pre-commit: $reason,跳过 4.1 黑名单 + 4.2 diff 阈值(仅保留 4.4 大小写)"
+
+  dups=$(git ls-files | sort -fu | uniq -di || true)
+  if [ -n "$dups" ]; then
+    echo "❌ pre-commit (4.4): 大小写冲突文件名(Windows/macOS 上会冲突):"
+    echo "$dups"
+    echo "请 git mv 改成统一大小写后再 commit"
+    exit 1
+  fi
+  exit 0
+fi
+
+# ------------------------------------------------------------
 # 4.1 白名单/黑名单
 # ------------------------------------------------------------
 BLACKLIST_REGEX='^(packages/(console|containers|desktop-electron|docs|enterprise|extensions|function|identity|opencode|plugin|script|sdk|shared|slack|storybook|ui|web)/|packages/desktop/src-tauri/(tauri\..+\.conf\.json|build\.rs|capabilities/|icons/|entitlements\.plist)|\.github/|bunfig\.toml$|.*\.config\.(ts|js|mjs)$|^package\.json$|^bun\.lock$|^tsconfig\.json$|^flake\.lock$|^LICENSE$)'
