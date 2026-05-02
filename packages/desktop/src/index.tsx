@@ -14,6 +14,7 @@ import {
   ServerConnection,
   useCommand,
 } from "@opencode-ai/app"
+import * as Sentry from "@sentry/solid"
 import type { AsyncStorage } from "@solid-primitives/storage"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { readImage } from "@tauri-apps/plugin-clipboard-manager"
@@ -284,7 +285,7 @@ const createPlatform = (): Platform => {
       }
     })(),
 
-    // FORK: UPDATER_ENABLED=false 时不暴露 checkUpdate/update,所有 UI 入口(layout polling /
+    // FORK: UPDATER_ENABLED=false 时不暴露 checkUpdate/updateAndRestart,所有 UI 入口(layout polling /
     // settings UI / error 页 / 菜单)通过现有的 if (!platform.checkUpdate) return 自动短路
     // 失效,无需逐个改 UI(禁自动升级 2026-04-28)
     ...(UPDATER_ENABLED
@@ -300,10 +301,15 @@ const createPlatform = (): Platform => {
             update = next
             return { updateAvailable: true, version: next.version }
           },
-          update: async () => {
+          updateAndRestart: async () => {
             if (!update) return
             if (ostype() === "windows") await commands.killSidecar().catch(() => undefined)
-            await update.install().catch(() => undefined)
+            const installed = await update
+              .install()
+              .then(() => true)
+              .catch(() => false)
+            if (!installed) return
+            await relaunch()
           },
         }
       : {}),

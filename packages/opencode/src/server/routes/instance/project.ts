@@ -2,12 +2,11 @@ import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Instance } from "@/project/instance"
-import { Project } from "@/project"
+import { Project } from "@/project/project"
 import z from "zod"
 import { ProjectID } from "@/project/schema"
 import { errors } from "../../error"
 import { lazy } from "@/util/lazy"
-import { InstanceBootstrap } from "@/project/bootstrap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { jsonRequest, runRequest } from "./trace"
 
@@ -86,7 +85,6 @@ export const ProjectRoutes = lazy(() =>
           directory: dir,
           worktree: dir,
           project: next,
-          init: () => AppRuntime.runPromise(InstanceBootstrap),
         })
         return c.json(next)
       },
