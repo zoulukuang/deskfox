@@ -2,8 +2,9 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 import crypto from "crypto"
-import { Global } from "../global"
-import { Log, Process } from "../util"
+import { Global } from "@opencode-ai/core/global"
+import * as Log from "@opencode-ai/core/util/log"
+import * as Process from "../util/process"
 import { detectSofficePath } from "./office-installer"
 
 const log = Log.create({ service: "libreoffice" })
