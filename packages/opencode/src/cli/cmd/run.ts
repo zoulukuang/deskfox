@@ -26,7 +26,6 @@ import { ShellTool } from "../../tool/shell"
 import { ShellID } from "../../tool/shell/id"
 import { TodoWriteTool } from "../../tool/todo"
 import { Locale } from "@/util/locale"
-import { AppRuntime } from "@/effect/app-runtime"
 
 type ToolProps<T> = {
   input: Tool.InferParameters<T>
@@ -299,6 +298,7 @@ export const RunCommand = effectCmd({
         default: false,
       }),
   handler: Effect.fn("Cli.run")(function* (args) {
+    const agentSvc = yield* Agent.Service
     yield* Effect.promise(async () => {
       let message = [...args.message, ...(args["--"] || [])]
         .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
@@ -602,7 +602,7 @@ export const RunCommand = effectCmd({
             return name
           }
 
-          const entry = await AppRuntime.runPromise(Agent.Service.use((svc) => svc.get(name)))
+          const entry = await Effect.runPromise(agentSvc.get(name))
           if (!entry) {
             UI.println(
               UI.Style.TEXT_WARNING_BOLD + "!",
