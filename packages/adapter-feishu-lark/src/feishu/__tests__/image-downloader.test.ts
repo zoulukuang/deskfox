@@ -43,7 +43,12 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
         }),
     ) as unknown as typeof fetch
 
-    const r = await downloadFeishuImage("img_v3_abc123def", "oc_chat_xyz", "tk_fake")
+    const r = await downloadFeishuImage(
+      "img_v3_abc123def",
+      "om_msg_test",
+      "oc_chat_xyz",
+      "tk_fake",
+    )
 
     expect(r.mime).toBe("image/jpeg")
     expect(r.size).toBe(fakeBytes.length)
@@ -66,7 +71,7 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
     ) as unknown as typeof fetch
 
     await expect(
-      downloadFeishuImage("img_invalid", "oc_chat_test", "tk_fake"),
+      downloadFeishuImage("img_invalid", "om_msg_test", "oc_chat_test", "tk_fake"),
     ).rejects.toThrow(/404|Not Found|img_invalid/)
   })
 
@@ -80,7 +85,7 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
         }),
     ) as unknown as typeof fetch
 
-    const r = await downloadFeishuImage("img_png", "oc_chat_test", "tk_fake")
+    const r = await downloadFeishuImage("img_png", "om_msg_test", "oc_chat_test", "tk_fake")
     expect(r.mime).toBe("image/png")
     expect(r.filename).toMatch(/\.png$/)
     rmSync(r.absolutePath)
@@ -96,7 +101,12 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
         }),
     ) as unknown as typeof fetch
 
-    const r = await downloadFeishuImage("img_test", "../../etc/passwd:malicious", "tk_fake")
+    const r = await downloadFeishuImage(
+      "img_test",
+      "om_msg_test",
+      "../../etc/passwd:malicious",
+      "tk_fake",
+    )
     // safeChatId 把所有非 [a-zA-Z0-9_-] 字符 → _
     expect(r.absolutePath).not.toContain("..")
     expect(r.absolutePath).not.toContain("/etc/passwd")
@@ -118,7 +128,7 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
 
     // chatId 用唯一名(肯定首次创建)
     const uniqueChatId = `oc_uniq_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const r = await downloadFeishuImage("img_uniq", uniqueChatId, "tk_fake")
+    const r = await downloadFeishuImage("img_uniq", "om_msg_test", uniqueChatId, "tk_fake")
     expect(existsSync(r.absolutePath)).toBe(true)
     expect(r.filename).toMatch(/\.gif$/)
     rmSync(r.absolutePath)

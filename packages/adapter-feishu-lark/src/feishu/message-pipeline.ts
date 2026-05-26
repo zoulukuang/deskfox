@@ -334,7 +334,13 @@ export class MessagePipeline {
 
       try {
         const auth = await getClientAuthContext(this.larkClient)
-        const dl = await downloadFeishuImage(imageKey, event.chatId, auth.token, auth.domain)
+        const dl = await downloadFeishuImage(
+          imageKey,
+          event.messageId,
+          event.chatId,
+          auth.token,
+          auth.domain,
+        )
         imagePart = { mime: dl.mime, filename: dl.filename, absolutePath: dl.absolutePath }
         console.log(
           `[pipeline ${this.opts.accountId}] downloaded image ${dl.size}B → ${dl.absolutePath}`,

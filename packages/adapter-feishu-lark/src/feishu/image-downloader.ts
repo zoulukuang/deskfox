@@ -34,27 +34,31 @@ export interface DownloadedImage {
 /**
  * 飞书图片下载。返回本地 absolute path。失败抛 Error 含可读原因。
  *
+ * **重要**:用户上传的图片必须走 message resources endpoint:
+ *   `GET /open-apis/im/v1/messages/{message_id}/resources/{file_key}?type=image`
+ * 不能走 `/images/{image_key}`(那是 bot 自己上传图的下载端点,对用户图返 400)
+ *
  * 参数:
- *   - imageKey:飞书 image_key,从 message event content JSON 提取
+ *   - imageKey:飞书 image_key,从 message event content JSON 提取(同 file_key)
+ *   - messageId:飞书 message_id(om_xxx),消息维度资源 access
  *   - chatId:聊天 ID,用作子目录分类
- *   - tenantAccessToken:飞书 tenant_access_token(用 file-uploader 的
- *     getClientAuthContext(client) 从 SDK Client 借)
- *   - domain:飞书 API domain(可选,默认国际版 open.feishu.cn;
- *     企业自建可能 open.larksuite.com)
+ *   - tenantAccessToken:飞书 tenant_access_token
+ *   - domain:飞书 API domain(可选,默认国际版 open.feishu.cn)
  */
 export async function downloadFeishuImage(
   imageKey: string,
+  messageId: string,
   chatId: string,
   tenantAccessToken: string,
   domain = "https://open.feishu.cn",
 ): Promise<DownloadedImage> {
-  const url = `${domain}/open-apis/im/v1/images/${encodeURIComponent(imageKey)}`
+  const url = `${domain}/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(imageKey)}?type=image`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${tenantAccessToken}` },
   })
   if (!res.ok) {
     throw new Error(
-      `飞书图片下载失败 ${res.status} ${res.statusText} for image_key=${imageKey}`,
+      `飞书图片下载失败 ${res.status} ${res.statusText} for image_key=${imageKey} message_id=${messageId}`,
     )
   }
   const rawCt = res.headers.get("content-type") || "image/jpeg"
