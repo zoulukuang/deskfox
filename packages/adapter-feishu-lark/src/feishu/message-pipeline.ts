@@ -40,6 +40,15 @@ import {
   uploadImage,
 } from "./file-uploader"
 import { downloadFeishuImage } from "./image-downloader"
+import { fetchMergeForwardItems } from "./merge-forward-fetcher"
+import {
+  flattenMergeForward,
+  hasAnyImage,
+  MAX_IMAGE_COUNT,
+  MAX_NEST_DEPTH,
+  MAX_SUB_MESSAGES,
+  type SubMessage,
+} from "./merge-forward-flatten"
 import type { PromptDispatcher } from "./prompt-dispatcher"
 import {
   classifyAttachment,
@@ -398,16 +407,26 @@ export class MessagePipeline {
 
   async handle(event: ImMessageEvent): Promise<void> {
     // [feat: feishu-image-recognition] 2026-05-26 — image 走多模态识别路径
+    // [feat: feishu-merge-forward] 2026-05-26 — merge_forward 走拉子消息 flatten 路径
     // text=纯文字 / image=纯图 / post=富文本(图+文混合,飞书拖图+输文字默认走 post)
+    // merge_forward = user 长按多条消息合并转发
     // 其它(file/audio/video/sticker/interactive 等)留 backlog
     if (
       event.messageType !== "text" &&
       event.messageType !== "image" &&
-      event.messageType !== "post"
+      event.messageType !== "post" &&
+      event.messageType !== "merge_forward"
     ) {
       console.log(
         `[pipeline ${this.opts.accountId}] skip unsupported message: type=${event.messageType}`,
       )
+      return
+    }
+
+    // [feat: feishu-merge-forward] 2026-05-26 — merge_forward 走独立路径
+    // (其内容 = N 条原消息嵌套,跟 text/image/post 处理流程完全不同)
+    if (event.messageType === "merge_forward") {
+      await this.handleMergeForward(event)
       return
     }
 
@@ -718,6 +737,243 @@ export class MessagePipeline {
   }
 
   /**
+   * [feat: feishu-merge-forward] 2026-05-26
+   * merge_forward 独立处理路径(跟 text/image/post 的 handle 主流程并列)。
+   *
+   * 流程:
+   *   1. 立即回 user "📋 收到合并消息,展开中..."
+   *   2. fetch 子消息列表(SDK + 30s timeout / R1)
+   *   3. 0 子消息 / 拉取失败 → 友好回复(R3)
+   *   4. vision 预检(R4)— 不支持图 → textOnly 模式(maxImages=0)
+   *   5. flatten(R2 时间序 + D3 截断 + D5 sender 前缀 + D6 占位)
+   *   6. 嵌套递归(D4):depth=0 调本方法子流程,1 层后占位
+   *   7. 下载图(继承 image-downloader S1-S5)
+   *   8. session create + runOpencode(text + N file part)+ reply
+   */
+  private async handleMergeForward(event: ImMessageEvent): Promise<void> {
+    // 1. 立即回 user
+    await this.sendFeishuText(event.chatId, "📋 收到合并消息,展开中...").catch((err) => {
+      console.warn(`[pipeline ${this.opts.accountId}] 发送展开中提示失败:`, err)
+    })
+
+    // 2. fetch + R3 错误兜底
+    let items: SubMessage[]
+    try {
+      items = await fetchMergeForwardItems(event.messageId, this.larkClient)
+    } catch (err) {
+      const msg = (err as Error).message
+      console.warn(`[pipeline ${this.opts.accountId}] merge_forward fetch failed:`, msg)
+      await this.sendFeishuText(
+        event.chatId,
+        `❌ 没能展开这条合并消息(原因:${msg})。把内容直接发我也行。`,
+      ).catch(() => {})
+      return
+    }
+
+    if (items.length === 0) {
+      await this.sendFeishuText(
+        event.chatId,
+        "😅 这条合并消息好像是空的,换条试试?",
+      ).catch(() => {})
+      return
+    }
+
+    // 3. vision 预检(R4)
+    const visionOk = await this.checkModelVisionSupport().catch(() => true)
+    const containsImage = hasAnyImage(items)
+
+    // 4. flatten 顶层(depth=0)
+    const flatten = flattenMergeForward(items, {
+      withSender: event.chatType !== "p2p",
+      maxSubMessages: MAX_SUB_MESSAGES,
+      maxImages: visionOk ? MAX_IMAGE_COUNT : 0,
+      depth: 0,
+    })
+
+    // 5. 嵌套递归 1 层(D4) — depth=0 flatten 后,把嵌套占位替换为子内容
+    // 实现:遍历 items 找 msg_type=merge_forward 的,深度递归 fetch + flatten depth=1
+    // 然后把"[嵌套合并消息(展开中)]"占位文本替换成 "  ↳ {嵌套 flatten text}"
+    const expandedText = await this.expandNestedMergeForward(
+      flatten.text,
+      items,
+      visionOk ? MAX_IMAGE_COUNT - flatten.images.length : 0,
+      event.chatType !== "p2p",
+    )
+
+    // 6. 下载所有图(继承 image-downloader S1-S5)
+    const imageParts: Array<{ mime: string; filename: string; absolutePath: string }> = []
+    if (flatten.images.length > 0) {
+      const auth = await getClientAuthContext(this.larkClient)
+      for (const img of flatten.images) {
+        try {
+          const dl = await downloadFeishuImage(
+            img.imageKey,
+            // ⚠️ 关键:用子消息自己的 message_id(不是 merge_forward 容器的 messageId)
+            img.subMessageId,
+            event.chatId,
+            auth.token,
+            auth.domain,
+          )
+          imageParts.push({
+            mime: dl.mime,
+            filename: dl.filename,
+            absolutePath: dl.absolutePath,
+          })
+          console.log(
+            `[pipeline ${this.opts.accountId}] merge_forward 图 ${img.indexInForward} (${dl.size}B) → ${dl.absolutePath}`,
+          )
+        } catch (err) {
+          console.warn(
+            `[pipeline ${this.opts.accountId}] merge_forward 子图 ${img.imageKey} 下载失败,继续:`,
+            (err as Error).message,
+          )
+        }
+      }
+    }
+
+    // 7. 组装最终 text(flatten + nested expanded + vision-incapable warning)
+    let finalText = expandedText.flat()
+    finalText = `(以下是用户合并转发给你的对话内容,共 ${items.length} 条子消息${expandedText.nestedCount > 0 ? `,含 ${expandedText.nestedCount} 个嵌套合并消息` : ""})\n\n${finalText}\n\n请基于这些内容回答用户的问题或给出总结/建议。`
+
+    if (!visionOk && containsImage) {
+      finalText += "\n\n⚠️ 当前 model 不支持图片识别,这条合并消息我只能看到文字部分。"
+    }
+
+    // 8. 立即给 user 消息加 reaction
+    void this.ackMessage(event.messageId).catch((err) =>
+      console.warn(
+        `[pipeline ${this.opts.accountId}] ack reaction failed:`,
+        (err as Error).message,
+      ),
+    )
+
+    // 9. session create / 复用(跟 handle 主流程同款)
+    let sessionID = this.chatToSession.get(event.chatId)
+    if (!sessionID) {
+      try {
+        const res = await this.opts.opencodeClient.session.create({
+          query: { directory: IMBOT_WORKSPACE },
+          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
+        })
+        const id = (res as { data?: { id?: string } }).data?.id
+        if (!id) throw new Error("session.create returned no id")
+        sessionID = id
+        this.chatToSession.set(event.chatId, sessionID)
+        this.sessionToChat.set(sessionID, event.chatId)
+        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
+        await this.archiveSession(sessionID).catch((archErr) => {
+          console.warn(
+            `[pipeline ${this.opts.accountId}] archive session ${sessionID} failed:`,
+            archErr,
+          )
+        })
+        console.log(
+          `[pipeline ${this.opts.accountId}] new opencode session ${sessionID} (merge_forward) for chat=${event.chatId}`,
+        )
+      } catch (err) {
+        console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
+        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+        return
+      }
+    }
+
+    // 10. runOpencode(text + N file part)
+    let reply: string
+    try {
+      reply = await this.runOpencode(sessionID, finalText, this.opts.account.agent, {
+        imagePart: null,
+        imageParts,
+        imageDownloadError: null,
+      })
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] opencode error (merge_forward):`, err)
+      await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+      return
+    }
+
+    // 11. 后处理 + reply
+    const finalReply = await this.processAttachments(reply, event.chatId)
+    if (!finalReply.trim()) {
+      console.warn(`[pipeline ${this.opts.accountId}] empty reply for merge_forward`)
+      return
+    }
+    try {
+      await this.sendFeishuText(event.chatId, finalReply)
+      console.log(
+        `[pipeline ${this.opts.accountId}] merge_forward reply sent (len=${finalReply.length})`,
+      )
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] sendFeishuText failed:`, err)
+    }
+  }
+
+  /**
+   * [feat: feishu-merge-forward] 2026-05-26
+   * 嵌套 merge_forward 1 层递归展开(D4)。
+   *
+   * 找 items 里 msg_type=merge_forward 的子消息,fetch 其内容并 depth=1 flatten,
+   * 把顶层 flatten text 里 "[嵌套合并消息(展开中)]" 占位替换成 "  ↳ <嵌套内容>"。
+   *
+   * @param baseFlattenText  顶层 flattenMergeForward 输出的 text
+   * @param items            顶层 items(含 msg_type=merge_forward 项)
+   * @param remainingImageQuota  剩余图配额(顶层用了 N 张,嵌套总共最多再用 maxImages-N 张)
+   * @param withSender       群聊 true / p2p false
+   * @returns { flat: 替换后的文本, nestedCount: 实际展开的嵌套数 }
+   */
+  private async expandNestedMergeForward(
+    baseFlattenText: string,
+    items: SubMessage[],
+    remainingImageQuota: number,
+    withSender: boolean,
+  ): Promise<{ flat: () => string; nestedCount: number }> {
+    const nestedItems = items.filter((i) => i.msg_type === "merge_forward")
+    if (nestedItems.length === 0) {
+      return { flat: () => baseFlattenText, nestedCount: 0 }
+    }
+
+    let resultText = baseFlattenText
+    let nestedCount = 0
+    let remaining = remainingImageQuota
+
+    for (const nested of nestedItems) {
+      if (!nested.message_id) continue
+      try {
+        const subItems = await fetchMergeForwardItems(nested.message_id, this.larkClient)
+        // depth=1 → renderSubMessage 会把 depth>=MAX_NEST_DEPTH 的嵌套占位 "深度超限"
+        const subFlatten = flattenMergeForward(subItems, {
+          withSender,
+          maxSubMessages: MAX_SUB_MESSAGES,
+          maxImages: remaining,
+          depth: MAX_NEST_DEPTH, // depth=1 — 再嵌套的占位 "深度超限"
+        })
+        remaining -= subFlatten.images.length
+
+        // 嵌套展开内容每行缩进 "  ↳ "
+        const indented = subFlatten.text
+          .split("\n")
+          .map((line) => `  ↳ ${line}`)
+          .join("\n")
+        // 替换占位(只替换第一个 — 因为 flatten 输出占位顺序跟 items.filter 顺序一致,
+        // 我们这里也是按 items 顺序遍历)
+        resultText = resultText.replace("[嵌套合并消息(展开中)]", indented)
+        nestedCount += 1
+      } catch (err) {
+        console.warn(
+          `[pipeline ${this.opts.accountId}] 嵌套 merge_forward ${nested.message_id} 展开失败,占位:`,
+          (err as Error).message,
+        )
+        // 失败时占位换成 "(展开失败)" 让 LLM 知道
+        resultText = resultText.replace(
+          "[嵌套合并消息(展开中)]",
+          `[嵌套合并消息(展开失败:${(err as Error).message.slice(0, 50)})]`,
+        )
+      }
+    }
+
+    return { flat: () => resultText, nestedCount }
+  }
+
+  /**
    * [feat: feishu-bridge-light] 解析 reply 里的 [ATTACH:path] marker、上传文件、strip marker。
    *
    * 安全约束:路径必须在 ~/.opencode/imbot-workspace/ 子树内(classifyAttachment 判)。
@@ -866,8 +1122,13 @@ export class MessagePipeline {
     text: string,
     agent: string,
     // [feat: feishu-image-recognition] 2026-05-26 — 多模态 image part
+    // [feat: feishu-merge-forward] 2026-05-26 — 扩展 imageParts(N 个,merge_forward 多图)
     imageOpts?: {
+      /** 单图场景(image / post 消息),null 或单个 — 跟下方 imageParts 二选一,
+       *  保持向后兼容 image-recognition path */
       imagePart: { mime: string; filename: string; absolutePath: string } | null
+      /** 多图场景(merge_forward),N 个 file part 并存 */
+      imageParts?: Array<{ mime: string; filename: string; absolutePath: string }>
       imageDownloadError: string | null
     },
   ): Promise<string> {
@@ -907,6 +1168,13 @@ export class MessagePipeline {
                   },
                 ]
               : []),
+            // [feat: feishu-merge-forward] 2026-05-26 — N 个 file part(多图)
+            ...(imageOpts?.imageParts ?? []).map((img) => ({
+              type: "file" as const,
+              mime: img.mime,
+              filename: img.filename,
+              url: `file://${img.absolutePath}`,
+            })),
             ...(imageOpts?.imageDownloadError
               ? [
                   {
