@@ -1,62 +1,168 @@
-// [fork-only] media-gen — opencode plugin 入口(第一竖切:阿里文生图)
+// [fork-only] media-gen — opencode plugin 入口(阿里全能力:图/视频/翻译/语音合成/语音识别)
 // [feat: media-gen-alibaba] 2026-05-26
 //
-// 跑在 opencode-cli sidecar 进程内。注册 1 个工具 media_image_generate,
-// AI 在 user 说"画一张…"时自动调用。0 修改上游 / DeskFox 主程序。
-//
-// 开发期装载:user `~/.config/opencode/opencode.jsonc` 的 plugin 数组加:
-//   "file:///D:/project/opencode-fork/packages/media-gen/src/index.ts"
-// 然后杀 + 重开 DeskFox(插件运行时加载,无需重新编译 App)。
+// 跑在 opencode-cli sidecar 进程内。注册 5 个工具,AI 按用户意图自动调用。
+// 0 修改上游 / DeskFox 主程序。装载见 opencode.jsonc 的 plugin 数组(指向 dist/plugin.js)。
 
-import { tool, type Hooks, type PluginInput } from "@opencode-ai/plugin"
+import type { Hooks, PluginInput } from "@opencode-ai/plugin"
+import { tool } from "./tool-shim"
 import { ALIBABA_PROVIDER_ID, readProviderApiKey } from "./auth"
-import { DashScopeError, DEFAULT_MODEL, generateImage } from "./dashscope-image"
+import { DashScopeError } from "./dashscope-task"
+import { DEFAULT_MODEL, generateImage } from "./dashscope-image"
+import { generateVideo } from "./dashscope-video"
+import { synthesizeSpeech } from "./dashscope-tts"
+import { translateText } from "./dashscope-translate"
+import { transcribeAudio } from "./dashscope-asr"
+
+const NO_KEY = "未找到阿里(alibaba-cn)的 API Key。请先在 DeskFox 设置里连接阿里供应商。"
+const fail = (e: unknown) => `操作失败:${e instanceof DashScopeError ? e.friendly : (e as Error).message}`
 
 export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
   return {
     tool: {
       media_image_generate: tool({
         description: [
-          "生成图片(文生图)。当用户要求画图、绘图、生成图片、做配图、设计头像/插画/海报等时使用。",
-          "当前接入阿里通义万相(DashScope),异步生成并返回图片链接,通常 30-60 秒。",
+          "生成或编辑图片。用户要画图、绘图、生成图片、做配图/头像/插画/海报时使用;",
+          "若用户提供了参考图(refImages,公网 URL)则按描述改图。当前接入阿里通义万相。",
           "不要用于:截图保存、复制粘贴文件、把已有图片写到磁盘——那些请用文件/bash 工具。",
         ].join(" "),
         args: {
           prompt: tool.schema.string().describe("图片内容描述,中文或英文均可,越具体越好"),
-          model: tool.schema.string().optional().describe(`可选,生图模型 ID,缺省 ${DEFAULT_MODEL}`),
-          size: tool.schema.string().optional().describe("可选,尺寸 宽x高,默认 1024x1024"),
-          n: tool.schema.number().int().min(1).max(4).optional().describe("可选,生成数量 1-4,默认 1"),
+          model: tool.schema.string().optional().describe(`可选模型,缺省 ${DEFAULT_MODEL}(高清档传 wanx2.1-t2i-plus)`),
+          size: tool.schema.string().optional().describe("可选尺寸 宽x高,默认 1024x1024"),
+          n: tool.schema.number().int().min(1).max(4).optional().describe("可选生成数量 1-4,默认 1"),
+          refImages: tool.schema
+            .array(tool.schema.string())
+            .optional()
+            .describe("可选,参考图的公网 URL 列表;给了就按 prompt 改这张图"),
         },
         async execute(args, ctx) {
           const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
-          if (!apiKey) {
-            return "未找到阿里(alibaba-cn)的 API Key。请先在 DeskFox 设置里连接阿里供应商,再让我画图。"
-          }
-
-          ctx.metadata({ title: "提交生图任务…" })
+          if (!apiKey) return NO_KEY
+          ctx.metadata({ title: args.refImages?.length ? "提交改图任务…" : "提交生图任务…" })
           try {
-            const result = await generateImage({
+            const r = await generateImage({
               apiKey,
               prompt: args.prompt,
               model: args.model,
               size: args.size,
               n: args.n,
+              refImages: args.refImages,
               signal: ctx.abort,
               onProgress: (p) => ctx.metadata({ title: p.message, metadata: { state: p.state } }),
             })
-            const md = result.urls.map((u) => `![](${u})`).join("\n")
             return {
-              output: `已用 ${result.model} 生成 ${result.urls.length} 张图片:\n${md}`,
-              metadata: {
-                provider: "alibaba",
-                model: result.model,
-                urls: result.urls,
-                taskId: result.taskId,
-              },
+              output: `已用 ${r.model} 生成 ${r.urls.length} 张图片:\n${r.urls.map((u) => `![](${u})`).join("\n")}`,
+              metadata: { kind: "image", provider: "alibaba", model: r.model, urls: r.urls, taskId: r.taskId },
             }
           } catch (e) {
-            const msg = e instanceof DashScopeError ? e.friendly : (e as Error).message
-            return `生图失败:${msg}`
+            return fail(e)
+          }
+        },
+      }),
+
+      media_video_generate: tool({
+        description: [
+          "生成视频。用户要做视频、生成动画、让图片动起来时使用;",
+          "若提供参考图(refImage,公网 URL)则图生视频,否则文生视频。当前接入阿里通义万相,需等 1-3 分钟。",
+        ].join(" "),
+        args: {
+          prompt: tool.schema.string().describe("视频内容/动作描述"),
+          model: tool.schema.string().optional().describe("可选模型,缺省按是否有参考图选 t2v/i2v turbo"),
+          refImage: tool.schema.string().optional().describe("可选,首帧参考图的公网 URL;给了就让这张图动起来"),
+          size: tool.schema.string().optional().describe("可选尺寸,默认 1280x720(仅文生视频用)"),
+        },
+        async execute(args, ctx) {
+          const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
+          if (!apiKey) return NO_KEY
+          ctx.metadata({ title: "提交视频任务(约 1-3 分钟)…" })
+          try {
+            const r = await generateVideo({
+              apiKey,
+              prompt: args.prompt,
+              model: args.model,
+              refImage: args.refImage,
+              size: args.size,
+              signal: ctx.abort,
+              onProgress: (p) => ctx.metadata({ title: p.message, metadata: { state: p.state } }),
+            })
+            return {
+              output: `已用 ${r.model} 生成视频:\n${r.url}`,
+              metadata: { kind: "video", provider: "alibaba", model: r.model, url: r.url, taskId: r.taskId },
+            }
+          } catch (e) {
+            return fail(e)
+          }
+        },
+      }),
+
+      media_translate: tool({
+        description: "专业翻译文本。用户要翻译一段文字时使用。基于阿里 qwen-mt 翻译模型,质量优于普通聊天翻译。",
+        args: {
+          text: tool.schema.string().describe("要翻译的原文"),
+          targetLang: tool.schema.string().describe('目标语言,如 "English" / "Chinese" / "Japanese"'),
+          sourceLang: tool.schema.string().optional().describe("可选源语言,缺省自动识别"),
+        },
+        async execute(args) {
+          const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
+          if (!apiKey) return NO_KEY
+          try {
+            const r = await translateText({
+              apiKey,
+              text: args.text,
+              targetLang: args.targetLang,
+              sourceLang: args.sourceLang,
+            })
+            return { output: r.text, metadata: { kind: "translate", provider: "alibaba", model: r.model } }
+          } catch (e) {
+            return fail(e)
+          }
+        },
+      }),
+
+      media_tts: tool({
+        description: "把文字转成语音(语音合成 / TTS)。用户要朗读、配音、生成语音时使用。返回音频链接。基于阿里 qwen-tts。",
+        args: {
+          text: tool.schema.string().describe("要合成语音的文字"),
+          voice: tool.schema.string().optional().describe("可选音色,如 Cherry / Serena / Ethan / Chelsie,缺省 Cherry"),
+        },
+        async execute(args, ctx) {
+          const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
+          if (!apiKey) return NO_KEY
+          ctx.metadata({ title: "合成语音…" })
+          try {
+            const r = await synthesizeSpeech({ apiKey, text: args.text, voice: args.voice, signal: ctx.abort })
+            return {
+              output: `已合成语音(音色 ${r.voice}):\n${r.url}`,
+              metadata: { kind: "tts", provider: "alibaba", model: r.model, url: r.url },
+            }
+          } catch (e) {
+            return fail(e)
+          }
+        },
+      }),
+
+      media_asr: tool({
+        description: "把语音转成文字(语音识别 / ASR)。用户给出音频链接、要求转写/听写时使用。基于阿里 paraformer。",
+        args: {
+          audioUrl: tool.schema.string().describe("公网可访问的音频文件 URL(wav/mp3 等)"),
+          model: tool.schema.string().optional().describe("可选模型,缺省 paraformer-v2"),
+        },
+        async execute(args, ctx) {
+          const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
+          if (!apiKey) return NO_KEY
+          ctx.metadata({ title: "识别语音…" })
+          try {
+            const r = await transcribeAudio({
+              apiKey,
+              audioUrl: args.audioUrl,
+              model: args.model,
+              signal: ctx.abort,
+              onProgress: (p) => ctx.metadata({ title: p.message, metadata: { state: p.state } }),
+            })
+            return { output: `识别结果:\n${r.text}`, metadata: { kind: "asr", provider: "alibaba", model: r.model } }
+          } catch (e) {
+            return fail(e)
           }
         },
       }),
