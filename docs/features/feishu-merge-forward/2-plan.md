@@ -1,7 +1,7 @@
 ---
 feat-id: feishu-merge-forward
-status: in-progress
-related: ./1-spec.md ./2-plan.md
+status: done
+related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ---
 
 # feishu-merge-forward — 2-plan(实施计划 + 决策轨迹)
@@ -298,4 +298,9 @@ if (item.msg_type === "merge_forward") {
 
 ## 决策轨迹(实施中追加 note)
 
-(实施过程中遇到决策推翻 / 踩坑会追加到这里,docs/governance v2 要求 2-plan 实时记录踩坑)
+### 2026-05-26 实施 note
+
+- **N1 嵌套递归位置移到 pipeline 层**:flatten 是纯函数(0 IO),嵌套展开需要 `await fetchMergeForwardItems(...)`,违反纯函数约束 → 决定 flatten 内只返"[嵌套合并消息(展开中)]"占位,实际递归由 pipeline `expandNestedMergeForward` 同步做(depth=1 fetch + flatten(depth=1) + 字符串 replace 占位)。好处:flatten 易测,递归逻辑也独立可测。
+- **N2 image index 全局计数 bug**:初版 `imageGlobalIndex = images.length + 1` 在 maxImages 截断后,未展开图的序号停在 maxImages+1 不再递增 → M4 测试中第 7 张图变成 `[图 6(未展开)]` 而非 `[图 7]`。修法:加独立的 `imageCountTotal` 计数器(只在该子消息有 image_key 时 `++`),跟 `images.length` 解耦。
+- **N3 SDK timeout 用 Promise.race 兜底**:`@larksuiteoapi/node-sdk` 不原生支持 AbortController,改用 Promise.race + setTimeout。注意 SDK 内部请求超时后仍在跑无法真 cancel,只是我们停等,但飞书 API 自身约定 30s,超过基本是网络问题不会无限挂。
+- **N4 SDK get_message 安全**:Phase 2 实施前担心走 SDK 撞 axios + form-data 同款链(feishu-attach-upload-robustness 痛点),但 `client.im.v1.message.get` 是纯 JSON 不走 multipart,实测稳。0 撞坑。
