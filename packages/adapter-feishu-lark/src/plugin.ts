@@ -52,7 +52,9 @@ const PLUGIN_SERVER_PATH = join(homedir(), ".opencode", "feishu-plugin-server.js
  * 重命名为 `imbot-workspace`;启动时 `migrateLegacyWorkspace` 自动迁移老用户。
  */
 const LEGACY_WORKSPACE = join(homedir(), ".opencode", "feishu-workspace")
-const IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
+// FORK: export 给 image-downloader.ts 复用(放 feishu-images/ 子目录)
+// [feat: feishu-image-recognition] 2026-05-26
+export const IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
 
 /**
  * [feat: imbot-workspace-rename-followup] 2026-05-25
