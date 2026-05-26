@@ -27,7 +27,7 @@ export function MediaModeMenu() {
       value={(o) => o.value}
       label={(o) => o.label}
       onSelect={(o) => creation.setMode(!o || o.value === "chat" ? null : o.value)}
-      class="text-13-regular text-text-base"
+      class="text-13-regular text-text-base media-mode-select"
       triggerProps={{ "data-action": "media-mode" }}
     />
   )
@@ -44,7 +44,7 @@ export function MediaCreationControls() {
           options={creation.modelsFor(cap())}
           current={creation.selectedModel(cap())}
           value={(m) => m.id}
-          label={(m) => m.displayName}
+          label={(m) => m.model}
           onSelect={(m) => m && creation.selectModel(cap(), m.id)}
           class="text-13-regular text-text-base max-w-[260px]"
           triggerProps={{ "data-action": "media-model" }}
