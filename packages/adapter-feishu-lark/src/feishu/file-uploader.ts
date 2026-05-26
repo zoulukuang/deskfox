@@ -54,7 +54,8 @@ import type { LarkFileType } from "./reply-actions"
  * 字段全部 internal 但稳定 — SDK v1.50 至今未改这两个名字(verified
  * `node_modules/.../lib/index.js:81550-81553`)。
  */
-async function getClientAuthContext(client: Client): Promise<{
+// FORK: export 给 image-downloader.ts 复用 [feat: feishu-image-recognition] 2026-05-26
+export async function getClientAuthContext(client: Client): Promise<{
   token: string
   domain: string
 }> {

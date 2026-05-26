@@ -33,11 +33,13 @@ import {
   type PermissionRequest,
 } from "./permission-card"
 import {
+  getClientAuthContext,
   sendFileMessage,
   sendImageMessage,
   uploadFile,
   uploadImage,
 } from "./file-uploader"
+import { downloadFeishuImage } from "./image-downloader"
 import type { PromptDispatcher } from "./prompt-dispatcher"
 import {
   classifyAttachment,
@@ -52,6 +54,107 @@ import type { ImMessageEvent } from "./wss-client"
 
 /** opencode SDK v1 client 类型(plugin PluginInput.client 类型) */
 export type OpencodeSDKClient = ReturnType<typeof createOpencodeClient>
+
+/** [feat: feishu-image-recognition] 2026-05-26
+ *  vision capability 缓存 TTL — 10 min,导出供单测覆盖 */
+export const VISION_CAP_TTL_MS = 10 * 60 * 1000
+
+/** vision cache entry 是否仍然新鲜(未过 TTL)*/
+export function isVisionCacheFresh(
+  entry: { checkedAt: number } | undefined,
+  now: number = Date.now(),
+  ttl: number = VISION_CAP_TTL_MS,
+): boolean {
+  return !!entry && now - entry.checkedAt < ttl
+}
+
+/**
+ * 从 opencodeClient.config.providers() 的 raw response 抽 vision support。
+ * 纯函数,U2/U3/U4 直接覆盖(helper extract 模式,绕开 class 私有方法 + opencode RPC mock)。
+ *
+ * - 拿不到 providers 数组 → 默认 true(放行,假设支持,让 LLM 自己回错)
+ * - provider/model 找不到 → false(明确不支持)
+ * - model.capabilities.input.image === true → true
+ * - 其它情况 → false
+ */
+export function extractVisionSupport(
+  providersResponse: unknown,
+  providerID: string,
+  modelID: string,
+): boolean {
+  const providers = (
+    providersResponse as {
+      providers?: Array<{
+        id: string
+        models: Record<string, { capabilities?: { input?: { image?: boolean } } }>
+      }>
+    } | null | undefined
+  )?.providers
+  if (!providers) return true
+  const provider = providers.find((p) => p.id === providerID)
+  const modelInfo = provider?.models?.[modelID]
+  return modelInfo?.capabilities?.input?.image === true
+}
+
+/** [feat: feishu-image-recognition] 2026-05-26
+ *  飞书 IM 消息 content 解析结果(handle() 处理 text/image/post 时复用)*/
+export interface ParsedContent {
+  text: string
+  imageKey: string | null
+}
+
+/**
+ * 解析飞书 IM 消息 content JSON。支持 text/image/post 三种 messageType。
+ *
+ * - text:`{ text: "..." }`
+ * - image:`{ image_key: "img_v3_...", text?: "caption" }`(image event 偶尔含 caption)
+ * - post:`{ title?, content: [[{tag:"text"|"img", text?, image_key?}, ...], ...] }`
+ *   - 富文本嵌套:title + N 段 paragraph,每段 N 个 segment(text 段 / img 段)
+ *   - flatten 所有 text 段拼单字符串(空格 join)
+ *   - 首张图取 image_key(本期不支持多图,后续 D3 backlog)
+ *   - 兼容 SDK 用 "img" 或 "image" 标识图片段
+ *
+ * 解析失败抛 SyntaxError(由 JSON.parse 抛)— 调用方 catch 后跳过该消息。
+ * shape 不符合预期(如 messageType=post 但 content 不是 post)→ 返默认空值。
+ */
+export function parseMessageContent(
+  messageType: string,
+  contentJson: string,
+): ParsedContent {
+  if (messageType === "text") {
+    const parsed = JSON.parse(contentJson) as { text?: string }
+    return { text: (parsed.text ?? "").trim(), imageKey: null }
+  }
+  if (messageType === "image") {
+    const parsed = JSON.parse(contentJson) as { image_key?: string; text?: string }
+    return {
+      text: (parsed.text ?? "").trim(),
+      imageKey: parsed.image_key ?? null,
+    }
+  }
+  if (messageType === "post") {
+    const parsed = JSON.parse(contentJson) as {
+      title?: string
+      content?: Array<Array<{ tag?: string; text?: string; image_key?: string }>>
+    }
+    const textParts: string[] = []
+    if (parsed.title) textParts.push(parsed.title)
+    let imageKey: string | null = null
+    for (const para of parsed.content ?? []) {
+      if (!Array.isArray(para)) continue
+      for (const seg of para) {
+        if (!seg || typeof seg !== "object") continue
+        if (seg.tag === "text" && typeof seg.text === "string" && seg.text)
+          textParts.push(seg.text)
+        if ((seg.tag === "img" || seg.tag === "image") && typeof seg.image_key === "string" && !imageKey)
+          imageKey = seg.image_key
+      }
+    }
+    return { text: textParts.join(" ").trim(), imageKey }
+  }
+  // 其它 messageType — caller 已 skip 不该到这,兜底返空值
+  return { text: "", imageKey: null }
+}
 
 /**
  * 飞书桥接专用 workspace directory — 所有 plugin 创建的 session 都在这个
@@ -200,6 +303,14 @@ export class MessagePipeline {
   private readonly larkClient: Client
   /** chatId → opencode sessionID(in-memory cache,真持久化在 chatSessionStore)*/
   private readonly chatToSession = new Map<string, string>()
+  /** [feat: feishu-image-recognition] 2026-05-26 — model vision capability 缓存
+   *  key: `<providerID>/<modelID>` 或 "__default__"(account 没指定 model)
+   *  value: { supportsImage: boolean, checkedAt: ms }
+   *  TTL 10 min,避免每条消息都查 /config/providers */
+  private readonly visionCapCache = new Map<
+    string,
+    { supportsImage: boolean; checkedAt: number }
+  >()
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
   /** 飞书 CardKit 权限卡片控制器(LLM 调工具触发权限时弹卡片让 user 在飞书选)*/
@@ -286,22 +397,98 @@ export class MessagePipeline {
   }
 
   async handle(event: ImMessageEvent): Promise<void> {
-    if (event.messageType !== "text") {
+    // [feat: feishu-image-recognition] 2026-05-26 — image 走多模态识别路径
+    // text=纯文字 / image=纯图 / post=富文本(图+文混合,飞书拖图+输文字默认走 post)
+    // 其它(file/audio/video/sticker/interactive 等)留 backlog
+    if (
+      event.messageType !== "text" &&
+      event.messageType !== "image" &&
+      event.messageType !== "post"
+    ) {
       console.log(
-        `[pipeline ${this.opts.accountId}] skip non-text message: type=${event.messageType}`,
+        `[pipeline ${this.opts.accountId}] skip unsupported message: type=${event.messageType}`,
       )
       return
     }
 
-    let text: string
+    // 解析 content — text/image/post 各自 shape(helper 可单测)
+    let parseResult: ParsedContent | null = null
     try {
-      const parsed = JSON.parse(event.content) as { text?: string }
-      text = (parsed.text ?? "").trim()
+      parseResult = parseMessageContent(event.messageType, event.content)
     } catch {
-      console.warn(`[pipeline ${this.opts.accountId}] invalid content json:`, event.content)
+      console.warn(
+        `[pipeline ${this.opts.accountId}] invalid content json for type=${event.messageType}:`,
+        event.content,
+      )
       return
     }
-    if (!text) return
+
+    const { text, imageKey } = parseResult
+
+    if (event.messageType === "image" && !imageKey) {
+      console.warn(`[pipeline ${this.opts.accountId}] image event 缺 image_key,skip`)
+      await this.sendFeishuText(event.chatId, "😅 收到的图片好像出了点问题,换张图试试?").catch(
+        () => {},
+      )
+      return
+    }
+
+    // [feat: feishu-image-recognition] 2026-05-26
+    // 收图前先预检 model 是否支持 vision — 不支持就直接友好告知 user 不调 LLM(避免卡死在"识别中...")
+    if (imageKey) {
+      const visionOk = await this.checkModelVisionSupport().catch(() => true) // 查失败默认放行
+      if (!visionOk) {
+        const modelHint = this.opts.account.model
+          ? `${this.opts.account.model.providerID}/${this.opts.account.model.modelID}`
+          : "当前默认 model"
+        await this.sendFeishuText(
+          event.chatId,
+          `⚠️ ${modelHint} 不支持图片识别。请到 DeskFox 设置 → 飞书桥接 → 选当前账号 → 编辑 → Model,换成支持视觉的模型(如 claude-code/sonnet、Claude/GPT-4o/Gemini 等)。`,
+        ).catch(() => {})
+        return
+      }
+    }
+
+    // 下载图片(image/post 消息含图都走的分支)— 失败也继续(LLM 收到 text-only 错误说明)
+    let imagePart: { mime: string; filename: string; absolutePath: string } | null = null
+    let imageDownloadError: string | null = null
+    if (imageKey) {
+      // D5 提前发"识别中..."提示(vision LLM 5-15s 慢,无反馈用户以为没收到)
+      await this.sendFeishuText(event.chatId, "🖼️ 收到图片,识别中...").catch((err) => {
+        console.warn(`[pipeline ${this.opts.accountId}] 发送识别中提示失败:`, err)
+      })
+
+      try {
+        const auth = await getClientAuthContext(this.larkClient)
+        const dl = await downloadFeishuImage(
+          imageKey,
+          event.messageId,
+          event.chatId,
+          auth.token,
+          auth.domain,
+        )
+        imagePart = { mime: dl.mime, filename: dl.filename, absolutePath: dl.absolutePath }
+        console.log(
+          `[pipeline ${this.opts.accountId}] downloaded image ${dl.size}B → ${dl.absolutePath}`,
+        )
+      } catch (err) {
+        imageDownloadError = (err as Error).message
+        console.warn(
+          `[pipeline ${this.opts.accountId}] image download failed: ${imageDownloadError}`,
+        )
+      }
+    }
+
+    // 文本 + 图都没,直接退(image 消息无 caption + 下载失败的极端情况)
+    if (!text && !imagePart && !imageDownloadError) return
+    if (!text && imageDownloadError) {
+      await this.sendFeishuText(
+        event.chatId,
+        `😅 没能下载这张图(原因:${imageDownloadError})。换张图或者跟我说说图里啥内容?`,
+      ).catch(() => {})
+      return
+    }
+    // image 消息有时 caption 也是空的(纯发图),不退;让 LLM 收图后自己判断回复
 
     // [feat: feishu-bridge-light] /new slash command — 清当前 chat session 切话题
     // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25
@@ -497,7 +684,10 @@ export class MessagePipeline {
       // [feat: feishu-llm-strip-mention-placeholders] 2026-05-24
       // 传 cleaned(已 strip @_user_N 飞书占位符)而非 raw text,避免 LLM 误把
       // 占位符当成另一个联系人(实测 bot reply 含"我不是 @_user_1..."类幻觉)。
-      reply = await this.runOpencode(sessionID, cleaned, this.opts.account.agent)
+      reply = await this.runOpencode(sessionID, cleaned, this.opts.account.agent, {
+        imagePart,
+        imageDownloadError,
+      })
     } catch (err) {
       console.error(`[pipeline ${this.opts.accountId}] opencode error:`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
@@ -625,7 +815,62 @@ export class MessagePipeline {
    *    修需要按 message role 区分(part 没 role 字段,得通过 message.updated event 反查)。
    *    留 followup,先保证有 reply(echo)优于 empty reply。
    */
-  private async runOpencode(sessionID: string, text: string, agent: string): Promise<string> {
+  /**
+   * [feat: feishu-image-recognition] 2026-05-26
+   * 预检 account 配的 model 是否支持 image input(vision)。
+   * 用 opencodeClient.config.providers() 查 model.capabilities.input.image。
+   *
+   * 缓存 10 min,key = providerID/modelID(或 __default__)。
+   * 查询失败默认返 true(放行 — 假设支持,后续 LLM 收 ERROR text 会自己回 user 不支持)。
+   */
+  private async checkModelVisionSupport(): Promise<boolean> {
+    const model = this.opts.account.model
+    const cacheKey = model ? `${model.providerID}/${model.modelID}` : "__default__"
+    const cached = this.visionCapCache.get(cacheKey)
+    if (isVisionCacheFresh(cached)) {
+      return cached!.supportsImage
+    }
+
+    if (!model) {
+      // 未指定 model — 走 global default,不阻塞(放行让用户验)
+      this.visionCapCache.set(cacheKey, { supportsImage: true, checkedAt: Date.now() })
+      return true
+    }
+
+    try {
+      const res = await this.opts.opencodeClient.config.providers({
+        query: { directory: IMBOT_WORKSPACE },
+      })
+      const supportsImage = extractVisionSupport(
+        (res as { data?: unknown }).data,
+        model.providerID,
+        model.modelID,
+      )
+      this.visionCapCache.set(cacheKey, { supportsImage, checkedAt: Date.now() })
+      console.log(
+        `[pipeline ${this.opts.accountId}] vision check ${cacheKey} → image=${supportsImage}`,
+      )
+      return supportsImage
+    } catch (err) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] vision check failed for ${cacheKey}, 放行:`,
+        err,
+      )
+      // 查询失败放行(假设支持),避免 false negative 卡住用户
+      return true
+    }
+  }
+
+  private async runOpencode(
+    sessionID: string,
+    text: string,
+    agent: string,
+    // [feat: feishu-image-recognition] 2026-05-26 — 多模态 image part
+    imageOpts?: {
+      imagePart: { mime: string; filename: string; absolutePath: string } | null
+      imageDownloadError: string | null
+    },
+  ): Promise<string> {
     // 默认 30 分钟超时(2026-05-10 由 5min 提)。
     // 实测出现过 7m18s 才完成的回复(用户问"DeskFox 服务启动后..."触发 75 次工具调用)
     // 5min 超时强制走 dispatcher partial 路径 → runOpencode 又忽略 partial 改读
@@ -647,7 +892,30 @@ export class MessagePipeline {
           ...(accountModel
             ? { model: { providerID: accountModel.providerID, modelID: accountModel.modelID } }
             : {}),
-          parts: [{ type: "text", text }],
+          // [feat: feishu-image-recognition] 2026-05-26 — text + file part 混合
+          // file part url 用 file:// 协议,opencode-cli prompt.ts:1230 自动 readFile +
+          // base64 inline 给 LLM provider(0 JSON 体膨胀,0 临时 server,workspace 持久化)
+          parts: [
+            ...(text ? [{ type: "text" as const, text }] : []),
+            ...(imageOpts?.imagePart
+              ? [
+                  {
+                    type: "file" as const,
+                    mime: imageOpts.imagePart.mime,
+                    filename: imageOpts.imagePart.filename,
+                    url: `file://${imageOpts.imagePart.absolutePath}`,
+                  },
+                ]
+              : []),
+            ...(imageOpts?.imageDownloadError
+              ? [
+                  {
+                    type: "text" as const,
+                    text: `(系统提示:用户发了一张图片,但下载失败:${imageOpts.imageDownloadError}。请回复说图片暂时看不到,问 user 描述一下图片内容)`,
+                  },
+                ]
+              : []),
+          ],
         },
       })
       .catch((err) => {
