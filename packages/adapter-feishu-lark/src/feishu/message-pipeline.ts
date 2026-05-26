@@ -289,29 +289,53 @@ export class MessagePipeline {
 
   async handle(event: ImMessageEvent): Promise<void> {
     // [feat: feishu-image-recognition] 2026-05-26 — image 走多模态识别路径
-    // 其它非 text/image 仍 skip(file/audio/video/sticker/interactive 等留 backlog)
-    if (event.messageType !== "text" && event.messageType !== "image") {
+    // text=纯文字 / image=纯图 / post=富文本(图+文混合,飞书拖图+输文字默认走 post)
+    // 其它(file/audio/video/sticker/interactive 等)留 backlog
+    if (
+      event.messageType !== "text" &&
+      event.messageType !== "image" &&
+      event.messageType !== "post"
+    ) {
       console.log(
-        `[pipeline ${this.opts.accountId}] skip non-text/image message: type=${event.messageType}`,
+        `[pipeline ${this.opts.accountId}] skip unsupported message: type=${event.messageType}`,
       )
       return
     }
 
-    // 解析 content — text 取 text,image 取 image_key
+    // 解析 content — text/image/post 各自 shape
     let text = ""
     let imageKey: string | null = null
     try {
-      const parsed = JSON.parse(event.content) as { text?: string; image_key?: string }
       if (event.messageType === "text") {
+        const parsed = JSON.parse(event.content) as { text?: string }
+        text = (parsed.text ?? "").trim()
+      } else if (event.messageType === "image") {
+        const parsed = JSON.parse(event.content) as { image_key?: string; text?: string }
+        imageKey = parsed.image_key ?? null
         text = (parsed.text ?? "").trim()
       } else {
-        // image
-        imageKey = parsed.image_key ?? null
-        // 飞书 image event 偶尔含 caption(以 text 字段携带);若存在,跟图片一起处理
-        text = (parsed.text ?? "").trim()
+        // post — 富文本嵌套:{ title, content: [[{tag, text|image_key}, ...]] }
+        // 我们 flatten 所有 text segment 拼成单字符串,首张图取 image_key(本期不支持多图)
+        const parsed = JSON.parse(event.content) as {
+          title?: string
+          content?: Array<Array<{ tag?: string; text?: string; image_key?: string }>>
+        }
+        const textParts: string[] = []
+        if (parsed.title) textParts.push(parsed.title)
+        for (const para of parsed.content ?? []) {
+          for (const seg of para) {
+            if (seg.tag === "text" && seg.text) textParts.push(seg.text)
+            if (seg.tag === "img" && seg.image_key && !imageKey) imageKey = seg.image_key
+            if (seg.tag === "image" && seg.image_key && !imageKey) imageKey = seg.image_key
+          }
+        }
+        text = textParts.join(" ").trim()
       }
     } catch {
-      console.warn(`[pipeline ${this.opts.accountId}] invalid content json:`, event.content)
+      console.warn(
+        `[pipeline ${this.opts.accountId}] invalid content json for type=${event.messageType}:`,
+        event.content,
+      )
       return
     }
 
@@ -323,10 +347,10 @@ export class MessagePipeline {
       return
     }
 
-    // 下载图片(image 消息走的分支)— 失败也继续(LLM 收到 text-only 错误说明)
+    // 下载图片(image/post 消息含图都走的分支)— 失败也继续(LLM 收到 text-only 错误说明)
     let imagePart: { mime: string; filename: string; absolutePath: string } | null = null
     let imageDownloadError: string | null = null
-    if (event.messageType === "image" && imageKey) {
+    if (imageKey) {
       // D5 提前发"识别中..."提示(vision LLM 5-15s 慢,无反馈用户以为没收到)
       await this.sendFeishuText(event.chatId, "🖼️ 收到图片,识别中...").catch((err) => {
         console.warn(`[pipeline ${this.opts.accountId}] 发送识别中提示失败:`, err)
