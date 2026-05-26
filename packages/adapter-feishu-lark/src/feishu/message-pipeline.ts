@@ -55,6 +55,107 @@ import type { ImMessageEvent } from "./wss-client"
 /** opencode SDK v1 client 类型(plugin PluginInput.client 类型) */
 export type OpencodeSDKClient = ReturnType<typeof createOpencodeClient>
 
+/** [feat: feishu-image-recognition] 2026-05-26
+ *  vision capability 缓存 TTL — 10 min,导出供单测覆盖 */
+export const VISION_CAP_TTL_MS = 10 * 60 * 1000
+
+/** vision cache entry 是否仍然新鲜(未过 TTL)*/
+export function isVisionCacheFresh(
+  entry: { checkedAt: number } | undefined,
+  now: number = Date.now(),
+  ttl: number = VISION_CAP_TTL_MS,
+): boolean {
+  return !!entry && now - entry.checkedAt < ttl
+}
+
+/**
+ * 从 opencodeClient.config.providers() 的 raw response 抽 vision support。
+ * 纯函数,U2/U3/U4 直接覆盖(helper extract 模式,绕开 class 私有方法 + opencode RPC mock)。
+ *
+ * - 拿不到 providers 数组 → 默认 true(放行,假设支持,让 LLM 自己回错)
+ * - provider/model 找不到 → false(明确不支持)
+ * - model.capabilities.input.image === true → true
+ * - 其它情况 → false
+ */
+export function extractVisionSupport(
+  providersResponse: unknown,
+  providerID: string,
+  modelID: string,
+): boolean {
+  const providers = (
+    providersResponse as {
+      providers?: Array<{
+        id: string
+        models: Record<string, { capabilities?: { input?: { image?: boolean } } }>
+      }>
+    } | null | undefined
+  )?.providers
+  if (!providers) return true
+  const provider = providers.find((p) => p.id === providerID)
+  const modelInfo = provider?.models?.[modelID]
+  return modelInfo?.capabilities?.input?.image === true
+}
+
+/** [feat: feishu-image-recognition] 2026-05-26
+ *  飞书 IM 消息 content 解析结果(handle() 处理 text/image/post 时复用)*/
+export interface ParsedContent {
+  text: string
+  imageKey: string | null
+}
+
+/**
+ * 解析飞书 IM 消息 content JSON。支持 text/image/post 三种 messageType。
+ *
+ * - text:`{ text: "..." }`
+ * - image:`{ image_key: "img_v3_...", text?: "caption" }`(image event 偶尔含 caption)
+ * - post:`{ title?, content: [[{tag:"text"|"img", text?, image_key?}, ...], ...] }`
+ *   - 富文本嵌套:title + N 段 paragraph,每段 N 个 segment(text 段 / img 段)
+ *   - flatten 所有 text 段拼单字符串(空格 join)
+ *   - 首张图取 image_key(本期不支持多图,后续 D3 backlog)
+ *   - 兼容 SDK 用 "img" 或 "image" 标识图片段
+ *
+ * 解析失败抛 SyntaxError(由 JSON.parse 抛)— 调用方 catch 后跳过该消息。
+ * shape 不符合预期(如 messageType=post 但 content 不是 post)→ 返默认空值。
+ */
+export function parseMessageContent(
+  messageType: string,
+  contentJson: string,
+): ParsedContent {
+  if (messageType === "text") {
+    const parsed = JSON.parse(contentJson) as { text?: string }
+    return { text: (parsed.text ?? "").trim(), imageKey: null }
+  }
+  if (messageType === "image") {
+    const parsed = JSON.parse(contentJson) as { image_key?: string; text?: string }
+    return {
+      text: (parsed.text ?? "").trim(),
+      imageKey: parsed.image_key ?? null,
+    }
+  }
+  if (messageType === "post") {
+    const parsed = JSON.parse(contentJson) as {
+      title?: string
+      content?: Array<Array<{ tag?: string; text?: string; image_key?: string }>>
+    }
+    const textParts: string[] = []
+    if (parsed.title) textParts.push(parsed.title)
+    let imageKey: string | null = null
+    for (const para of parsed.content ?? []) {
+      if (!Array.isArray(para)) continue
+      for (const seg of para) {
+        if (!seg || typeof seg !== "object") continue
+        if (seg.tag === "text" && typeof seg.text === "string" && seg.text)
+          textParts.push(seg.text)
+        if ((seg.tag === "img" || seg.tag === "image") && typeof seg.image_key === "string" && !imageKey)
+          imageKey = seg.image_key
+      }
+    }
+    return { text: textParts.join(" ").trim(), imageKey }
+  }
+  // 其它 messageType — caller 已 skip 不该到这,兜底返空值
+  return { text: "", imageKey: null }
+}
+
 /**
  * 飞书桥接专用 workspace directory — 所有 plugin 创建的 session 都在这个
  * 目录下,跟 user 主窗口的项目隔离。GUI sidebar 不会显示(因为 archive),
@@ -210,7 +311,6 @@ export class MessagePipeline {
     string,
     { supportsImage: boolean; checkedAt: number }
   >()
-  private static readonly VISION_CAP_TTL_MS = 10 * 60 * 1000
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
   /** 飞书 CardKit 权限卡片控制器(LLM 调工具触发权限时弹卡片让 user 在飞书选)*/
@@ -311,35 +411,10 @@ export class MessagePipeline {
       return
     }
 
-    // 解析 content — text/image/post 各自 shape
-    let text = ""
-    let imageKey: string | null = null
+    // 解析 content — text/image/post 各自 shape(helper 可单测)
+    let parseResult: ParsedContent | null = null
     try {
-      if (event.messageType === "text") {
-        const parsed = JSON.parse(event.content) as { text?: string }
-        text = (parsed.text ?? "").trim()
-      } else if (event.messageType === "image") {
-        const parsed = JSON.parse(event.content) as { image_key?: string; text?: string }
-        imageKey = parsed.image_key ?? null
-        text = (parsed.text ?? "").trim()
-      } else {
-        // post — 富文本嵌套:{ title, content: [[{tag, text|image_key}, ...]] }
-        // 我们 flatten 所有 text segment 拼成单字符串,首张图取 image_key(本期不支持多图)
-        const parsed = JSON.parse(event.content) as {
-          title?: string
-          content?: Array<Array<{ tag?: string; text?: string; image_key?: string }>>
-        }
-        const textParts: string[] = []
-        if (parsed.title) textParts.push(parsed.title)
-        for (const para of parsed.content ?? []) {
-          for (const seg of para) {
-            if (seg.tag === "text" && seg.text) textParts.push(seg.text)
-            if (seg.tag === "img" && seg.image_key && !imageKey) imageKey = seg.image_key
-            if (seg.tag === "image" && seg.image_key && !imageKey) imageKey = seg.image_key
-          }
-        }
-        text = textParts.join(" ").trim()
-      }
+      parseResult = parseMessageContent(event.messageType, event.content)
     } catch {
       console.warn(
         `[pipeline ${this.opts.accountId}] invalid content json for type=${event.messageType}:`,
@@ -347,6 +422,8 @@ export class MessagePipeline {
       )
       return
     }
+
+    const { text, imageKey } = parseResult
 
     if (event.messageType === "image" && !imageKey) {
       console.warn(`[pipeline ${this.opts.accountId}] image event 缺 image_key,skip`)
@@ -750,8 +827,8 @@ export class MessagePipeline {
     const model = this.opts.account.model
     const cacheKey = model ? `${model.providerID}/${model.modelID}` : "__default__"
     const cached = this.visionCapCache.get(cacheKey)
-    if (cached && Date.now() - cached.checkedAt < MessagePipeline.VISION_CAP_TTL_MS) {
-      return cached.supportsImage
+    if (isVisionCacheFresh(cached)) {
+      return cached!.supportsImage
     }
 
     if (!model) {
@@ -764,15 +841,11 @@ export class MessagePipeline {
       const res = await this.opts.opencodeClient.config.providers({
         query: { directory: IMBOT_WORKSPACE },
       })
-      const providers = (res as { data?: { providers?: Array<{ id: string; models: Record<string, { capabilities: { input: { image: boolean } } }> }> } })
-        .data?.providers
-      if (!providers) {
-        this.visionCapCache.set(cacheKey, { supportsImage: true, checkedAt: Date.now() })
-        return true
-      }
-      const provider = providers.find((p) => p.id === model.providerID)
-      const modelInfo = provider?.models?.[model.modelID]
-      const supportsImage = modelInfo?.capabilities?.input?.image === true
+      const supportsImage = extractVisionSupport(
+        (res as { data?: unknown }).data,
+        model.providerID,
+        model.modelID,
+      )
       this.visionCapCache.set(cacheKey, { supportsImage, checkedAt: Date.now() })
       console.log(
         `[pipeline ${this.opts.accountId}] vision check ${cacheKey} → image=${supportsImage}`,

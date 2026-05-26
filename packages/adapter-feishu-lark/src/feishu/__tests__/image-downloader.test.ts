@@ -9,6 +9,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   downloadFeishuImage,
+  makeImageFilename,
+  MAX_IMAGE_BYTES,
   mimeToExt,
   timestampForFilename,
 } from "../image-downloader"
@@ -52,8 +54,8 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
 
     expect(r.mime).toBe("image/jpeg")
     expect(r.size).toBe(fakeBytes.length)
-    // image_key 取前 12 字符 → "img_v3_abc12"
-    expect(r.filename).toMatch(/^\d{14}-img_v3_abc12\.jpg$/)
+    // image_key 取前 12 字符 → "img_v3_abc12" + 6 字符 random suffix(U5 防同秒冲突)
+    expect(r.filename).toMatch(/^\d{14}-img_v3_abc12-[a-z0-9]{6}\.jpg$/)
     expect(r.absolutePath).toContain("feishu-images")
     expect(r.absolutePath).toContain("oc_chat_xyz")
     // 文件真落盘
@@ -168,5 +170,193 @@ describe("timestampForFilename", () => {
   test("月日时分秒补 0", () => {
     const ts = timestampForFilename(new Date(2026, 0, 5, 3, 7, 9)) // 月份 0-indexed
     expect(ts).toBe("20260105030709")
+  })
+})
+
+// ========= S1-S5 加固 + U5 防冲突 =========
+
+describe("S1: size limit 硬限", () => {
+  test("Content-Length 声明超过 MAX_IMAGE_BYTES → throw 含 mb 大小", async () => {
+    const oversize = MAX_IMAGE_BYTES + 1024
+    globalThis.fetch = mock(
+      async () =>
+        new Response(new Uint8Array(0).buffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg", "content-length": String(oversize) },
+        }),
+    ) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_big", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/过大|MB/)
+  })
+
+  test("实际 buffer 超过 MAX_IMAGE_BYTES(server 撒谎 Content-Length)→ throw", async () => {
+    const buf = new Uint8Array(MAX_IMAGE_BYTES + 100)
+    globalThis.fetch = mock(
+      async () =>
+        new Response(buf.buffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" }, // 没 Content-Length
+        }),
+    ) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_lies", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/过大|MB/)
+  })
+
+  test("空 buffer → throw", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(new Uint8Array(0).buffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+    ) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_empty", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/空|0 bytes/)
+  })
+})
+
+describe("S2: fetch timeout(AbortController)", () => {
+  test("fetch 抛 AbortError → throw 含'超时'", async () => {
+    globalThis.fetch = mock(async (_url: string, init?: RequestInit) => {
+      const err = new Error("Aborted")
+      err.name = "AbortError"
+      throw err
+    }) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_slow", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/超时/)
+  })
+
+  test("fetch 抛非 abort 网络错 → throw 含'网络错误'", async () => {
+    globalThis.fetch = mock(async () => {
+      throw new Error("ECONNREFUSED")
+    }) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_neterr", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/网络错误|ECONNREFUSED/)
+  })
+})
+
+describe("S3: mime allowlist", () => {
+  test("非 image/* mime(text/html error page)→ throw 'mime 不在白名单'", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response("<html>403 Forbidden</html>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+    ) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_html", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/mime 不在白名单|text\/html/)
+  })
+
+  test("application/octet-stream → throw 'mime 不在白名单'", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(new Uint8Array([1, 2]).buffer, {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    ) as unknown as typeof fetch
+
+    await expect(
+      downloadFeishuImage("img_octet", "om_test", "oc_test", "tk_fake"),
+    ).rejects.toThrow(/mime 不在白名单/)
+  })
+
+  test("常见 image mime 全部放行(jpeg/png/gif/webp/svg+xml/bmp/avif)", async () => {
+    const mimes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/bmp", "image/avif"]
+    for (const mime of mimes) {
+      globalThis.fetch = mock(
+        async () =>
+          new Response(new Uint8Array([1]).buffer, {
+            status: 200,
+            headers: { "content-type": mime },
+          }),
+      ) as unknown as typeof fetch
+      const r = await downloadFeishuImage(`img_${mime.replace(/[^a-z]/g, "")}`, "om_test", "oc_test", "tk_fake")
+      expect(r.mime).toBe(mime)
+      rmSync(r.absolutePath)
+    }
+  })
+})
+
+describe("S4: 路径越界 assert(防 chatId sanitize 漏 + symlink 攻击)", () => {
+  test("chatId 已 sanitize 但 resolved path 在 feishu-images 子树内", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(new Uint8Array([1]).buffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+    ) as unknown as typeof fetch
+    const r = await downloadFeishuImage("img_normal", "om_test", "oc_test", "tk_fake")
+    expect(r.absolutePath).toContain("feishu-images")
+    rmSync(r.absolutePath)
+  })
+})
+
+describe("S5: token 不进 error message", () => {
+  test("404 error 不含 token", async () => {
+    globalThis.fetch = mock(
+      async () => new Response(null, { status: 404, statusText: "Not Found" }),
+    ) as unknown as typeof fetch
+
+    const SECRET_TOKEN = "tk_super_secret_should_not_leak_12345"
+    try {
+      await downloadFeishuImage("img_404", "om_test", "oc_test", SECRET_TOKEN)
+      throw new Error("expected throw")
+    } catch (e) {
+      const msg = (e as Error).message
+      expect(msg).not.toContain(SECRET_TOKEN)
+    }
+  })
+
+  test("timeout error 不含 token", async () => {
+    globalThis.fetch = mock(async () => {
+      const err = new Error("Aborted")
+      err.name = "AbortError"
+      throw err
+    }) as unknown as typeof fetch
+
+    const SECRET_TOKEN = "tk_super_secret_should_not_leak"
+    try {
+      await downloadFeishuImage("img_timeout", "om_test", "oc_test", SECRET_TOKEN)
+      throw new Error("expected throw")
+    } catch (e) {
+      expect((e as Error).message).not.toContain(SECRET_TOKEN)
+    }
+  })
+})
+
+describe("U5: makeImageFilename 同 ts + 同 image_key 防冲突", () => {
+  test("100 次连续调 → 100 个不同 filename(random suffix 防同秒冲突)", () => {
+    const filenames = new Set<string>()
+    for (let i = 0; i < 100; i++) {
+      filenames.add(makeImageFilename("img_v3_abc12345", "jpg"))
+    }
+    expect(filenames.size).toBe(100)
+  })
+
+  test("filename 格式:<ts>-<key12>-<rnd6>.<ext>", () => {
+    const fn = makeImageFilename("img_v3_xyz9876", "png")
+    expect(fn).toMatch(/^\d{14}-img_v3_xyz98-[a-z0-9]{6}\.png$/)
+  })
+
+  test("image_key 含特殊字符 sanitize", () => {
+    const fn = makeImageFilename("img/../etc:malicious", "jpg")
+    expect(fn).not.toContain("/")
+    expect(fn).not.toContain("..")
+    expect(fn).not.toContain(":")
   })
 })
