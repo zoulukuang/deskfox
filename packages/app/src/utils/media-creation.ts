@@ -23,6 +23,7 @@ export type MediaResult = {
   urls?: string[]
   url?: string
   text?: string
+  localPaths?: string[] // 已落盘的本地路径(创作文件库)
   model: string
   provider: string
 }

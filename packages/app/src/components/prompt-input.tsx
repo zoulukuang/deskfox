@@ -1113,6 +1113,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (cap === "tts") input.voice = creation.currentVoice("tts")
     if (imagePart?.dataUrl) input.refFile = imagePart.dataUrl
     clearEditor()
+    prompt.reset() // 修:清空文字 + 附件(否则提交后附件图残留在输入框)
     await creation.runCreation(entry, input)
   }
   const handleFormSubmit = (...args: Parameters<typeof handleSubmit>) => {

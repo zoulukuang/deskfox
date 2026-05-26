@@ -35,6 +35,7 @@ export type CreationCard = {
   capability: MediaCapability
   modelName: string
   prompt?: string
+  inputThumb?: string // 输入参考图缩略图(改图/图生视频时的 ＋ 图,base64)
   progress?: string
   result?: MediaResult
   error?: string
@@ -114,6 +115,7 @@ export const creation = {
   /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error */
   async runCreation(entry: MediaModel, input: MediaGenInput) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const inputThumb = input.refFile?.startsWith("data:image") ? input.refFile : undefined
     setCards(
       produce((arr) => {
         arr.push({
@@ -122,6 +124,7 @@ export const creation = {
           capability: entry.capability,
           modelName: entry.displayName,
           prompt: input.prompt,
+          inputThumb,
           progress: "提交中…",
         })
       }),
