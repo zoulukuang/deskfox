@@ -1106,8 +1106,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       .map((p) => ("content" in p ? p.content : ""))
       .join("")
       .trim()
-    const input: { prompt: string; targetLang?: string } = { prompt: text }
+    const input: { prompt: string; targetLang?: string; voice?: string } = { prompt: text }
     if (cap === "translate") input.targetLang = "English" // 目标语言选择器后补;P1 默认英文
+    if (cap === "tts") input.voice = creation.currentVoice("tts")
     clearEditor()
     await creation.runCreation(entry, input)
   }
@@ -1280,7 +1281,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       ) {
         return
       }
-      void handleSubmit(event)
+      void handleFormSubmit(event) // FORK: 回车也走创作模式拦截(否则绕过 → 误入聊天调图片工具)[feat: media-creation-mode]
     }
   }
 

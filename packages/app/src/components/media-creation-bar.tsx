@@ -38,17 +38,31 @@ export function MediaCreationControls() {
   return (
     <Show when={creation.createMode()}>
       {(cap) => (
-        <Select<MediaModel>
-          size="normal"
-          variant="ghost"
-          options={creation.modelsFor(cap())}
-          current={creation.selectedModel(cap())}
-          value={(m) => m.id}
-          label={(m) => m.model}
-          onSelect={(m) => m && creation.selectModel(cap(), m.id)}
-          class="text-13-regular text-text-base max-w-[260px]"
-          triggerProps={{ "data-action": "media-model" }}
-        />
+        <>
+          <Select<MediaModel>
+            size="normal"
+            variant="ghost"
+            options={creation.modelsFor(cap())}
+            current={creation.selectedModel(cap())}
+            value={(m) => m.id}
+            label={(m) => m.model}
+            onSelect={(m) => m && creation.selectModel(cap(), m.id)}
+            class="text-13-regular text-text-base max-w-[260px]"
+            triggerProps={{ "data-action": "media-model" }}
+          />
+          {/* 音色选择(仅语音合成等带 voices 的模型出现)*/}
+          <Show when={(creation.selectedModel(cap())?.params?.voices?.length ?? 0) > 0}>
+            <Select<string>
+              size="normal"
+              variant="ghost"
+              options={creation.selectedModel(cap())?.params?.voices ?? []}
+              current={creation.currentVoice(cap())}
+              onSelect={(v) => v && creation.setVoice(v)}
+              class="text-13-regular text-text-base"
+              triggerProps={{ "data-action": "media-voice" }}
+            />
+          </Show>
+        </>
       )}
     </Show>
   )

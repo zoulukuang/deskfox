@@ -24,8 +24,8 @@ export const CREATION_MODES: { capability: MediaCapability; label: string }[] = 
   { capability: "image_edit", label: "图片编辑" },
   { capability: "video", label: "文生视频" },
   { capability: "video_i2v", label: "图生视频" },
-  { capability: "tts", label: "配音" },
-  { capability: "asr", label: "转写" },
+  { capability: "tts", label: "语音合成" },
+  { capability: "asr", label: "语音识别" },
   { capability: "translate", label: "专业翻译" },
 ]
 
@@ -45,6 +45,7 @@ const [createMode, setCreateMode] = createSignal<MediaCapability | null>(null)
 const [models, setModels] = createSignal<MediaModel[]>([])
 const [selected, setSelected] = createStore<Partial<Record<MediaCapability, string>>>({})
 const [cards, setCards] = createStore<CreationCard[]>([])
+const [voiceSel, setVoiceSel] = createSignal<string | undefined>(undefined)
 
 export const creation = {
   createMode,
@@ -98,6 +99,16 @@ export const creation = {
 
   selectModel(cap: MediaCapability, id: string) {
     setSelected(cap, id)
+  },
+
+  setVoice(v: string) {
+    setVoiceSel(v)
+  },
+  /** 当前(语音合成)选中的音色;缺省该模型第一个音色 */
+  currentVoice(cap: MediaCapability): string | undefined {
+    const voices = creation.selectedModel(cap)?.params?.voices ?? []
+    const v = voiceSel()
+    return v && voices.includes(v) ? v : voices[0]
   },
 
   /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error */

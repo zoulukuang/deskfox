@@ -11,6 +11,9 @@
 
 /* FORK: 创作模式菜单 — 项数固定且少,去掉 select 列表 12rem 高度上限(仅作用于本菜单,
    不动全局 select.css)[feat: media-creation-mode] 2026-05-26 */
+[data-component="select-content"].media-mode-select {
+  min-width: 11rem;
+}
 [data-component="select-content"].media-mode-select [data-slot="select-select-content-list"] {
   max-height: none;
 }
