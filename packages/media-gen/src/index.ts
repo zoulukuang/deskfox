@@ -14,11 +14,23 @@ import { generateVideo } from "./dashscope-video"
 import { synthesizeSpeech } from "./dashscope-tts"
 import { translateText } from "./dashscope-translate"
 import { transcribeAudio } from "./dashscope-asr"
+import { startMediaServer } from "./server"
 
 const NO_KEY = "未找到阿里(alibaba-cn)的 API Key。请先在 DeskFox 设置里连接阿里供应商。"
 const fail = (e: unknown) => `操作失败:${e instanceof DashScopeError ? e.friendly : (e as Error).message}`
 
+// 模块级单例:创作模式本地生成服务只起一次(multi-instance plugin 加载时复用)
+let serverStarted = false
+
 export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
+  if (!serverStarted) {
+    serverStarted = true
+    try {
+      startMediaServer()
+    } catch (e) {
+      console.error("[media-gen] generate server start failed:", e)
+    }
+  }
   return {
     tool: {
       media_image_generate: tool({
