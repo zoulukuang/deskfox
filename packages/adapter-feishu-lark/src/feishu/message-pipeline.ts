@@ -202,6 +202,15 @@ export class MessagePipeline {
   private readonly larkClient: Client
   /** chatId → opencode sessionID(in-memory cache,真持久化在 chatSessionStore)*/
   private readonly chatToSession = new Map<string, string>()
+  /** [feat: feishu-image-recognition] 2026-05-26 — model vision capability 缓存
+   *  key: `<providerID>/<modelID>` 或 "__default__"(account 没指定 model)
+   *  value: { supportsImage: boolean, checkedAt: ms }
+   *  TTL 10 min,避免每条消息都查 /config/providers */
+  private readonly visionCapCache = new Map<
+    string,
+    { supportsImage: boolean; checkedAt: number }
+  >()
+  private static readonly VISION_CAP_TTL_MS = 10 * 60 * 1000
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
   /** 飞书 CardKit 权限卡片控制器(LLM 调工具触发权限时弹卡片让 user 在飞书选)*/
@@ -345,6 +354,22 @@ export class MessagePipeline {
         () => {},
       )
       return
+    }
+
+    // [feat: feishu-image-recognition] 2026-05-26
+    // 收图前先预检 model 是否支持 vision — 不支持就直接友好告知 user 不调 LLM(避免卡死在"识别中...")
+    if (imageKey) {
+      const visionOk = await this.checkModelVisionSupport().catch(() => true) // 查失败默认放行
+      if (!visionOk) {
+        const modelHint = this.opts.account.model
+          ? `${this.opts.account.model.providerID}/${this.opts.account.model.modelID}`
+          : "当前默认 model"
+        await this.sendFeishuText(
+          event.chatId,
+          `⚠️ ${modelHint} 不支持图片识别。请到 DeskFox 设置 → 飞书桥接 → 选当前账号 → 编辑 → Model,换成支持视觉的模型(如 claude-code/sonnet、Claude/GPT-4o/Gemini 等)。`,
+        ).catch(() => {})
+        return
+      }
     }
 
     // 下载图片(image/post 消息含图都走的分支)— 失败也继续(LLM 收到 text-only 错误说明)
@@ -713,6 +738,56 @@ export class MessagePipeline {
    *    修需要按 message role 区分(part 没 role 字段,得通过 message.updated event 反查)。
    *    留 followup,先保证有 reply(echo)优于 empty reply。
    */
+  /**
+   * [feat: feishu-image-recognition] 2026-05-26
+   * 预检 account 配的 model 是否支持 image input(vision)。
+   * 用 opencodeClient.config.providers() 查 model.capabilities.input.image。
+   *
+   * 缓存 10 min,key = providerID/modelID(或 __default__)。
+   * 查询失败默认返 true(放行 — 假设支持,后续 LLM 收 ERROR text 会自己回 user 不支持)。
+   */
+  private async checkModelVisionSupport(): Promise<boolean> {
+    const model = this.opts.account.model
+    const cacheKey = model ? `${model.providerID}/${model.modelID}` : "__default__"
+    const cached = this.visionCapCache.get(cacheKey)
+    if (cached && Date.now() - cached.checkedAt < MessagePipeline.VISION_CAP_TTL_MS) {
+      return cached.supportsImage
+    }
+
+    if (!model) {
+      // 未指定 model — 走 global default,不阻塞(放行让用户验)
+      this.visionCapCache.set(cacheKey, { supportsImage: true, checkedAt: Date.now() })
+      return true
+    }
+
+    try {
+      const res = await this.opts.opencodeClient.config.providers({
+        query: { directory: IMBOT_WORKSPACE },
+      })
+      const providers = (res as { data?: { providers?: Array<{ id: string; models: Record<string, { capabilities: { input: { image: boolean } } }> }> } })
+        .data?.providers
+      if (!providers) {
+        this.visionCapCache.set(cacheKey, { supportsImage: true, checkedAt: Date.now() })
+        return true
+      }
+      const provider = providers.find((p) => p.id === model.providerID)
+      const modelInfo = provider?.models?.[model.modelID]
+      const supportsImage = modelInfo?.capabilities?.input?.image === true
+      this.visionCapCache.set(cacheKey, { supportsImage, checkedAt: Date.now() })
+      console.log(
+        `[pipeline ${this.opts.accountId}] vision check ${cacheKey} → image=${supportsImage}`,
+      )
+      return supportsImage
+    } catch (err) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] vision check failed for ${cacheKey}, 放行:`,
+        err,
+      )
+      // 查询失败放行(假设支持),避免 false negative 卡住用户
+      return true
+    }
+  }
+
   private async runOpencode(
     sessionID: string,
     text: string,
