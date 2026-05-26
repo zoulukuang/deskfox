@@ -37,6 +37,7 @@ export type EditResult = { url: string; model: string }
 function toImageContent(image: string): { value: string; resolveHeader: boolean } {
   if (/^https?:\/\//i.test(image)) return { value: image, resolveHeader: false }
   if (/^oss:\/\//i.test(image)) return { value: image, resolveHeader: true }
+  if (/^data:/i.test(image)) return { value: image, resolveHeader: false } // 前端附件 base64,qwen-image-edit 直收
   const local = toLocalPath(image)
   let bytes: Buffer
   try {

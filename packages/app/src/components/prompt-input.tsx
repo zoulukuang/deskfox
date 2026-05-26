@@ -1101,14 +1101,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const submitCreation = async (cap: NonNullable<ReturnType<typeof creation.createMode>>) => {
     const entry = creation.selectedModel(cap)
     if (!entry) return
-    const text = prompt
-      .current()
+    const parts = prompt.current()
+    const text = parts
       .map((p) => ("content" in p ? p.content : ""))
       .join("")
       .trim()
-    const input: { prompt: string; targetLang?: string; voice?: string } = { prompt: text }
+    // 附件图片(＋ 加进来的)在 prompt 里是 base64 data URL → 作为参考图/首帧图传给模型
+    const imagePart = parts.find((p) => p.type === "image") as { dataUrl?: string } | undefined
+    const input: { prompt: string; targetLang?: string; voice?: string; refFile?: string } = { prompt: text }
     if (cap === "translate") input.targetLang = "English" // 目标语言选择器后补;P1 默认英文
     if (cap === "tts") input.voice = creation.currentVoice("tts")
+    if (imagePart?.dataUrl) input.refFile = imagePart.dataUrl
     clearEditor()
     await creation.runCreation(entry, input)
   }
