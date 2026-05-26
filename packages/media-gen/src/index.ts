@@ -8,7 +8,7 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { tool } from "./tool-shim"
 import { ALIBABA_PROVIDER_ID, readProviderApiKey } from "./auth"
 import { DashScopeError } from "./dashscope-task"
-import { DEFAULT_MODEL, generateImage } from "./dashscope-image"
+import { DEFAULT_EDIT_MODEL, DEFAULT_MODEL, generateImage } from "./dashscope-image"
 import { generateVideo } from "./dashscope-video"
 import { synthesizeSpeech } from "./dashscope-tts"
 import { translateText } from "./dashscope-translate"
@@ -22,24 +22,20 @@ export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
     tool: {
       media_image_generate: tool({
         description: [
-          "生成或编辑图片。用户要画图、绘图、生成图片、做配图/头像/插画/海报时使用;",
-          "若用户提供了参考图(refImages,公网 URL)则按描述改图。当前接入阿里通义万相。",
-          "不要用于:截图保存、复制粘贴文件、把已有图片写到磁盘——那些请用文件/bash 工具。",
+          "从文字描述生成【全新】图片(文生图)。用户要画图、绘图、生成图片、做配图/头像/插画/海报时使用。",
+          "当前接入阿里通义万相。注意:要修改/编辑【已有】的图片(如换背景、改颜色、增删元素)请改用 media_image_edit,不要用本工具。",
+          "也不要用于:截图保存、复制粘贴文件。",
         ].join(" "),
         args: {
           prompt: tool.schema.string().describe("图片内容描述,中文或英文均可,越具体越好"),
           model: tool.schema.string().optional().describe(`可选模型,缺省 ${DEFAULT_MODEL}(高清档传 wanx2.1-t2i-plus)`),
           size: tool.schema.string().optional().describe("可选尺寸 宽x高,默认 1024x1024"),
           n: tool.schema.number().int().min(1).max(4).optional().describe("可选生成数量 1-4,默认 1"),
-          refImages: tool.schema
-            .array(tool.schema.string())
-            .optional()
-            .describe("可选,参考图的公网 URL 列表;给了就按 prompt 改这张图"),
         },
         async execute(args, ctx) {
           const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
           if (!apiKey) return NO_KEY
-          ctx.metadata({ title: args.refImages?.length ? "提交改图任务…" : "提交生图任务…" })
+          ctx.metadata({ title: "提交生图任务…" })
           try {
             const r = await generateImage({
               apiKey,
@@ -47,13 +43,46 @@ export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
               model: args.model,
               size: args.size,
               n: args.n,
-              refImages: args.refImages,
               signal: ctx.abort,
               onProgress: (p) => ctx.metadata({ title: p.message, metadata: { state: p.state } }),
             })
             return {
               output: `已用 ${r.model} 生成 ${r.urls.length} 张图片:\n${r.urls.map((u) => `![](${u})`).join("\n")}`,
               metadata: { kind: "image", provider: "alibaba", model: r.model, urls: r.urls, taskId: r.taskId },
+            }
+          } catch (e) {
+            return fail(e)
+          }
+        },
+      }),
+
+      media_image_edit: tool({
+        description: [
+          "编辑 / 修改【已有】的图片。用户要改背景、换颜色、替换或增删元素、局部修改、风格化一张现有图片时,必须用本工具。",
+          "典型场景:把背景换成绿色 / 荷花、给人物加顶帽子、把白天改成夜晚、去掉某个物体。当前接入阿里通义万相 wanx2.1-imageedit。",
+          "需要用户提供这张图(放进 image 参数):本地文件路径(包括 @ 提及的文件)或公网 URL,本地文件会自动上传处理。",
+        ].join(" "),
+        args: {
+          prompt: tool.schema.string().describe("要怎么改这张图,如 '把背景换成绿色'、'给狗戴上墨镜'"),
+          image: tool.schema.string().describe("要编辑的图片:本地文件路径(@ 提及的文件)或公网 URL"),
+          model: tool.schema.string().optional().describe(`可选模型,缺省 ${DEFAULT_EDIT_MODEL}`),
+        },
+        async execute(args, ctx) {
+          const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
+          if (!apiKey) return NO_KEY
+          ctx.metadata({ title: "提交改图任务…" })
+          try {
+            const r = await generateImage({
+              apiKey,
+              prompt: args.prompt,
+              model: args.model,
+              refImages: [args.image],
+              signal: ctx.abort,
+              onProgress: (p) => ctx.metadata({ title: p.message, metadata: { state: p.state } }),
+            })
+            return {
+              output: `已编辑生成 ${r.urls.length} 张图片:\n${r.urls.map((u) => `![](${u})`).join("\n")}`,
+              metadata: { kind: "image-edit", provider: "alibaba", model: r.model, urls: r.urls, taskId: r.taskId },
             }
           } catch (e) {
             return fail(e)
