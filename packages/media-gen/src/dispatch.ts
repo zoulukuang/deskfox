@@ -35,6 +35,7 @@ export type GenOutput = {
   urls?: string[]
   url?: string
   text?: string
+  localPaths?: string[] // 落盘后的本地路径(由 /generate 服务端填,见 server.ts)
   model: string
   provider: string
 }

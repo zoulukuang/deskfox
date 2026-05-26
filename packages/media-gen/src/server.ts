@@ -19,6 +19,7 @@ import { join } from "node:path"
 import { DashScopeError } from "./dashscope-task"
 import { runEntry } from "./dispatch"
 import { availableEntries, findEntry } from "./registry"
+import { listCreations, saveAssets } from "./asset-save"
 
 export const MEDIA_SERVER_PORT = 51737 // 固定 loopback 端口(P1);前端按此 fetch
 const PORT_FILE = join(homedir(), ".opencode", "media-gen-server.json")
@@ -45,6 +46,11 @@ export async function handler(req: Request): Promise<Response> {
     return json({ entries: availableEntries() })
   }
 
+  if (url.pathname === "/files" && req.method === "GET") {
+    // 创作文件库(右侧"创作文件"面板)
+    return json(listCreations())
+  }
+
   if (url.pathname === "/generate" && req.method === "POST") {
     const body = (await req.json().catch(() => ({}))) as { entryId?: string; input?: Record<string, unknown> }
     const entry = body.entryId ? findEntry(body.entryId) : undefined
@@ -57,6 +63,12 @@ export async function handler(req: Request): Promise<Response> {
           controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
         try {
           const out = await runEntry(entry, { ...(body.input ?? {}), onProgress: (p) => send("progress", p) })
+          // 落盘到本地分类文件夹(图片/视频/音频),把本地路径带回前端
+          if (out.kind !== "text") {
+            send("progress", { state: "saving", message: "保存到本地…" })
+            const urls = out.urls ?? (out.url ? [out.url] : [])
+            out.localPaths = await saveAssets(out.kind, urls)
+          }
           send("result", out)
         } catch (e) {
           const message = e instanceof DashScopeError ? e.friendly : (e as Error).message

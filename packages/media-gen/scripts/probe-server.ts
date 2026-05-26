@@ -36,9 +36,15 @@ while (true) {
     else if (ev === "result") {
       const r = JSON.parse(data!)
       console.log(`\n✓ result: kind=${r.kind} model=${r.model}`)
-      console.log("   ", r.urls?.[0] ?? r.url ?? r.text)
+      console.log("   url:", r.urls?.[0] ?? r.url ?? r.text)
+      console.log("   localPaths:", r.localPaths)
     } else if (ev === "error") console.log("\n✗ error:", JSON.parse(data!).message)
   }
 }
+
+console.log("→ GET /files(创作文件库)")
+const files = (await (await fetch(`${base}/files`)).json()) as { images: unknown[]; videos: unknown[]; audio: unknown[] }
+console.log(`  images=${files.images.length} videos=${files.videos.length} audio=${files.audio.length}`)
+
 handle.stop()
 process.exit(0)
