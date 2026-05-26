@@ -33,11 +33,13 @@ import {
   type PermissionRequest,
 } from "./permission-card"
 import {
+  getClientAuthContext,
   sendFileMessage,
   sendImageMessage,
   uploadFile,
   uploadImage,
 } from "./file-uploader"
+import { downloadFeishuImage } from "./image-downloader"
 import type { PromptDispatcher } from "./prompt-dispatcher"
 import {
   classifyAttachment,
@@ -286,22 +288,75 @@ export class MessagePipeline {
   }
 
   async handle(event: ImMessageEvent): Promise<void> {
-    if (event.messageType !== "text") {
+    // [feat: feishu-image-recognition] 2026-05-26 — image 走多模态识别路径
+    // 其它非 text/image 仍 skip(file/audio/video/sticker/interactive 等留 backlog)
+    if (event.messageType !== "text" && event.messageType !== "image") {
       console.log(
-        `[pipeline ${this.opts.accountId}] skip non-text message: type=${event.messageType}`,
+        `[pipeline ${this.opts.accountId}] skip non-text/image message: type=${event.messageType}`,
       )
       return
     }
 
-    let text: string
+    // 解析 content — text 取 text,image 取 image_key
+    let text = ""
+    let imageKey: string | null = null
     try {
-      const parsed = JSON.parse(event.content) as { text?: string }
-      text = (parsed.text ?? "").trim()
+      const parsed = JSON.parse(event.content) as { text?: string; image_key?: string }
+      if (event.messageType === "text") {
+        text = (parsed.text ?? "").trim()
+      } else {
+        // image
+        imageKey = parsed.image_key ?? null
+        // 飞书 image event 偶尔含 caption(以 text 字段携带);若存在,跟图片一起处理
+        text = (parsed.text ?? "").trim()
+      }
     } catch {
       console.warn(`[pipeline ${this.opts.accountId}] invalid content json:`, event.content)
       return
     }
-    if (!text) return
+
+    if (event.messageType === "image" && !imageKey) {
+      console.warn(`[pipeline ${this.opts.accountId}] image event 缺 image_key,skip`)
+      await this.sendFeishuText(event.chatId, "😅 收到的图片好像出了点问题,换张图试试?").catch(
+        () => {},
+      )
+      return
+    }
+
+    // 下载图片(image 消息走的分支)— 失败也继续(LLM 收到 text-only 错误说明)
+    let imagePart: { mime: string; filename: string; absolutePath: string } | null = null
+    let imageDownloadError: string | null = null
+    if (event.messageType === "image" && imageKey) {
+      // D5 提前发"识别中..."提示(vision LLM 5-15s 慢,无反馈用户以为没收到)
+      await this.sendFeishuText(event.chatId, "🖼️ 收到图片,识别中...").catch((err) => {
+        console.warn(`[pipeline ${this.opts.accountId}] 发送识别中提示失败:`, err)
+      })
+
+      try {
+        const auth = await getClientAuthContext(this.larkClient)
+        const dl = await downloadFeishuImage(imageKey, event.chatId, auth.token, auth.domain)
+        imagePart = { mime: dl.mime, filename: dl.filename, absolutePath: dl.absolutePath }
+        console.log(
+          `[pipeline ${this.opts.accountId}] downloaded image ${dl.size}B → ${dl.absolutePath}`,
+        )
+      } catch (err) {
+        imageDownloadError = (err as Error).message
+        console.warn(
+          `[pipeline ${this.opts.accountId}] image download failed: ${imageDownloadError}`,
+        )
+      }
+    }
+
+    // 文本 + 图都没,直接退(image 消息无 caption + 下载失败的极端情况)
+    if (!text && !imagePart && !imageDownloadError) return
+    if (!text && imageDownloadError) {
+      await this.sendFeishuText(
+        event.chatId,
+        `😅 没能下载这张图(原因:${imageDownloadError})。换张图或者跟我说说图里啥内容?`,
+      ).catch(() => {})
+      return
+    }
+    // image 消息有时 caption 也是空的(纯发图),不退;让 LLM 收图后自己判断回复
 
     // [feat: feishu-bridge-light] /new slash command — 清当前 chat session 切话题
     // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25
@@ -497,7 +552,10 @@ export class MessagePipeline {
       // [feat: feishu-llm-strip-mention-placeholders] 2026-05-24
       // 传 cleaned(已 strip @_user_N 飞书占位符)而非 raw text,避免 LLM 误把
       // 占位符当成另一个联系人(实测 bot reply 含"我不是 @_user_1..."类幻觉)。
-      reply = await this.runOpencode(sessionID, cleaned, this.opts.account.agent)
+      reply = await this.runOpencode(sessionID, cleaned, this.opts.account.agent, {
+        imagePart,
+        imageDownloadError,
+      })
     } catch (err) {
       console.error(`[pipeline ${this.opts.accountId}] opencode error:`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
@@ -625,7 +683,16 @@ export class MessagePipeline {
    *    修需要按 message role 区分(part 没 role 字段,得通过 message.updated event 反查)。
    *    留 followup,先保证有 reply(echo)优于 empty reply。
    */
-  private async runOpencode(sessionID: string, text: string, agent: string): Promise<string> {
+  private async runOpencode(
+    sessionID: string,
+    text: string,
+    agent: string,
+    // [feat: feishu-image-recognition] 2026-05-26 — 多模态 image part
+    imageOpts?: {
+      imagePart: { mime: string; filename: string; absolutePath: string } | null
+      imageDownloadError: string | null
+    },
+  ): Promise<string> {
     // 默认 30 分钟超时(2026-05-10 由 5min 提)。
     // 实测出现过 7m18s 才完成的回复(用户问"DeskFox 服务启动后..."触发 75 次工具调用)
     // 5min 超时强制走 dispatcher partial 路径 → runOpencode 又忽略 partial 改读
@@ -647,7 +714,30 @@ export class MessagePipeline {
           ...(accountModel
             ? { model: { providerID: accountModel.providerID, modelID: accountModel.modelID } }
             : {}),
-          parts: [{ type: "text", text }],
+          // [feat: feishu-image-recognition] 2026-05-26 — text + file part 混合
+          // file part url 用 file:// 协议,opencode-cli prompt.ts:1230 自动 readFile +
+          // base64 inline 给 LLM provider(0 JSON 体膨胀,0 临时 server,workspace 持久化)
+          parts: [
+            ...(text ? [{ type: "text" as const, text }] : []),
+            ...(imageOpts?.imagePart
+              ? [
+                  {
+                    type: "file" as const,
+                    mime: imageOpts.imagePart.mime,
+                    filename: imageOpts.imagePart.filename,
+                    url: `file://${imageOpts.imagePart.absolutePath}`,
+                  },
+                ]
+              : []),
+            ...(imageOpts?.imageDownloadError
+              ? [
+                  {
+                    type: "text" as const,
+                    text: `(系统提示:用户发了一张图片,但下载失败:${imageOpts.imageDownloadError}。请回复说图片暂时看不到,问 user 描述一下图片内容)`,
+                  },
+                ]
+              : []),
+          ],
         },
       })
       .catch((err) => {

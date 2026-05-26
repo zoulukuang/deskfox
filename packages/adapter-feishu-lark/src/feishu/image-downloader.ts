@@ -11,9 +11,13 @@
 // readFile + base64 inline 给 LLM provider。0 临时 server / 0 端口 / 0 R6 风险。
 
 import { mkdir, writeFile } from "node:fs/promises"
+import { homedir } from "node:os"
 import { join } from "node:path"
-import { IMBOT_WORKSPACE } from "../plugin"
 
+// FORK: 不 import IMBOT_WORKSPACE from "../plugin" 避免循环依赖
+// (plugin → message-pipeline → image-downloader → plugin)
+// 自己重算同样的路径(plugin.ts:55 也是 join(homedir(), ".opencode", "imbot-workspace"))
+const IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
 export const FEISHU_IMAGES_DIR = join(IMBOT_WORKSPACE, "feishu-images")
 
 export interface DownloadedImage {
