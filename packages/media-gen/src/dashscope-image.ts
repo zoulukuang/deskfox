@@ -4,6 +4,7 @@
 // 两者都是异步任务,复用 dashscope-task 的 runDashScopeTask。
 
 import { DashScopeError, normalizeSize, runDashScopeTask, type TaskProgress } from "./dashscope-task"
+import { needsResolveHeader, resolveInputUrl } from "./dashscope-upload"
 
 export { DashScopeError, normalizeSize } from "./dashscope-task"
 
@@ -36,10 +37,16 @@ export async function generateImage(input: ImageGenInput): Promise<ImageGenResul
   const model = input.model ?? (isEdit ? DEFAULT_EDIT_MODEL : DEFAULT_MODEL)
   const n = input.n ?? 1
 
+  // 改图:参考图若是本地文件先上传成 oss:// 链接
+  let baseImageUrl: string | undefined
+  if (isEdit) {
+    baseImageUrl = await resolveInputUrl({ apiKey: input.apiKey, input: input.refImages![0]!, model, fetchImpl: input.fetchImpl })
+  }
+
   const body = isEdit
     ? {
         model,
-        input: { function: "description_edit", prompt: input.prompt, base_image_url: input.refImages![0] },
+        input: { function: "description_edit", prompt: input.prompt, base_image_url: baseImageUrl },
         parameters: { n },
       }
     : {
@@ -52,6 +59,7 @@ export async function generateImage(input: ImageGenInput): Promise<ImageGenResul
     apiKey: input.apiKey,
     endpoint: isEdit ? EDIT_ENDPOINT : T2I_ENDPOINT,
     body,
+    extraHeaders: baseImageUrl && needsResolveHeader(baseImageUrl) ? { "X-DashScope-OssResourceResolve": "enable" } : undefined,
     signal: input.signal,
     onProgress: input.onProgress,
     fetchImpl: input.fetchImpl,

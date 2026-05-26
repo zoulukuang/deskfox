@@ -3,6 +3,7 @@
 // 提交音频 URL → 轮询 → 拿到 transcription_url(指向转写 JSON)→ 再 fetch 取文字。
 
 import { DashScopeError, readJson, runDashScopeTask, type TaskProgress } from "./dashscope-task"
+import { needsResolveHeader, resolveInputUrl } from "./dashscope-upload"
 
 export const DEFAULT_ASR_MODEL = "paraformer-v2"
 const ENDPOINT = "/api/v1/services/audio/asr/transcription"
@@ -24,10 +25,14 @@ export async function transcribeAudio(input: AsrInput): Promise<AsrResult> {
   const model = input.model ?? DEFAULT_ASR_MODEL
   const fetchImpl = input.fetchImpl ?? fetch
 
+  // 本地文件先上传成 oss:// 链接(公网/oss 链接原样用)
+  const fileUrl = await resolveInputUrl({ apiKey: input.apiKey, input: input.audioUrl, model, fetchImpl: input.fetchImpl })
+
   const { taskId, output } = await runDashScopeTask({
     apiKey: input.apiKey,
     endpoint: ENDPOINT,
-    body: { model, input: { file_urls: [input.audioUrl] }, parameters: {} },
+    body: { model, input: { file_urls: [fileUrl] }, parameters: {} },
+    extraHeaders: needsResolveHeader(fileUrl) ? { "X-DashScope-OssResourceResolve": "enable" } : undefined,
     signal: input.signal,
     onProgress: input.onProgress,
     fetchImpl: input.fetchImpl,

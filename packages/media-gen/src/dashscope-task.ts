@@ -84,6 +84,8 @@ export type TaskRunInput = {
   apiKey: string
   endpoint: string
   body: unknown
+  /** 额外提交头,如使用 oss:// 资源时的 X-DashScope-OssResourceResolve: enable */
+  extraHeaders?: Record<string, string>
   signal?: AbortSignal
   onProgress?: (p: TaskProgress) => void
   // ---- 以下仅测试注入 ----
@@ -107,6 +109,7 @@ export async function runDashScopeTask(input: TaskRunInput): Promise<{ taskId: s
       Authorization: `Bearer ${input.apiKey}`,
       "X-DashScope-Async": "enable",
       "Content-Type": "application/json",
+      ...(input.extraHeaders ?? {}),
     },
     body: JSON.stringify(input.body),
     signal: input.signal,

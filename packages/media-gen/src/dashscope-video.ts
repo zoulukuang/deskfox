@@ -3,6 +3,7 @@
 // 给了 refImage(公网 URL)走图生视频(i2v),否则文生视频(t2v)。异步任务,轮询更久。
 
 import { DashScopeError, normalizeSize, runDashScopeTask, type TaskProgress } from "./dashscope-task"
+import { needsResolveHeader, resolveInputUrl } from "./dashscope-upload"
 
 export const DEFAULT_T2V_MODEL = "wanx2.1-t2v-turbo"
 export const DEFAULT_I2V_MODEL = "wanx2.1-i2v-turbo"
@@ -27,14 +28,21 @@ export async function generateVideo(input: VideoGenInput): Promise<VideoGenResul
   const isI2V = !!input.refImage
   const model = input.model ?? (isI2V ? DEFAULT_I2V_MODEL : DEFAULT_T2V_MODEL)
 
+  // 图生视频:首帧图若是本地文件先上传成 oss:// 链接
+  let imgUrl: string | undefined
+  if (isI2V) {
+    imgUrl = await resolveInputUrl({ apiKey: input.apiKey, input: input.refImage!, model, fetchImpl: input.fetchImpl })
+  }
+
   const body = isI2V
-    ? { model, input: { prompt: input.prompt, img_url: input.refImage }, parameters: { resolution: "720P" } }
+    ? { model, input: { prompt: input.prompt, img_url: imgUrl }, parameters: { resolution: "720P" } }
     : { model, input: { prompt: input.prompt }, parameters: { size: normalizeSize(input.size ?? "1280*720") } }
 
   const { taskId, output } = await runDashScopeTask({
     apiKey: input.apiKey,
     endpoint: ENDPOINT,
     body,
+    extraHeaders: imgUrl && needsResolveHeader(imgUrl) ? { "X-DashScope-OssResourceResolve": "enable" } : undefined,
     signal: input.signal,
     onProgress: input.onProgress,
     fetchImpl: input.fetchImpl,
