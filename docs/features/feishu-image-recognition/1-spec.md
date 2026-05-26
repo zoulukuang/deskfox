@@ -1,8 +1,12 @@
 ---
 feat-id: feishu-image-recognition
-status: spec
+status: locked
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ---
+
+> **架构锁版**(2026-05-26 user 拍板):**D1 = file:// path 方案**(下载到 workspace + FilePart `url=file:///absolute/path`,opencode-cli `prompt.ts:1230` 自动 readFile + base64 inline 给 LLM provider)。其它 D2-D6 全按推荐方案锁。
+>
+> **关键事实**(架构选型基础):opencode-cli runs locally on user 机器,`FilePartInput.url` 支持 4 种形态,**file:// 是唯一同时满足"opencode 原生本地读 + JSON 体不膨胀 + workspace 持久化 + 跟反向 ATTACH 路径对偶"的方案**。data: URL 也可工作但 multi-turn 每次重发 base64;localhost server 给 LLM 不可达;public URL 让 LLM 自 fetch 不可控。
 
 # feishu-image-recognition — 1-spec(需求 + 验收 + 架构调研)
 
