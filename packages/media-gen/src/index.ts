@@ -8,7 +8,8 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { tool } from "./tool-shim"
 import { ALIBABA_PROVIDER_ID, readProviderApiKey } from "./auth"
 import { DashScopeError } from "./dashscope-task"
-import { DEFAULT_EDIT_MODEL, DEFAULT_MODEL, generateImage } from "./dashscope-image"
+import { DEFAULT_MODEL, generateImage } from "./dashscope-image"
+import { DEFAULT_EDIT_MODEL, editImage } from "./dashscope-edit"
 import { generateVideo } from "./dashscope-video"
 import { synthesizeSpeech } from "./dashscope-tts"
 import { translateText } from "./dashscope-translate"
@@ -70,19 +71,18 @@ export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
         async execute(args, ctx) {
           const apiKey = readProviderApiKey(ALIBABA_PROVIDER_ID)
           if (!apiKey) return NO_KEY
-          ctx.metadata({ title: "提交改图任务…" })
+          ctx.metadata({ title: "改图中…" })
           try {
-            const r = await generateImage({
+            const r = await editImage({
               apiKey,
               prompt: args.prompt,
+              image: args.image,
               model: args.model,
-              refImages: [args.image],
               signal: ctx.abort,
-              onProgress: (p) => ctx.metadata({ title: p.message, metadata: { state: p.state } }),
             })
             return {
-              output: `已编辑生成 ${r.urls.length} 张图片:\n${r.urls.map((u) => `![](${u})`).join("\n")}`,
-              metadata: { kind: "image-edit", provider: "alibaba", model: r.model, urls: r.urls, taskId: r.taskId },
+              output: `已改图:\n![](${r.url})`,
+              metadata: { kind: "image-edit", provider: "alibaba", model: r.model, url: r.url },
             }
           } catch (e) {
             return fail(e)

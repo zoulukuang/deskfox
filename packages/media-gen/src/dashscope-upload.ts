@@ -19,7 +19,7 @@ export function needsResolveHeader(s: string): boolean {
   return /^oss:\/\//i.test(s)
 }
 
-function toLocalPath(p: string): string {
+export function toLocalPath(p: string): string {
   if (p.startsWith("file://")) {
     try {
       return fileURLToPath(p)

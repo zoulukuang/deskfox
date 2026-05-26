@@ -1,6 +1,9 @@
 // [feat: media-gen-alibaba] 2026-05-26 — 视频/翻译/语音合成/语音识别 + 改图 单元测试(mock fetch)
 import { describe, expect, test } from "bun:test"
-import { generateImage } from "../src/dashscope-image"
+import { rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { editImage } from "../src/dashscope-edit"
 import { generateVideo } from "../src/dashscope-video"
 import { synthesizeSpeech } from "../src/dashscope-tts"
 import { translateText } from "../src/dashscope-translate"
@@ -10,28 +13,33 @@ function res(status: number, body: unknown): Response {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as unknown as Response
 }
 
-describe("generateImage 改图分支", () => {
-  test("给 refImages 时走 image2image 端点 + description_edit", async () => {
-    let captured: any
-    const fetchImpl = (async (url: string, init?: any) => {
-      if (init?.method === "POST") {
-        captured = { url: String(url), body: JSON.parse(init.body) }
-        return res(200, { output: { task_id: "t", task_status: "PENDING" } })
-      }
-      return res(200, { output: { task_status: "SUCCEEDED", results: [{ url: "https://oss/edited.png" }] } })
+describe("editImage（qwen-image-edit）", () => {
+  test("远程 url → multimodal-generation,取 content[].image", async () => {
+    let body: any
+    const fetchImpl = (async (_url: string, init?: any) => {
+      body = JSON.parse(init.body)
+      return res(200, { output: { choices: [{ message: { content: [{ image: "https://oss/edited.png" }] } }] } })
     }) as unknown as typeof fetch
 
-    const out = await generateImage({
-      apiKey: "k",
-      prompt: "把背景换成雪山",
-      refImages: ["https://oss/base.png"],
-      fetchImpl,
-      pollIntervalMs: 1,
-    })
-    expect(captured.url).toContain("image2image/image-synthesis")
-    expect(captured.body.input.function).toBe("description_edit")
-    expect(captured.body.input.base_image_url).toBe("https://oss/base.png")
-    expect(out.urls).toEqual(["https://oss/edited.png"])
+    const out = await editImage({ apiKey: "k", prompt: "把背景换成绿色", image: "https://oss/base.png", fetchImpl })
+    expect(out.url).toBe("https://oss/edited.png")
+    expect(body.input.messages[0].content[0].image).toBe("https://oss/base.png")
+    expect(body.input.messages[0].content[1].text).toBe("把背景换成绿色")
+  })
+
+  test("本地文件 → base64 data uri", async () => {
+    const p = join(tmpdir(), `mg-edit-test-${Date.now()}.png`)
+    writeFileSync(p, new Uint8Array([1, 2, 3, 4]))
+    let body: any
+    const fetchImpl = (async (_url: string, init?: any) => {
+      body = JSON.parse(init.body)
+      return res(200, { output: { choices: [{ message: { content: [{ image: "https://oss/e.png" }] } }] } })
+    }) as unknown as typeof fetch
+
+    const out = await editImage({ apiKey: "k", prompt: "x", image: p, fetchImpl })
+    expect(out.url).toBe("https://oss/e.png")
+    expect(String(body.input.messages[0].content[0].image)).toContain("data:image/png;base64,")
+    rmSync(p)
   })
 })
 

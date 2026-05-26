@@ -1,19 +1,14 @@
-// [fork-only] media-gen — 阿里文生图 / 图生图(改图)
+// [fork-only] media-gen — 阿里文生图(纯 t2i;改图见 dashscope-edit.ts 的 qwen-image-edit)
 // [feat: media-gen-alibaba] 2026-05-26
-// 文生图走 text2image 端点;给了参考图(refImages)则走 image2image 改图端点。
-// 两者都是异步任务,复用 dashscope-task 的 runDashScopeTask。
+// 异步任务,复用 dashscope-task 的 runDashScopeTask。
 
 import { DashScopeError, normalizeSize, runDashScopeTask, type TaskProgress } from "./dashscope-task"
-import { needsResolveHeader, resolveInputUrl } from "./dashscope-upload"
 
 export { DashScopeError, normalizeSize } from "./dashscope-task"
 
 export const DEFAULT_MODEL = "wanx2.1-t2i-turbo" // 高清档可传 wanx2.1-t2i-plus
-export const DEFAULT_EDIT_MODEL = "wanx2.1-imageedit"
 export const DEFAULT_SIZE = "1024*1024"
-
 const T2I_ENDPOINT = "/api/v1/services/aigc/text2image/image-synthesis"
-const EDIT_ENDPOINT = "/api/v1/services/aigc/image2image/image-synthesis"
 
 export type ImageGenInput = {
   apiKey: string
@@ -21,7 +16,6 @@ export type ImageGenInput = {
   model?: string
   size?: string // "1024x1024" / "1024*1024" 均可
   n?: number
-  refImages?: string[] // 公网 URL;给了就走改图
   signal?: AbortSignal
   onProgress?: (p: TaskProgress) => void
   // ---- 仅测试注入 ----
@@ -33,33 +27,13 @@ export type ImageGenInput = {
 export type ImageGenResult = { urls: string[]; model: string; taskId: string }
 
 export async function generateImage(input: ImageGenInput): Promise<ImageGenResult> {
-  const isEdit = !!(input.refImages && input.refImages.length > 0)
-  const model = input.model ?? (isEdit ? DEFAULT_EDIT_MODEL : DEFAULT_MODEL)
+  const model = input.model ?? DEFAULT_MODEL
   const n = input.n ?? 1
-
-  // 改图:参考图若是本地文件先上传成 oss:// 链接
-  let baseImageUrl: string | undefined
-  if (isEdit) {
-    baseImageUrl = await resolveInputUrl({ apiKey: input.apiKey, input: input.refImages![0]!, model, fetchImpl: input.fetchImpl })
-  }
-
-  const body = isEdit
-    ? {
-        model,
-        input: { function: "description_edit", prompt: input.prompt, base_image_url: baseImageUrl },
-        parameters: { n },
-      }
-    : {
-        model,
-        input: { prompt: input.prompt },
-        parameters: { size: normalizeSize(input.size ?? DEFAULT_SIZE), n },
-      }
 
   const { taskId, output } = await runDashScopeTask({
     apiKey: input.apiKey,
-    endpoint: isEdit ? EDIT_ENDPOINT : T2I_ENDPOINT,
-    body,
-    extraHeaders: baseImageUrl && needsResolveHeader(baseImageUrl) ? { "X-DashScope-OssResourceResolve": "enable" } : undefined,
+    endpoint: T2I_ENDPOINT,
+    body: { model, input: { prompt: input.prompt }, parameters: { size: normalizeSize(input.size ?? DEFAULT_SIZE), n } },
     signal: input.signal,
     onProgress: input.onProgress,
     fetchImpl: input.fetchImpl,
