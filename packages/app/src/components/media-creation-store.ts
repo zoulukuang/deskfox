@@ -56,8 +56,21 @@ export const creation = {
     setCreateMode(cap)
   },
 
-  /** 拉取可用模型(连接服务后调一次;失败静默,创作入口自然为空) */
+  /** 拉取可用模型;边车服务可能晚于 UI 就绪,故重试几次(拿到非空即停) */
   async loadModels() {
+    for (let i = 0; i < 6; i++) {
+      try {
+        const list = await listMediaModels()
+        if (list.length > 0) {
+          setModels(list)
+          return
+        }
+      } catch {
+        /* 服务未就绪,稍后重试 */
+      }
+      await new Promise((r) => setTimeout(r, 800))
+    }
+    // 最后一次(允许空 — 可能确实没配任何已适配供应商)
     try {
       setModels(await listMediaModels())
     } catch {
