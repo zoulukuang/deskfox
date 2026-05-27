@@ -15,6 +15,8 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { type Session } from "@opencode-ai/sdk/v2/client"
 import { type LocalProject } from "@/context/layout"
 import { loadSessionsQuery, useGlobalSync } from "@/context/global-sync"
+// FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
 import { pathKey } from "@/utils/path-key"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
@@ -415,7 +417,10 @@ export const SortableWorkspace = (props: {
                 showDeleteWorkspaceDialog={props.ctx.showDeleteWorkspaceDialog}
                 root={props.project.worktree}
                 clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
-                navigateToNewSession={() => navigate(`/${slug()}/session`)}
+                navigateToNewSession={() => {
+                  creation.resetDraft()
+                  navigate(`/${slug()}/session`)
+                }}
               />
             </div>
           </div>

@@ -75,6 +75,13 @@ export const creation = {
     setCardsByScope(key, [])
   },
 
+  /** 清空首页 draft 作用域 —— 供各"新建会话"入口直接调。
+   *  session→首页 由 session.tsx effect(params.id 变空)兜底重置;但"已停在首页再点新建会话"
+   *  是同路由跳转、params.id 不变、effect 不触发,必须由按钮/命令显式调本方法清掉旧 draft 卡。 */
+  resetDraft() {
+    setCardsByScope(DRAFT_SCOPE, [])
+  },
+
   /** 首页 draft 创作 → 发 chat 建出 session 时,把 draft 卡过继给新 session,draft 清空 */
   adoptDraftInto(key: string) {
     const draft = cardsByScope[DRAFT_SCOPE] ?? []

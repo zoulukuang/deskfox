@@ -50,6 +50,17 @@ describe("创作卡作用域隔离", () => {
     expect(creation.cards().length).toBe(0)
   })
 
+  // [bug-repro: 已停在首页时再点"新建会话"(home→home,同路由 params.id 不变 → session.tsx effect
+  //  不触发)→ 旧 draft 卡不清。各新建会话入口显式调 resetDraft() 兜底]
+  test("resetDraft 清空首页 draft(home→home 新建会话路径)", async () => {
+    creation.setScope(DRAFT_SCOPE)
+    creation.resetScope(DRAFT_SCOPE)
+    await creation.runCreation(entry, { prompt: "首页生成" }, undefined, { generate: fakeGen })
+    expect(creation.cards().length).toBe(1) // 首页 draft 有卡
+    creation.resetDraft() // 模拟点"新建会话"
+    expect(creation.cards().length).toBe(0) // draft 清空
+  })
+
   test("adoptDraftInto:首页 draft 卡过继给新建 session,draft 清空", async () => {
     creation.setScope(DRAFT_SCOPE)
     creation.resetScope(DRAFT_SCOPE)
