@@ -61,7 +61,7 @@ export function NewSessionView(props: NewSessionViewProps) {
           无卡时维持原居中 hero 布局。[feat: media-creation-mode] */}
       <div
         class="flex-1 min-h-0 px-6 pb-30 overflow-y-auto flex flex-col items-center text-center"
-        classList={{ "justify-center": creation.cards.length === 0 }}
+        classList={{ "justify-center": creation.cards().length === 0 }}
       >
         <div class="w-full max-w-200 flex flex-col items-center text-center gap-4">
           <div class="flex flex-col items-center gap-6">
@@ -99,7 +99,7 @@ export function NewSessionView(props: NewSessionViewProps) {
           </div>
         </div>
         {/* FORK: 创作结果卡(首页/无 session 场景);session 内由 message-timeline 渲染同一份 store */}
-        <Show when={creation.cards.length > 0}>
+        <Show when={creation.cards().length > 0}>
           <div class="w-full max-w-200 mt-6 text-left">
             <MediaCreationResults />
           </div>

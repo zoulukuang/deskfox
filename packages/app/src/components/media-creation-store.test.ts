@@ -1,0 +1,65 @@
+// [fork-only] 创作卡作用域隔离单测 [feat: media-creation-mode]
+// [bug-repro: 启动过创作后,打开任何新会话/新绘画都带出旧创作记录(模块级全局 store 未按 session 隔离)]
+import { describe, expect, test, beforeEach } from "bun:test"
+import { creation, DRAFT_SCOPE } from "./media-creation-store"
+import type { MediaModel, MediaResult } from "@/utils/media-creation"
+
+const entry: MediaModel = {
+  id: "alibaba-x",
+  capability: "image",
+  provider: "p",
+  model: "m",
+  displayName: "测试模型",
+}
+
+// mock 生成:立即 resolve(不碰真实本地服务 / 网络)
+const fakeGen = async (): Promise<MediaResult> => ({
+  kind: "image",
+  urls: ["u"],
+  localPaths: ["/proj/creations/images/x.png"],
+  model: "m",
+  provider: "p",
+})
+
+beforeEach(() => {
+  creation.resetScope(DRAFT_SCOPE)
+})
+
+describe("创作卡作用域隔离", () => {
+  test("不同 session 作用域的卡互不可见(本 bug 根因)", async () => {
+    creation.setScope("sessA")
+    creation.resetScope("sessA")
+    await creation.runCreation(entry, { prompt: "p" }, undefined, { generate: fakeGen })
+    expect(creation.cards().length).toBe(1)
+    expect(creation.cards()[0]?.status).toBe("done")
+
+    creation.setScope("sessB")
+    creation.resetScope("sessB")
+    expect(creation.cards().length).toBe(0) // B 看不到 A 的卡
+
+    creation.setScope("sessA")
+    expect(creation.cards().length).toBe(1) // 切回 A 仍在
+  })
+
+  test("resetScope 清空当前作用域(新建会话进 draft)", async () => {
+    creation.setScope("sessC")
+    creation.resetScope("sessC")
+    await creation.runCreation(entry, { prompt: "p" }, undefined, { generate: fakeGen })
+    expect(creation.cards().length).toBe(1)
+    creation.resetScope("sessC")
+    expect(creation.cards().length).toBe(0)
+  })
+
+  test("adoptDraftInto:首页 draft 卡过继给新建 session,draft 清空", async () => {
+    creation.setScope(DRAFT_SCOPE)
+    creation.resetScope(DRAFT_SCOPE)
+    await creation.runCreation(entry, { prompt: "p" }, undefined, { generate: fakeGen })
+    expect(creation.cards().length).toBe(1) // draft 有 1 张
+
+    creation.adoptDraftInto("newSess")
+    creation.setScope(DRAFT_SCOPE)
+    expect(creation.cards().length).toBe(0) // draft 已清空
+    creation.setScope("newSess")
+    expect(creation.cards().length).toBe(1) // 过继到新 session
+  })
+})

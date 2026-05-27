@@ -12,10 +12,10 @@ const revealFolder = (p: string) => void invoke("reveal_in_folder", { path: p })
 
 export function MediaCreationResults() {
   return (
-    <Show when={creation.cards.length > 0}>
+    <Show when={creation.cards().length > 0}>
       {/* 渲染在聊天滚动流里(消息之后),由时间线滚动承载 */}
       <div class="flex flex-col gap-2 pb-2">
-        <For each={creation.cards}>
+        <For each={creation.cards()}>
           {(card) => (
             <div class="rounded-[10px] border border-border-weak-base bg-background-base p-3">
               <div class="text-13-medium text-text-weak mb-1.5">
