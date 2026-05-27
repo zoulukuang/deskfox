@@ -93,7 +93,8 @@ describe("defaultMode", () => {
 describe("defaultFilePath", () => {
   test("含 ~/.opencode/feishu-secrets/", () => {
     const p = defaultFilePath("appid_123")
-    expect(p).toContain(".opencode/feishu-secrets")
+    // 用 join 给原生分隔符(Win `\` / Unix `/`),别写死 "/" 否则 Windows 上 toContain 失败
+    expect(p).toContain(join(".opencode", "feishu-secrets"))
     expect(p).toEndWith("appid_123.key")
   })
 
