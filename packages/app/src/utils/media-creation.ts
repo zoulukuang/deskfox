@@ -4,6 +4,10 @@
 // 引擎要 node:fs 读 auth.json,webview 跑不了 → 由边车插件起本地 HTTP 服务(固定 loopback 端口),
 // 本模块在 DeskFox 前端 fetch 它:列可用专业模型 + 触发生成(SSE 进度)。与 packages/media-gen/src/server.ts 对接。
 
+// 用相对路径(非 @/ 别名):本文件被 packages/media-gen/scripts/probe-client.ts 跨包相对引用,
+// media-gen 的 tsconfig 无 @/ 别名,用别名会让 media-gen typecheck 解析失败(TS2307)。
+import { localAssetUrl } from "./local-asset"
+
 export const MEDIA_SERVER_BASE = "http://127.0.0.1:51737"
 
 export type MediaCapability = "image" | "image_edit" | "video" | "video_i2v" | "tts" | "asr" | "translate"
@@ -96,4 +100,23 @@ export async function generateMedia(
   if (error) throw new Error(error)
   if (!result) throw new Error("生成未返回结果")
   return result
+}
+
+/**
+ * 创作结果卡里媒体元素(<audio>/<video>/<img>)的 src 取值。
+ * 优先用已落盘的本地文件(走 localasset:// 自定义 protocol — Rust 端给正确 MIME + HTTP Range +
+ * Access-Control-Allow-Origin),而不是远端 DashScope OSS 链接:
+ *   - 远端链接喂 <audio>/<video> 在 WebView 里常加载失败显示 "Error"(跨源 / 缺 Range / content-type),
+ *     <img> 容忍度高才没暴露;且远端链接 24h 过期,本地文件永久可放。
+ *   - 没有本地文件(理论上 kind!=text 都会落盘,这里兜底)时回落远端 url。
+ * [bug-repro: 创作模式 TTS 生成完成但卡片音频播放器显示 Error(用了过期/跨源远端 url 而非本地文件)]
+ */
+export function creationMediaSrc(remoteUrl: string | undefined, localPath: string | undefined): string {
+  if (localPath && localPath.trim()) {
+    const norm = localPath.replace(/\\/g, "/")
+    const i = norm.lastIndexOf("/")
+    const dir = i >= 0 ? norm.slice(0, i) : norm
+    return localAssetUrl(dir, norm)
+  }
+  return remoteUrl ?? ""
 }

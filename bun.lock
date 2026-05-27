@@ -407,6 +407,20 @@
         "typescript": "catalog:",
       },
     },
+    "packages/media-gen": {
+      "name": "@deskfox/media-gen",
+      "version": "0.0.1",
+      "dependencies": {
+        "@opencode-ai/plugin": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/opencode": {
       "name": "opencode",
       "version": "1.14.33",
@@ -1186,6 +1200,8 @@
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "https://registry.npmmirror.com/@cspotcode/source-map-support/-/source-map-support-0.8.1.tgz", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
     "@ctrl/tinycolor": ["@ctrl/tinycolor@4.2.0", "https://registry.npmmirror.com/@ctrl/tinycolor/-/tinycolor-4.2.0.tgz", {}, "sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A=="],
+
+    "@deskfox/media-gen": ["@deskfox/media-gen@workspace:packages/media-gen"],
 
     "@develar/schema-utils": ["@develar/schema-utils@2.6.5", "https://registry.npmmirror.com/@develar/schema-utils/-/schema-utils-2.6.5.tgz", { "dependencies": { "ajv": "^6.12.0", "ajv-keywords": "^3.4.1" } }, "sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig=="],
 

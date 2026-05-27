@@ -31,6 +31,8 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { checksum } from "@opencode-ai/core/util/encode"
 import { useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
+// FORK: 创作卡作用域随当前 session 切换(隔离 + 首页 draft 过继)[feat: media-creation-mode]
+import { creation, DRAFT_SCOPE } from "@/components/media-creation-store"
 import { useComments } from "@/context/comments"
 import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
 import { useGlobalSync } from "@/context/global-sync"
@@ -349,6 +351,25 @@ export default function Page() {
       setSearchParams({ ...searchParams, prompt: undefined })
     })
   })
+
+  // FORK: 创作卡作用域跟随当前 session [feat: media-creation-mode]
+  //   - 进某 session(id 有值)→ 切到该 session 作用域(只显示它自己的创作卡);
+  //     若从首页 draft 直接建出 session(prev 无 id)→ 把 draft 卡过继给新 session;
+  //   - 回首页/新建会话(id 变空)→ 重置 draft 作用域(干净起步),修"旧创作记录在新会话冒出来"。
+  createEffect(
+    on(
+      () => params.id,
+      (id, prevId) => {
+        if (id) {
+          if (!prevId) creation.adoptDraftInto(id)
+          creation.setScope(id)
+        } else {
+          creation.resetScope(DRAFT_SCOPE)
+          creation.setScope(DRAFT_SCOPE)
+        }
+      },
+    ),
+  )
 
   const [ui, setUi] = createStore({
     pendingMessage: undefined as string | undefined,

@@ -5,16 +5,17 @@
 import { For, Show } from "solid-js"
 import { invoke } from "@tauri-apps/api/core"
 import { creation } from "./media-creation-store"
+import { creationMediaSrc } from "@/utils/media-creation"
 
 const openFile = (p: string) => void invoke("open_path", { path: p, appName: null }).catch(() => {})
 const revealFolder = (p: string) => void invoke("reveal_in_folder", { path: p }).catch(() => {})
 
 export function MediaCreationResults() {
   return (
-    <Show when={creation.cards.length > 0}>
+    <Show when={creation.cards().length > 0}>
       {/* 渲染在聊天滚动流里(消息之后),由时间线滚动承载 */}
       <div class="flex flex-col gap-2 pb-2">
-        <For each={creation.cards}>
+        <For each={creation.cards()}>
           {(card) => (
             <div class="rounded-[10px] border border-border-weak-base bg-background-base p-3">
               <div class="text-13-medium text-text-weak mb-1.5">
@@ -45,15 +46,21 @@ export function MediaCreationResults() {
                 <Show when={card.result?.kind === "image"}>
                   <div class="flex flex-wrap gap-1.5">
                     <For each={card.result?.urls ?? []}>
-                      {(u) => <img src={u} alt="" class="max-h-32 rounded" />}
+                      {(u, i) => (
+                        <img src={creationMediaSrc(u, card.result?.localPaths?.[i()])} alt="" class="max-h-32 rounded" />
+                      )}
                     </For>
                   </div>
                 </Show>
                 <Show when={card.result?.kind === "video"}>
-                  <video src={card.result?.url} controls class="max-h-40 rounded" />
+                  <video
+                    src={creationMediaSrc(card.result?.url, card.result?.localPaths?.[0])}
+                    controls
+                    class="max-h-40 rounded"
+                  />
                 </Show>
                 <Show when={card.result?.kind === "audio"}>
-                  <audio src={card.result?.url} controls class="w-full" />
+                  <audio src={creationMediaSrc(card.result?.url, card.result?.localPaths?.[0])} controls class="w-full" />
                 </Show>
                 <Show when={card.result?.kind === "text"}>
                   <div class="text-14-regular text-text-base whitespace-pre-wrap">{card.result?.text}</div>

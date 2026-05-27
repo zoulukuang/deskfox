@@ -45,13 +45,44 @@ export type CreationCard = {
 const [createMode, setCreateMode] = createSignal<MediaCapability | null>(null)
 const [models, setModels] = createSignal<MediaModel[]>([])
 const [selected, setSelected] = createStore<Partial<Record<MediaCapability, string>>>({})
-const [cards, setCards] = createStore<CreationCard[]>([])
 const [voiceSel, setVoiceSel] = createSignal<string | undefined>(undefined)
+
+// FORK: 创作卡按"作用域"隔离(session id;首页/无 session 用 DRAFT_SCOPE),否则模块级全局
+// store 会让一次创作后的卡在所有 session / 新建会话里都冒出来。session 页用 setScope 切换、
+// resetScope 清空(新建会话)、adoptDraftInto 把首页 draft 卡过继给刚建出的 session。
+// [bug-repro: 启动过创作后,打开任何新会话/新绘画都带出旧创作记录]
+export const DRAFT_SCOPE = "__draft__"
+const [cardsByScope, setCardsByScope] = createStore<Record<string, CreationCard[]>>({ [DRAFT_SCOPE]: [] })
+const [activeScope, setActiveScope] = createSignal<string>(DRAFT_SCOPE)
 
 export const creation = {
   createMode,
   models,
-  cards,
+
+  /** 当前作用域(当前 session / 首页 draft)的创作卡 — 响应式 accessor */
+  cards: (): CreationCard[] => cardsByScope[activeScope()] ?? [],
+
+  DRAFT_SCOPE,
+
+  /** session 页驱动:切到某 session(传 session id)或首页 draft(传 DRAFT_SCOPE)作用域 */
+  setScope(key: string) {
+    if (!cardsByScope[key]) setCardsByScope(key, [])
+    setActiveScope(key)
+  },
+
+  /** 清空某作用域的卡(新建会话进 draft 时用) */
+  resetScope(key: string) {
+    setCardsByScope(key, [])
+  },
+
+  /** 首页 draft 创作 → 发 chat 建出 session 时,把 draft 卡过继给新 session,draft 清空 */
+  adoptDraftInto(key: string) {
+    const draft = cardsByScope[DRAFT_SCOPE] ?? []
+    if (draft.length > 0) {
+      setCardsByScope(key, [...(cardsByScope[key] ?? []), ...draft])
+      setCardsByScope(DRAFT_SCOPE, [])
+    }
+  },
 
   /** 进/出创作模式;退出传 null = 回 Chat */
   setMode(cap: MediaCapability | null) {
@@ -112,11 +143,22 @@ export const creation = {
     return v && voices.includes(v) ? v : voices[0]
   },
 
-  /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error;projectDir=当前项目根(落盘位置)*/
-  async runCreation(entry: MediaModel, input: MediaGenInput, projectDir?: string) {
+  /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error;projectDir=当前项目根(落盘位置)。
+   *  opts.generate 仅供单测注入(默认走真实 generateMedia) */
+  async runCreation(
+    entry: MediaModel,
+    input: MediaGenInput,
+    projectDir?: string,
+    opts?: { generate?: typeof generateMedia },
+  ) {
+    const generate = opts?.generate ?? generateMedia
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const inputThumb = input.refFile?.startsWith("data:image") ? input.refFile : undefined
-    setCards(
+    // 卡入发起时的作用域
+    const scope = activeScope()
+    if (!cardsByScope[scope]) setCardsByScope(scope, [])
+    setCardsByScope(
+      scope,
       produce((arr) => {
         arr.push({
           id,
@@ -129,12 +171,21 @@ export const creation = {
         })
       }),
     )
+    // patch 按卡 id **跨所有作用域**查找 —— 生成期间(尤其视频要几分钟)若发 chat 建出 session,
+    // adoptDraftInto 会把这张运行中的卡从 draft 移到新 session;固定捕获 scope 会让 patch 落空、
+    // 卡永远停在"正在生成…"。按 id 找它当前所在作用域才稳。
+    // [bug-repro: 视频生成完成但聊天区卡片状态不变(adoption 移动了卡,patch 找不到)]
     const patch = (fn: (c: CreationCard) => void) => {
-      const i = cards.findIndex((c) => c.id === id)
-      if (i >= 0) setCards(i, produce(fn))
+      for (const key of Object.keys(cardsByScope)) {
+        const i = (cardsByScope[key] ?? []).findIndex((c) => c.id === id)
+        if (i >= 0) {
+          setCardsByScope(key, i, produce(fn))
+          return
+        }
+      }
     }
     try {
-      const result = await generateMedia(entry.id, input, {
+      const result = await generate(entry.id, input, {
         projectDir,
         onProgress: (p) => patch((c) => (c.progress = p.message ?? p.state)),
       })
