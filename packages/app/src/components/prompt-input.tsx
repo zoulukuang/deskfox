@@ -27,6 +27,10 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ModelSelectorPopover } from "@/components/dialog-select-model"
+// FORK-BEGIN: 创作模式 — 模式菜单 + 生成编排 [feat: media-creation-mode] 2026-05-26
+import { creation } from "./media-creation-store"
+import { MediaModeMenu, MediaCreationControls } from "./media-creation-bar"
+// FORK-END
 import { useProviders } from "@/hooks/use-providers"
 import { useCommand } from "@/context/command"
 import { Persist, persisted } from "@/utils/persist"
@@ -1092,6 +1096,37 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSubmit: props.onSubmit,
   })
 
+  // FORK-BEGIN: 创作模式 — 启动拉取可用模型 + send 拦截到生成 [feat: media-creation-mode]
+  void creation.loadModels()
+  const submitCreation = async (cap: NonNullable<ReturnType<typeof creation.createMode>>) => {
+    const entry = creation.selectedModel(cap)
+    if (!entry) return
+    const parts = prompt.current()
+    const text = parts
+      .map((p) => ("content" in p ? p.content : ""))
+      .join("")
+      .trim()
+    // 附件图片(＋ 加进来的)在 prompt 里是 base64 data URL → 作为参考图/首帧图传给模型
+    const imagePart = parts.find((p) => p.type === "image") as { dataUrl?: string } | undefined
+    const input: { prompt: string; targetLang?: string; voice?: string; refFile?: string } = { prompt: text }
+    if (cap === "translate") input.targetLang = "English" // 目标语言选择器后补;P1 默认英文
+    if (cap === "tts") input.voice = creation.currentVoice("tts")
+    if (imagePart?.dataUrl) input.refFile = imagePart.dataUrl
+    clearEditor()
+    prompt.reset() // 修:清空文字 + 附件(否则提交后附件图残留在输入框)
+    await creation.runCreation(entry, input, sdk.directory) // 落盘到当前项目根目录
+  }
+  const handleFormSubmit = (...args: Parameters<typeof handleSubmit>) => {
+    const cap = creation.createMode()
+    if (cap) {
+      ;(args[0] as { preventDefault?: () => void } | undefined)?.preventDefault?.()
+      void submitCreation(cap)
+      return
+    }
+    return handleSubmit(...args)
+  }
+  // FORK-END
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
@@ -1250,7 +1285,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       ) {
         return
       }
-      void handleSubmit(event)
+      void handleFormSubmit(event) // FORK: 回车也走创作模式拦截(否则绕过 → 误入聊天调图片工具)[feat: media-creation-mode]
     }
   }
 
@@ -1287,7 +1322,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         t={(key) => language.t(key as Parameters<typeof language.t>[0])}
       />
       <DockShellForm
-        onSubmit={handleSubmit}
+        onSubmit={handleFormSubmit}
         classList={{
           "group/prompt-input": true,
           "focus-within:shadow-xs-border": true,
@@ -1475,6 +1510,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 </Button>
               </div>
               <div class="flex items-center gap-1.5 min-w-0 flex-1 h-7">
+                {/* FORK-BEGIN: 创作模式左侧随动 — 创作档显示生成模型下拉,否则原 agent/model [feat: media-creation-mode] */}
+                <Show when={creation.createMode()}>
+                  <MediaCreationControls />
+                </Show>
+                <Show when={!creation.createMode()}>
+                {/* FORK-END */}
                 <Show when={!agentsLoading()}>
                   <div
                     data-component="prompt-agent-control"
@@ -1610,8 +1651,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     </Show>
                   </Show>
                 </Show>
+                {/* FORK: close 创作模式 !createMode 包裹 [feat: media-creation-mode] */}
+                </Show>
               </div>
             </div>
+            {/* FORK: 创作模式统一模式菜单(最右)[feat: media-creation-mode] */}
+            <MediaModeMenu />
           </div>
         </DockTray>
       </Show>

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@deskfox/media-gen",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "[fork-only] DeskFox 多模态生成插件 — 第一竖切:阿里 DashScope 文生图。注册 tool media_image_generate,AI 自动调用。不与 anomalyco/opencode 上游同步。详见 OPENCODE-PLAN/需求池/多模态生成-通用plugin框架.md",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./server": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun run build.ts",
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit",
+    "probe": "bun run scripts/probe.ts"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "workspace:*",
+    "zod": "catalog:"
+  }
+}

@@ -10,5 +10,8 @@ pub const WSL_ENABLED_KEY: &str = "wslEnabled";
 pub const UPDATER_ENABLED: bool = false;
 
 pub fn window_state_flags() -> StateFlags {
-    StateFlags::all() - StateFlags::DECORATIONS - StateFlags::VISIBLE
+    // FORK: 不记忆 MAXIMIZED / FULLSCREEN — 否则上次最大化或全屏状态被恢复,窗口开局铺满整屏、
+    // 系统层面无法鼠标拖边 resize(实测残留 state 里 fullscreen:true 导致窗口盖住任务栏拖不动)。
+    // 尺寸/位置仍跨会话记忆;最大化/全屏按钮当次仍可用,只是不持久化。[fix: window-resizable] 2026-05-27
+    StateFlags::all() - StateFlags::DECORATIONS - StateFlags::VISIBLE - StateFlags::MAXIMIZED - StateFlags::FULLSCREEN
 }
