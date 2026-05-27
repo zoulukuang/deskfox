@@ -10,6 +10,8 @@ import { useTheme } from "@opencode-ai/ui/theme/context"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
+// FORK: 新建会话时清空首页创作 draft(同路由跳转 effect 测不到)[feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
@@ -246,6 +248,7 @@ export function Titlebar() {
                       tabIndex={layout.sidebar.opened() ? -1 : undefined}
                       onClick={() => {
                         if (!params.dir) return
+                        creation.resetDraft()
                         navigate(`/${params.dir}/session`)
                       }}
                       aria-label={language.t("command.session.new")}

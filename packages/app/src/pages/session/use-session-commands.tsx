@@ -1,5 +1,7 @@
 import { useNavigate } from "@solidjs/router"
 import { useCommand, type CommandOption } from "@/context/command"
+// FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { previewSelectedLines } from "@opencode-ai/ui/pierre/selection-bridge"
 import { useFile, selectionFromLines, type FileSelection, type SelectedLineRange } from "@/context/file"
@@ -386,7 +388,10 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.session.new"),
       keybind: "mod+shift+s",
       slash: "new",
-      onSelect: () => navigate(`/${params.dir}/session`),
+      onSelect: () => {
+        creation.resetDraft()
+        navigate(`/${params.dir}/session`)
+      },
     }),
     sessionCommand({
       id: "session.undo",

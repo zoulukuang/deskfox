@@ -8,6 +8,8 @@ import { getFilename } from "@opencode-ai/core/util/path"
 import { A, useParams } from "@solidjs/router"
 import { type Accessor, createMemo, For, type JSX, Match, Show, Switch } from "solid-js"
 import { useGlobalSync } from "@/context/global-sync"
+// FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
 import { getAvatarColors, type LocalProject, useLayout } from "@/context/layout"
 import { useNotification } from "@/context/notification"
@@ -296,6 +298,7 @@ export const NewSessionItem = (props: {
       end
       class={`flex items-center gap-2 min-w-0 w-full text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
       onClick={() => {
+        creation.resetDraft()
         if (layout.sidebar.opened()) return
         props.clearHoverProjectSoon()
       }}
