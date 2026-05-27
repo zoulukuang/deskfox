@@ -8,16 +8,24 @@
 
 ---
 
+## [macOS] 2026.5.28.1 — 2026-05-28
 
+**主题**:多模态创作模式 + 飞书图片/合并转发识别 上线(macOS 端,自 prod `2026.5.25.1` 以来),含一批 mac 实测修复。
 
+**新功能 / 改进**:
+- **多模态创作模式(REQ-030)**:阿里通义全能力(文生图/图片编辑/文生视频/图生视频/语音合成/语音识别/专业翻译),结果融入聊天滚动流 + 产出落当前项目根 `creations/`,创作卡按 session 隔离,音/视频卡播放本地文件。
+- **飞书**:图片识别 + 合并转发识别 + 单测 Win 兼容 + 合并转发图片优雅降级。
 
+**本版 macOS 实测修复**:
+- 创作模式 6 bug 链(首页卡片不显示 / 音视频播本地文件 / 创作卡 session 隔离 / 视频卡卡死 / 新建会话清 draft)。
+- **飞书插件 "failed to load plugin (fs.existsSync undefined)" 修复**:插件入口不再 export 裸 helper(被 opencode getLegacyPlugins 误当插件调致 fs undefined),挪到 `workspace-migrate.ts`。
+- bun.lock 补 media-gen workspace 条目。
 
+**验证**:双轮 ship 验证通过(现有状态 + 干净状态,feishu 加载 0 错 / media-gen ok / 无 401/404/panic);飞书 622 单测 + 全仓 typecheck 17/17 + pre-push e2e 13 pass。
 
+**产物**:`DeskFox-2026.5.28.1_aarch64.dmg`(arm64,不签名)。
 
-
-
-
-
+---
 ## [Windows] 2026.5.27.1 — 2026-05-27
 
 **主题**:多模态创作模式上线 + 飞书图片/合并转发识别(自 prod `2026.5.25.1` 以来)
@@ -318,7 +326,6 @@ installer 路径:`packages/branding/installer/Output/DeskFox-2026.5.11.4-setup.e
 installer 路径:`packages/branding/installer/Output/DeskFox-2026.5.11.2-setup.exe`(59.4 MB,本地 build)
 
 ---
-
 
 ---
 
