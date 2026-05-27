@@ -47,12 +47,16 @@ export async function handler(req: Request): Promise<Response> {
   }
 
   if (url.pathname === "/files" && req.method === "GET") {
-    // 创作文件库(右侧"创作文件"面板)
-    return json(listCreations())
+    // 创作文件库(右侧"创作文件"面板);?dir=<当前项目根>
+    return json(listCreations(url.searchParams.get("dir") ?? undefined))
   }
 
   if (url.pathname === "/generate" && req.method === "POST") {
-    const body = (await req.json().catch(() => ({}))) as { entryId?: string; input?: Record<string, unknown> }
+    const body = (await req.json().catch(() => ({}))) as {
+      entryId?: string
+      input?: Record<string, unknown>
+      projectDir?: string // 当前项目根 → 落盘到 <projectDir>/creations/
+    }
     const entry = body.entryId ? findEntry(body.entryId) : undefined
     if (!entry) return json({ error: "model_not_found", message: "模型不存在或对应供应商未连接。" }, 404)
 
@@ -67,7 +71,7 @@ export async function handler(req: Request): Promise<Response> {
           if (out.kind !== "text") {
             send("progress", { state: "saving", message: "保存到本地…" })
             const urls = out.urls ?? (out.url ? [out.url] : [])
-            out.localPaths = await saveAssets(out.kind, urls)
+            out.localPaths = await saveAssets(body.projectDir, out.kind, urls)
           }
           send("result", out)
         } catch (e) {

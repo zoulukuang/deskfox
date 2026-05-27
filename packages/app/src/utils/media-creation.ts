@@ -60,13 +60,13 @@ export async function listMediaModels(base = MEDIA_SERVER_BASE): Promise<MediaMo
 export async function generateMedia(
   entryId: string,
   input: MediaGenInput,
-  opts?: { onProgress?: (p: MediaProgress) => void; signal?: AbortSignal; base?: string },
+  opts?: { onProgress?: (p: MediaProgress) => void; signal?: AbortSignal; base?: string; projectDir?: string },
 ): Promise<MediaResult> {
   const base = opts?.base ?? MEDIA_SERVER_BASE
   const resp = await fetch(`${base}/generate`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ entryId, input }),
+    body: JSON.stringify({ entryId, input, projectDir: opts?.projectDir }),
     signal: opts?.signal,
   })
   if (!resp.ok || !resp.body) throw new Error(`media server /generate ${resp.status}`)

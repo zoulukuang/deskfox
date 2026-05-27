@@ -112,8 +112,8 @@ export const creation = {
     return v && voices.includes(v) ? v : voices[0]
   },
 
-  /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error */
-  async runCreation(entry: MediaModel, input: MediaGenInput) {
+  /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error;projectDir=当前项目根(落盘位置)*/
+  async runCreation(entry: MediaModel, input: MediaGenInput, projectDir?: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const inputThumb = input.refFile?.startsWith("data:image") ? input.refFile : undefined
     setCards(
@@ -135,6 +135,7 @@ export const creation = {
     }
     try {
       const result = await generateMedia(entry.id, input, {
+        projectDir,
         onProgress: (p) => patch((c) => (c.progress = p.message ?? p.state)),
       })
       patch((c) => {

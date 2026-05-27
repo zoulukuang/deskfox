@@ -1114,7 +1114,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (imagePart?.dataUrl) input.refFile = imagePart.dataUrl
     clearEditor()
     prompt.reset() // 修:清空文字 + 附件(否则提交后附件图残留在输入框)
-    await creation.runCreation(entry, input)
+    await creation.runCreation(entry, input, sdk.directory) // 落盘到当前项目根目录
   }
   const handleFormSubmit = (...args: Parameters<typeof handleSubmit>) => {
     const cap = creation.createMode()

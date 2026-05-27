@@ -8,13 +8,18 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "nod
 import { homedir } from "node:os"
 import { extname, join } from "node:path"
 
-export const CREATIONS_ROOT = join(homedir(), ".deskfox", "creations")
+// 落盘根目录:有项目目录则放该项目根下的 creations/(user 要求"产出放在当前项目根目录下"),
+// 否则回落到全局 ~/.deskfox/creations/。
+const GLOBAL_ROOT = join(homedir(), ".deskfox", "creations")
+export function creationsRoot(projectDir?: string): string {
+  return projectDir && projectDir.trim() ? join(projectDir, "creations") : GLOBAL_ROOT
+}
 
 const SUBDIR: Record<string, string> = { image: "images", video: "videos", audio: "audio" }
 const DEFAULT_EXT: Record<string, string> = { image: "png", video: "mp4", audio: "wav" }
 
-function categoryDir(kind: string): string {
-  return join(CREATIONS_ROOT, SUBDIR[kind] ?? "other")
+function categoryDir(projectDir: string | undefined, kind: string): string {
+  return join(creationsRoot(projectDir), SUBDIR[kind] ?? "other")
 }
 
 function guessExt(url: string, kind: string): string {
@@ -22,9 +27,13 @@ function guessExt(url: string, kind: string): string {
   return (m?.[1] ?? DEFAULT_EXT[kind] ?? "bin").toLowerCase()
 }
 
-/** 把若干 URL 下载到分类目录,返回本地绝对路径 */
-export async function saveAssets(kind: "image" | "video" | "audio", urls: string[]): Promise<string[]> {
-  const dir = categoryDir(kind)
+/** 把若干 URL 下载到分类目录(projectDir 为当前项目根,缺省则全局),返回本地绝对路径 */
+export async function saveAssets(
+  projectDir: string | undefined,
+  kind: "image" | "video" | "audio",
+  urls: string[],
+): Promise<string[]> {
+  const dir = categoryDir(projectDir, kind)
   mkdirSync(dir, { recursive: true })
   const out: string[] = []
   for (const url of urls) {
@@ -43,10 +52,10 @@ export async function saveAssets(kind: "image" | "video" | "audio", urls: string
 
 export type CreationFile = { path: string; name: string; kind: string; mtime: number; size: number }
 
-/** 列出创作文件库(供右侧"创作文件"面板)*/
-export function listCreations(): { images: CreationFile[]; videos: CreationFile[]; audio: CreationFile[] } {
+/** 列出创作文件库(供右侧"创作文件"面板;projectDir 为当前项目根)*/
+export function listCreations(projectDir?: string): { images: CreationFile[]; videos: CreationFile[]; audio: CreationFile[] } {
   const read = (kind: "image" | "video" | "audio"): CreationFile[] => {
-    const dir = categoryDir(kind)
+    const dir = categoryDir(projectDir, kind)
     if (!existsSync(dir)) return []
     return readdirSync(dir)
       .filter((n) => !n.startsWith("."))
