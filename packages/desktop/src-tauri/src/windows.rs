@@ -57,7 +57,13 @@ impl MainWindow {
         .disable_drag_drop_handler()
         .zoom_hotkeys_enabled(false)
         .visible(true)
-        .maximized(true)
+        // FORK: 开局窗口态(不强制最大化)+ 默认/最小尺寸,让无边框窗口可鼠标拖边改大小。
+        // 原 .maximized(true) 开局即最大化,系统层面无法拖拽 resize;尺寸由 window-state 插件记忆,
+        // 配合 constants.rs 去掉 MAXIMIZED 记忆,保证开局是可拖拽的窗口态。[fix: window-resizable] 2026-05-27
+        .resizable(true)
+        .min_inner_size(800.0, 600.0)
+        .inner_size(1280.0, 800.0)
+        .center()
         .initialization_script(format!(
             r#"
             window.__OPENCODE__ ??= {{}};
