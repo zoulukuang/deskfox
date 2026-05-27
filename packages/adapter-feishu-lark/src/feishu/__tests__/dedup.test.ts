@@ -66,11 +66,12 @@ describe("TTL 过期", () => {
   })
 
   test("mark 刷新 TTL", async () => {
-    const c = new DedupCache({ ttlMs: 30 })
+    // 大裕度(ttl 300 / sleep 100)避免 Windows setTimeout ~16ms 粒度抖动把边界翻转
+    const c = new DedupCache({ ttlMs: 300 })
     c.mark("refresh-me")
-    await sleep(20) // 还没过期
-    c.mark("refresh-me") // 刷新
-    await sleep(20) // 距 mark 又过 20ms,但距刷新只 20ms
+    await sleep(100) // 还没过期
+    c.mark("refresh-me") // 刷新 → expireAt 重置到 now+300
+    await sleep(100) // 距刷新仅 ~100ms,远未到 300
     expect(c.has("refresh-me")).toBe(true)
   })
 
@@ -161,11 +162,12 @@ describe("hasAndMark", () => {
   })
 
   test("hasAndMark 走 LRU touch(seen=true 也刷新 TTL)", async () => {
-    const c = new DedupCache({ ttlMs: 30 })
+    // 大裕度(ttl 300 / sleep 100)避免 Windows setTimeout ~16ms 粒度抖动把边界翻转
+    const c = new DedupCache({ ttlMs: 300 })
     c.hasAndMark("k") // 首次 mark
-    await sleep(20) // 还没过期
-    c.hasAndMark("k") // seen=true,但 mark 刷新 TTL
-    await sleep(20) // 距首次已 40ms > ttl,但距刷新 20ms < ttl
+    await sleep(100) // 还没过期
+    c.hasAndMark("k") // seen=true,但 mark 刷新 TTL → expireAt 重置
+    await sleep(100) // 距刷新仅 ~100ms < 300
     expect(c.has("k")).toBe(true)
   })
 })

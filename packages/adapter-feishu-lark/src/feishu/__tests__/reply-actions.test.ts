@@ -2,7 +2,7 @@
 // [feat: feishu-bridge-light] 2026-05-23
 
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { describe, expect, test } from "bun:test"
 import {
   classifyAttachment,
@@ -119,7 +119,9 @@ describe("parseAttachMarkers", () => {
 // ============================================================
 
 describe("classifyAttachment", () => {
-  const ROOT = "/tmp/test-workspace"
+  // resolve → 原生绝对路径(Win 上加盘符如 C:\tmp\test-workspace),否则 classifyAttachment 内
+  // resolve(arg) 会把输入归一成带盘符路径,跟 Unix 字面量 ROOT 对不上 → 全 reject(Win 测试失败)
+  const ROOT = resolve("/tmp/test-workspace")
 
   test("workspace 内 .png → image", () => {
     expect(classifyAttachment(`${ROOT}/foo/a.png`, ROOT)).toEqual({ kind: "image" })

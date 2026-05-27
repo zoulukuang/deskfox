@@ -12,14 +12,15 @@
 
 import { mkdir, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join, resolve } from "node:path"
+import { join, resolve, sep } from "node:path"
 
 // FORK: 不 import IMBOT_WORKSPACE from "../plugin" 避免循环依赖
 // (plugin → message-pipeline → image-downloader → plugin)
 // 自己重算同样的路径(plugin.ts:55 也是 join(homedir(), ".opencode", "imbot-workspace"))
 const IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
 export const FEISHU_IMAGES_DIR = join(IMBOT_WORKSPACE, "feishu-images")
-const FEISHU_IMAGES_DIR_RESOLVED = resolve(FEISHU_IMAGES_DIR) + "/"
+// 用 path.sep(而非写死 "/")做子树前缀,否则 Windows 上 resolve 返反斜杠路径、硬加 "/" 致 startsWith 永假 → 误报越界
+const FEISHU_IMAGES_DIR_RESOLVED = resolve(FEISHU_IMAGES_DIR) + sep
 
 // [feat: feishu-image-recognition] S1 大小硬限 — LLM API 限制(Claude 5MB / OpenAI 20MB),
 // 取 20MB 上限既兼容 OpenAI,Claude 失败时 LLM 自己报错复述给 user
@@ -142,7 +143,7 @@ export async function downloadFeishuImage(
   const dir = join(FEISHU_IMAGES_DIR, safeChatId)
 
   // S4 路径越界 assert — 即使 sanitize 漏改了,resolve 后必须在 FEISHU_IMAGES_DIR 子树内
-  const resolvedDir = resolve(dir) + "/"
+  const resolvedDir = resolve(dir) + sep
   if (!resolvedDir.startsWith(FEISHU_IMAGES_DIR_RESOLVED)) {
     throw new Error(
       `飞书图片落盘路径越界 (resolved=${resolvedDir}, root=${FEISHU_IMAGES_DIR_RESOLVED}) for image_key=${imageKey}`,
