@@ -104,6 +104,10 @@ if ($needBuild) {
 # 让 installer 装完即可用 — runtime 由 lib.rs setup hook 把 plugin 路径注入 user opencode 配置
 & (Join-Path $PSScriptRoot "build-feishu-plugin.ps1")
 
+# 0.6. 打 media-gen 创作 plugin(进 installer 资源,同飞书)[feat: media-gen-bundle] 2026-05-27
+# tauri.conf.json resources 引用 branding/plugin/media-gen/dist/plugin.js,必须在 tauri build 前产出
+& (Join-Path $PSScriptRoot "build-media-gen-plugin.ps1")
+
 # 1. apply(按 env 选样式)
 & (Join-Path $PSScriptRoot "apply-icons.ps1") -Env $Env
 
@@ -142,7 +146,10 @@ if ($buildExit -eq 0) {
     foreach ($fileName in @("opencode.jsonc", "opencode.json")) {
         $jsonc = Join-Path $configDir $fileName
         if (-not (Test-Path $jsonc)) { continue }
-        $raw = Get-Content $jsonc -Raw
+        # UTF-8 读写(PS5.1 Get-Content/Set-Content 默认 ANSI/GBK,会把含中文的配置写成非 UTF-8,
+        # Rust setup hook serde 读时报 "stream did not contain valid UTF-8" → 注入全废)。
+        # [feat: media-gen-bundle] 2026-05-27 修此潜伏编码 bug。
+        $raw = [System.IO.File]::ReadAllText($jsonc)
         $feishuMatches = [regex]::Matches($raw, "plugin/feishu-bridge")
         if ($feishuMatches.Count -gt 1) {
             Write-Output ""
@@ -152,8 +159,22 @@ if ($buildExit -eq 0) {
             $cleaned = ($raw -split "`n" | Where-Object { $_ -notmatch "plugin/feishu-bridge" }) -join "`n"
             # 修复:plugin 数组最后一项可能留悬空逗号(",\n  ]" → "\n  ]")
             $cleaned = [regex]::Replace($cleaned, ",(\s*\])", '$1')
-            Set-Content -Path $jsonc -Value $cleaned -NoNewline
+            [System.IO.File]::WriteAllText($jsonc, $cleaned, (New-Object System.Text.UTF8Encoding($false)))
             Write-Output "[deskfox] OK 已清,原文件备份至 $jsonc.bak.build-cleanup"
+        }
+
+        # media-gen 创作 plugin 清理(2026-05-27,media-gen-bundle):移除旧开发仓 dev 路径条目
+        # (packages/media-gen)+ 任何多余 plugin/media-gen 条目;下次启动 setup hook 注入当前 .exe 资源路径单条。
+        # 与飞书同理,只在开发机生效(end user 装包后不跑 build-deskfox,靠 setup hook retain 自去重)。
+        $rawMg = [System.IO.File]::ReadAllText($jsonc)
+        $mgMatches = [regex]::Matches($rawMg, "media-gen")
+        if ($mgMatches.Count -ge 1) {
+            Write-Output "[deskfox] $fileName 发现 $($mgMatches.Count) 个 media-gen plugin entry,清理(下次启动 setup hook 注入当前资源路径)..."
+            if (-not (Test-Path "$jsonc.bak.build-cleanup")) { Copy-Item $jsonc "$jsonc.bak.build-cleanup" -Force }
+            $cleanedMg = ($rawMg -split "`n" | Where-Object { $_ -notmatch "media-gen" }) -join "`n"
+            $cleanedMg = [regex]::Replace($cleanedMg, ",(\s*\])", '$1')
+            [System.IO.File]::WriteAllText($jsonc, $cleanedMg, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Output "[deskfox] OK media-gen 已清"
         }
     }
 }

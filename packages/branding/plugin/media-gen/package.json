@@ -1,0 +1,11 @@
+{
+  "name": "@deskfox/media-gen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DeskFox bundled media-gen plugin — 由 build script 复用 packages/media-gen/build.ts 把 src/index.ts + 全部 deps 打成单 dist/plugin.js,装进 installer 跟 DeskFox 一起 ship。runtime 由 lib.rs setup 把 path 注入 user opencode 配置(同 feishu-bridge 套路)。",
+  "main": "./dist/plugin.js",
+  "exports": {
+    "./server": "./dist/plugin.js"
+  }
+}

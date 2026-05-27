@@ -91,6 +91,10 @@ Source: "{#ReleaseDir}\opencode_lib.dll";    DestDir: "{app}"; Flags: ignorevers
 ;   独立配置,需在 [Files] 显式列。runtime 由 feishu_plugin_install.rs 注入 user opencode 配置。
 Source: "{#ReleaseDir}\plugin\feishu-bridge\package.json";    DestDir: "{app}\plugin\feishu-bridge";      Flags: ignoreversion
 Source: "{#ReleaseDir}\plugin\feishu-bridge\dist\plugin.js";  DestDir: "{app}\plugin\feishu-bridge\dist"; Flags: ignoreversion
+; media-gen 创作插件 bundle(2026-05-27,media-gen-bundle)— 同飞书,作为软件内置部分 ship
+;   runtime 由 feishu_plugin_install.rs 的 ensure_media_gen_plugin_in_config 注入 user opencode 配置。
+Source: "{#ReleaseDir}\plugin\media-gen\package.json";        DestDir: "{app}\plugin\media-gen";      Flags: ignoreversion
+Source: "{#ReleaseDir}\plugin\media-gen\dist\plugin.js";      DestDir: "{app}\plugin\media-gen\dist"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";        Filename: "{app}\{#AppExeName}"

@@ -30,48 +30,64 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 const PLUGIN_DIR_NAME: &str = "plugin/feishu-bridge";
+// FORK: media-gen 创作插件也作为软件内置部分 ship,同飞书机制注入 user 配置 [feat: media-gen-bundle] 2026-05-27
+const MEDIA_GEN_PLUGIN_DIR_NAME: &str = "plugin/media-gen";
 
-/// 主入口 — 在 .setup 里调,把 plugin 路径写进 user opencode 配置。
+/// 主入口 — 在 .setup 里调,把飞书 plugin 路径写进 user opencode 配置 + 注入 imbot agent。
 /// 失败仅 log,不阻断 DeskFox 启动(plugin 没起 user 仍能用其他功能)。
 pub fn ensure_feishu_plugin_in_config(app: &AppHandle) {
-    let plugin_dir = match resolve_plugin_dir(app) {
+    let config_path = ensure_bundled_plugin_in_config(app, PLUGIN_DIR_NAME);
+
+    // FORK: 注入 imbot 安全 agent(unattended IM 桥接默认 agent)
+    // [feat: feishu-bridge-imbot-agent] 2026-05-11
+    if let Some(config_path) = config_path {
+        if let Err(err) = inject_imbot_agent(&config_path) {
+            tracing::warn!("[feishu-plugin] imbot agent inject failed: {err}");
+        }
+    }
+}
+
+/// FORK: media-gen 创作插件注入(同飞书机制,无 imbot)[feat: media-gen-bundle] 2026-05-27
+pub fn ensure_media_gen_plugin_in_config(app: &AppHandle) {
+    ensure_bundled_plugin_in_config(app, MEDIA_GEN_PLUGIN_DIR_NAME);
+}
+
+/// 通用:把打进 installer 资源的某 bundled plugin(resource_dir/<dir_name>)路径注入 user opencode 配置。
+/// 返回 user config 路径(供调用方继续注入别的东西,如飞书的 imbot agent);任一步失败返回 None。
+fn ensure_bundled_plugin_in_config(app: &AppHandle, dir_name: &str) -> Option<PathBuf> {
+    let plugin_dir = match resolve_plugin_dir(app, dir_name) {
         Some(p) => p,
         None => {
-            tracing::warn!("[feishu-plugin] resource plugin dir not found, skip injection");
-            return;
+            tracing::warn!("[plugin-install] resource plugin dir not found ({dir_name}), skip injection");
+            return None;
         }
     };
 
     if !plugin_dir.join("package.json").exists() {
         tracing::warn!(
-            "[feishu-plugin] resource plugin missing package.json: {}",
+            "[plugin-install] resource plugin missing package.json: {}",
             plugin_dir.display()
         );
-        return;
+        return None;
     }
 
     let config_path = match resolve_user_config_path() {
         Some(p) => p,
         None => {
-            tracing::warn!("[feishu-plugin] cannot resolve user opencode config dir");
-            return;
+            tracing::warn!("[plugin-install] cannot resolve user opencode config dir");
+            return None;
         }
     };
 
     if let Err(err) = inject_plugin(&config_path, &plugin_dir) {
-        tracing::warn!("[feishu-plugin] inject failed: {err}");
+        tracing::warn!("[plugin-install] inject failed ({dir_name}): {err}");
     }
-
-    // FORK: 注入 imbot 安全 agent(unattended IM 桥接默认 agent)
-    // [feat: feishu-bridge-imbot-agent] 2026-05-11
-    if let Err(err) = inject_imbot_agent(&config_path) {
-        tracing::warn!("[feishu-plugin] imbot agent inject failed: {err}");
-    }
+    Some(config_path)
 }
 
-fn resolve_plugin_dir(app: &AppHandle) -> Option<PathBuf> {
+fn resolve_plugin_dir(app: &AppHandle, dir_name: &str) -> Option<PathBuf> {
     let resource_dir = app.path().resource_dir().ok()?;
-    let candidate = resource_dir.join(PLUGIN_DIR_NAME);
+    let candidate = resource_dir.join(dir_name);
     if candidate.is_dir() {
         return Some(candidate);
     }
@@ -126,6 +142,9 @@ fn to_file_url(path: &Path) -> String {
 
 fn inject_plugin(config_path: &Path, plugin_dir: &Path) -> Result<(), String> {
     let plugin_url = to_file_url(plugin_dir);
+    // 从 plugin_dir 末两段推出本 plugin 标识(如 "plugin/feishu-bridge" / "plugin/media-gen"),
+    // retain 用它区分"指向本 plugin 的 entry",使本函数可服务多个 bundled plugin。[feat: media-gen-bundle]
+    let dir_key = plugin_dir_match_key(plugin_dir);
 
     let raw = if config_path.exists() {
         fs::read_to_string(config_path).map_err(|e| format!("read config: {e}"))?
@@ -169,7 +188,7 @@ fn inject_plugin(config_path: &Path, plugin_dir: &Path) -> Result<(), String> {
             _ => return true, // 非本 plugin 形状 → 不动
         };
         let Some(s) = path_str else { return true };
-        if !s.contains(PLUGIN_DIR_NAME) {
+        if !s.contains(dir_key.as_str()) {
             return true; // 不是本 plugin entry → 保持
         }
         // 是本 plugin entry → 检测路径是否仍存在
@@ -336,6 +355,21 @@ fn imbot_agent_spec() -> Value {
             // websearch / grep / glob / list / lsp / skill / todowrite 同理
         }
     })
+}
+
+/// FORK: 从 plugin 目录路径推出"标识子串"(末两段,如 "plugin/feishu-bridge" / "plugin/media-gen"),
+/// 供 inject 的去重/自愈 retain 判断"这条 entry 是不是指向本 plugin"。[feat: media-gen-bundle] 2026-05-27
+fn plugin_dir_match_key(plugin_dir: &Path) -> String {
+    let comps: Vec<String> = plugin_dir
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_string())
+        .collect();
+    let n = comps.len();
+    if n >= 2 {
+        format!("{}/{}", comps[n - 2], comps[n - 1])
+    } else {
+        comps.last().cloned().unwrap_or_default()
+    }
 }
 
 /// 字符串路径(可能带 file:// 前缀,可能是裸路径)→ 判断对应文件系统路径是否存在
@@ -559,6 +593,35 @@ mod tests {
         assert_eq!(arr.len(), 2);
         assert!(arr.iter().any(|s| s == "file:///some/other/plugin"));
         assert!(arr.iter().any(|s| s.contains(PLUGIN_DIR_NAME)));
+    }
+
+    // [feat: media-gen-bundle] 2026-05-27 — 两个 bundled plugin 各自注入,
+    // 靠末两段标识(plugin/feishu-bridge vs plugin/media-gen)区分,互不误删 + 各自幂等。
+    #[test]
+    fn media_gen_and_feishu_coexist_without_cross_removal() {
+        let s = Sandbox::new("coexist");
+        let cfg = s.root.join("opencode.json");
+        fs::write(&cfg, r#"{ "$schema": "x" }"#).unwrap();
+
+        let feishu_dir = s.root.join("install").join("plugin").join("feishu-bridge");
+        fs::create_dir_all(&feishu_dir).unwrap();
+        fs::write(feishu_dir.join("package.json"), "{}").unwrap();
+        let media_dir = s.root.join("install").join("plugin").join("media-gen");
+        fs::create_dir_all(&media_dir).unwrap();
+        fs::write(media_dir.join("package.json"), "{}").unwrap();
+
+        inject_plugin(&cfg, &feishu_dir).unwrap();
+        inject_plugin(&cfg, &media_dir).unwrap();
+
+        let arr = read_plugin_array(&cfg);
+        assert_eq!(arr.len(), 2, "both plugins present, no cross-removal: {arr:?}");
+        assert!(arr.iter().any(|s| s.contains("plugin/feishu-bridge")), "feishu kept: {arr:?}");
+        assert!(arr.iter().any(|s| s.contains("plugin/media-gen")), "media-gen kept: {arr:?}");
+
+        // 再注入 media-gen — 幂等,不重复,不动 feishu
+        inject_plugin(&cfg, &media_dir).unwrap();
+        let arr2 = read_plugin_array(&cfg);
+        assert_eq!(arr2.len(), 2, "idempotent re-inject: {arr2:?}");
     }
 
     #[test]

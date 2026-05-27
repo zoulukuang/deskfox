@@ -159,6 +159,10 @@ fi
 # 让 installer 装完即可用 — runtime 由 lib.rs setup hook 把 plugin 路径注入 user opencode 配置
 bash "$SCRIPT_DIR/build-feishu-plugin.sh"
 
+# === 0.6. 打 media-gen 创作 plugin(进 installer 资源,同飞书)[feat: media-gen-bundle] 2026-05-27 ===
+# tauri.conf.json resources 引用 branding/plugin/media-gen/dist/plugin.js,必须在 tauri build 前产出
+bash "$SCRIPT_DIR/build-media-gen-plugin.sh"
+
 # === 1. apply icons(按 env 选样式)===
 bash "$SCRIPT_DIR/apply-icons.sh" -Env "$ENV"
 
@@ -210,6 +214,18 @@ if [[ "$BUILD_EXIT" -eq 0 ]]; then
             perl -i -0pe 's/,(\s*\])/\1/g' "$JSONC.tmp"
             mv "$JSONC.tmp" "$JSONC"
             echo "[deskfox] ✅ 已清,原文件备份至 $JSONC.bak.build-cleanup"
+        fi
+
+        # media-gen 创作 plugin 清理(2026-05-27,media-gen-bundle):移除旧开发仓 dev 路径条目
+        # (packages/media-gen)+ 任何多余 plugin/media-gen 条目;下次启动 setup hook 注入当前资源路径单条。
+        MG_COUNT=$(grep -c "media-gen" "$JSONC" 2>/dev/null || true)
+        if [[ "$MG_COUNT" -ge 1 ]]; then
+            echo "[deskfox] $FILE_NAME 发现 $MG_COUNT 个 media-gen plugin entry,清理(下次启动 setup hook 注入当前资源路径)..."
+            [[ -f "$JSONC.bak.build-cleanup" ]] || cp "$JSONC" "$JSONC.bak.build-cleanup"
+            grep -v "media-gen" "$JSONC" > "$JSONC.tmp"
+            perl -i -0pe 's/,(\s*\])/\1/g' "$JSONC.tmp"
+            mv "$JSONC.tmp" "$JSONC"
+            echo "[deskfox] ✅ media-gen 已清"
         fi
     done
 fi

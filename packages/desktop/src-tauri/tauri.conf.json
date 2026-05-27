@@ -37,7 +37,9 @@
     "externalBin": ["sidecars/opencode-cli"],
     "resources": {
       "../../branding/plugin/feishu-bridge/package.json": "plugin/feishu-bridge/package.json",
-      "../../branding/plugin/feishu-bridge/dist/plugin.js": "plugin/feishu-bridge/dist/plugin.js"
+      "../../branding/plugin/feishu-bridge/dist/plugin.js": "plugin/feishu-bridge/dist/plugin.js",
+      "../../branding/plugin/media-gen/package.json": "plugin/media-gen/package.json",
+      "../../branding/plugin/media-gen/dist/plugin.js": "plugin/media-gen/dist/plugin.js"
     },
     "linux": {
       "rpm": {

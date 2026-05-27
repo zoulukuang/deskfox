@@ -501,6 +501,10 @@ pub fn run() {
             // [feat: feishu-bridge-ship-packaging] 2026-05-09
             feishu_plugin_install::ensure_feishu_plugin_in_config(app.handle());
 
+            // FORK: media-gen 创作插件同样作为软件内置部分注入(同机制,idempotent)
+            // [feat: media-gen-bundle] 2026-05-27
+            feishu_plugin_install::ensure_media_gen_plugin_in_config(app.handle());
+
             Ok(())
         });
 
