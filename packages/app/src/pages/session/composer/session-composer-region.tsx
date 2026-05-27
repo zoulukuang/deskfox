@@ -3,8 +3,6 @@ import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { PromptInput } from "@/components/prompt-input"
-// FORK: 创作模式结果区 [feat: media-creation-mode] 2026-05-26
-import { MediaCreationResults } from "@/components/media-creation-results"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
 import { useSync } from "@/context/sync"
@@ -232,8 +230,6 @@ export function SessionComposerRegion(props: {
                 </div>
               )}
             </Show>
-            {/* FORK: 创作模式结果区(本地渲染,不入 opencode session)[feat: media-creation-mode] */}
-            <MediaCreationResults />
             <div
               classList={{
                 "relative z-10": true,

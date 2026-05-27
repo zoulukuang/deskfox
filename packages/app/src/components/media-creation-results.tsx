@@ -2,7 +2,7 @@
 // [feat: media-creation-mode] 2026-05-27
 // 重构:不再用占满屏的大播放器;文件已落盘到本地分类文件夹,这里只给轻量提示 + 打开入口。
 
-import { For, Show, createEffect } from "solid-js"
+import { For, Show } from "solid-js"
 import { invoke } from "@tauri-apps/api/core"
 import { creation } from "./media-creation-store"
 
@@ -10,16 +10,10 @@ const openFile = (p: string) => void invoke("open_path", { path: p, appName: nul
 const revealFolder = (p: string) => void invoke("reveal_in_folder", { path: p }).catch(() => {})
 
 export function MediaCreationResults() {
-  let scroller: HTMLDivElement | undefined
-  createEffect(() => {
-    creation.cards.length
-    requestAnimationFrame(() => {
-      if (scroller) scroller.scrollTop = scroller.scrollHeight
-    })
-  })
   return (
     <Show when={creation.cards.length > 0}>
-      <div ref={scroller} class="flex flex-col gap-2 pb-2 max-h-[50vh] overflow-y-auto">
+      {/* 渲染在聊天滚动流里(消息之后),由时间线滚动承载 */}
+      <div class="flex flex-col gap-2 pb-2">
         <For each={creation.cards}>
           {(card) => (
             <div class="rounded-[10px] border border-border-weak-base bg-background-base p-3">

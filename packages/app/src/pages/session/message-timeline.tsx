@@ -12,6 +12,8 @@ import { InlineInput } from "@opencode-ai/ui/inline-input"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
+// FORK: 创作结果融入聊天滚动流 [feat: media-creation-mode] 2026-05-27
+import { MediaCreationResults } from "@/components/media-creation-results"
 import { TextField } from "@opencode-ai/ui/text-field"
 import type { AssistantMessage, Message as MessageType, Part, TextPart, UserMessage } from "@opencode-ai/sdk/v2"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -1113,6 +1115,15 @@ export function MessageTimeline(props: {
                   )
                 }}
               </For>
+            </div>
+            {/* FORK: 创作结果卡融入聊天滚动流(消息之后)[feat: media-creation-mode] */}
+            <div
+              classList={{
+                "w-full px-4 md:px-5 pb-3": true,
+                "md:max-w-200 2xl:max-w-[1000px] md:mx-auto": props.centered,
+              }}
+            >
+              <MediaCreationResults />
             </div>
           </div>
         </ScrollView>
