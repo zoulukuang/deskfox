@@ -8,6 +8,11 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Mark } from "@opencode-ai/branding/logo"
 // FORK: 跟上游 shared → core rename 走 2026-05-03
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
+// FORK: 创作结果卡在首页(无 session)也要显示 —— 否则创作模式在首页生成成功后,
+// 卡片只 push 进模块级 store 却无处渲染(MediaCreationResults 原本只挂在 session 的
+// message-timeline 里),用户要先发一句 chat 建出 session 才看到。[feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
+import { MediaCreationResults } from "@/components/media-creation-results"
 
 const MAIN_WORKTREE = "main"
 const CREATE_WORKTREE = "create"
@@ -52,7 +57,12 @@ export function NewSessionView(props: NewSessionViewProps) {
   return (
     <div class={ROOT_CLASS}>
       <div class="h-12 shrink-0" aria-hidden />
-      <div class="flex-1 px-6 pb-30 flex items-center justify-center text-center">
+      {/* FORK: 有创作卡时改顶对齐 + 可滚动(否则 justify-center 会把溢出内容两端裁掉);
+          无卡时维持原居中 hero 布局。[feat: media-creation-mode] */}
+      <div
+        class="flex-1 min-h-0 px-6 pb-30 overflow-y-auto flex flex-col items-center text-center"
+        classList={{ "justify-center": creation.cards.length === 0 }}
+      >
         <div class="w-full max-w-200 flex flex-col items-center text-center gap-4">
           <div class="flex flex-col items-center gap-6">
             {/* FORK: DeskFox branded variant + 加大 2x 2026-04-26 */}
@@ -88,6 +98,12 @@ export function NewSessionView(props: NewSessionViewProps) {
             </Show>
           </div>
         </div>
+        {/* FORK: 创作结果卡(首页/无 session 场景);session 内由 message-timeline 渲染同一份 store */}
+        <Show when={creation.cards.length > 0}>
+          <div class="w-full max-w-200 mt-6 text-left">
+            <MediaCreationResults />
+          </div>
+        </Show>
       </div>
     </div>
   )
