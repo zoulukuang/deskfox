@@ -154,7 +154,7 @@ export const creation = {
     const generate = opts?.generate ?? generateMedia
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const inputThumb = input.refFile?.startsWith("data:image") ? input.refFile : undefined
-    // 绑定到发起时的作用域 — 生成期间即使切走也回填到正确 session/draft
+    // 卡入发起时的作用域
     const scope = activeScope()
     if (!cardsByScope[scope]) setCardsByScope(scope, [])
     setCardsByScope(
@@ -171,10 +171,18 @@ export const creation = {
         })
       }),
     )
+    // patch 按卡 id **跨所有作用域**查找 —— 生成期间(尤其视频要几分钟)若发 chat 建出 session,
+    // adoptDraftInto 会把这张运行中的卡从 draft 移到新 session;固定捕获 scope 会让 patch 落空、
+    // 卡永远停在"正在生成…"。按 id 找它当前所在作用域才稳。
+    // [bug-repro: 视频生成完成但聊天区卡片状态不变(adoption 移动了卡,patch 找不到)]
     const patch = (fn: (c: CreationCard) => void) => {
-      const arr = cardsByScope[scope] ?? []
-      const i = arr.findIndex((c) => c.id === id)
-      if (i >= 0) setCardsByScope(scope, i, produce(fn))
+      for (const key of Object.keys(cardsByScope)) {
+        const i = (cardsByScope[key] ?? []).findIndex((c) => c.id === id)
+        if (i >= 0) {
+          setCardsByScope(key, i, produce(fn))
+          return
+        }
+      }
     }
     try {
       const result = await generate(entry.id, input, {

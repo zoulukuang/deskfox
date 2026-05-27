@@ -62,4 +62,31 @@ describe("创作卡作用域隔离", () => {
     creation.setScope("newSess")
     expect(creation.cards().length).toBe(1) // 过继到新 session
   })
+
+  // [bug-repro: 视频生成完成但卡片卡在"正在生成…"—— 生成期间发 chat,adoptDraftInto 把运行中的卡
+  //  从 draft 移到新 session,而 patch 用启动时捕获的固定 scope 找不到 → 卡永不更新]
+  test("生成中途卡被 adopt 到新 session,完成后仍能更新为 done(不卡 running)", async () => {
+    creation.setScope(DRAFT_SCOPE)
+    creation.resetScope(DRAFT_SCOPE)
+    creation.resetScope("sessVideo")
+
+    // 可控 resolve 的 generate,模拟视频长耗时
+    let resolveGen!: (r: MediaResult) => void
+    const slowGen = () => new Promise<MediaResult>((res) => (resolveGen = res))
+    const run = creation.runCreation(entry, { prompt: "视频" }, undefined, { generate: slowGen })
+
+    // 生成中:卡在 draft,running
+    expect(creation.cards()[0]?.status).toBe("running")
+
+    // 模拟发 chat 建出 session → adopt + 切作用域(卡从 draft 移到 sessVideo)
+    creation.adoptDraftInto("sessVideo")
+    creation.setScope("sessVideo")
+    expect(creation.cards().length).toBe(1)
+
+    // 生成完成 → patch 必须跨作用域找到这张卡并置 done
+    resolveGen({ kind: "video", url: "u", localPaths: ["/p/creations/videos/x.mp4"], model: "m", provider: "p" })
+    await run
+    expect(creation.cards()[0]?.status).toBe("done")
+    expect(creation.cards()[0]?.result?.kind).toBe("video")
+  })
 })
