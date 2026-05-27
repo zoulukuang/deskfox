@@ -13,7 +13,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { applyStaleSessionsCleanup } from "../src/plugin"
+import { applyStaleSessionsCleanup } from "../src/workspace-migrate"
 
 const tmp = mkdtempSync(join(tmpdir(), "cleanup-probe-"))
 const marker = join(tmp, ".imbot-workspace-rename-cleanup-applied")
