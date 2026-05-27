@@ -15,7 +15,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { applyStaleSessionsCleanup } from "../plugin"
+import { applyStaleSessionsCleanup } from "../workspace-migrate"
 
 function makeFakeFs(opts: {
   markerExists: boolean

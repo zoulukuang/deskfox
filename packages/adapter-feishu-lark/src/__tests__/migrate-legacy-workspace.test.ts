@@ -16,7 +16,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { migrateLegacyWorkspace } from "../plugin"
+import { migrateLegacyWorkspace } from "../workspace-migrate"
 
 function makeFakeFs(opts: {
   legacyExists: boolean
