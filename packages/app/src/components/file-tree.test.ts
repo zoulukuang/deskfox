@@ -29,6 +29,12 @@ beforeAll(async () => {
   mock.module("@opencode-ai/ui/file-icon", () => ({ FileIcon: () => null }))
   mock.module("@opencode-ai/ui/icon", () => ({ Icon: () => null }))
   mock.module("@opencode-ai/ui/tooltip", () => ({ Tooltip: (props: { children?: unknown }) => props.children }))
+  // FORK: mock 掉 Kobalte 系组件,避免 import file-tree 时连带加载 @kobalte/core —— 它在
+  // 模块求值期就调 solid-js client-only API,而 bun test 解析的是 solid-js 服务端构建(无浏览器
+  // 条件)→ 抛 "Client-only API called on the server side"。本测试只测纯函数、从不渲染组件,
+  // mock 掉这些 import 即可隔离。[fix: file-tree-test-client-env] 2026-05-27
+  const passthrough = (props: { children?: unknown }) => props?.children
+  mock.module("@opencode-ai/ui/context-menu", () => ({ ContextMenu: new Proxy(passthrough, { get: () => passthrough }) }))
   const mod = await import("./file-tree")
   shouldListRoot = mod.shouldListRoot
   shouldListExpanded = mod.shouldListExpanded
