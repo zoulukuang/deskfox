@@ -41,6 +41,8 @@ export interface FlattenResult {
     /** 1-based,用于占位文案对应(第 N 张图)*/
     indexInForward: number
   }>
+  /** 检测到的图片总数(含未展开的)— 用于"合并转发含图但飞书 API 不支持读取"提示计数 [feat: feishu-merge-forward-image-400] */
+  imageCount: number
 }
 
 export interface FlattenOptions {
@@ -316,6 +318,7 @@ export function flattenMergeForward(
   return {
     text: lines.join("\n"),
     images,
+    imageCount: imageCountTotal,
   }
 }
 
