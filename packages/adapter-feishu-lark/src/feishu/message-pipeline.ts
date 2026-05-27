@@ -43,8 +43,6 @@ import { downloadFeishuImage } from "./image-downloader"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
   flattenMergeForward,
-  hasAnyImage,
-  MAX_IMAGE_COUNT,
   MAX_NEST_DEPTH,
   MAX_SUB_MESSAGES,
   type SubMessage,
@@ -778,15 +776,15 @@ export class MessagePipeline {
       return
     }
 
-    // 3. vision 预检(R4)
-    const visionOk = await this.checkModelVisionSupport().catch(() => true)
-    const containsImage = hasAnyImage(items)
-
-    // 4. flatten 顶层(depth=0)
+    // 3. flatten 顶层(depth=0)
+    // FORK: 合并转发里的图片飞书 API 不支持读取(错误码 234043 / HTTP 400,见
+    // OPENCODE-PLAN/需求池/飞书合并转发子图下载-400-bug.md)→ maxImages=0:不建下载列表、
+    // 不假装"已展开识别";含图时改在回复头部给用户诚实提示(步骤 11)。
+    // [feat: feishu-merge-forward-image-400] 2026-05-27
     const flatten = flattenMergeForward(items, {
       withSender: event.chatType !== "p2p",
       maxSubMessages: MAX_SUB_MESSAGES,
-      maxImages: visionOk ? MAX_IMAGE_COUNT : 0,
+      maxImages: 0,
       depth: 0,
     })
 
@@ -796,47 +794,24 @@ export class MessagePipeline {
     const expandedText = await this.expandNestedMergeForward(
       flatten.text,
       items,
-      visionOk ? MAX_IMAGE_COUNT - flatten.images.length : 0,
+      0, // 嵌套层的图同样不可下载(同 234043),不下载
       event.chatType !== "p2p",
     )
 
-    // 6. 下载所有图(继承 image-downloader S1-S5)
+    // 6. 合并转发的图片【不下载】— 飞书 API 不支持读取合并转发内的资源(234043),下载必 400。
+    // imageParts 恒空(maxImages=0 → flatten.images 也为空);含图时在回复头部给用户诚实提示(步骤 11)。
+    // [feat: feishu-merge-forward-image-400] 2026-05-27
     const imageParts: Array<{ mime: string; filename: string; absolutePath: string }> = []
-    if (flatten.images.length > 0) {
-      const auth = await getClientAuthContext(this.larkClient)
-      for (const img of flatten.images) {
-        try {
-          const dl = await downloadFeishuImage(
-            img.imageKey,
-            // ⚠️ 关键:用子消息自己的 message_id(不是 merge_forward 容器的 messageId)
-            img.subMessageId,
-            event.chatId,
-            auth.token,
-            auth.domain,
-          )
-          imageParts.push({
-            mime: dl.mime,
-            filename: dl.filename,
-            absolutePath: dl.absolutePath,
-          })
-          console.log(
-            `[pipeline ${this.opts.accountId}] merge_forward 图 ${img.indexInForward} (${dl.size}B) → ${dl.absolutePath}`,
-          )
-        } catch (err) {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] merge_forward 子图 ${img.imageKey} 下载失败,继续:`,
-            (err as Error).message,
-          )
-        }
-      }
-    }
 
     // 7. 组装最终 text(flatten + nested expanded + vision-incapable warning)
     let finalText = expandedText.flat()
     finalText = `(以下是用户合并转发给你的对话内容,共 ${items.length} 条子消息${expandedText.nestedCount > 0 ? `,含 ${expandedText.nestedCount} 个嵌套合并消息` : ""})\n\n${finalText}\n\n请基于这些内容回答用户的问题或给出总结/建议。`
 
-    if (!visionOk && containsImage) {
-      finalText += "\n\n⚠️ 当前 model 不支持图片识别,这条合并消息我只能看到文字部分。"
+    // FORK: 合并转发含图 → 告诉 LLM 图读不了(只基于文字回答),且无需在回复里重复说明
+    //(用户侧的诚实提示由步骤 11 在回复头部统一加,避免重复)。[feat: feishu-merge-forward-image-400]
+    if (flatten.imageCount > 0) {
+      finalText +=
+        "\n\n(注:这条合并转发里有图片,但飞书接口不支持读取合并转发内的图片,你看不到图片内容,只基于文字回答即可,无需在回复中说明这一点。)"
     }
 
     // 8. 立即给 user 消息加 reaction
@@ -892,10 +867,17 @@ export class MessagePipeline {
     }
 
     // 11. 后处理 + reply
-    const finalReply = await this.processAttachments(reply, event.chatId)
+    let finalReply = await this.processAttachments(reply, event.chatId)
     if (!finalReply.trim()) {
       console.warn(`[pipeline ${this.opts.accountId}] empty reply for merge_forward`)
       return
+    }
+    // FORK: 合并转发含图 → 回复头部加一行诚实提示(飞书 API 不支持读取合并转发内图片)。
+    // [feat: feishu-merge-forward-image-400] 2026-05-27
+    if (flatten.imageCount > 0) {
+      finalReply =
+        `📷 合并转发里的 ${flatten.imageCount} 张图片我读不了(飞书接口限制),需要识别请直接把图转发给我。\n\n` +
+        finalReply
     }
     try {
       await this.sendFeishuText(event.chatId, finalReply)

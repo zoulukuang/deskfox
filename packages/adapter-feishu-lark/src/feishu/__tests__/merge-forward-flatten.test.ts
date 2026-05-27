@@ -251,6 +251,8 @@ describe("M6 — textOnly(maxImages=0)", () => {
     ]
     const r = flattenMergeForward(items, { ...baseOpts, maxImages: 0 })
     expect(r.images).toEqual([])
+    // [feat: feishu-merge-forward-image-400] 不下载(images=[])但仍计数 → 回复头部据此提示"有 N 张图读不了"
+    expect(r.imageCount).toBe(2)
     const lines = r.text.split("\n")
     expect(lines[0]).toBe("看图")
     expect(lines[1]).toBe("[图 1(未展开)]")
