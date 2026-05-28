@@ -355,13 +355,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     // 起源:user 反馈"看了说明才知道 VoiceClone 是先拖音频再写文字" + m4a 不支持没引导。
     // 放工具栏里跟 mode menu 撞,移进 prompt placeholder 才是正确位置(empty 状态显眼)。
     const cap = creation.createMode()
-    if (cap === "tts_clone") return "📎 先 @ 引用参考音频(wav/mp3,< 7MB),然后在这里写要克隆说的话"
-    if (cap === "tts_design") return "在这里写要念的文本(声线由上方「声线描述」输入框决定)"
+    if (cap === "tts_clone") return "先 @ 引用参考音频（wav/mp3，< 7MB），然后在这里写要克隆说的话"
+    if (cap === "tts_design") return "在这里写要朗读的文字，下方输入声音要求"
     if (cap === "tts") return "在这里写要朗读的文字"
-    if (cap === "asr") return "📎 先 @ 引用音频文件(wav/mp3)"
+    if (cap === "asr") return "先 @ 引用音频文件（wav/mp3）"
     if (cap === "translate") return "在这里写要翻译的原文"
     if (cap === "image" || cap === "video") return "用文字描述你想要生成的内容"
-    if (cap === "image_edit" || cap === "video_i2v") return "📎 先 @ 引用一张图,然后写要怎么改 / 让它怎么动"
+    if (cap === "image_edit" || cap === "video_i2v") return "先 @ 引用一张图，然后写要怎么改 / 让它怎么动"
     return promptPlaceholder({
       mode: store.mode,
       commentCount: commentCount(),
