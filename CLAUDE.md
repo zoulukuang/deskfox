@@ -177,6 +177,7 @@ grep `[feat: <id>]` 能反查到对应文档。
   - `-Env dev|beta|prod` 三档 installer channel(平时验证用 `dev` 这档,跟分支名 `main` 无关);`-NoBundle` 跳过 NSIS bundler(SignTool 没装时用,不影响 exe)
   - **禁止**直接跑 `bun run --cwd packages/desktop tauri build`,那会出 `OpenCode.exe`,违反品牌规范
 - **改完不起 tauri dev mode(`bun dev`),直接 build release exe 验证**(WebView2 + Tauri 在 dev mode 下行为可能与 release 不一致)
+- **Phase 2 真桌面 e2e**(碰 native dialog / Tauri 跨进程 / 真 Rust 后端的改动必跑):`bun run --cwd packages/app test:e2e:tauri`(前置 build release exe);完整用法见 [`packages/app/e2e-tauri/README.md`](packages/app/e2e-tauri/README.md);治理对照 [`docs/governance/自动化测试规范.md`](docs/governance/自动化测试规范.md) Phase 2 段
 - **build 前必须先杀进程**:tauri build 会被运行中的 `DeskFox.exe` / `opencode-cli.exe` 锁文件导致 PermissionDenied。任何 release build 前**无条件**先执行,不询问 user:
   ```powershell
   Get-Process -Name DeskFox,OpenCode,opencode-cli -ErrorAction SilentlyContinue | Stop-Process -Force

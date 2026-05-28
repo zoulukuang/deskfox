@@ -1,102 +1,162 @@
-# DeskFox 桌面端到端 e2e(Playwright + WebView2 CDP)
+# Phase 2 真桌面 e2e — Agent 用法指南
 
-> 状态:**架子搭完,smoke 跑通**(2026-05-08)
->
-> **完整 MD → Word 测试 fixme**,等 saveDialog mock 方案落地。
+> **状态**:✅ 已启用(2026-05-28,feat `e2e-tauri-phase2-real-desktop` 合 main)
+> **位置**:`packages/app/e2e-tauri/`(独立 Playwright runner,跟 Phase 1 mock e2e 互不干扰)
 
-## 路径选型(已踩坑沉淀)
+## 这一层 e2e 能干什么(用一段话讲清)
 
-经过 2 条路探索,**最优方案是 Playwright + WebView2 CDP**:
+驱动**真编译过的 DeskFox.exe**,真启动 + WebView2 真 hydrate + 真 Tauri command + 真 Rust 后端往返,然后用 Playwright 通过 WebView2 CDP(`--remote-debugging-port=9222`)操作 UI,做端到端断言。
 
-| 路径 | 结果 | 理由 |
-|---|---|---|
-| ❌ WebdriverIO + tauri-driver | **走不通** | tauri-driver 在 Tauri 2 + Win11 + WebView2 上不接管 DeskFox(msedgedriver 启 isolated 空 WebView2)|
-| ✅ Playwright + WebView2 CDP | **跑通** | `--remote-debugging-port=9222` 启 DeskFox + `chromium.connectOverCDP` 连进 真 WebView2 |
+CDP self-test(`packages/media-gen/scripts/cdp-*.ts`)验数据 + Phase 1 mock e2e(`packages/app/e2e/`)验组件行为 + **本层(Phase 2)验真 Tauri 跨进程实际行为**,三层互补,**任何 Tauri/WebView 边界 bug** 只有本层能抓到。
 
-## 环境依赖(一次性 setup)
+## 测试金字塔三层
 
-仅 Win 平台:
-- Edge 147+(系统已带,WebView2 内核同版本)
-- Bun(已装)
-- Playwright + chromium 二进制(随 e2e setup 自动装)
-
-**不依赖** WebdriverIO / tauri-driver / msedgedriver / Rust(Playwright 走 CDP,无需这些)。
-
-## 跑法
-
-```powershell
-# 必须先 build DeskFox.exe(release)
-D:\project\opencode-fork\packages\branding\scripts\build-deskfox.ps1 -Env dev -NoBundle
-
-# 跑 e2e
-bun run --cwd packages/app test:e2e:tauri
+```
+┌──────────────────────────────────────────────┐
+│ Phase 2 真桌面 e2e  ← 本层                    │
+│   - 验 native dialog 行为(save/open)        │
+│   - 验 真 Tauri command 跨进程行为            │
+│   - 验 真 Rust 后端读写                       │
+│   - 慢:每 spec 1-2 分钟,build release 前提  │
+├──────────────────────────────────────────────┤
+│ Phase 1 mock e2e(packages/app/e2e)          │
+│   - Vite mock + Playwright,组件交互验证      │
+│   - 快:每 spec 几秒,无需 build              │
+├──────────────────────────────────────────────┤
+│ Unit tests(各包 bun test)                   │
+│   - 纯逻辑,毫秒级                            │
+└──────────────────────────────────────────────┘
 ```
 
-注:config 文件名是 `playwright-tauri.ts`(无 `.config` 后缀)— pre-commit hook 黑名单 `.*\.config\.(ts|js|mjs)$` 防上游配置乱改,fork 加桌面 e2e config 用 `playwright-tauri.ts`(Playwright `--config=` 接任何 .ts 文件,不强制 `.config.ts` 命名)。
+## 快速跑(给 Agent)
 
-## 当前测试
+```powershell
+# 0. 杀残留(无条件,避免 :9222 被占 / DeskFox.exe 被锁)
+powershell -Command "Get-Process -Name DeskFox,opencode-cli -ErrorAction SilentlyContinue | Stop-Process -Force"
 
-| spec | 状态 | 说明 |
+# 1. build release exe(每次产品代码改动后必跑;只改测试代码可跳)
+D:\project\opencode-fork\packages\branding\scripts\build-deskfox.ps1 -Env dev -NoBundle
+
+# 2. 跑所有 e2e-tauri specs
+bun run --cwd packages/app test:e2e:tauri
+
+# 跑单个 spec
+bun run --cwd packages/app test:e2e:tauri specs/md-to-word-real.spec.ts
+
+# 跑前 grep 一下 spec 名(测试 title 走 --grep)
+bun run --cwd packages/app test:e2e:tauri --grep "完整端到端"
+
+# 看 trace(测试失败时,Playwright 自动生成 trace.zip)
+npx playwright show-trace packages/app/e2e-tauri/test-results/<test-name>/trace.zip
+```
+
+**注意**:跑期间 DeskFox 窗口会真弹出(headless 不支持,Tauri WebView2 限制)。fixture 内置 `SetForegroundWindow` 把它顶到前景方便观察,**不影响测试正确性**。
+
+## 现有 spec
+
+| Spec | 验证内容 | 状态 |
 |---|---|---|
-| `smoke-cdp.spec.ts` | ✅ 跑通 | DeskFox 启动 + CDP 连 + DOM 探查;0 业务依赖 |
-| `md-to-word-real.spec.ts` | ⏸ `test.fixme` | 完整 MD→Word 端到端;**等 saveDialog mock 方案落地后启用** |
+| `specs/smoke-cdp.spec.ts` | CDP 链路 / WebView 渲染 / DOM 探查 | ✅ #1 pass(41s)/ ⚠ #2 race(连续 spawn 偶发,留 backlog) |
+| `specs/md-to-word-real.spec.ts` | 完整端到端 MD → docx(右键导出 Word 全链路) | ✅ pass(1.2 min,产 22.5KB docx) |
 
-## fixture 能力
+## fixture API(给写新 spec 的 Agent)
 
-`fixtures.ts` 提供 `deskfoxApp` test fixture,自动:
-1. spawn DeskFox.exe(`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`)
-2. 等 9222 端口 CDP 监听就绪
+`fixtures.ts` 暴露的 `deskfoxApp` 自动:
+1. spawn 真 `DeskFox.exe`(带 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`)
+2. 等 CDP `http://127.0.0.1:9222` 就绪(30s 超时)
 3. `chromium.connectOverCDP` 连入主 WebView
-4. 等 SolidJS hydrate(button visible)
-5. **强制 `page.goto` 注入测试项目**(默认 `C:/Users/yuexi/Downloads`,统一环境不靠 user state)
-6. SetForegroundWindow 让 user 看见(可选,Win32 API)
-7. 测试结束自动 kill DeskFox + close browser
+4. **注入 saveDialog mock**(`page.exposeFunction("__deskFoxE2eSavePath", () => savePath)`,见下)
+5. 等 SolidJS hydrate(button visible)
+6. **强制 goto 测试项目 URL**(base64 编码本仓根路径,统一环境不靠 user state)
+7. `SetForegroundWindow` 把 DeskFox 顶前景
+8. 测试结束 SIGKILL DeskFox + close browser + 500ms 让 Win 释放端口
 
-## 待解决的关键问题:saveDialog mock
+测试代码可以直接用 `deskfoxApp.{page, browser, context, proc, e2eSavePath}`。
 
-`md-to-word-real.spec.ts` 完整跑通需要让 native save dialog 不弹(直接返 mock 路径)。**3 个候选方案**(实施顺序由难易决定):
+```ts
+import { test, expect } from "../fixtures"
 
-### 方案 ① Playwright `page.exposeFunction`(推荐)
-- 测试代码:`page.exposeFunction("__deskFoxE2eSavePath", () => "D:/tmp/.../mock.docx")`
-- 前端 platform.tsx:try `(window as any).__deskFoxE2eSavePath?.()` 优先,fallback native dialog
-- 优点:**0 产品代码侵入**(前端只是查 window 上是否有这个 function,生产环境永远 undefined)
-- 投入:小
+test("我的新场景", async ({ deskfoxApp }) => {
+  const { page, e2eSavePath } = deskfoxApp
+  // page 是 Playwright Page 对象,跟普通 Playwright spec 一样用
+  await page.keyboard.press("Control+k")
+  // ...
+})
+```
 
-### 方案 ② env var 检测
-- DeskFox.exe 启动加 `DESKFOX_E2E_MODE=1` 环境变量
-- 前端 platform.tsx 启动时通过 Tauri command 读 env,标记 e2e 模式
-- saveDialog 在 e2e 模式下走 mock(读固定 path 文件 / 路径 fixed)
-- 优点:可控
-- 缺点:需 1 行 platform 改动 + 1 个 Tauri command(轻度产品改动)
+## saveDialog mock 模式(可复用)
 
-### 方案 ③ Tauri Rust 后端 dialog plugin mock
-- 改 packages/desktop/src-tauri 加 e2e config 拦 save_dialog 命令
-- 优点:最彻底
-- 缺点:重工程,改 Rust 侧
+**问题**:Tauri native save dialog 弹出后,Playwright 不能跨进程操作 native UI,测试卡住。
 
-**推荐顺序**:① → ②(① 实在不行)→ ③(都不行才上)。
+**方案**:`page.exposeFunction` + 平台 hook,**0 产品代码侵入**:
 
-## 实证(2026-05-07)
+- **产品端**(`packages/desktop/src/index.tsx saveFilePickerDialog`):
+  ```ts
+  const e2eMock = (window as unknown as { __deskFoxE2eSavePath?: ... }).__deskFoxE2eSavePath
+  if (typeof e2eMock === "function") {
+    const mocked = await e2eMock(opts)
+    if (typeof mocked === "string") return mocked
+  }
+  // fall through 走真 native dialog(生产环境永远走这,window 字段 undefined)
+  const result = await save({ ... })
+  return handleWslPicker(result)
+  ```
+- **测试端**(`fixtures.ts`):
+  ```ts
+  await page.exposeFunction("__deskFoxE2eSavePath", () => e2eSavePath)
+  ```
 
-`md-to-word-real.spec.ts` 之前用方案 (废)产品代码 hook 跑通过 1 次:
-- 真启动 DeskFox + 进 Downloads 项目 + 找 .md + 右键 + 导出 + 真生成 53KB .docx
-- 测试 status: passed
-- docx 视觉效果 user 反馈"不理想"(独立 backlog,不在 e2e 范围)
+**任何新的 native dialog mock 都按这套**:产品端加 `(window as any).__deskFoxE2e<Name>` 检查,fixture exposeFunction 注入。
 
-代码逻辑已实证可行,只是 mock 方案要换干净路径。
+## 加新 spec 的 checklist(给 Agent)
+
+写新 e2e-tauri spec 时,**按这个 checklist 抄**(避免重新踩坑):
+
+1. ✅ **新文件放 `specs/`**,命名 `<feature>-real.spec.ts`(`-real` 后缀区分于 Phase 1 mock)
+2. ✅ **import**:`import { test, expect } from "../fixtures"`(不是 `@playwright/test`)
+3. ✅ **不要手 spawn DeskFox** —— fixture 已经做
+4. ✅ **不要手 connectOverCDP** —— fixture 已经做
+5. ✅ **找文件用 `Ctrl+K` 命令面板**,不要点文件树(文件树 SolidJS 结构容易飘,命令面板稳)
+6. ✅ **right-click 用 Portal 选择器**,`[data-slot="<menu-slot>"]`(SolidJS Portal 渲到 body 外)
+7. ✅ **跨进程文件读 / dialog 操作 用 mock 模式**(见上面 saveDialog mock 段)
+8. ✅ **测试输出落 `D:/tmp/deskfox-test-output/`**(已被 `.gitignore` 排,且 OS 重启自清)
+9. ✅ **失败截图** `await page.screenshot({ path: "e2e-tauri/test-results/<phase>.png" })`,test-results/ 已 .gitignore
+10. ✅ **timeout 给宽**(release exe 启动 + hydrate 慢,Playwright config 已默认 120s / expect 15s)
 
 ## 已知限制
 
-- **仅 Win**:Mac 端 WebView 是 WKWebView,CDP 行为不同,需要单独 setup(macOS WebDriver / Safari Inspector 路径)
-- **WebDriverIO 不再尝试**:Tauri 2 时代验证不行
-- **测试期间窗口可见**:fixture 有 SetForegroundWindow,user 跑 e2e 时会看到 DeskFox 弹出(headless 不可行,因 Tauri WebView2 不支持 headless)
+- **仅 Win**:Mac 端 WebView 是 WKWebView,CDP 行为不同(需 Safari Inspector 路径,留 backlog)
+- **WebDriverIO + tauri-driver 走不通**:Tauri 2 时代 msedgedriver 启 isolated 空 WebView2,**不要再尝试**
+- **测试窗口必弹**:headless 不支持,fixture 已 SetForegroundWindow 顶前景
+- **连续 spawn race**(smoke#2 已知):后一个 test fixture spawn DeskFox 时偶发 page crash,sidecar 清不全。短期 workaround:每个 spec 文件只放 1 个 test,或加 `await new Promise(r => setTimeout(r, 3000))` 让端口释放。长期 follow-up:fixture 改进 process group kill
+- **不进 pre-push 闸**:build release 太重(2-3 min)+ 测试 1-2 min,push 闸太慢。手动跑 / CI 触发 / ship 前跑
 
-## 后续 follow-up(backlog)
+## 跟 Phase 1 mock e2e 怎么分工
+
+| 场景 | 用 Phase 1 mock(快) | 用 Phase 2 真桌面(慢) |
+|---|---|---|
+| 组件交互逻辑(click / type / state 变化) | ✅ | × |
+| Vite mock 可以 mock 的 Tauri command | ✅ | × |
+| native dialog 行为(save/open file picker) | × | ✅ |
+| Rust 后端真读写 / IPC 边界 bug | × | ✅ |
+| 真 Tauri command 跨进程时序 | × | ✅ |
+| 跑测试要不要 `bun run dev` Vite 服务 | ✅ 要 | × 不要 |
+| 跑测试要不要 build release exe | × 不要 | ✅ 要 |
+
+**Phase 1 能做的优先 Phase 1**,Phase 2 留给「native / 跨进程 / 真 Rust」类。
+
+## 关联文档
+
+- 治理:[`docs/governance/自动化测试规范.md`](../../../docs/governance/自动化测试规范.md) — 测试纪律 / R5 规则
+- spec 文档:[`docs/features/e2e-tauri-phase2-real-desktop/`](../../../docs/features/e2e-tauri-phase2-real-desktop/) — 本 feat 三文档
+- Phase 1 mock e2e:[`packages/app/e2e/README.md`](../e2e/README.md) — 兄弟基础设施
+
+## Follow-up(留 backlog)
 
 | 项 | 投入 |
 |---|---|
-| 实施 saveDialog mock 方案 ①(`page.exposeFunction`)| 中 |
-| 启用 `md-to-word-real.spec.ts`(去 fixme)| 小(mock 落地后)|
-| 加 Mac CDP 路径(WKWebView Safari Inspector)| 大 |
-| docx 视觉效果优化(user 反馈不理想)| 独立 feat |
-| 加更多端到端测试场景(导出 PDF / 文件树拖入 / etc)| 持续 |
+| smoke#2 race fix(fixture 加 process group kill / 更长 release 等) | 小 |
+| Mac CDP 路径(WKWebView Safari Inspector) | 大 |
+| 加更多 spec(导出 PDF / 文件树拖入 / 创作模式生成 / IM 桥接) | 持续 |
+| 进 CI 闸(ship 前自动跑) | 小 |
+| docx 视觉效果优化(2026-05-07 实证 user 反馈"不理想") | 独立 feat |
