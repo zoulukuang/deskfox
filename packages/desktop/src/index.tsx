@@ -34,7 +34,7 @@ import { initI18n, t } from "./i18n"
 import { UPDATER_ENABLED } from "./updater"
 import { webviewZoom } from "./webview-zoom"
 import "./styles.css"
-import { Channel } from "@tauri-apps/api/core"
+import { Channel, invoke } from "@tauri-apps/api/core"
 import { commands, type InitStep } from "./bindings"
 import { createMenu } from "./menu"
 
@@ -119,6 +119,16 @@ const createPlatform = (): Platform => {
       if (typeof e2eMock === "function") {
         const mocked = await e2eMock(opts)
         if (typeof mocked === "string") return mocked
+      }
+      // FORK: E2E mock 方案 ②(Mac 端,env var 路径)— Mac Phase 2 e2e 走 GUI 黑盒不连 WebView CDP,
+      // 没 Playwright page 对象 → 上面 ① 用不了;改读后端 env DESKFOX_E2E_SAVE_PATH(测试侧 spawn .app
+      // 时注入)。生产 env 永远不设,fall through 真 native dialog;不改变现有 Win/dev/prod 行为。
+      // [feat: e2e-tauri-phase2-mac] 2026-05-28
+      try {
+        const envPath = await invoke<string | null>("read_e2e_save_path_env")
+        if (typeof envPath === "string" && envPath.length > 0) return envPath
+      } catch {
+        // 老 sidecar / 上游分支没注册该 command 时 fall through,不影响产品行为
       }
       const result = await save({
         title: opts?.title ?? t("desktop.dialog.saveFile"),
