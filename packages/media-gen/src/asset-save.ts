@@ -4,9 +4,10 @@
 // OSS 链接 24h 过期,且 user 要"分门别类存放 + 右侧文件夹浏览"。生成后把文件下载到
 // ~/.deskfox/creations/<images|videos|audio>/,返回本地路径供聊天提示 + 右侧面板用。
 
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { extname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 // 落盘根目录:有项目目录则放该项目根下的 creations/(user 要求"产出放在当前项目根目录下"),
 // 否则回落到全局 ~/.deskfox/creations/。
@@ -38,7 +39,11 @@ export async function saveAssets(
   const out: string[] = []
   for (const url of urls) {
     try {
-      const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer())
+      // FORK: file:// 协议本地读(支持 minimax-tts 引擎把 hex 解出来落 tmpdir 再来这里搬家)
+      // [feat: media-gen-minimax] 2026-05-28
+      const bytes = url.startsWith("file://")
+        ? new Uint8Array(readFileSync(fileURLToPath(url)))
+        : new Uint8Array(await (await fetch(url)).arrayBuffer())
       const name = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${guessExt(url, kind)}`
       const p = join(dir, name)
       writeFileSync(p, bytes)

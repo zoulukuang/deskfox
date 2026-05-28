@@ -33,7 +33,13 @@ export type CatalogEntry = {
 }
 
 const ALIBABA = "通义万相"
-const ALIBABA_KEY = "alibaba-cn"
+export const ALIBABA_KEY = "alibaba-cn"
+
+// FORK: 第二家 provider 接入 [feat: media-gen-minimax] 2026-05-28
+const MINIMAX = "MiniMax"
+const MINIMAX_HAILUO = "MiniMax·海螺"
+// 对齐 opencode 上游 minimax auth 默认 id(配套 Coding Plan 套餐)
+export const MINIMAX_KEY = "minimax-cn-coding-plan"
 
 /** 内置目录(首批 = 阿里 8 模型,均已 probe 实测,详见 REQ-030 §0.4/§0.5) */
 export const BUILTIN_CATALOG: CatalogEntry[] = [
@@ -114,5 +120,36 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     model: "qwen-mt-turbo",
     displayName: "通义·专业翻译(qwen-mt)",
     isDefault: true,
+  },
+  // FORK: MiniMax 接入 — image-01 / Hailuo-02 / speech-02-turbo [feat: media-gen-minimax] 2026-05-28
+  {
+    id: "minimax-image-01",
+    capability: "image",
+    provider: MINIMAX,
+    providerKey: MINIMAX_KEY,
+    model: "image-01",
+    displayName: "MiniMax·文生图(image-01)",
+    // 不标 isDefault — 阿里 wanx2.1-t2i-turbo 已是默认,MiniMax 作为可选第二档
+    params: { sizes: ["1024*1024", "1280*720", "720*1280"] },
+  },
+  {
+    id: "minimax-hailuo-2.3",
+    capability: "video",
+    provider: MINIMAX_HAILUO,
+    providerKey: MINIMAX_KEY,
+    model: "MiniMax-Hailuo-2.3", // 2026-05-28 实测真实 API id(文档写 Hailuo-2.3 / Hailuo-2.3-Fast,实际带 MiniMax- 前缀)
+    displayName: "海螺·文生视频(Hailuo-2.3)",
+    params: { sizes: ["768P", "1080P"] },
+  },
+  {
+    id: "minimax-speech-2.8-hd",
+    capability: "tts",
+    provider: MINIMAX,
+    providerKey: MINIMAX_KEY,
+    // 2026-05-28 实测确认:Token Plan 走 -hd 后缀(speech-2.8-hd / 2.6-hd / 02-hd),-turbo 走积分计费。
+    // FAQ 原文:"Token Plan 支持的非语言模型包括: TTS HD (speech-2.8-hd / speech-2.6-hd / speech-02-hd)..."
+    model: "speech-2.8-hd",
+    displayName: "MiniMax·配音(speech-2.8-hd)",
+    params: { voices: ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
   },
 ]
