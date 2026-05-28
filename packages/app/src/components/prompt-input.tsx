@@ -350,15 +350,26 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const suggest = createMemo(() => !hasUserPrompt())
 
-  const placeholder = createMemo(() =>
-    promptPlaceholder({
+  const placeholder = createMemo(() => {
+    // FORK: 创作模式 user 引导(各 capability 不同) [feat: media-gen-xiaomi] 2026-05-28
+    // 起源:user 反馈"看了说明才知道 VoiceClone 是先拖音频再写文字" + m4a 不支持没引导。
+    // 放工具栏里跟 mode menu 撞,移进 prompt placeholder 才是正确位置(empty 状态显眼)。
+    const cap = creation.createMode()
+    if (cap === "tts_clone") return "📎 先 @ 引用参考音频(wav/mp3,< 7MB),然后在这里写要克隆说的话"
+    if (cap === "tts_design") return "在这里写要念的文本(声线由上方「声线描述」输入框决定)"
+    if (cap === "tts") return "在这里写要朗读的文字"
+    if (cap === "asr") return "📎 先 @ 引用音频文件(wav/mp3)"
+    if (cap === "translate") return "在这里写要翻译的原文"
+    if (cap === "image" || cap === "video") return "用文字描述你想要生成的内容"
+    if (cap === "image_edit" || cap === "video_i2v") return "📎 先 @ 引用一张图,然后写要怎么改 / 让它怎么动"
+    return promptPlaceholder({
       mode: store.mode,
       commentCount: commentCount(),
       example: suggest() ? (store.mode === "shell" ? "git status" : language.t(EXAMPLES[store.placeholder])) : "",
       suggest: suggest(),
       t: (key, params) => language.t(key as Parameters<typeof language.t>[0], params as never),
-    }),
-  )
+    })
+  })
 
   const historyComments = () => {
     const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
