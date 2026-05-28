@@ -12,9 +12,9 @@ import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { MINIMAX_BASE, MinimaxError, checkBaseResp, httpError, readJson } from "./minimax-error"
 
-// 2026-05-28 实测确认:Token Plan Plus 支持的 TTS model id = speech-2.8-turbo
-// (客服描述 "speech-2.8" 省了 -turbo 后缀;旧 speech-02-turbo Token Plan 不支持)
-export const DEFAULT_TTS_MODEL = "speech-2.8-turbo"
+// 2026-05-28 实测 + FAQ 确认:Token Plan 走 -hd 后缀(speech-2.8-hd / 2.6-hd / 02-hd),
+// -turbo 走积分计费(没积分就 0/0)。坑点:客服只说 "speech-2.8",实际要带 -hd 才走 Token Plan 配额。
+export const DEFAULT_TTS_MODEL = "speech-2.8-hd"
 export const DEFAULT_VOICE = "male-qn-qingse"
 
 export type TtsInput = {

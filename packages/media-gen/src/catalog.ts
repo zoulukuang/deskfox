@@ -142,12 +142,14 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     params: { sizes: ["768P", "1080P"] },
   },
   {
-    id: "minimax-speech-2.8-turbo",
+    id: "minimax-speech-2.8-hd",
     capability: "tts",
     provider: MINIMAX,
     providerKey: MINIMAX_KEY,
-    model: "speech-2.8-turbo", // 2026-05-28 客服 + 实测确认:Token Plan 支持的 TTS 是 speech-2.8-turbo(客服简称 speech-2.8)
-    displayName: "MiniMax·配音(speech-2.8)",
+    // 2026-05-28 实测确认:Token Plan 走 -hd 后缀(speech-2.8-hd / 2.6-hd / 02-hd),-turbo 走积分计费。
+    // FAQ 原文:"Token Plan 支持的非语言模型包括: TTS HD (speech-2.8-hd / speech-2.6-hd / speech-02-hd)..."
+    model: "speech-2.8-hd",
+    displayName: "MiniMax·配音(speech-2.8-hd)",
     params: { voices: ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
   },
 ]

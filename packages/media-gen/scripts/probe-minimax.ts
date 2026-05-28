@@ -112,7 +112,7 @@ async function probeTts() {
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "speech-2.8-turbo",
+      model: "speech-2.8-hd",
       text: "你好,我是小狐狸,很高兴为你服务。",
       stream: false,
       voice_setting: { voice_id: "male-qn-qingse", speed: 1.0, vol: 1.0, pitch: 0 },

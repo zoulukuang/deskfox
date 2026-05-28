@@ -27,7 +27,7 @@ describe("minimax synthesizeSpeech", () => {
     // 验返回结构
     expect(out.url.startsWith("file://")).toBe(true)
     expect(out.url).toContain(".mp3")
-    expect(out.model).toBe("speech-2.8-turbo")
+    expect(out.model).toBe("speech-2.8-hd")
     expect(out.voice).toBe("female-shaonv")
 
     // 验请求 body 形状
