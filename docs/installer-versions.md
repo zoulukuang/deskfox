@@ -26,6 +26,19 @@
 **产物**:`DeskFox-2026.5.28.1_aarch64.dmg`(arm64,不签名)。
 
 ---
+
+## [Windows] 2026.5.28.1 — 2026-05-28
+
+**主题**:飞书插件加载修复 hotfix(自 prod `2026.5.27.1` 以来)
+
+**修复**:
+- **飞书插件入口不再 export 裸 helper**(`e6d0735dd`):`migrate` / `cleanup` 等内部 helper 被上游 `getLegacyPlugins` 当成插件调用,触发 `failed to load plugin (fs.existsSync undefined)`。入口只 export 真正的 plugin 工厂,helper 内部化。
+
+**配套 plugin**(随安装包):feishu-bridge + media-gen(`{app}\plugin\` 下,启动自动注入 user opencode 配置)。
+**installer**:`DeskFox-2026.5.28.1-setup.exe`(~62 MB,Inno Setup,未签名)。
+
+---
+
 ## [Windows] 2026.5.27.1 — 2026-05-27
 
 **主题**:多模态创作模式上线 + 飞书图片/合并转发识别(自 prod `2026.5.25.1` 以来)
