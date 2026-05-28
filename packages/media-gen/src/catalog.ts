@@ -33,7 +33,12 @@ export type CatalogEntry = {
 }
 
 const ALIBABA = "通义万相"
-const ALIBABA_KEY = "alibaba-cn"
+export const ALIBABA_KEY = "alibaba-cn"
+
+// FORK: 第二家 provider 接入 [feat: media-gen-minimax] 2026-05-28
+const MINIMAX = "MiniMax"
+const MINIMAX_HAILUO = "MiniMax·海螺"
+export const MINIMAX_KEY = "minimax-cn"
 
 /** 内置目录(首批 = 阿里 8 模型,均已 probe 实测,详见 REQ-030 §0.4/§0.5) */
 export const BUILTIN_CATALOG: CatalogEntry[] = [
@@ -114,5 +119,34 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     model: "qwen-mt-turbo",
     displayName: "通义·专业翻译(qwen-mt)",
     isDefault: true,
+  },
+  // FORK: MiniMax 接入 — image-01 / Hailuo-02 / speech-02-turbo [feat: media-gen-minimax] 2026-05-28
+  {
+    id: "minimax-image-01",
+    capability: "image",
+    provider: MINIMAX,
+    providerKey: MINIMAX_KEY,
+    model: "image-01",
+    displayName: "MiniMax·文生图(image-01)",
+    // 不标 isDefault — 阿里 wanx2.1-t2i-turbo 已是默认,MiniMax 作为可选第二档
+    params: { sizes: ["1024*1024", "1280*720", "720*1280"] },
+  },
+  {
+    id: "minimax-hailuo-02",
+    capability: "video",
+    provider: MINIMAX_HAILUO,
+    providerKey: MINIMAX_KEY,
+    model: "MiniMax-Hailuo-02",
+    displayName: "海螺·文生视频(Hailuo-02)",
+    params: { sizes: ["768P", "1080P"] }, // 海螺用分辨率档,沿用 sizes 字段
+  },
+  {
+    id: "minimax-speech-02-turbo",
+    capability: "tts",
+    provider: MINIMAX,
+    providerKey: MINIMAX_KEY,
+    model: "speech-02-turbo",
+    displayName: "MiniMax·配音(speech-02-turbo)",
+    params: { voices: ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
   },
 ]
