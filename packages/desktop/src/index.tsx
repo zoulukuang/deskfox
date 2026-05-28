@@ -110,6 +110,16 @@ const createPlatform = (): Platform => {
     },
 
     async saveFilePickerDialog(opts) {
+      // FORK: E2E 真桌面 mock 注入点 — Playwright page.exposeFunction("__deskFoxE2eSavePath") 注入时
+      // 优先返 mock 路径,不弹 native save dialog。生产环境 window.__deskFoxE2eSavePath 永远 undefined,
+      // fall through 走真 native dialog。0 e2e mode flag / 0 env var,纯 window 属性存在性检查。
+      // [feat: e2e-tauri-phase2-real-desktop] 2026-05-28
+      const e2eMock = (window as unknown as { __deskFoxE2eSavePath?: (opts?: unknown) => string | Promise<string | null> })
+        .__deskFoxE2eSavePath
+      if (typeof e2eMock === "function") {
+        const mocked = await e2eMock(opts)
+        if (typeof mocked === "string") return mocked
+      }
       const result = await save({
         title: opts?.title ?? t("desktop.dialog.saveFile"),
         defaultPath: opts?.defaultPath,
