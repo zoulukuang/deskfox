@@ -43,6 +43,8 @@ import { createDebounced } from "@/utils/debounce"
 import { stripFrontmatter } from "@/utils/markdown-frontmatter"
 // FORK: 聊天输入框焦点跟随 [feat: chat-input-focus-follow] 2026-05-21
 import { focusChatInput } from "@/utils/chat-input-focus"
+// FORK: 选区菜单贴边沿溢出修复(REQ-032)— 渲染后 measure + clamp 进视口
+import { repositionMenu } from "@/utils/menu-position"
 
 // FORK: macOS 平台检测,用于右键菜单输入框 Option+Enter 提交支持 2026-04-30
 const IS_MAC = typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
@@ -882,6 +884,18 @@ export function FileTabContent(props: {
   type MdMenuMode = "menu" | "input"
   type MdMenuState = { open: boolean; x: number; y: number; text: string; mode: MdMenuMode }
   const [mdMenu, setMdMenu] = createSignal<MdMenuState>({ open: false, x: 0, y: 0, text: "", mode: "menu" })
+
+  // FORK: 菜单视口边界保护(REQ-032)— 同 host.tsx ContextMenuHost 的同款模式,初帧 visibility:hidden,
+  // 渲染后 measure + clamp 进视口再可见。不能用常量宽高(input 卡 360px + textarea 多行高,差异大)。
+  // [feat: req-032-menu-clamp-viewport] 2026-05-28
+  let mdMenuEl: HTMLDivElement | undefined
+  createEffect(() => {
+    const m = mdMenu()
+    if (!m.open) return
+    queueMicrotask(() => {
+      if (mdMenuEl) repositionMenu(mdMenuEl, m.x, m.y)
+    })
+  })
   const [mdComment, setMdComment] = createSignal("")
 
   // 选区红色覆盖层:绝对定位的 div 数组,通过 range.getClientRects() 计算每行 rect。
@@ -1774,9 +1788,10 @@ export function FileTabContent(props: {
           <Switch>
             <Match when={mdMenu().mode === "menu"}>
               <div
+                ref={(el) => { mdMenuEl = el }}
                 data-slot="md-selection-menu"
                 class="fixed z-50 min-w-[220px] rounded-md border border-border-base bg-surface-raised-stronger-non-alpha text-text-strong shadow-[var(--shadow-lg-border-base)] py-1 text-sm"
-                style={{ left: `${mdMenu().x}px`, top: `${mdMenu().y}px` }}
+                style={{ left: `${mdMenu().x}px`, top: `${mdMenu().y}px`, visibility: "hidden" }}
               >
                 {/* FORK: 始终显示完整菜单(2026-05-07)— 选区相关项(添加到聊天 / 复制)按
                     mdMenu().text.trim() disabled 灰显;编辑 / 导出 Word 不依赖选区,始终可用。
@@ -1819,9 +1834,10 @@ export function FileTabContent(props: {
             </Match>
             <Match when={mdMenu().mode === "input"}>
               <div
+                ref={(el) => { mdMenuEl = el }}
                 data-slot="md-selection-menu"
                 class="fixed z-50 w-[360px] rounded-md border border-border-base bg-surface-raised-stronger-non-alpha text-text-strong shadow-[var(--shadow-lg-border-base)] p-3 text-sm flex flex-col gap-2"
-                style={{ left: `${mdMenu().x}px`, top: `${mdMenu().y}px` }}
+                style={{ left: `${mdMenu().x}px`, top: `${mdMenu().y}px`, visibility: "hidden" }}
               >
                 <textarea
                   ref={(el) => queueMicrotask(() => el.focus())}
