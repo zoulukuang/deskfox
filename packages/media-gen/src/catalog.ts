@@ -38,7 +38,8 @@ export const ALIBABA_KEY = "alibaba-cn"
 // FORK: 第二家 provider 接入 [feat: media-gen-minimax] 2026-05-28
 const MINIMAX = "MiniMax"
 const MINIMAX_HAILUO = "MiniMax·海螺"
-export const MINIMAX_KEY = "minimax-cn"
+// 对齐 opencode 上游 minimax auth 默认 id(配套 Coding Plan 套餐)
+export const MINIMAX_KEY = "minimax-cn-coding-plan"
 
 /** 内置目录(首批 = 阿里 8 模型,均已 probe 实测,详见 REQ-030 §0.4/§0.5) */
 export const BUILTIN_CATALOG: CatalogEntry[] = [

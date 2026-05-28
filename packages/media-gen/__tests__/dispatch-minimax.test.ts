@@ -20,7 +20,7 @@ function makeAuthJson(): string {
     p,
     JSON.stringify({
       "alibaba-cn": { type: "api", key: "sk-alibaba-fake" },
-      "minimax-cn": { type: "api", key: "sk-minimax-fake" },
+      "minimax-cn-coding-plan": { type: "api", key: "sk-minimax-fake" },
     }),
   )
   return p
@@ -89,7 +89,7 @@ describe("runEntry by-provider 路由", () => {
 
     // findEntry 返回 undefined(provider 没配 key 时不算可用)→ 测试场景里我们绕过 findEntry 直接构造 entry
     // (registry 已确认 filter 行为,这里测 dispatch 自己也有兜底)
-    const entry = { id: "x", capability: "image" as const, provider: "MiniMax", providerKey: "minimax-cn", model: "image-01", displayName: "x" }
+    const entry = { id: "x", capability: "image" as const, provider: "MiniMax", providerKey: "minimax-cn-coding-plan", model: "image-01", displayName: "x" }
     const p = runEntry(entry, { prompt: "p" }, { authPath })
     await expect(p).rejects.toThrow(/未找到.*API Key|no_key/)
     rmSync(authPath, { force: true })

@@ -35,7 +35,7 @@ describe("registry 配 minimax-cn 后自动亮 3 档", () => {
     const dir = join(tmpdir(), `catalog-test-${Date.now()}`)
     mkdirSync(dir, { recursive: true })
     const authPath = join(dir, "auth.json")
-    writeFileSync(authPath, JSON.stringify({ "minimax-cn": { type: "api", key: "sk-x" } }))
+    writeFileSync(authPath, JSON.stringify({ "minimax-cn-coding-plan": { type: "api", key: "sk-x" } }))
 
     const list = availableEntries({ authPath })
     expect(list).toHaveLength(3)
@@ -53,7 +53,7 @@ describe("registry 配 minimax-cn 后自动亮 3 档", () => {
       authPath,
       JSON.stringify({
         "alibaba-cn": { type: "api", key: "sk-a" },
-        "minimax-cn": { type: "api", key: "sk-m" },
+        "minimax-cn-coding-plan": { type: "api", key: "sk-m" },
       }),
     )
 
@@ -61,7 +61,7 @@ describe("registry 配 minimax-cn 后自动亮 3 档", () => {
     expect(images.length).toBeGreaterThanOrEqual(2)
     const providers = new Set(images.map((e) => e.providerKey))
     expect(providers.has("alibaba-cn")).toBe(true)
-    expect(providers.has("minimax-cn")).toBe(true)
+    expect(providers.has("minimax-cn-coding-plan")).toBe(true)
 
     rmSync(authPath, { force: true })
   })
