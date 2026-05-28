@@ -102,6 +102,17 @@ fn kill_sidecar(app: AppHandle) {
     tracing::info!("Killed server");
 }
 
+// FORK: E2E saveDialog mock 方案 ② — 测试态读 env 优先返,生产态 env 永远不设
+// 跟 Win 端方案 ①(`page.exposeFunction`)互补:Mac Phase 2 e2e 走 GUI 黑盒不连 WebView CDP,
+// 没 Playwright page 对象 → 方案 ① 注入端无解;改用 env var(测试侧 spawn .app 时注入),
+// 产品代码 saveFilePickerDialog 优先读 env,fall through 真 native dialog。
+// [feat: e2e-tauri-phase2-mac] 2026-05-28
+#[tauri::command]
+#[specta::specta]
+fn read_e2e_save_path_env() -> Option<String> {
+    std::env::var("DESKFOX_E2E_SAVE_PATH").ok().filter(|s| !s.is_empty())
+}
+
 #[tauri::command]
 #[specta::specta]
 async fn await_initialization(
@@ -556,6 +567,8 @@ fn make_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         // Then register them (separated by a comma)
         .commands(tauri_specta::collect_commands![
             kill_sidecar,
+            // FORK: E2E saveDialog mock 方案 ② [feat: e2e-tauri-phase2-mac] 2026-05-28
+            read_e2e_save_path_env,
             cli::install_cli,
             await_initialization,
             server::get_default_server_url,
