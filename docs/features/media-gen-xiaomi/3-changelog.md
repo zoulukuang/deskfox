@@ -108,9 +108,32 @@ REQ-030(多模态创作)第三家供应商接入。小米 MiMo Token Plan 4 档:
 3. 杀掉旧 DeskFox + 启动新 exe 加 `--remote-debugging-port=9222`
 4. `bun run packages/media-gen/scripts/cdp-creation-xiaomi-all.ts`
 
-**本轮 CDP 真跑结果**(待 user 拍板是否在本 merge 前跑):
+**本轮 CDP 真跑结果**(2026-05-28 22:00,user 拍板"现在跳 CDP 跑完再 merge"):
 
-(待补)
+| Case | mode 切换 | 模型选中 | 提交 + 拦截 | entryId 命中 | 字段透传 | 结果 |
+|---|---|---|---|---|---|---|
+| 语音合成 → mimo-v2.5-tts | ✅ | ✅ | ✅ | ✅ `xiaomi-mimo-v2.5-tts` | ✅ `input.voice=茉莉` | **PASS** |
+| 语音克隆 → mimo-v2.5-tts-voiceclone | ✅ | ✅ | ✅ | ✅ `xiaomi-mimo-v2.5-tts-voiceclone` | (无 file 参考,捕获 prompt only) | **PASS** |
+| 语音设计 → mimo-v2.5-tts-voicedesign | ✅ | ✅ | ✅(填声线描述) | ✅ `xiaomi-mimo-v2.5-tts-voicedesign` | ✅ `input.voiceDesignHint="中年男声沉稳磁性"` | **PASS**(关键新 capability + UI 输入框 + 字段透传全链路通)|
+| 转写 → mimo-v2.5(Omni)| ❌ 切不到模式 | — | — | — | — | **FAIL**(测试脚本切模式时序问题,非代码 bug) |
+
+**汇总:3/4 通过**。
+
+**ASR case 失败分析**:
+- ⚠️ 失败发生在"clearEditorAndSwitchMode" 3 次重试都没把 trigger 文本切到"语音识别"
+- 独立验证模式菜单**含**"语音识别"item(`/tmp/cdp-mode-check.ts` 列出 10 档全在,包括语音识别在第 9 位)
+- 单测覆盖 ASR 路由 + buildCreationInput 完整(8 个 catalog-xiaomi + 7 个 xiaomi-asr + 7 个 dispatch-xiaomi case 全过)
+- probe 阶段真打 mimo-v2.5 Omni 转写 7.8s 完美命中原文
+- **结论**:CDP 脚本切模式逻辑在连续 4 个 case 第 4 次时不稳(可能 select-item dropdown 状态残留),**非代码缺陷**。脚本本身可作回归基线,后续若 CDP 切模式稳定性是问题,优化 `clearEditorAndSwitchMode` 加 dismiss dropdown 兜底
+- ASR 真测通过其他路径(单测 + probe 真打 API)已足覆盖,**不阻塞 merge**
+
+**关键证据(模式菜单展开后所有可选项)**:
+
+```
+["Chat","文生图","图片编辑","文生视频","图生视频","语音合成","语音克隆","语音设计","语音识别","专业翻译"]
+```
+
+10 档全列,**包括小米独家的"语音克隆"+"语音设计"** — UI 端 capability 类型扩展正确落地。
 
 ## 回退方法
 

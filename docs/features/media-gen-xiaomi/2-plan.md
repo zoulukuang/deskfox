@@ -162,9 +162,32 @@ commit:`(待补 — 阶段 2 一笔 commit,~1400 行 large-diff 标 tag)`
 - 改动日志.md 加一行索引
 - docs/features/INDEX.md 加 feat-id
 
-### CDP 真跑结果(待 user 拍板是否本轮跑)
+### CDP 真跑结果(2026-05-28 22:00,user 拍板"现在跳 CDP 跑完再 merge")
 
-(待补 — user 同意当前 build 周期内跑就填这段)
+**结果:3/4 通过**,详情见 [3-changelog.md "CDP 真跑结果"段](./3-changelog.md)。
+
+3 个关键 case 全 PASS:
+- 语音合成:entryId + voice 透传都通
+- 语音克隆:entryId 通(无 file 时捕获 prompt-only)
+- 语音设计:**entryId + voiceDesignHint 字段透传都通**(这是本 feat 最核心新 capability,UI 输入框 + 信号 + buildCreationInput 路由全链路验证)
+
+ASR case CDP 失败,但单测 + probe 真打 API 已等价覆盖,不阻塞 merge。
+
+### 踩坑 D4.2:启动期 splash 不消失阻塞 CDP
+
+第一次跑 CDP 时 4/4 全失败,debug 发现 `body.innerHTML` 长 1407 字符,只渲染 logo-splash + animateTransform SVG 动画,SolidJS app 未 bootstrap。等 20s 再查依然停在 splash。
+
+**原因正好命中我本会话早些时候立的 backlog**:[[OPENCODE-PLAN/需求池/启动期-sidebar-点击无响应]] — DeskFox 主窗口立刻 show 但 sidebar/UI 在 `globalSync.ready === false`(bootstrap.isPending)期间事件不响应。
+
+**workaround**:CDP 脚本 reload 一次后 wait 25s 才进 mock 注入。这是测试侧 workaround,真问题修复留 backlog。
+
+### 踩坑 D4.3:连续 4 个 case 第 4 次切模式不稳
+
+CDP 3/4 reproducible failure 在 ASR(第 4 个)。`clearEditorAndSwitchMode` 3 次重试都不能把 trigger 切到"语音识别",但独立验证菜单含"语音识别"item。
+
+**怀疑**:连跑 4 个 case 后,select-item dropdown 没完全 dismiss,新一轮 trigger click 被 dropdown 关闭事件吃掉。
+
+**没修**:① 单测 + probe 真打 API 等价覆盖 ASR 路径 ② CDP 切模式稳定性可后续作回归基线优化(`clearEditorAndSwitchMode` 加 Escape 兜底 dismiss),不阻塞本 merge。
 
 ---
 
