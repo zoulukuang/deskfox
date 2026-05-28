@@ -32,12 +32,25 @@ const ERROR_MAP: Record<string, string> = {
   "1039": "生成任务被取消或超时。",
   "1041": "音频文件格式或大小不符合要求。",
   "1042": "提示词过长,请精简后重试。",
-  // 2056 实测于 2026-05-28 user 套餐 Token Plan Plus 5h 限额耗尽
-  "2056": "MiniMax 套餐用量限额已达(5 小时窗口),稍后或下个重置时间再试。",
+}
+
+/**
+ * 2056 = MiniMax usage limit / quota 错误,两种场景需区分:
+ * - "(0/0 used)" = 套餐对该能力**无配额**(如 Token Plan Plus 仅含 image,TTS/video 0 配额)
+ * - "(N/M used)" 且 N>0 = 真的把 5h 窗口配额耗尽,等 resets 时间再试
+ * 解析 status_msg 文本来给精准提示(2026-05-28 user 真实踩坑后引入)。
+ */
+function translate2056(msg?: string): string {
+  if (msg && /\(\s*0\s*\/\s*0\s+used\s*\)/i.test(msg)) {
+    const resets = /resets at ([^)]+)/i.exec(msg)?.[1]?.trim()
+    return `MiniMax 当前套餐对该能力无配额(0/0,即该套餐不含此能力)。需升级套餐或换 provider${resets ? ` (服务器报重置时间 ${resets},但 0/0 配额等重置也不会有)` : ""}。`
+  }
+  return `MiniMax 套餐 5 小时窗口配额耗尽,稍后或下个重置时间再试${msg ? ` (${msg})` : ""}。`
 }
 
 export function translateBaseResp(code: number | string, msg?: string): string {
   const key = String(code)
+  if (key === "2056") return translate2056(msg)
   return ERROR_MAP[key] ?? `MiniMax 返回错误(${key})${msg ? ": " + msg : ""}`
 }
 
