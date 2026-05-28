@@ -180,8 +180,10 @@ pub fn set_tray_status(app: &AppHandle, status: TrayStatus) -> bool {
     true
 }
 
-/// 显示并聚焦主窗口(tray 菜单"打开"+ 左键单击共用)。
-fn show_main_window_impl<R: Runtime>(app: &AppHandle<R>) {
+/// 显示并聚焦主窗口(tray 菜单"打开" + 左键单击 + single-instance 二次启动共用)。
+/// 顺序 show → unminimize → set_focus 关键:被 hide() 的窗口必须先 show,只 focus/unminimize 无效。
+/// [feat: req-031-tray-icon-relaunch-show] 2026-05-28 改 pub,给 lib.rs single-instance 回调用
+pub fn show_main_window_impl<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(MainWindow::LABEL) {
         let _ = window.show();
         let _ = window.unminimize();

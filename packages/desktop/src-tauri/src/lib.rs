@@ -452,11 +452,12 @@ pub fn run() {
         // FORK: 注册本地资源 protocol — .md 图 / 音视频 / HTML 预览 iframe 共用,Rust 端 canonicalize + sdk 越权防护 2026-05-05
         .register_uri_scheme_protocol(local_asset::SCHEME, local_asset::handler)
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // Focus existing window when another instance is launched
-            if let Some(window) = app.get_webview_window(MainWindow::LABEL) {
-                let _ = window.set_focus();
-                let _ = window.unminimize();
-            }
+            // FORK: 关闭到托盘(CloseRequested → hide())后,再点桌面/Dock/程序列表图标启动,
+            // single-instance 拦截到这个二次启动。原实现只 set_focus + unminimize 对被 hide()
+            // 的窗口无效(看不见就 focus 不到)→ 用户点图标"没反应"。复用 system_tray 的同款
+            // show + unminimize + focus 顺序 helper,与 tray 菜单"打开 DeskFox"行为对齐。
+            // [feat: req-031-tray-icon-relaunch-show] 2026-05-28
+            system_tray::show_main_window_impl(app);
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_os::init())
