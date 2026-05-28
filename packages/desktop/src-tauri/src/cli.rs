@@ -395,6 +395,12 @@ pub fn spawn_command(
             state_dir.to_string_lossy().to_string(),
         ),
     ];
+    // FORK: 国内用户走 npm 国内镜像,避免 sidecar 装 @opencode-ai/plugin / 用户插件卡 npmjs
+    // (实测 12s vs 国内 ~1s)。None = 国际用户,不注入保持官方。[feat: npm-registry-cn-mirror] 2026-05-28
+    if let Some(registry) = crate::npm_registry::decide(app) {
+        tracing::info!("[npm-registry] sidecar 走 npm 镜像: {registry}");
+        envs.push(("npm_config_registry".to_string(), registry));
+    }
     envs.extend(
         extra_env
             .iter()

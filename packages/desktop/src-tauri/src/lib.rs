@@ -14,6 +14,8 @@ pub mod linux_display;
 pub mod linux_windowing;
 mod logging;
 mod markdown;
+// FORK: 国内 npm 镜像决策 — sidecar 装插件走国内镜像,避免卡 npmjs [feat: npm-registry-cn-mirror] 2026-05-28
+mod npm_registry;
 mod os;
 mod server;
 mod text_file;
