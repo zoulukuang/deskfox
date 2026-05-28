@@ -34,6 +34,8 @@ import {
   insertTextIntoPrompt,
 } from "@/pages/session/chat-selection-quote"
 import { focusChatInput } from "@/utils/chat-input-focus"
+// FORK: 选区菜单贴近边沿溢出修复(REQ-032)— 渲染后 measure + clamp 进视口
+import { repositionMenu } from "@/utils/menu-position"
 import { promptLength } from "@/components/prompt-input/history"
 import type { SelectionProvider, SelectionResult } from "./provider"
 
@@ -82,6 +84,19 @@ export function ContextMenuHost(props: {
   const [menu, setMenu] = createSignal<MenuState>(INITIAL_MENU)
   const [comment, setComment] = createSignal("")
   const [highlightRects, setHighlightRects] = createSignal<HighlightRect[] | null>(null)
+
+  // FORK: 菜单视口边界保护(REQ-032)— 渲染初帧给 visibility:hidden,measure 真实宽高后 clamp 进视口再可见。
+  // 不能用常量宽高(input 卡 360px 宽 + textarea 多行可变高,差异大)。覆盖 menu/input 两 Match 同一变量。
+  // [feat: req-032-menu-clamp-viewport] 2026-05-28
+  let menuEl: HTMLDivElement | undefined
+  createEffect(() => {
+    const m = menu()
+    if (!m.open) return
+    // createSignal 整体追踪,setMenu(newState) 每次都触发,x/y 变化天然覆盖
+    queueMicrotask(() => {
+      if (menuEl) repositionMenu(menuEl, m.x, m.y)
+    })
+  })
 
   const applyHighlight = (sel: SelectionResult | null) => {
     if (!sel || sel.rects.length === 0) {
@@ -410,9 +425,10 @@ export function ContextMenuHost(props: {
           <Switch>
             <Match when={menu().mode === "menu"}>
               <div
+                ref={(el) => { menuEl = el }}
                 data-slot="context-menu-host"
                 class="fixed z-50 min-w-[180px] rounded-md border border-border-base bg-surface-raised-stronger-non-alpha text-text-strong shadow-[var(--shadow-lg-border-base)] py-1 text-sm"
-                style={{ left: `${menu().x}px`, top: `${menu().y}px` }}
+                style={{ left: `${menu().x}px`, top: `${menu().y}px`, visibility: "hidden" }}
               >
                 <button
                   class="w-full text-left px-3 py-1.5 hover:bg-surface-base-hover disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent"
@@ -442,9 +458,10 @@ export function ContextMenuHost(props: {
             </Match>
             <Match when={menu().mode === "input"}>
               <div
+                ref={(el) => { menuEl = el }}
                 data-slot="context-menu-host"
                 class="fixed z-50 w-[360px] rounded-md border border-border-base bg-surface-raised-stronger-non-alpha text-text-strong shadow-[var(--shadow-lg-border-base)] p-3 text-sm flex flex-col gap-2"
-                style={{ left: `${menu().x}px`, top: `${menu().y}px` }}
+                style={{ left: `${menu().x}px`, top: `${menu().y}px`, visibility: "hidden" }}
               >
                 <textarea
                   ref={(el) => queueMicrotask(() => el.focus())}
