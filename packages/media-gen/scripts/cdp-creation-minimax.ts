@@ -104,7 +104,7 @@ console.log("    可选模型清单:")
 for (const m of models) console.log("      •", m.text)
 
 // 模型下拉显示的是 `model` 字段(不是 displayName),所以匹配 minimax 的 model id:
-// image-01 / MiniMax-Hailuo-02 / speech-02-turbo
+// image-01 / MiniMax-Hailuo-2.3 / speech-2.8-hd
 const minimaxModel = models.find((m) => /^image-01$|MiniMax-Hailuo|^speech-02/.test(m.text))
 if (!minimaxModel) {
   console.error("✗ 模型下拉里没看到 MiniMax — 可能 minimax-cn key 没配,或 catalog 没 ship 到 build")

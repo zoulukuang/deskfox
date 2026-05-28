@@ -114,8 +114,8 @@ async function submitAndCapture(promptText: string): Promise<any> {
 // ====== 跑三个 case ======
 const cases: Array<{ name: string; mode: string; modelRegex: RegExp; expectEntryId: string; prompt: string }> = [
   { name: "文生图 → minimax-image-01", mode: "文生图", modelRegex: /^image-01$/, expectEntryId: "minimax-image-01", prompt: "一只赛博朋克小狐狸" },
-  { name: "语音合成 → minimax-speech-02-turbo", mode: "语音合成", modelRegex: /^speech-02-turbo$/, expectEntryId: "minimax-speech-02-turbo", prompt: "你好,我是小狐狸" },
-  { name: "文生视频 → minimax-hailuo-02", mode: "文生视频", modelRegex: /MiniMax-Hailuo-02/, expectEntryId: "minimax-hailuo-02", prompt: "一只狐狸在霓虹城市奔跑" },
+  { name: "语音合成 → minimax-speech-2.8-hd", mode: "语音合成", modelRegex: /^speech-2\.8-hd$/, expectEntryId: "minimax-speech-2.8-hd", prompt: "你好,我是小狐狸" },
+  { name: "文生视频 → minimax-hailuo-2.3", mode: "文生视频", modelRegex: /MiniMax-Hailuo-2\.3/, expectEntryId: "minimax-hailuo-2.3", prompt: "一只狐狸在霓虹城市奔跑" },
 ]
 
 let pass = 0
