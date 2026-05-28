@@ -35,26 +35,46 @@ export type VoiceCloneInput = {
 
 export type VoiceCloneResult = { url: string; model: string; tmpPath: string }
 
+// 小米官方明文支持的参考音频格式 — 其他统统拦在客户端,不让小米后端炸
+// 起源:2026-05-28 user 拖 .m4a(苹果录制)进 VoiceClone,我代码默认 audio/wav mime 但字节是 m4a,
+//      小米后端报 HTTP 500 "An exception occurred while loading multimodal data: Error while loading data"
+//      ⇒ 走 ext 白名单预检,直接友好报错告诉用户用啥格式
+const SUPPORTED_EXTS = new Set([".wav", ".mp3", ".mpeg"])
+
 function mimeFromExt(ref: string): "audio/wav" | "audio/mpeg" {
   const ext = extname(ref).toLowerCase()
   if (ext === ".mp3" || ext === ".mpeg") return "audio/mpeg"
-  // 不支持 m4a / aac / flac(官方只列 mp3/wav)
   return "audio/wav"
 }
 
+function validateExt(ref: string): void {
+  const ext = extname(ref).toLowerCase()
+  if (!SUPPORTED_EXTS.has(ext)) {
+    const display = ext || "(无扩展名)"
+    throw new XiaomiError(
+      "ref_unsupported_format",
+      `语音克隆只支持 wav / mp3 格式参考音频,你的文件是 ${display}。请用音频转换工具(如 ffmpeg、剪映、quicktime)转成 wav 或 mp3 再试。`,
+    )
+  }
+}
+
 async function loadRefAudio(ref: string, fetchImpl: typeof fetch): Promise<{ bytes: Uint8Array; mime: "audio/wav" | "audio/mpeg" }> {
+  // 先验扩展名(防 m4a / aac / flac / opus 等小米后端炸的格式)
   if (ref.startsWith("file://")) {
     const path = fileURLToPath(ref)
+    validateExt(path)
     if (!existsSync(path)) throw new XiaomiError("ref_not_found", `参考音频不存在:${path}`)
     return { bytes: readFileSync(path), mime: mimeFromExt(path) }
   }
   if (ref.startsWith("http://") || ref.startsWith("https://")) {
+    validateExt(ref)
     const res = await fetchImpl(ref)
     if (!res.ok) throw new XiaomiError("ref_fetch_failed", `下载参考音频失败:HTTP ${res.status}`)
     const buf = new Uint8Array(await res.arrayBuffer())
     return { bytes: buf, mime: mimeFromExt(ref) }
   }
   // 当作本地路径
+  validateExt(ref)
   if (!existsSync(ref)) throw new XiaomiError("ref_not_found", `参考音频不存在:${ref}`)
   return { bytes: readFileSync(ref), mime: mimeFromExt(ref) }
 }

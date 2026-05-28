@@ -74,6 +74,43 @@ describe("cloneVoice", () => {
     await expect(cloneVoice({ apiKey: "k", text: "t", refAudio: "/no/such/file.wav", fetchImpl })).rejects.toThrow(/参考音频不存在/)
   })
 
+  // FORK: ext 白名单预检 [feat: media-gen-xiaomi] 2026-05-28
+  // 起源:user 真测撞 .m4a → 小米后端 HTTP 500 "loading multimodal data" 炸,加客户端拦截
+  test("m4a 不支持 → ref_unsupported_format(客户端预检拦,不浪费请求)", async () => {
+    const refPath = join(tmpdir(), `xiaomi-ref-${Date.now()}.m4a`)
+    writeFileSync(refPath, Buffer.from("FAKE M4A"))
+    const fetchImpl = (async () => res(200, {})) as unknown as typeof fetch
+    await expect(cloneVoice({ apiKey: "k", text: "t", refAudio: refPath, fetchImpl })).rejects.toThrow(/只支持 wav \/ mp3|\.m4a/)
+    unlinkSync(refPath)
+  })
+
+  test(".aac / .flac / .opus / .ogg 同理拦截", async () => {
+    const fetchImpl = (async () => res(200, {})) as unknown as typeof fetch
+    for (const ext of [".aac", ".flac", ".opus", ".ogg"]) {
+      const p = join(tmpdir(), `xiaomi-ref-${Date.now()}${ext}`)
+      writeFileSync(p, Buffer.from("FAKE"))
+      await expect(cloneVoice({ apiKey: "k", text: "t", refAudio: p, fetchImpl })).rejects.toThrow(/只支持 wav \/ mp3/)
+      unlinkSync(p)
+    }
+  })
+
+  test("file:// URL 形式也会拦 m4a", async () => {
+    const refPath = join(tmpdir(), `xiaomi-ref-${Date.now()}.m4a`)
+    writeFileSync(refPath, Buffer.from("FAKE M4A"))
+    const fileUrl = pathToFileURL(refPath).href
+    const fetchImpl = (async () => res(200, {})) as unknown as typeof fetch
+    await expect(cloneVoice({ apiKey: "k", text: "t", refAudio: fileUrl, fetchImpl })).rejects.toThrow(/只支持 wav \/ mp3/)
+    unlinkSync(refPath)
+  })
+
+  test("无扩展名文件 → 拦截(避免默认走 audio/wav 但字节是别的)", async () => {
+    const refPath = join(tmpdir(), `xiaomi-ref-${Date.now()}-noext`)
+    writeFileSync(refPath, Buffer.from("FAKE"))
+    const fetchImpl = (async () => res(200, {})) as unknown as typeof fetch
+    await expect(cloneVoice({ apiKey: "k", text: "t", refAudio: refPath, fetchImpl })).rejects.toThrow(/只支持 wav \/ mp3/)
+    unlinkSync(refPath)
+  })
+
   test("文件 > 7MB(safety margin)→ ref_too_large 预检拦", async () => {
     const refPath = join(tmpdir(), `xiaomi-big-${Date.now()}.wav`)
     writeFileSync(refPath, Buffer.alloc(8 * 1024 * 1024)) // 8MB

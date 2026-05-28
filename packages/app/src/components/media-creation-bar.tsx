@@ -73,6 +73,18 @@ export function MediaCreationControls() {
               class="text-13-regular text-text-base bg-transparent border border-border-weak-base rounded-md px-2 py-1 max-w-[260px] focus:outline-none focus:border-border-strong-base"
             />
           </Show>
+          {/* FORK: 用法引导提示(tts_clone / asr 需先拖入音频)[feat: media-gen-xiaomi] 2026-05-28
+              起源:user 实测 VoiceClone 撞 m4a 不支持 + 不知道用法是"先拖音频再写文字" */}
+          <Show when={cap() === "tts_clone"}>
+            <span class="text-12-regular text-text-weak whitespace-nowrap" data-action="media-clone-hint">
+              📎 先 @ 引用参考音频(wav/mp3,&lt; 7MB),再写要克隆说的话
+            </span>
+          </Show>
+          <Show when={cap() === "asr"}>
+            <span class="text-12-regular text-text-weak whitespace-nowrap" data-action="media-asr-hint">
+              📎 先 @ 引用音频文件(wav/mp3)
+            </span>
+          </Show>
         </>
       )}
     </Show>
