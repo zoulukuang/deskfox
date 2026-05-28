@@ -11,7 +11,8 @@
 
 import { readProviderApiKey } from "../src/auth"
 
-const MINIMAX_PROVIDER_ID = "minimax-cn-coding-plan"
+// FORK: 对齐 user auth.json 实际配置 id `minimax-cn`(原 `minimax-cn-coding-plan` 没人配)2026-05-28
+const MINIMAX_PROVIDER_ID = "minimax-cn"
 // minimax 媒体 API 标准 host(国内统一到 minimaxi.com;若鉴权失败再试 api.minimax.chat)
 const BASE = process.env.MINIMAX_BASE || "https://api.minimaxi.com"
 
