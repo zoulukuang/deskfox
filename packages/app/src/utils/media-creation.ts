@@ -10,7 +10,18 @@ import { localAssetUrl } from "./local-asset"
 
 export const MEDIA_SERVER_BASE = "http://127.0.0.1:51737"
 
-export type MediaCapability = "image" | "image_edit" | "video" | "video_i2v" | "tts" | "asr" | "translate"
+// FORK: 加 tts_clone / tts_design [feat: media-gen-xiaomi] 2026-05-28
+// 跟 packages/media-gen/src/catalog.ts Capability 联动 — 加 capability 必须两端同改
+export type MediaCapability =
+  | "image"
+  | "image_edit"
+  | "video"
+  | "video_i2v"
+  | "tts"
+  | "tts_clone"
+  | "tts_design"
+  | "asr"
+  | "translate"
 
 export type MediaModel = {
   id: string
@@ -19,7 +30,13 @@ export type MediaModel = {
   model: string
   displayName: string
   isDefault?: boolean
-  params?: { sizes?: string[]; voices?: string[]; needFile?: "image" | "audio" }
+  params?: {
+    sizes?: string[]
+    voices?: string[]
+    needFile?: "image" | "audio"
+    // FORK: VoiceDesign UI 提示 [feat: media-gen-xiaomi] 2026-05-28
+    voiceDesignHint?: boolean
+  }
 }
 
 export type MediaResult = {
@@ -40,8 +57,10 @@ export type MediaGenInput = {
   n?: number
   voice?: string
   targetLang?: string
-  refFile?: string // 参考图/首帧图(本地路径或 URL)
+  refFile?: string // 参考图/首帧图/语音克隆参考音频(本地路径或 URL)
   audioUrl?: string // 转写音频(本地路径或 URL)
+  // FORK: VoiceDesign 声线描述 [feat: media-gen-xiaomi] 2026-05-28
+  voiceDesignHint?: string
 }
 
 /** 服务是否就绪(用于创作模式入口的可用性判断) */
