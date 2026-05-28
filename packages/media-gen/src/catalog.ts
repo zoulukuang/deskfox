@@ -5,7 +5,19 @@
 // 对应需求规格 OPENCODE-PLAN/多模态创作模式/模型填入机制-需求规格.md §5。
 // 用户连了某供应商(auth.json 有 key)→ 该供应商在此目录里的模型自动"亮起来"(见 registry.ts)。
 
-export type Capability = "image" | "image_edit" | "video" | "video_i2v" | "tts" | "asr" | "translate"
+// FORK: 加 tts_clone / tts_design 两档 [feat: media-gen-xiaomi] 2026-05-28
+// 起源:小米 MiMo VoiceClone / VoiceDesign 跟普通 TTS 行为本质不同(克隆要参考音频、设计要描述声线),
+// 硬塞进 tts 字段会污染语义。新增独立 capability 类型,UI 各起新档位 + 独立输入控件。
+export type Capability =
+  | "image"
+  | "image_edit"
+  | "video"
+  | "video_i2v"
+  | "tts"
+  | "tts_clone"
+  | "tts_design"
+  | "asr"
+  | "translate"
 
 export const CAPABILITY_LABEL: Record<Capability, string> = {
   image: "文生图",
@@ -13,6 +25,8 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   video: "文生视频",
   video_i2v: "图生视频",
   tts: "配音",
+  tts_clone: "语音克隆",
+  tts_design: "语音设计",
   asr: "转写",
   translate: "专业翻译",
 }
@@ -28,7 +42,9 @@ export type CatalogEntry = {
   params?: {
     sizes?: string[]
     voices?: string[]
-    needFile?: "image" | "audio" // 需素材(图片编辑/图生视频/转写)→ 输入框 ＋ 高亮
+    needFile?: "image" | "audio" // 需素材(图片编辑/图生视频/转写/语音克隆)→ 输入框 ＋ 高亮
+    // FORK: VoiceDesign 用 [feat: media-gen-xiaomi] —— UI 显示"声线描述"输入框
+    voiceDesignHint?: boolean
   }
 }
 
@@ -40,6 +56,11 @@ const MINIMAX = "MiniMax"
 const MINIMAX_HAILUO = "MiniMax·海螺"
 // 对齐 opencode 上游 minimax auth 默认 id(配套 Coding Plan 套餐)
 export const MINIMAX_KEY = "minimax-cn-coding-plan"
+
+// FORK: 第三家 provider 接入 [feat: media-gen-xiaomi] 2026-05-28
+const XIAOMI = "小米 MiMo"
+// 对齐 opencode 上游 xiaomi auth id(配套 Token Plan 套餐)
+export const XIAOMI_KEY = "xiaomi-token-plan-cn"
 
 /** 内置目录(首批 = 阿里 8 模型,均已 probe 实测,详见 REQ-030 §0.4/§0.5) */
 export const BUILTIN_CATALOG: CatalogEntry[] = [
@@ -151,5 +172,49 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     model: "speech-2.8-hd",
     displayName: "MiniMax·配音(speech-2.8-hd)",
     params: { voices: ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
+  },
+  // FORK: 小米 MiMo 接入 — 3 档 TTS + Omni 当 ASR [feat: media-gen-xiaomi] 2026-05-28
+  // 限免:TTS 三档 Token Plan 不消耗额度;ASR 走 Omni(mimo-v2.5)消耗 1x token
+  {
+    id: "xiaomi-mimo-v2.5-tts",
+    capability: "tts",
+    provider: XIAOMI,
+    providerKey: XIAOMI_KEY,
+    model: "mimo-v2.5-tts",
+    displayName: "MiMo·配音(预设音色)",
+    // 不标 isDefault — 阿里 qwen-tts 已是默认,小米作为可选第三档
+    // voices 全集(probe 阶段查官方):中文 冰糖/茉莉/苏打/白桦/MimoDefault/DefaultZh,英文 Chloe/Mia/Milo/Dean/DefaultEn
+    params: { voices: ["茉莉", "冰糖", "苏打", "白桦", "Chloe", "Mia", "Milo", "Dean", "MimoDefault"] },
+  },
+  {
+    id: "xiaomi-mimo-v2.5-tts-voiceclone",
+    capability: "tts_clone",
+    provider: XIAOMI,
+    providerKey: XIAOMI_KEY,
+    model: "mimo-v2.5-tts-voiceclone",
+    displayName: "MiMo·语音克隆",
+    isDefault: true, // tts_clone capability 目前只此一家,自动是默认
+    params: { needFile: "audio" },
+  },
+  {
+    id: "xiaomi-mimo-v2.5-tts-voicedesign",
+    capability: "tts_design",
+    provider: XIAOMI,
+    providerKey: XIAOMI_KEY,
+    model: "mimo-v2.5-tts-voicedesign",
+    displayName: "MiMo·语音设计",
+    isDefault: true, // tts_design capability 目前只此一家
+    params: { voiceDesignHint: true },
+  },
+  {
+    id: "xiaomi-mimo-v2.5-asr",
+    capability: "asr",
+    provider: XIAOMI,
+    providerKey: XIAOMI_KEY,
+    // 用 Omni 当 ASR — mimo-v2.5-asr 直 model id 在 Token Plan 没暴露(probe 实测 "Not supported model")
+    model: "mimo-v2.5",
+    displayName: "MiMo·转写(Omni)",
+    // 不标 isDefault — 阿里 paraformer-v2 已是默认且更快(1-3s vs 此 7.8s)
+    params: { needFile: "audio" },
   },
 ]

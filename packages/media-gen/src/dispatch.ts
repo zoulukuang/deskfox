@@ -7,7 +7,7 @@
 // 第三家时该考虑抽 MediaAdapter 接口(本文件目前是"竖切打穿,不抽象")。
 
 import { readProviderApiKey } from "./auth"
-import { ALIBABA_KEY, MINIMAX_KEY, type CatalogEntry } from "./catalog"
+import { ALIBABA_KEY, MINIMAX_KEY, XIAOMI_KEY, type CatalogEntry } from "./catalog"
 import { DashScopeError, type TaskProgress } from "./dashscope-task"
 import { generateImage as dsGenerateImage } from "./dashscope-image"
 import { editImage as dsEditImage } from "./dashscope-edit"
@@ -20,6 +20,12 @@ import { MinimaxError } from "./minimax-error"
 import { generateImage as mxGenerateImage } from "./minimax-image"
 import { generateVideo as mxGenerateVideo } from "./minimax-video"
 import { synthesizeSpeech as mxSynthesizeSpeech } from "./minimax-tts"
+// FORK: 小米 MiMo 引擎 [feat: media-gen-xiaomi] 2026-05-28
+import { XiaomiError } from "./xiaomi-error"
+import { synthesizeSpeech as xmSynthesizeSpeech } from "./xiaomi-tts"
+import { cloneVoice as xmCloneVoice } from "./xiaomi-tts-clone"
+import { designVoice as xmDesignVoice } from "./xiaomi-tts-design"
+import { transcribeAudio as xmTranscribeAudio } from "./xiaomi-asr"
 
 export type GenInput = {
   prompt?: string // 文本类输入(文生图/视频/配音文字/翻译原文)
@@ -28,7 +34,9 @@ export type GenInput = {
   voice?: string
   targetLang?: string
   refFile?: string // 素材:参考图/首帧图(本地路径或 URL)
-  audioUrl?: string // 转写音频(本地路径或 URL)
+  audioUrl?: string // 转写音频 / VoiceClone 参考音频(本地路径或 URL)
+  // FORK: VoiceDesign 用 [feat: media-gen-xiaomi] —— UI 的"声线描述"输入框 → 这里
+  voiceDesignHint?: string
   signal?: AbortSignal
   onProgress?: (p: TaskProgress) => void
   // 仅测试注入
@@ -73,6 +81,12 @@ export async function runEntry(entry: CatalogEntry, input: GenInput, opts?: Disp
       const base: Base = { apiKey, model: entry.model, signal: input.signal, fetchImpl: input.fetchImpl, pollIntervalMs: input.pollIntervalMs, maxWaitMs: input.maxWaitMs }
       return dispatchMinimax(entry, base, input, meta)
     }
+    // FORK: 小米 MiMo 路由 [feat: media-gen-xiaomi] 2026-05-28
+    case XIAOMI_KEY: {
+      if (!apiKey) throw new XiaomiError("no_key", `未找到 ${entry.provider}(${entry.providerKey})的 API Key,请先连接该供应商。`)
+      const base: Base = { apiKey, model: entry.model, signal: input.signal, fetchImpl: input.fetchImpl, pollIntervalMs: input.pollIntervalMs, maxWaitMs: input.maxWaitMs }
+      return dispatchXiaomi(entry, base, input, meta)
+    }
     default:
       throw new Error(`未知 provider: ${entry.providerKey}`)
   }
@@ -116,6 +130,10 @@ async function dispatchAlibaba(entry: CatalogEntry, base: Base, input: GenInput,
       const r = await dsTranslateText({ ...base, text: input.prompt ?? "", targetLang: input.targetLang })
       return { kind: "text", text: r.text, ...meta }
     }
+    // 阿里通义没的能力(tts_clone / tts_design 是小米独家)→ 友好报错(catalog 没注册理论上不会进来)
+    case "tts_clone":
+    case "tts_design":
+      throw new DashScopeError("not_supported", `阿里通义暂不支持 ${entry.capability} 能力,请换 provider(小米 MiMo 有)。`)
   }
 }
 
@@ -143,10 +161,56 @@ async function dispatchMinimax(entry: CatalogEntry, base: Base, input: GenInput,
       const r = await mxSynthesizeSpeech({ ...base, text: input.prompt ?? "", voice: input.voice })
       return { kind: "audio", url: r.url, ...meta }
     }
-    // MiniMax 没的能力(image_edit / asr / translate)→ 友好报错(catalog 也没注册,理论上不会进来,留兜底)
+    // MiniMax 没的能力(image_edit / asr / translate / tts_clone / tts_design)→ 友好报错
     case "image_edit":
     case "asr":
     case "translate":
+    case "tts_clone":
+    case "tts_design":
       throw new MinimaxError("not_supported", `MiniMax 暂不支持 ${entry.capability} 能力,请换 provider。`)
+  }
+}
+
+// ============================================================
+// 小米 MiMo(mimo-v2.5-tts / voiceclone / voicedesign / Omni ASR)
+// [feat: media-gen-xiaomi] 2026-05-28
+// ============================================================
+async function dispatchXiaomi(
+  entry: CatalogEntry,
+  base: Base,
+  input: GenInput,
+  meta: { model: string; provider: string },
+): Promise<GenOutput> {
+  switch (entry.capability) {
+    case "tts": {
+      const r = await xmSynthesizeSpeech({ ...base, text: input.prompt ?? "", voice: input.voice })
+      return { kind: "audio", url: r.url, ...meta }
+    }
+    case "tts_clone": {
+      const ref = input.refFile ?? input.audioUrl
+      if (!ref) throw new XiaomiError("no_ref", "语音克隆需要先提供一段参考音频(mp3/wav,< 7MB)。")
+      const r = await xmCloneVoice({ ...base, text: input.prompt ?? "", refAudio: ref })
+      return { kind: "audio", url: r.url, ...meta }
+    }
+    case "tts_design": {
+      if (!input.voiceDesignHint) {
+        throw new XiaomiError("no_design_hint", "语音设计需要先填一段声线描述(例:中年男声,沉稳磁性,新闻主播感)。")
+      }
+      const r = await xmDesignVoice({ ...base, text: input.prompt ?? "", voiceDescription: input.voiceDesignHint })
+      return { kind: "audio", url: r.url, ...meta }
+    }
+    case "asr": {
+      const audio = input.audioUrl ?? input.refFile
+      if (!audio) throw new XiaomiError("no_audio", "转写需要先提供一个音频文件。")
+      const r = await xmTranscribeAudio({ ...base, audioUrl: audio })
+      return { kind: "text", text: r.text, ...meta }
+    }
+    // 小米 MiMo Token Plan 没的能力 → 友好报错
+    case "image":
+    case "image_edit":
+    case "video":
+    case "video_i2v":
+    case "translate":
+      throw new XiaomiError("not_supported", `小米 MiMo 暂不支持 ${entry.capability} 能力,请换 provider。`)
   }
 }
