@@ -14,7 +14,17 @@ export function absolutePath(directory: string, p: string): string {
 }
 
 /** 创作模式 capability 集合(跟 packages/media-gen/src/dispatch.ts GenInput 对齐)*/
-export type CreationCapability = "image" | "image_edit" | "video" | "video_i2v" | "tts" | "asr" | "translate"
+// FORK: 加 tts_clone / tts_design [feat: media-gen-xiaomi] 2026-05-28
+export type CreationCapability =
+  | "image"
+  | "image_edit"
+  | "video"
+  | "video_i2v"
+  | "tts"
+  | "tts_clone"
+  | "tts_design"
+  | "asr"
+  | "translate"
 
 /** 创作模式提交给 server 的 input(对齐 GenInput)。 */
 export type CreationInput = {
@@ -23,6 +33,8 @@ export type CreationInput = {
   audioUrl?: string
   voice?: string
   targetLang?: string
+  // FORK: VoiceDesign 声线描述 [feat: media-gen-xiaomi] 2026-05-28
+  voiceDesignHint?: string
 }
 
 export type BuildCreationInputArgs = {
@@ -31,6 +43,8 @@ export type BuildCreationInputArgs = {
   projectDir: string
   voice?: string
   targetLang?: string
+  // FORK: VoiceDesign 输入框值 [feat: media-gen-xiaomi] 2026-05-28
+  voiceDesignHint?: string
 }
 
 /**
@@ -46,7 +60,7 @@ export type BuildCreationInputArgs = {
  * - 多个 file part → 取**第一个**(MVP)。
  */
 export function buildCreationInput(args: BuildCreationInputArgs): CreationInput {
-  const { parts, capability, projectDir, voice, targetLang } = args
+  const { parts, capability, projectDir, voice, targetLang, voiceDesignHint } = args
 
   // 1. prompt:剔除 file/agent 的 "@<x>" 字面
   const prompt = parts
@@ -71,10 +85,18 @@ export function buildCreationInput(args: BuildCreationInputArgs): CreationInput 
     if (filePart?.path) {
       input.audioUrl = absolutePath(projectDir, filePart.path)
     }
+  } else if (capability === "tts_clone") {
+    // FORK: 语音克隆复用 refFile 字段传参考音频路径(媒体后端会读字节构 DataURL)
+    // [feat: media-gen-xiaomi] 2026-05-28
+    if (filePart?.path) {
+      input.refFile = absolutePath(projectDir, filePart.path)
+    }
   }
 
   if (capability === "tts" && voice) input.voice = voice
   if (capability === "translate" && targetLang) input.targetLang = targetLang
+  // FORK: 语音设计的声线描述 [feat: media-gen-xiaomi] 2026-05-28
+  if (capability === "tts_design" && voiceDesignHint) input.voiceDesignHint = voiceDesignHint
 
   return input
 }

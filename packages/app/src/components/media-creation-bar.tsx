@@ -62,6 +62,17 @@ export function MediaCreationControls() {
               triggerProps={{ "data-action": "media-voice" }}
             />
           </Show>
+          {/* FORK: VoiceDesign 声线描述输入框(仅 tts_design 模型出现)[feat: media-gen-xiaomi] 2026-05-28 */}
+          <Show when={creation.selectedModel(cap())?.params?.voiceDesignHint}>
+            <input
+              type="text"
+              value={creation.voiceDesignHint()}
+              onInput={(e) => creation.setVoiceDesignHint(e.currentTarget.value)}
+              placeholder="声线描述(例:中年男声沉稳)"
+              data-action="media-voice-design-hint"
+              class="text-13-regular text-text-base bg-transparent border border-border-weak-base rounded-md px-2 py-1 max-w-[260px] focus:outline-none focus:border-border-strong-base"
+            />
+          </Show>
         </>
       )}
     </Show>

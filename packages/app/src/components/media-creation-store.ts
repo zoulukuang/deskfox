@@ -25,6 +25,9 @@ export const CREATION_MODES: { capability: MediaCapability; label: string }[] = 
   { capability: "video", label: "文生视频" },
   { capability: "video_i2v", label: "图生视频" },
   { capability: "tts", label: "语音合成" },
+  // FORK: 小米独家两档 [feat: media-gen-xiaomi] 2026-05-28
+  { capability: "tts_clone", label: "语音克隆" },
+  { capability: "tts_design", label: "语音设计" },
   { capability: "asr", label: "语音识别" },
   { capability: "translate", label: "专业翻译" },
 ]
@@ -46,6 +49,9 @@ const [createMode, setCreateMode] = createSignal<MediaCapability | null>(null)
 const [models, setModels] = createSignal<MediaModel[]>([])
 const [selected, setSelected] = createStore<Partial<Record<MediaCapability, string>>>({})
 const [voiceSel, setVoiceSel] = createSignal<string | undefined>(undefined)
+// FORK: VoiceDesign 声线描述,跟 voice 一样跨创作请求保留(未提交前 user 改了 mode 再回来还在)
+// [feat: media-gen-xiaomi] 2026-05-28
+const [voiceDesignHintSig, setVoiceDesignHintSig] = createSignal<string>("")
 
 // FORK: 创作卡按"作用域"隔离(session id;首页/无 session 用 DRAFT_SCOPE),否则模块级全局
 // store 会让一次创作后的卡在所有 session / 新建会话里都冒出来。session 页用 setScope 切换、
@@ -148,6 +154,11 @@ export const creation = {
     const voices = creation.selectedModel(cap)?.params?.voices ?? []
     const v = voiceSel()
     return v && voices.includes(v) ? v : voices[0]
+  },
+  // FORK: VoiceDesign 声线描述 [feat: media-gen-xiaomi] 2026-05-28
+  voiceDesignHint: voiceDesignHintSig,
+  setVoiceDesignHint(v: string) {
+    setVoiceDesignHintSig(v)
   },
 
   /** 触发一次生成:推一张 running 卡 → SSE 更新 → done/error;projectDir=当前项目根(落盘位置)。

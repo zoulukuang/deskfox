@@ -1114,6 +1114,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       projectDir: sdk.directory,
       voice: cap === "tts" ? creation.currentVoice("tts") : undefined,
       targetLang: cap === "translate" ? "English" : undefined, // P1 默认英文;目标语言选择器后补
+      // FORK: 语音设计 [feat: media-gen-xiaomi] 2026-05-28
+      voiceDesignHint: cap === "tts_design" ? creation.voiceDesignHint() : undefined,
     })
     clearEditor()
     prompt.reset() // 修:清空文字 + 附件(否则提交后附件图残留在输入框)

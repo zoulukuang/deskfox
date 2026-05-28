@@ -127,4 +127,42 @@ describe("buildCreationInput — 向后兼容 + 边界", () => {
     const input = build(parts, "image_edit")
     expect(input.refFile).toBe("D:\\已绝对\\img.png")
   })
+
+  // FORK: 小米 capability 分支测试 [feat: media-gen-xiaomi] 2026-05-28
+  test("tts_clone:@<path> file part → refFile(语音克隆复用 refFile 字段)", () => {
+    const parts = [file("samples/voice-ref.wav"), text("用这个声音说话")]
+    const input = build(parts, "tts_clone")
+    expect(input.refFile).toBe("D:\\文章库/samples/voice-ref.wav")
+    expect(input.prompt).toBe("用这个声音说话")
+  })
+
+  test("tts_clone 没 file part → refFile 留 undefined(dispatch 层会兜底报错)", () => {
+    const input = build([text("说点啥")], "tts_clone")
+    expect(input.refFile).toBeUndefined()
+    expect(input.prompt).toBe("说点啥")
+  })
+
+  test("tts_design + voiceDesignHint → input.voiceDesignHint 设置", () => {
+    const input = build([text("请这样念这句话")], "tts_design", { voiceDesignHint: "中年男声沉稳磁性" })
+    expect(input.voiceDesignHint).toBe("中年男声沉稳磁性")
+    expect(input.prompt).toBe("请这样念这句话")
+  })
+
+  test("tts_design 不传 voiceDesignHint → 字段不设(dispatch 层兜底报错让用户填)", () => {
+    const input = build([text("x")], "tts_design")
+    expect(input.voiceDesignHint).toBeUndefined()
+  })
+
+  test("非 tts_design capability 不会带 voiceDesignHint 即使外部传了(避免污染)", () => {
+    const input = build([text("x")], "tts", { voiceDesignHint: "wrong slot", voice: "茉莉" })
+    expect(input.voiceDesignHint).toBeUndefined()
+    expect(input.voice).toBe("茉莉")
+  })
+
+  test("非 tts_clone capability 不会把 file part 当 refFile(沿用既有路由)", () => {
+    const input = build([file("v.wav"), text("translate this")], "tts_clone")
+    expect(input.refFile).toBeDefined() // tts_clone 该走
+    const input2 = build([file("v.wav"), text("translate this")], "tts")
+    expect(input2.refFile).toBeUndefined() // tts 不该走
+  })
 })
