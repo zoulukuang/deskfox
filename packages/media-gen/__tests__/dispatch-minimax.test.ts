@@ -72,7 +72,7 @@ describe("runEntry by-provider 路由", () => {
     const fetchImpl = (async () =>
       res(200, { base_resp: { status_code: 0 }, data: { audio: "deadbeef" } })) as unknown as typeof fetch
 
-    const entry = findEntry("minimax-speech-02-turbo", { authPath })
+    const entry = findEntry("minimax-speech-2.8-turbo", { authPath })
     const out = await runEntry(entry!, { prompt: "你好", voice: "female-shaonv", fetchImpl }, { authPath })
     expect(out.kind).toBe("audio")
     expect(out.url?.startsWith("file://")).toBe(true)

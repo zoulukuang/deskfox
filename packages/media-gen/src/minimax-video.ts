@@ -10,7 +10,9 @@
 
 import { MINIMAX_BASE, MinimaxError, type MediaTaskProgress, checkBaseResp, delay, httpError, readJson } from "./minimax-error"
 
-export const DEFAULT_VIDEO_MODEL = "MiniMax-Hailuo-02"
+// 2026-05-28 实测真实 API id = MiniMax-Hailuo-2.3(文档简称 Hailuo-2.3 / Hailuo-2.3-Fast,实际带 MiniMax- 前缀)
+// 旧 MiniMax-Hailuo-02 也被 API 识别但 Token Plan Plus 配额 0,新一代 2.3 才是当前在用版本。
+export const DEFAULT_VIDEO_MODEL = "MiniMax-Hailuo-2.3"
 
 export type VideoInput = {
   apiKey: string

@@ -11,7 +11,7 @@ describe("catalog minimax entries", () => {
     const minimax = BUILTIN_CATALOG.filter((e) => e.providerKey === MINIMAX_KEY)
     expect(minimax).toHaveLength(3)
     const ids = minimax.map((e) => e.id).sort()
-    expect(ids).toEqual(["minimax-hailuo-02", "minimax-image-01", "minimax-speech-02-turbo"])
+    expect(ids).toEqual(["minimax-hailuo-2.3", "minimax-image-01", "minimax-speech-2.8-turbo"])
     const caps = minimax.map((e) => e.capability).sort()
     expect(caps).toEqual(["image", "tts", "video"])
   })

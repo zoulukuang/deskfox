@@ -133,21 +133,21 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     params: { sizes: ["1024*1024", "1280*720", "720*1280"] },
   },
   {
-    id: "minimax-hailuo-02",
+    id: "minimax-hailuo-2.3",
     capability: "video",
     provider: MINIMAX_HAILUO,
     providerKey: MINIMAX_KEY,
-    model: "MiniMax-Hailuo-02",
-    displayName: "海螺·文生视频(Hailuo-02)",
-    params: { sizes: ["768P", "1080P"] }, // 海螺用分辨率档,沿用 sizes 字段
+    model: "MiniMax-Hailuo-2.3", // 2026-05-28 实测真实 API id(文档写 Hailuo-2.3 / Hailuo-2.3-Fast,实际带 MiniMax- 前缀)
+    displayName: "海螺·文生视频(Hailuo-2.3)",
+    params: { sizes: ["768P", "1080P"] },
   },
   {
-    id: "minimax-speech-02-turbo",
+    id: "minimax-speech-2.8-turbo",
     capability: "tts",
     provider: MINIMAX,
     providerKey: MINIMAX_KEY,
-    model: "speech-02-turbo",
-    displayName: "MiniMax·配音(speech-02-turbo)",
+    model: "speech-2.8-turbo", // 2026-05-28 客服 + 实测确认:Token Plan 支持的 TTS 是 speech-2.8-turbo(客服简称 speech-2.8)
+    displayName: "MiniMax·配音(speech-2.8)",
     params: { voices: ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
   },
 ]

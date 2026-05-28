@@ -38,7 +38,7 @@ describe("minimax generateVideo", () => {
     expect(out.url).toBe("https://cdn/x.mp4")
     expect(out.taskId).toBe("task_abc")
     expect(out.fileId).toBe("file_123")
-    expect(out.model).toBe("MiniMax-Hailuo-02")
+    expect(out.model).toBe("MiniMax-Hailuo-2.3")
     // 验调用次序:submit + poll×2 + retrieve
     expect(calls[0]).toContain("POST")
     expect(calls[0]).toContain("/v1/video_generation")

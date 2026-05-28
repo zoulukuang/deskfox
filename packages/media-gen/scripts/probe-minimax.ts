@@ -61,7 +61,7 @@ async function probeVideo() {
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "MiniMax-Hailuo-02",
+      model: "MiniMax-Hailuo-2.3",
       prompt: "一只橘色小狐狸在霓虹城市里奔跑,赛博朋克",
       duration: 6,
       resolution: "768P",
@@ -112,7 +112,7 @@ async function probeTts() {
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "speech-02-turbo",
+      model: "speech-2.8-turbo",
       text: "你好,我是小狐狸,很高兴为你服务。",
       stream: false,
       voice_setting: { voice_id: "male-qn-qingse", speed: 1.0, vol: 1.0, pitch: 0 },
