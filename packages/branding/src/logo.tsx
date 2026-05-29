@@ -194,6 +194,61 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
 }
 
 /**
+ * LogoVertical — 启动屏专用竖排组合(图标 + DeskFox.Ai 文字标 + 标语)。
+ * 来源:OPENCODE-PLAN/品牌设计/SVG/logo-vertical.svg verbatim,viewBox 440×380。
+ * 品牌手册:App 启动屏 / 海报 / T 恤(`品牌设计.md` 二.资产清单)。
+ * 用 textLength + lengthAdjust 锁定文字宽度,免受字体回退影响。
+ * [feat: startup-sidebar-ready-gate] 2026-05-29
+ */
+export const LogoVertical = (props: { class?: string }) => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 440 380"
+      fill="none"
+      data-component="logo-vertical"
+      classList={{ [props.class ?? ""]: !!props.class }}
+    >
+      <defs>
+        <linearGradient id="bgV" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#243353" />
+          <stop offset="100%" stop-color="#172238" />
+        </linearGradient>
+        <linearGradient id="faceV" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#9DBBE3" />
+          <stop offset="100%" stop-color="#7295C4" />
+        </linearGradient>
+      </defs>
+      {/* 顶部图标(居中:200 宽图标在 440 宽画布中) */}
+      <g transform="translate(120, 20)">
+        <rect width="200" height="200" rx="44" fill="url(#bgV)" />
+        <g transform="translate(100, 104) scale(1.4)">
+          <path d="M -54,-8 L -28,-56 L -14,-9 Z" fill="#7295C4" />
+          <path d="M -44,-15 L -30,-44 L -22,-17 Z" fill="#FF9A7A" />
+          <path d="M 54,-8 L 28,-56 L 14,-9 Z" fill="#7295C4" />
+          <path d="M 44,-15 L 30,-44 L 22,-17 Z" fill="#FF9A7A" />
+          <path d="M -54,-8 L 54,-8 L 0,54 Z" fill="url(#faceV)" />
+          <path d="M -18,14 L 18,14 L 0,42 Z" fill="#F4F7FB" />
+          <circle cx="-18" cy="4" r="4" fill="#172238" />
+          <circle cx="18" cy="4" r="4" fill="#172238" />
+        </g>
+      </g>
+      {/* 文字组 */}
+      <g font-family="'Inter', 'Segoe UI', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif" font-weight="800">
+        <text x="220" y="290" font-size="56" fill="#1F2D44" textLength="380" lengthAdjust="spacingAndGlyphs" text-anchor="middle">
+          <tspan fill="#1F2D44">Desk</tspan>
+          <tspan fill="#7295C4">Fo</tspan>
+          <tspan fill="#1F2D44">x.Ai</tspan>
+        </text>
+        <text x="220" y="332" font-size="13" fill="#6B7C9A" textLength="380" lengthAdjust="spacing" font-weight="500" text-anchor="middle">
+          CLEVER · CALM · ALWAYS ON YOUR DESK
+        </text>
+      </g>
+    </svg>
+  )
+}
+
+/**
  * Logo — 纯 wordmark "DeskFoX"(X 由 3 三角拼成,珊瑚色点缀)。
  * 来源:wordmark.svg verbatim,viewBox 300×100。
  * 用 textLength + lengthAdjust 锁定文字宽度,免受字体回退影响。
