@@ -929,6 +929,23 @@ export function FileTabContent(props: {
       if (mdMenuEl) repositionMenu(mdMenuEl, m.x, m.y)
     })
   })
+  // FORK: input mode textarea focus — REQ-032 visibility:hidden + el.focus() race 修复 2026-05-29
+  // 起源:REQ-032(2026-05-28 commit d944cabb4)给菜单 div 加初帧 `visibility: hidden` + repositionMenu
+  // microtask 才置 visible(防闪)。textarea 自带 `ref={(el) => queueMicrotask(() => el.focus())}` 比
+  // repositionMenu microtask **早一拍**触发(JSX mount 在 createEffect 之前 schedule),浏览器对
+  // visibility:hidden 元素的 `.focus()` 是 **silent fail**(Chromium 与 WebKit 行为一致)→
+  // 焦点回落到上一个有焦点的元素(典型场景:上次 submitMdSelection 后 focusChatInput 留在底部主聊天框)。
+  // 修法:把 focus 从 textarea ref 抽到本 createEffect,用 requestAnimationFrame —— 比所有 queueMicrotask
+  // 都晚一拍,等 repositionMenu 已设 visibility:visible 之后再 focus,可靠。
+  createEffect(() => {
+    const m = mdMenu()
+    if (!m.open || m.mode !== "input") return
+    requestAnimationFrame(() => {
+      if (!mdMenuEl) return
+      const ta = mdMenuEl.querySelector("textarea") as HTMLTextAreaElement | null
+      ta?.focus()
+    })
+  })
   const [mdComment, setMdComment] = createSignal("")
 
   // 选区红色覆盖层:绝对定位的 div 数组,通过 range.getClientRects() 计算每行 rect。
@@ -1781,7 +1798,8 @@ export function FileTabContent(props: {
                 style={{ left: `${mdMenu().x}px`, top: `${mdMenu().y}px`, visibility: "hidden" }}
               >
                 <textarea
-                  ref={(el) => queueMicrotask(() => el.focus())}
+                  // FORK: focus 已由上方 createEffect + rAF 接管(visibility:hidden race);
+                  // 不在 ref 里 queueMicrotask focus,避免 silent fail 之后焦点跑回上次有焦点的元素 2026-05-29
                   class="w-full min-h-[80px] rounded border border-border-base bg-background-base px-2 py-1.5 text-sm text-text-strong placeholder:text-text-weak focus:outline-none focus:ring-1 focus:ring-text-interactive-base resize-y"
                   placeholder={language.t("fileViewer.menu.input.placeholder")}
                   value={mdComment()}

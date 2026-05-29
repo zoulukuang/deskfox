@@ -98,6 +98,21 @@ export function ContextMenuHost(props: {
     })
   })
 
+  // FORK: input mode textarea focus — REQ-032 visibility:hidden + el.focus() race 修复 2026-05-29
+  // 详见 packages/app/src/pages/session/file-tabs.tsx 同款 fix 注释(两套手写菜单同一根因)。
+  // textarea 原 `ref={(el) => queueMicrotask(() => el.focus())}` 在 visibility:hidden 父容器内
+  // 是浏览器 silent fail → 焦点回落到上一个有焦点的元素(典型:上次 submit 后 focusChatInput 留在主聊天框)。
+  // 用 createEffect + rAF 等 repositionMenu microtask 把 visibility 改 visible 之后再 focus,可靠。
+  createEffect(() => {
+    const m = menu()
+    if (!m.open || m.mode !== "input") return
+    requestAnimationFrame(() => {
+      if (!menuEl) return
+      const ta = menuEl.querySelector("textarea") as HTMLTextAreaElement | null
+      ta?.focus()
+    })
+  })
+
   const applyHighlight = (sel: SelectionResult | null) => {
     if (!sel || sel.rects.length === 0) {
       setHighlightRects(null)
@@ -464,7 +479,8 @@ export function ContextMenuHost(props: {
                 style={{ left: `${menu().x}px`, top: `${menu().y}px`, visibility: "hidden" }}
               >
                 <textarea
-                  ref={(el) => queueMicrotask(() => el.focus())}
+                  // FORK: focus 已由上方 createEffect + rAF 接管(visibility:hidden race);
+                  // 不在 ref 里 queueMicrotask focus,避免 silent fail 之后焦点跑回上次有焦点的元素 2026-05-29
                   class="w-full min-h-[80px] rounded border border-border-base bg-background-base px-2 py-1.5 text-sm text-text-strong placeholder:text-text-weak focus:outline-none focus:ring-1 focus:ring-text-interactive-base resize-y"
                   placeholder={language.t("fileViewer.menu.input.placeholder")}
                   value={comment()}

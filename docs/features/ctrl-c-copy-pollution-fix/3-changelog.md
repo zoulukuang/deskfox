@@ -165,3 +165,78 @@ decideCtrlCAction({ text, shadow, anchorNode, viewerRoot }) → CtrlCDecision
 ### Backlog 全 close
 
 架构师视角"如果重做"清单 3 项 → 2 ✅ 落地 / 1 ❌ NACK(审计后发现是过度抽象,不做反而正确)。**`selectionHistory` 整套机制现在 1 个消费者**(`handleSelectionContextMenu`),职责清晰可单独 grep,future 删除 / 调整时一目了然。
+
+---
+
+## Follow-up 2 · REQ-032 visibility:hidden + el.focus() race 修复(2026-05-29 user 测试发现)
+
+User 测试 dev .dmg(`9d7440cf6` post-refactor build)发现新 bug:**所有文件格式**(.md / 代码 / HTML / PDF / office / 聊天区)右键"添加到聊天窗口"后,**input mode 弹出框的 textarea 没自动 focus,焦点回到了底部主聊天输入框**。
+
+### 根因 — 跟本 fix / refactor 无关,是 REQ-032 残留 bug
+
+REQ-032(2026-05-28 commit `d944cabb4`)给两套手写菜单加了**初帧 `visibility: hidden` + repositionMenu microtask 才置 visible** 的防闪 pattern。但 textarea 自带的 `ref={(el) => queueMicrotask(() => el.focus())}` 在 Solid 渲染流水线上**比 repositionMenu microtask 早一拍**触发:
+
+```
+setMdMenu({mode:"input"}) → reactive flush:
+  1. JSX render: input div 挂载(visibility:hidden) → textarea ref 触发 → queueMicrotask A (focus)
+  2. createEffect repositionMenu 触发 → queueMicrotask B (visibility:visible)
+微任务队列(FIFO): A → B
+  A: textarea.focus() on visibility:hidden 父容器 → **浏览器 silent fail**(Chromium/WebKit 一致)
+  B: visibility:visible → 已经太晚
+```
+
+Silent fail 之后 `document.activeElement` 没动,焦点保留在上一个有焦点的元素 — 典型场景:**上次 `submitMdSelection` / `submitToChat` 用 `focusChatInput()` 把焦点留在了底部主聊天框**。下次 user 再选→右键→添加到聊天,弹窗起来了但焦点还在底部主聊天框,user 必须手动点弹窗的 textarea 才能输入。
+
+### 影响范围
+
+两套手写菜单**全中招**(同一根因,User 也确认"在其他文件格式上也是同样的问题"):
+- `file-tabs.tsx mdMenu`(.md light DOM + 代码/HTML Pierre shadow)
+- `context-menu-host/host.tsx ContextMenuHost`(PDF / office / 聊天区)
+
+### 修法
+
+把 focus 从 textarea ref 抽出,改 `createEffect` + `requestAnimationFrame`:rAF 比所有 queueMicrotask 都晚一拍,等 repositionMenu 已把 visibility 置 visible 之后再 focus。
+
+```ts
+createEffect(() => {
+  const m = mdMenu()  // 或 menu() (host.tsx)
+  if (!m.open || m.mode !== "input") return
+  requestAnimationFrame(() => {
+    if (!menuEl) return
+    const ta = menuEl.querySelector("textarea") as HTMLTextAreaElement | null
+    ta?.focus()
+  })
+})
+```
+
+同时 textarea 上原 `ref={(el) => queueMicrotask(() => el.focus())}` 删除(改 doc-only 注释,说明 focus 已由上方 createEffect + rAF 接管),避免双路径 silent fail 之后困住焦点。
+
+### 改动文件
+
+| 文件 | 改动 | 行数 |
+|---|---|---|
+| `packages/app/src/pages/session/file-tabs.tsx` | 加 `createEffect + rAF` focus,删 textarea inline ref | +20 -2 |
+| `packages/app/src/utils/context-menu-host/host.tsx` | 同款 fix,加 `createEffect + rAF` focus,删 textarea inline ref | +14 -2 |
+
+净改动 ~30 行 / 2 文件 / 0 R4 / 0 上游侵入。
+
+### 测试
+
+- typecheck 17/17
+- 全 app 单测 780/0 pass(0 回归)
+- Unit 测层未加:这种 visibility + queueMicrotask + rAF race 行为 happy-dom 不完整模拟,unit 测会不稳定;**靠 user 真桌面验证 + bug-repro tag 标识**。**长期方向**:Phase 2 真桌面 e2e ready 后补一个 right-click + input mode 的端到端 case(目前基础设施在 backlog)
+
+### user 验证 checklist
+
+| 文件类型 | 操作 | 期望 |
+|---|---|---|
+| `.md` / 代码 / HTML | 选文字 → 右键 → 添加到聊天窗口 | 弹窗 textarea 自动获得焦点,光标在 textarea 里,可立即输入 |
+| PDF / office | 同上 | 同上 |
+| 聊天区某条消息 | 选文字 → 右键 → 添加到聊天 | 同上 |
+| 连续两次"添加到聊天" | 第一次 submit 后再选 → 右键 → 添加 | 第二次弹窗仍正确 focus 到弹窗 textarea(不再被上次 focusChatInput 留下的主聊天框 focus 捕获)|
+
+### 教训
+
+REQ-032 引入 `visibility:hidden` 防闪 pattern 时,没考虑现有 `ref={queueMicrotask focus}` pattern 的执行时机 — 两个 microtask 在同一个 batch flush 里,JSX mount 比 createEffect 早一拍,导致 silent fail 之后焦点丢失。
+
+类似 race 防线:**任何依赖元素 visible 才能正确执行的副作用,必须用 rAF**(比所有 queueMicrotask 晚)**或在同一个 createEffect 里 sequential** (先设 visibility:visible 再做副作用)。queueMicrotask 链不可靠(后注册的 microtask 不一定比早注册的晚)。
