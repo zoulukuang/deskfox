@@ -12,8 +12,6 @@ import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
 import { ProjectIcon, SessionItem, type SessionItemProps } from "./sidebar-items"
 import { displayName, sortedRootSessions } from "./helpers"
-// FORK: 启动期 ready gate [feat: startup-sidebar-ready-gate] 2026-05-29
-import { shouldGateProjectTile, shouldSkipProjectNavigate } from "./ready-gate"
 
 export type ProjectSidebarContext = {
   currentDir: Accessor<string>
@@ -61,12 +59,6 @@ const ProjectTile = (props: {
   overlay: Accessor<boolean>
   suppressHover: Accessor<boolean>
   dirs: Accessor<string[]>
-  // FORK: 启动期 ready gate [feat: startup-sidebar-ready-gate] 2026-05-29
-  // bootReady=false 期间(冷启动 sidecar / bootstrap 没就绪):
-  //   ① opacity-60 + cursor-wait 视觉信号"启动中,稍候"
-  //   ② onClick 跳过 navigateToProject(已选 tile 的 toggle sidebar 不 gate)
-  //   ③ aria-busy="true" 给 a11y / 自动化
-  bootReady: Accessor<boolean>
   onProjectMouseEnter: (worktree: string, event: MouseEvent) => void
   onProjectMouseLeave: (worktree: string) => void
   onProjectFocus: (worktree: string) => void
@@ -105,7 +97,6 @@ const ProjectTile = (props: {
         as="button"
         type="button"
         aria-label={displayName(props.project)}
-        aria-busy={!props.bootReady()}
         data-action="project-switch"
         data-project={base64Encode(props.project.worktree)}
         classList={{
@@ -114,9 +105,6 @@ const ProjectTile = (props: {
           "bg-transparent border border-transparent hover:bg-surface-base-hover hover:border-border-weak-base":
             !props.selected() && !props.active(),
           "bg-surface-base-hover border border-border-weak-base": !props.selected() && props.active(),
-          // FORK: ready gate 视觉 [feat: startup-sidebar-ready-gate] 2026-05-29
-          // helper shouldGateProjectTile 决定:已选 tile 永远不 gate;未选 tile 在启动期 gate
-          "opacity-60 cursor-wait": shouldGateProjectTile(props.bootReady(), props.selected()),
         }}
         onPointerDown={(event) => {
           if (event.button === 0 && !event.ctrlKey) {
@@ -148,13 +136,9 @@ const ProjectTile = (props: {
         onClick={() => {
           props.setOpen(false)
           if (props.selected()) {
-            // 已选 tile 的 toggle sidebar 永远允许(纯前端,0 HTTP)
             layout.sidebar.toggle()
             return
           }
-          // FORK: ready gate 功能 [feat: startup-sidebar-ready-gate] 2026-05-29
-          // helper shouldSkipProjectNavigate 决定:启动期未选 tile 跳过 navigate(防 HTTP 卡死)
-          if (shouldSkipProjectNavigate(props.bootReady(), props.selected())) return
           props.navigateToProject(props.project.worktree)
         }}
         onBlur={() => props.setOpen(false)}
@@ -322,9 +306,6 @@ export const SortableProject = (props: {
     const [data] = globalSync.child(directory, { bootstrap: false })
     return sortedRootSessions(data, props.sortNow())
   }
-  // FORK: 启动期 ready 状态 [feat: startup-sidebar-ready-gate] 2026-05-29
-  // 直接读 globalSync.ready(已修正语义:true=就绪)。冷启动期间为 false,bootstrap 完成翻 true。
-  const bootReady = () => globalSync.ready
   const tile = () => (
     <ProjectTile
       project={props.project}
@@ -335,7 +316,6 @@ export const SortableProject = (props: {
       overlay={overlay}
       suppressHover={() => state.suppressHover}
       dirs={dirs}
-      bootReady={bootReady}
       onProjectMouseEnter={props.ctx.onProjectMouseEnter}
       onProjectMouseLeave={props.ctx.onProjectMouseLeave}
       onProjectFocus={props.ctx.onProjectFocus}

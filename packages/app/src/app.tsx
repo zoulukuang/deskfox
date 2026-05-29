@@ -200,12 +200,8 @@ function ConnectionGate(props: ParentProps<{ disableHealthCheck?: boolean }>) {
   return (
     <Suspense
       fallback={
-        // FORK: splash 屏 — 极简版,旋转三角 + 一行文字
-        // [feat: startup-sidebar-ready-gate] 2026-05-29
-        // user 2026-05-29 反馈:只留呼吸旋转三角(放大)+ 一行 "正在启动 DeskFox…",大 logo 撑屏感太强
-        <div class="h-dvh w-screen flex flex-col items-center justify-center gap-3 bg-background-base">
-          <Splash class="w-24 h-24 opacity-70 animate-pulse" />
-          <div class="text-13-regular text-text-weak">正在启动 DeskFox…</div>
+        <div class="h-dvh w-screen flex flex-col items-center justify-center bg-background-base">
+          <Splash class="w-16 h-20 opacity-50 animate-pulse" />
         </div>
       }
     >
