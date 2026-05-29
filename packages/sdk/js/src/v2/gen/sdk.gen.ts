@@ -1562,9 +1562,6 @@ export class Tooling extends HeyApiClient {
     parameters?: {
       directory?: string
       workspace?: string
-      body?: {
-        [key: string]: unknown
-      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1575,7 +1572,6 @@ export class Tooling extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
-            { key: "body", map: "body" },
           ],
         },
       ],
@@ -1584,11 +1580,6 @@ export class Tooling extends HeyApiClient {
       url: "/office-tooling/install",
       ...options,
       ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 

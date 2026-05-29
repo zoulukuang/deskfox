@@ -4008,9 +4008,7 @@ export type OfficeToolingStatusResponses = {
 export type OfficeToolingStatusResponse = OfficeToolingStatusResponses[keyof OfficeToolingStatusResponses]
 
 export type OfficeToolingInstallData = {
-  body?: {
-    [key: string]: unknown
-  }
+  body?: never
   path?: never
   query?: {
     directory?: string
