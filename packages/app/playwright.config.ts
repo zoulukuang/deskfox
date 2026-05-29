@@ -4,7 +4,11 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3000)
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`
 const serverHost = process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"
 const serverPort = process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"
-const command = `bun run dev -- --host 0.0.0.0 --port ${port}`
+// FORK: 走 dev:e2e-mock 让 vite mode = e2e-mock,激活 e2e-mock plugin
+// [bug-repro: webServer command 跑普通 `bun run dev` 缺 --mode e2e-mock → mock plugin 不激活
+//  → @tauri-apps/api/core 未 alias + window.__deskfoxE2eInvoke 未注入 → 5 spec 同源 fail]
+// [feat: e2e-phase1-mock-mode 修复] 2026-05-29
+const command = `bun run dev:e2e-mock -- --host 0.0.0.0 --port ${port}`
 const reuse = !process.env.CI
 const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? (process.env.CI ? 5 : 0)) || undefined
 const reporter = [["html", { outputFolder: "e2e/playwright-report", open: "never" }], ["line"]] as const
