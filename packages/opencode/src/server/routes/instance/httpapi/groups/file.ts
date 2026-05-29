@@ -134,8 +134,12 @@ export const FileApi = HttpApi.make("file")
             description: "Returns LibreOffice availability + install progress on this machine.",
           }),
         ),
+        // FORK: 删 `payload: Schema.Struct({})` 让 Effect 跟 Hono 一侧对齐 — OfficeInstaller.startInstall()
+        // 不接参数,空 body 才是契约真相;原 `Schema.Struct({})` 生成 `{required:false, content:{application/json:object}}`
+        // body shape,但 Hono `.post("/office-tooling/install", ...)` 没声明 requestBody,httpapi-bridge.test.ts
+        // "matches generated OpenAPI request body shape" 比对双端永远不等 → unit test stable fail。
+        // 上游同 group 内其他无 body POST(initGit / abort / share)都不带 payload,跟齐 idiom。 2026-05-29
         HttpApiEndpoint.post("officeToolingInstall", FilePaths.officeToolingInstall, {
-          payload: Schema.Struct({}),
           success: described(OfficeToolingStatus, "Office tooling status (post-install start)"),
         }).annotateMerge(
           OpenApi.annotations({
