@@ -45,6 +45,9 @@ import { stripFrontmatter } from "@/utils/markdown-frontmatter"
 import { focusChatInput } from "@/utils/chat-input-focus"
 // FORK: 选区菜单贴边沿溢出修复(REQ-032)— 渲染后 measure + clamp 进视口
 import { repositionMenu } from "@/utils/menu-position"
+// FORK: Ctrl+C v2 — onSelChange scope 闸 + keydown 当前选区优先决策
+// 修跨区域选区污染 + history 策略错配两 bug,详见 file-tabs-ctrl-c.ts 头部注释 2026-05-29
+import { decideCtrlCAction, isAnchorInsideViewer } from "./file-tabs-ctrl-c"
 
 // FORK: macOS 平台检测,用于右键菜单输入框 Option+Enter 提交支持 2026-04-30
 const IS_MAC = typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
@@ -810,9 +813,16 @@ export function FileTabContent(props: {
   // FORK-BEGIN: 文件查看器 Ctrl/Cmd+C — 修非 .md 内容(@pierre/diffs shadow DOM)原生 Ctrl+C 拿不到选区的 bug 2026-05-04
   // 现象:.md 走 light DOM 原生 Ctrl+C 工作;代码 / HTML / PDF / office 预览走 <diffs-container> shadow DOM,
   // window.getSelection().toString() 对 shadow 内容返回空 → 系统剪贴板拿不到东西 → "Ctrl+C 没反应"。
-  // 解法:复用既有 pickBestRecentSelection()(2026-04-29 macOS 选区修复时建立的 shadow-aware 历史栈),
-  // 加 window-capture keydown,Ctrl/Cmd+C 时把"最近最长"选区文本 writeText 到剪贴板,preventDefault 阻断原生
-  // 的失败路径。.md 也命中(无回归 — light DOM 选区也进 history),编辑态 / input / textarea / contenteditable 时让原生走。
+  //
+  // v1(2026-05-04):pickBestRecentSelection() history "最近最长" 策略统一兜底,preventDefault 阻断原生。
+  // v2(2026-05-29):v1 引入两个新 bug — A) viewer 内重选短覆盖长 / B) 跨区域污染 / C) 取消选区后幽灵复制,
+  //   见 OPENCODE-PLAN/需求池/ctrl-c-复制失效.md。
+  //   R2 改用 readSelectionText 拿**当前**选区(shadow-aware,无右键 collapse bug),交 decideCtrlCAction 决策:
+  //     · 无选区 → noop(让原生 no-op,解 C)
+  //     · anchor 不在本 viewer → noop(让 chat 区 / 其他 tab 走自己的原生,解 B)
+  //     · viewer 内 + light DOM → native(直接让原生 Ctrl+C 处理 — 比 history 更准确,解 A 的 light 半边)
+  //     · viewer 内 + shadow DOM → shadow-intercept,handler 自己 writeText(原生看不到 shadow,解 A 的 shadow 半边)
+  //   history(selectionHistory + pickBestRecentSelection)保留给右键 contextmenu 用,kbd 路径不再走。
   createEffect(() => {
     if (typeof window === "undefined") return
 
@@ -826,13 +836,23 @@ export function FileTabContent(props: {
       const ae = document.activeElement as HTMLElement | null
       if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) return
 
-      const best = pickBestRecentSelection()
-      if (!best || !best.text.trim()) return // 无可用选区 → 让原生处理(也是 no-op)
+      const sel = window.getSelection()
+      if (!sel) return
+      const result = readSelectionText(sel)
+      const decision = decideCtrlCAction({
+        text: result.text,
+        shadow: result.shadow,
+        anchorNode: sel.anchorNode,
+        viewerRoot: viewerRootRef,
+      })
 
-      event.preventDefault()
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        navigator.clipboard.writeText(best.text).catch(() => {})
+      if (decision.action === "shadow-intercept") {
+        event.preventDefault()
+        if (typeof navigator !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(decision.text).catch(() => {})
+        }
       }
+      // "noop" / "native" → 不 preventDefault,让浏览器原生 Ctrl+C 自处理(或 no-op)
     }
 
     makeEventListener(window, "keydown", onKeyDown, { capture: true })
@@ -889,6 +909,9 @@ export function FileTabContent(props: {
   // 渲染后 measure + clamp 进视口再可见。不能用常量宽高(input 卡 360px + textarea 多行高,差异大)。
   // [feat: req-032-menu-clamp-viewport] 2026-05-28
   let mdMenuEl: HTMLDivElement | undefined
+  // FORK: Ctrl+C v2 — 实例 scope 的 viewer 根节点 ref。
+  // onSelChange / Ctrl+C handler 用它判 anchor 是否在本 tab 内,跨 tab + 跨区域选区互不污染 2026-05-29
+  let viewerRootRef: HTMLElement | undefined
   createEffect(() => {
     const m = mdMenu()
     if (!m.open) return
@@ -1047,10 +1070,15 @@ export function FileTabContent(props: {
 
   // selectionchange:无脑记录所有非空选区到历史栈(不屏蔽、不 pop)。
   // 之所以不需要屏蔽 collapse 回调:contextmenu 阶段挑"最近窗口里最长的那条"足以排除短的 collapse 词。
+  //
+  // FORK: Ctrl+C v2 R1 闸 — 只收本 viewer 内的选区,避免聊天区 / 其他 tab 的选区污染本实例 history。
+  // 否则 active file tab 期间在聊天区选文字 → 入本 tab 的 history → Ctrl+C 跨区域命中错文本。
+  // sel.anchorNode 走 light DOM(shadow 选区时 anchorNode 由 getRootNode 回到 host)。2026-05-29
   onMount(() => {
     const onSelChange = () => {
       const sel = typeof window !== "undefined" ? window.getSelection() : null
       if (!sel) return
+      if (!isAnchorInsideViewer(sel.anchorNode, viewerRootRef)) return
       const result = readSelectionText(sel)
       if (!result.text.trim() || !result.range) return
       selectionHistory.push({
@@ -1713,7 +1741,15 @@ export function FileTabContent(props: {
   }
 
   return (
-    <Tabs.Content value={props.tab} class="mt-3 relative h-full flex flex-col">
+    <Tabs.Content
+      value={props.tab}
+      class="mt-3 relative h-full flex flex-col"
+      // FORK: Ctrl+C v2 — 标识本 FileTabContent 实例的 viewer 根节点(scope 闸用)。
+      // anchor.closest('[data-component="file-viewer"]') 命中即认为选区在本 tab 内,
+      // 跨 tab 不相同节点,自动隔离。2026-05-29
+      data-component="file-viewer"
+      ref={(el: HTMLElement) => { viewerRootRef = el }}
+    >
       <Show when={editing()}>
         <div class="flex items-center justify-between px-4 py-1.5 border-b border-border-base bg-surface-raised-stronger-non-alpha shadow-sm">
           <button
