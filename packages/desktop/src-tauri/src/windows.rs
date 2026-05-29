@@ -53,7 +53,9 @@ impl MainWindow {
             app,
             decorations,
         )
-        .title("OpenCode")
+        // FORK: 窗口标题读 productName(tauri-overrides 按 env 注入 "DeskFox" / "DeskFox Dev" / "DeskFox Beta"),
+        // 替换上游硬编码 "OpenCode",修复品牌泄漏。2026-05-29
+        .title(app.config().product_name.clone().unwrap_or_else(|| "DeskFox".to_string()))
         .disable_drag_drop_handler()
         .zoom_hotkeys_enabled(false)
         .visible(true)
