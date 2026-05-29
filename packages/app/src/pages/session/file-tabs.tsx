@@ -45,6 +45,15 @@ import { stripFrontmatter } from "@/utils/markdown-frontmatter"
 import { focusChatInput } from "@/utils/chat-input-focus"
 // FORK: 选区菜单贴边沿溢出修复(REQ-032)— 渲染后 measure + clamp 进视口
 import { repositionMenu } from "@/utils/menu-position"
+// FORK: Ctrl+C v2 — onSelChange scope 闸 + keydown 当前选区优先决策
+// 修跨区域选区污染 + history 策略错配两 bug,详见 file-tabs-ctrl-c.ts 头部注释 2026-05-29
+import { decideCtrlCAction } from "./file-tabs-ctrl-c"
+// FORK: 选区历史 + 单例 bus 抽出 module(2026-05-29 refactor):
+// - selection-history.ts:`ViewerSelectionHistory` + `readSelectionWithShadows`(从 file-tabs.tsx 挪出)
+// - selection-bus.ts:`registerViewer` 单例 document.selectionchange,消除 N×listener
+// history 现在只剩**一个**合法消费者(`handleSelectionContextMenu` 对抗 macOS WebKit shadow collapse bug)
+import { registerViewer } from "./selection-bus"
+import type { ViewerSelectionHistory } from "./selection-history"
 
 // FORK: macOS 平台检测,用于右键菜单输入框 Option+Enter 提交支持 2026-04-30
 const IS_MAC = typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
@@ -810,9 +819,16 @@ export function FileTabContent(props: {
   // FORK-BEGIN: 文件查看器 Ctrl/Cmd+C — 修非 .md 内容(@pierre/diffs shadow DOM)原生 Ctrl+C 拿不到选区的 bug 2026-05-04
   // 现象:.md 走 light DOM 原生 Ctrl+C 工作;代码 / HTML / PDF / office 预览走 <diffs-container> shadow DOM,
   // window.getSelection().toString() 对 shadow 内容返回空 → 系统剪贴板拿不到东西 → "Ctrl+C 没反应"。
-  // 解法:复用既有 pickBestRecentSelection()(2026-04-29 macOS 选区修复时建立的 shadow-aware 历史栈),
-  // 加 window-capture keydown,Ctrl/Cmd+C 时把"最近最长"选区文本 writeText 到剪贴板,preventDefault 阻断原生
-  // 的失败路径。.md 也命中(无回归 — light DOM 选区也进 history),编辑态 / input / textarea / contenteditable 时让原生走。
+  //
+  // v1(2026-05-04):pickBestRecentSelection() history "最近最长" 策略统一兜底,preventDefault 阻断原生。
+  // v2(2026-05-29):v1 引入两个新 bug — A) viewer 内重选短覆盖长 / B) 跨区域污染 / C) 取消选区后幽灵复制,
+  //   见 OPENCODE-PLAN/需求池/ctrl-c-复制失效.md。
+  //   R2 改用 readSelectionText 拿**当前**选区(shadow-aware,无右键 collapse bug),交 decideCtrlCAction 决策:
+  //     · 无选区 → noop(让原生 no-op,解 C)
+  //     · anchor 不在本 viewer → noop(让 chat 区 / 其他 tab 走自己的原生,解 B)
+  //     · viewer 内 + light DOM → native(直接让原生 Ctrl+C 处理 — 比 history 更准确,解 A 的 light 半边)
+  //     · viewer 内 + shadow DOM → shadow-intercept,handler 自己 writeText(原生看不到 shadow,解 A 的 shadow 半边)
+  //   history(selectionHistory + pickBestRecentSelection)保留给右键 contextmenu 用,kbd 路径不再走。
   createEffect(() => {
     if (typeof window === "undefined") return
 
@@ -826,13 +842,23 @@ export function FileTabContent(props: {
       const ae = document.activeElement as HTMLElement | null
       if (ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae.isContentEditable)) return
 
-      const best = pickBestRecentSelection()
-      if (!best || !best.text.trim()) return // 无可用选区 → 让原生处理(也是 no-op)
+      const sel = window.getSelection()
+      if (!sel || !viewerHistory) return
+      const result = viewerHistory.readSelection(sel)
+      const decision = decideCtrlCAction({
+        text: result.text,
+        shadow: result.shadow,
+        anchorNode: sel.anchorNode,
+        viewerRoot: viewerRootRef,
+      })
 
-      event.preventDefault()
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        navigator.clipboard.writeText(best.text).catch(() => {})
+      if (decision.action === "shadow-intercept") {
+        event.preventDefault()
+        if (typeof navigator !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(decision.text).catch(() => {})
+        }
       }
+      // "noop" / "native" → 不 preventDefault,让浏览器原生 Ctrl+C 自处理(或 no-op)
     }
 
     makeEventListener(window, "keydown", onKeyDown, { capture: true })
@@ -889,11 +915,35 @@ export function FileTabContent(props: {
   // 渲染后 measure + clamp 进视口再可见。不能用常量宽高(input 卡 360px + textarea 多行高,差异大)。
   // [feat: req-032-menu-clamp-viewport] 2026-05-28
   let mdMenuEl: HTMLDivElement | undefined
+  // FORK: Ctrl+C v2 + selection-bus — 实例 scope 的 viewer 根节点 ref。2026-05-29
+  // - selection-bus 用它做 selectionchange 路由(只有 anchor 在本 viewer 内的选区入本实例 history)
+  // - Ctrl+C handler 用它判 anchor 是否在本 tab 内,跨 tab + 跨区域选区互不污染
+  let viewerRootRef: HTMLElement | undefined
+  // FORK: 本 FileTabContent 实例的选区历史(由 selection-bus 注册时分配)2026-05-29
+  // 唯一消费者:`handleSelectionContextMenu` 对抗 macOS WebKit shadow DOM 右键 collapse bug
+  let viewerHistory: ViewerSelectionHistory | undefined
   createEffect(() => {
     const m = mdMenu()
     if (!m.open) return
     queueMicrotask(() => {
       if (mdMenuEl) repositionMenu(mdMenuEl, m.x, m.y)
+    })
+  })
+  // FORK: input mode textarea focus — REQ-032 visibility:hidden + el.focus() race 修复 2026-05-29
+  // 起源:REQ-032(2026-05-28 commit d944cabb4)给菜单 div 加初帧 `visibility: hidden` + repositionMenu
+  // microtask 才置 visible(防闪)。textarea 自带 `ref={(el) => queueMicrotask(() => el.focus())}` 比
+  // repositionMenu microtask **早一拍**触发(JSX mount 在 createEffect 之前 schedule),浏览器对
+  // visibility:hidden 元素的 `.focus()` 是 **silent fail**(Chromium 与 WebKit 行为一致)→
+  // 焦点回落到上一个有焦点的元素(典型场景:上次 submitMdSelection 后 focusChatInput 留在底部主聊天框)。
+  // 修法:把 focus 从 textarea ref 抽到本 createEffect,用 requestAnimationFrame —— 比所有 queueMicrotask
+  // 都晚一拍,等 repositionMenu 已设 visibility:visible 之后再 focus,可靠。
+  createEffect(() => {
+    const m = mdMenu()
+    if (!m.open || m.mode !== "input") return
+    requestAnimationFrame(() => {
+      if (!mdMenuEl) return
+      const ta = mdMenuEl.querySelector("textarea") as HTMLTextAreaElement | null
+      ta?.focus()
     })
   })
   const [mdComment, setMdComment] = createSignal("")
@@ -957,125 +1007,29 @@ export function FileTabContent(props: {
     if (p) file.setSelectedLines(p, null)
   }
 
-  // FORK-BEGIN: macOS WebKit Shadow DOM 选区修复 2026-04-29
-  // 问题 1:WebKit 不支持 ShadowRoot.getSelection(),window.getSelection().toString()
-  // 对 Shadow DOM 内容返回空串 → 用 getComposedRanges({ shadowRoots }) API(WebKit 17+)读取。
+  // FORK-BEGIN: 选区历史 — 注册到单例 selection-bus(2026-05-29 refactor)
   //
-  // 问题 2:macOS WebKit 右键点击文字时 OS 级强制 collapse 选区到右键点中的那个词,
-  // 任何 JS 层 preventDefault 都拦不住,且 collapse 后的 selectionchange 时机不定
-  // (可能在 mousedown JS handler 之前或之后)。
+  // 原版 ~125 行(SelSnapshot type / selectionHistory 数组 / knownShadows / readSelectionText
+  // 三策略 / onSelChange 入栈 / pickBestRecentSelection)已抽出到:
+  //   - `./selection-history.ts`(ViewerSelectionHistory 类 + readSelectionWithShadows 三策略)
+  //   - `./selection-bus.ts`(单例 document.selectionchange listener,消除 N×listener)
   //
-  // 第三轮 pop+block 方案的失败原因:用户刚选完就右键时,最后一条历史栈条目正是
-  // 用户真实选区(<100ms 新),被 pop 掉 → 栈空 → fallback 读 collapse 后的词。
-  // 空白处右键能成功是侥幸(WebKit 不 collapse 空白),一碰文字就破。
-  //
-  // 第四轮解法:**最近窗口内挑最长** —— WebKit collapse 出的单词必然比用户多行选区短。
-  //   1) selectionchange 不加任何屏蔽,所有非空选区都进历史栈(限 16 条)
-  //   2) 不在 mousedown 时 pop(那是错的)
-  //   3) contextmenu 时:从最近 30 秒的历史里挑文本最长的那条 → 必为用户真实选区
-  //   4) 程序化恢复 window.getSelection() + CSS Custom Highlight(0.55 alpha 强色)双重视觉
-  type SelSnapshot = { text: string; range: Range; shadow: ShadowRoot | null; time: number }
-  const selectionHistory: SelSnapshot[] = []
-  const SEL_HISTORY_LIMIT = 16
-  const SEL_HISTORY_RECENT_MS = 30_000
-  const knownShadows = new Set<ShadowRoot>()
-
-  // 收集 Shadow Root(从 mouse 事件 composedPath + DOM 查询双通道)
-  const handlePreContextCapture = (event: MouseEvent) => {
-    const composedPath = typeof event.composedPath === "function" ? event.composedPath() : []
-    for (const node of composedPath) {
-      if (node instanceof ShadowRoot) { knownShadows.add(node); break }
-    }
-    // 备用:直接查找 Pierre 的 diffs-container shadow root
-    const target = event.currentTarget as HTMLElement | null
-    if (target) {
-      const host = target.querySelector("diffs-container")
-      const sr = host?.shadowRoot
-      if (sr) knownShadows.add(sr)
-    }
-  }
-
-  // 从 Selection 对象读取文本(支持 Shadow DOM 跨边界选区)
-  const readSelectionText = (sel: Selection): { text: string; range: Range | null; shadow: ShadowRoot | null } => {
-    // 策略 1:getComposedRanges({ shadowRoots }) — WebKit 17+ 跨 shadow 选区 API
-    // API 签名:options object 形式(与 Pierre file-selection.ts 一致)
-    if (knownShadows.size > 0 && typeof (sel as any).getComposedRanges === "function") {
-      try {
-        const shadowArray = [...knownShadows]
-        const staticRanges = (sel as any).getComposedRanges({ shadowRoots: shadowArray }) as StaticRange[]
-        if (staticRanges?.length > 0) {
-          const sr = staticRanges[0]
-          const r = document.createRange()
-          r.setStart(sr.startContainer, sr.startOffset)
-          r.setEnd(sr.endContainer, sr.endOffset)
-          // 文本提取:toString() 优先,cloneContents().textContent 备用
-          const t = r.toString() || r.cloneContents()?.textContent || ""
-          if (t.trim()) {
-            const root = sr.startContainer.getRootNode()
-            return { text: t, range: r, shadow: root instanceof ShadowRoot ? root : null }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // 策略 2:ShadowRoot.getSelection (Chromium 专有)
-    for (const sh of knownShadows) {
-      try {
-        const shadowSel = (sh as unknown as { getSelection?: () => Selection | null }).getSelection?.()
-        if (shadowSel && shadowSel.toString().trim()) {
-          return {
-            text: shadowSel.toString(),
-            range: shadowSel.rangeCount > 0 ? shadowSel.getRangeAt(0).cloneRange() : null,
-            shadow: sh,
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // 策略 3:window.getSelection (light DOM / md 文件)
-    const t = sel.toString()
-    if (t.trim() && sel.rangeCount > 0) {
-      return { text: t, range: sel.getRangeAt(0).cloneRange(), shadow: null }
-    }
-
-    return { text: "", range: null, shadow: null }
-  }
-
-  // selectionchange:无脑记录所有非空选区到历史栈(不屏蔽、不 pop)。
-  // 之所以不需要屏蔽 collapse 回调:contextmenu 阶段挑"最近窗口里最长的那条"足以排除短的 collapse 词。
+  // 历史机制本质是 macOS WebKit shadow DOM 右键 collapse bug 的解药 — 看 selection-history.ts 头部注释。
+  // 现在只剩 `handleSelectionContextMenu`(代码/HTML/PDF/office 等 Pierre shadow 右键)一个消费者用 history;
+  // Ctrl+C kbd 路径用 `viewerHistory.readSelection(sel)` 即时读不入栈。
   onMount(() => {
-    const onSelChange = () => {
-      const sel = typeof window !== "undefined" ? window.getSelection() : null
-      if (!sel) return
-      const result = readSelectionText(sel)
-      if (!result.text.trim() || !result.range) return
-      selectionHistory.push({
-        text: result.text,
-        range: result.range,
-        shadow: result.shadow,
-        time: Date.now(),
-      })
-      if (selectionHistory.length > SEL_HISTORY_LIMIT) selectionHistory.shift()
-    }
-    document.addEventListener("selectionchange", onSelChange)
-    onCleanup(() => document.removeEventListener("selectionchange", onSelChange))
+    if (!viewerRootRef) return
+    const reg = registerViewer(viewerRootRef)
+    viewerHistory = reg.history
+    onCleanup(() => {
+      reg.destroy()
+      viewerHistory = undefined
+    })
   })
 
-  // 从最近 30 秒历史里挑"文本最长"的快照:WebKit collapse 出的单词永远比用户多行选区短。
-  const pickBestRecentSelection = (): SelSnapshot | null => {
-    if (selectionHistory.length === 0) return null
-    const now = Date.now()
-    let best: SelSnapshot | null = null
-    for (let i = selectionHistory.length - 1; i >= 0; i--) {
-      const s = selectionHistory[i]!
-      if (now - s.time > SEL_HISTORY_RECENT_MS) break
-      if (!best || s.text.length > best.text.length) best = s
-    }
-    return best
+  // mouse 事件 composedPath + DOM 查询双通道收 ShadowRoot,塞 viewerHistory 的 knownShadows 集
+  const handlePreContextCapture = (event: MouseEvent) => {
+    viewerHistory?.collectShadowFromEvent(event)
   }
   // FORK-END
 
@@ -1083,19 +1037,15 @@ export function FileTabContent(props: {
     if (editing()) return // 编辑态让 CodeMirror 拿到原生右键菜单
     event.preventDefault()
 
-    // 从 composedPath 找 shadow root 并收集
-    let shadow: ShadowRoot | null = null
-    const composedPath = typeof event.composedPath === "function" ? event.composedPath() : []
-    for (const node of composedPath) {
-      if (node instanceof ShadowRoot) { shadow = node; knownShadows.add(shadow); break }
-    }
+    // 从 composedPath 找 shadow root 并收集到 viewerHistory.knownShadows
+    let shadow: ShadowRoot | null = viewerHistory?.collectShadowFromEvent(event) ?? null
 
     // 主路径:历史栈里最近 30 秒"文本最长"的条目 → 必为用户多行真实选区
     // (collapse 出的单词肯定更短)。
     let text = ""
     let range: Range | null = null
 
-    const best = pickBestRecentSelection()
+    const best = viewerHistory?.pickBestRecent() ?? null
     if (best) {
       text = best.text
       range = best.range
@@ -1103,8 +1053,8 @@ export function FileTabContent(props: {
     } else {
       // 回退:历史完全空(用户首次右键、或刚切换文件)→ 读当前选区
       const sel = typeof window !== "undefined" ? window.getSelection() : null
-      if (sel) {
-        const result = readSelectionText(sel)
+      if (sel && viewerHistory) {
+        const result = viewerHistory.readSelection(sel)
         text = result.text
         range = result.range
         shadow = result.shadow ?? shadow
@@ -1713,7 +1663,15 @@ export function FileTabContent(props: {
   }
 
   return (
-    <Tabs.Content value={props.tab} class="mt-3 relative h-full flex flex-col">
+    <Tabs.Content
+      value={props.tab}
+      class="mt-3 relative h-full flex flex-col"
+      // FORK: Ctrl+C v2 — 标识本 FileTabContent 实例的 viewer 根节点(scope 闸用)。
+      // anchor.closest('[data-component="file-viewer"]') 命中即认为选区在本 tab 内,
+      // 跨 tab 不相同节点,自动隔离。2026-05-29
+      data-component="file-viewer"
+      ref={(el: HTMLElement) => { viewerRootRef = el }}
+    >
       <Show when={editing()}>
         <div class="flex items-center justify-between px-4 py-1.5 border-b border-border-base bg-surface-raised-stronger-non-alpha shadow-sm">
           <button
@@ -1840,7 +1798,8 @@ export function FileTabContent(props: {
                 style={{ left: `${mdMenu().x}px`, top: `${mdMenu().y}px`, visibility: "hidden" }}
               >
                 <textarea
-                  ref={(el) => queueMicrotask(() => el.focus())}
+                  // FORK: focus 已由上方 createEffect + rAF 接管(visibility:hidden race);
+                  // 不在 ref 里 queueMicrotask focus,避免 silent fail 之后焦点跑回上次有焦点的元素 2026-05-29
                   class="w-full min-h-[80px] rounded border border-border-base bg-background-base px-2 py-1.5 text-sm text-text-strong placeholder:text-text-weak focus:outline-none focus:ring-1 focus:ring-text-interactive-base resize-y"
                   placeholder={language.t("fileViewer.menu.input.placeholder")}
                   value={mdComment()}
