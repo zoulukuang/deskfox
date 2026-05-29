@@ -92,3 +92,76 @@ decideCtrlCAction({ text, shadow, anchorNode, viewerRoot }) → CtrlCDecision
 - v1 前序:commit `6792320c2` `fix(file-tree): 中性区 Ctrl+C 失效 — B 路径加文本选区闸 [feat: filetree-ctrlc-textsel-fix]`(`use-file-tree-shortcuts.ts:61-78` `hasTextSelectionOutsideFileTree()` 闸,修文件树快捷键抢 Ctrl+C)
 - 不沾边路径(已审计):`chat-selection-menu.tsx`(只拦右键 `contextmenu`,聊天区 Ctrl+C 走原生)/ `terminal.tsx`(用 Ctrl+Shift+C 不冲突)/ `handleLightDomContextMenu`(右键 light DOM 已识别不走 history)
 - 长期方向:`office-选中加聊天 v2` 把 shadow DOM 内容统一迁到 ContextMenuHost 后,`selectionHistory` + `pickBestRecentSelection` 整套机制(右键 collapse 解药)可视情况移除 — 当前先留着,本 fix 只解 kbd 路径
+
+---
+
+## Follow-up · 架构师视角 backlog 落地(2026-05-29 同分支续做)
+
+主 fix 后 user 要求做架构师审视里点出的 3 个 backlog 项。**结论**:Item 1 + Item 2 做了,Item 3 显性 NACK。
+
+### Item 1 ✅ 落地 — 单例 selection-bus
+**问题**:每个 `FileTabContent` 实例自己挂 `document.addEventListener("selectionchange", ...)`,N tab = N listener。
+**修法**:新建 `packages/app/src/pages/session/selection-bus.ts`:
+- 模块级 singleton,`registerViewer(viewerRoot)` 返回 `{ history, destroy }`
+- 0 注册时自动 detach 全局 listener,有注册才挂
+- selectionchange first-match-wins 路由到 anchor 所在 viewer(viewer 互不嵌套)
+
+### Item 2 ✅ 落地 — selection-history 独立 module
+**问题**:`SelSnapshot` type / `selectionHistory` 数组 / `knownShadows` 集 / `readSelectionText` 三策略 / `pickBestRecentSelection` 全挤在 `file-tabs.tsx` 里(~125 行),职责不清。
+**修法**:新建 `packages/app/src/pages/session/selection-history.ts`:
+- `ViewerSelectionHistory` class(`push / pickBestRecent / readSelection / collectShadow* / size / clear`)
+- `readSelectionWithShadows(sel, knownShadows)` export(三策略 shadow-aware,供测试 / Ctrl+C handler 复用)
+- module 头部注释**严格界定唯一合法消费者**:`handleSelectionContextMenu` 对抗 macOS WebKit shadow collapse bug。其他路径**禁止扩散**(在头部白纸黑字写明)。
+
+### Item 3 ❌ NACK — 不统一决策表
+**审计发现**:右键路径已经天然按特性分流,没必要硬塞同一个 `decideCtrlCAction`-style 决策表:
+
+| 路径 | 数据源 | 走 history? | 为什么 |
+|---|---|---|---|
+| `handleLightDomContextMenu`(.md 右键)| `window.getSelection()` | ❌ | light DOM 无 collapse bug,原生工作 |
+| `handleSelectionContextMenu`(代码/HTML 右键)| `pickBestRecent()` history | ✅ | 对抗 macOS WebKit shadow collapse — **唯一合法 history 消费者** |
+| `ContextMenuHost` / `DomSelectionProvider`(聊天 / PDF / office 右键)| `window.getSelection()` | ❌ | 自己 module,2026-05-24 重构后跟 file-tabs 解耦 |
+| Ctrl+C kbd handler(R2 主 fix)| `readSelectionWithShadows` 当前选区 | ❌ | kbd 无 collapse 问题 |
+
+三个右键路径**已经各自处理**,数据源根本不同。硬塞决策表只会增加抽象噪音 — 不做。
+
+### file-tabs.tsx 净瘦身
+
+| 段 | 改动 |
+|---|---|
+| import | +2 行(`registerViewer` + `type ViewerSelectionHistory`)|
+| 顶部局部状态 | `let viewerHistory: ViewerSelectionHistory \| undefined` 替代 `selectionHistory[]/knownShadows/SEL_HISTORY_*` 三个常量 |
+| FORK-BEGIN/END 块(macOS shadow 选区修复段)| **-125 行 → +16 行**(`onMount` 注册 / `onCleanup` 注销 / `handlePreContextCapture` 改委托)|
+| `handleSelectionContextMenu` | `pickBestRecentSelection()` → `viewerHistory?.pickBestRecent()`;`readSelectionText` → `viewerHistory.readSelection` |
+| Ctrl+C handler | `readSelectionText` → `viewerHistory.readSelection` |
+
+### 新增改动文件 / 测试
+
+| 文件 | 改动 | 行数 |
+|---|---|---|
+| `packages/app/src/pages/session/selection-history.ts` | **新建** `ViewerSelectionHistory` class + `readSelectionWithShadows` + 严格 module 头部注释 | +180 |
+| `packages/app/src/pages/session/selection-bus.ts` | **新建** 单例 bus + `registerViewer` + `_resetBus`(测试用)| +100 |
+| `packages/app/src/pages/session/selection-history.test.ts` | **新建** 12 单测(pickBest 语义 / shift / 30s 窗 / shadow 收集 / readSelection light path)| +175 |
+| `packages/app/src/pages/session/selection-bus.test.ts` | **新建** 8 单测(注册生命周期 / 多 viewer 隔离 / 幂等 destroy)| +125 |
+| `packages/app/src/pages/session/file-tabs.tsx` | 接入新 module,净减 ~110 行 | +28 -110 |
+
+### 验证
+
+- 新 module 单测:**20/20 pass**(history 12 + bus 8)
+- 既有 ctrl-c-test:**16/16 pass**(0 回归)
+- 同目录 session 套件:**77 pass / 1 fail**(pre-existing solid-js SSR,memory 已记录 `reference_known_dev_issues.md`,与本次无关)
+- 全 app 套件:**780/0 pass / 0 fail**
+- typecheck:17/17 pass
+- Mac dev build:raw + DeskFox Dev.app(40,515,088 bytes)20:37 timestamp 同步刷新
+
+### 健康指标
+
+- 上游侵入率:**0 change**(纯 fork-only 新文件 + 既有 fork 文件内重构)
+- R4 黑名单:**0 触动**
+- 漂移 commit:1 笔
+- 净行数:`file-tabs.tsx` -110 行 / 新文件 +580 行,本仓总行数 +470。R1 三级跳 ratio = 新增 580 / 改既有 138(28+110)= 4.2:1,健康
+- 模块责任清晰:`selection-history.ts`(数据结构 + 算法)/ `selection-bus.ts`(派发)/ `file-tabs-ctrl-c.ts`(决策表)/ `file-tabs.tsx`(组件接入)
+
+### Backlog 全 close
+
+架构师视角"如果重做"清单 3 项 → 2 ✅ 落地 / 1 ❌ NACK(审计后发现是过度抽象,不做反而正确)。**`selectionHistory` 整套机制现在 1 个消费者**(`handleSelectionContextMenu`),职责清晰可单独 grep,future 删除 / 调整时一目了然。
