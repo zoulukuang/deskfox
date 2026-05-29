@@ -21,7 +21,13 @@ export function unregisterChatInputRef(el: HTMLElement) {
 export function focusChatInput() {
   const el = chatInputRef
   if (!el) return
-  el.focus()
+  // FORK: preventScroll: true — 加完卡片不强行把输入框滚到顶 2026-05-29
+  // 起源:user 反馈"卡片加入聊天后,下方输入区文字跳到头部",根因跟 prompt-input.tsx:1382 mousedown
+  // 那条同款 — `el.focus()` 默认 preventScroll:false 触发 scrollIntoView 把 editorRef 开头滚进视口,
+  // 当 editor 内容已 scroll 到下方时,这一下硬把 scroll 拽回顶。
+  // 改 preventScroll:true 后,scroll 状态保持;cursor 仍由下方 Selection API 移到末尾(只是不强行
+  // 滚到可视区 — 浏览器对程序化 selection 修改默认不 scroll-into-view)。user 想看末尾自己滑。
+  el.focus({ preventScroll: true })
   if (typeof window === "undefined") return
   const sel = window.getSelection()
   if (!sel) return
