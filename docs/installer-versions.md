@@ -8,6 +8,30 @@
 
 ---
 
+
+## [macOS] 2026.5.29.1 — 2026-05-29
+
+**主题**:多模态创作模式扩到三家 + Phase 2 Mac 真桌面 e2e 启用 + 桌面体验修复 + sortable bug 入需求池(自 prod `2026.5.28.1` 以来)
+
+**新功能 / 改进**:
+- **media-gen 第三家小米 MiMo Token Plan 接入**(REQ-030):3 档 TTS + Omni-ASR + 首次加 `tts_clone` / `tts_design` capability;前端模式菜单加两档 + VoiceDesign 输入框 + capability 联动(前端 3 处副本同步)。
+- **Phase 2 真桌面 e2e Mac 端启用**:`packages/app/e2e-tauri-mac/` 平级独立,helpers 4 文件(osascript / cliclick / screencapture / window-bounds)+ saveDialog mock 方案 ②(env var + Tauri command `read_e2e_save_path_env`)+ deep_link 注入项目跟 Win page.goto 看齐;全量套件 3 passed + 1 skip / 1.3min(smoke-mac 2 + command-palette-flow-mac user-flow + md-to-word-real-mac fixme)。
+- **聊天主循环 Phase 1 mock e2e 套件**:3 case 覆盖 user 视角(发消息→user msg→AI 回复 / sidebar 新 session 出现 / busy 期 progress 显示);chat-mock 路由全 RegExp 化 + SSE 改 `addInitScript` 路线 + assistant mock 补 `parentID + tokens + cost` 三件套。
+
+**修复**:
+- **主窗口标题品牌泄漏修复**:`title` 改读 `productName`(`DeskFox`),不再泄漏上游硬编码 `OpenCode`。
+- **officeToolingInstall HttpApi 跟 Hono 对齐**:Effect endpoint 去掉多余 `payload Schema.Struct({})`,跟同 group 内 `initGit` / `abort` / `share` 无 body POST idiom 一致(P1 unit test stable fail 修,SDK 同步 regen)。
+- **e2e Phase 1 webServer 走 dev:e2e-mock 激活 mock plugin**:原 `bun run dev` 缺 `--mode e2e-mock`,导致 `@tauri-apps/api/core` 未 alias + `window.__deskfoxE2eInvoke` 未注入,5 个 spec 同源 fail;改 webServer.command 一行修(P0 fix,13 pass / 0 fail / 32s,之前 5 fail 1.2min)。
+- **md-editing-iter-3-visual 2 spec 标 `test.fixme`**:让 pre-push gate 不被 pre-existing fail 拦(REQ-035 走 A 方案,根因待深挖)。
+
+**Revert(本期发现)**:
+- **startup-sidebar-ready-gate revert(2 笔)**:① user 实测 Mac 上撞 2 个 bug(第一次点击未选 project tile 只变灰不切换 + gate 状态下鼠标 hover/move 误触发 sortable drag)② 后续诊断证实跟 ready-gate **无关**,是 **macOS Tahoe 26.5 WKWebView + Apple 触摸板 Tap to Click 上游 + 依赖兼容性 latent bug**(`sortable` / `DragDropProvider` / `@thisbeyond/solid-dnd@0.7.5` fork 0 改)③ 3 次 sensor fix 尝试均失败(提阈值 / mouseup 兜底 / 三重 capture phase 兜底),真根因待 WebKit Inspector 取 event timeline 实证 ④ ready-gate 本身 UX 不佳(opacity-60 + 阻 click 让 user 困惑),revert 后续重设计走 grip handle 避开 sortable activator 冲突 ⑤ sortable bug 入 OPENCODE-PLAN REQ-037 跟踪,Mac user 临时按压切换 / 外接 mouse 规避。
+
+**配套 plugin**(随 .app bundle,同 Win 端 bundle 机制):feishu-bridge + media-gen(`DeskFox.app/Contents/Resources/plugins/` 下,启动自动注入 user opencode 配置)。
+**质量**:全仓 typecheck 17/17;pre-push e2e 14 pass / 3 skipped(24.2s)。
+**.dmg**:`DeskFox-2026.5.29.1_aarch64.dmg`(62 MB,Tauri bundle,未签名 — macOS Gatekeeper 首次右键 → 打开 → 仍要打开,或 `xattr -cr` 去 quarantine)。
+
+---
 ## [Windows] 2026.5.29.1 — 2026-05-29
 
 **主题**:多模态创作模式扩到三家(阿里 + MiniMax + 小米)+ 一批桌面体验修复(自 prod `2026.5.28.1` 以来)
