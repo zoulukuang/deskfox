@@ -80,13 +80,8 @@ function createGlobalSync() {
   }))
 
   const [globalStore, setGlobalStore] = createStore<GlobalStore>({
-    // FORK: ready 语义修正 [feat: startup-sidebar-ready-gate] 2026-05-29
-    // 原:return bootstrap.isPending — 字段名 ready 但实际 isPending(加载中 true、完成 false),
-    //   唯一 callsite layout.tsx:474 `if (!globalSync.ready) return` 字面意图"没就绪就 return"
-    //   配合原 inverted ready 实际跑成"加载完才 return",icon enrichment 反在加载期间跑,bug。
-    // 现:ready = !isPending,字面 = "就绪了",callsite 字面意图与实际行为对齐。
     get ready() {
-      return !bootstrap.isPending
+      return bootstrap.isPending
     },
     project: [],
     session_todo: {},
