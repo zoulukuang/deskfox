@@ -8,6 +8,30 @@
 
 ---
 
+## [Windows] 2026.5.29.1 — 2026-05-29
+
+**主题**:多模态创作模式扩到三家(阿里 + MiniMax + 小米)+ 一批桌面体验修复(自 prod `2026.5.28.1` 以来)
+
+**新功能 / 改进**:
+- **media-gen 第二家 MiniMax 接入**(REQ-030):`speech-2.8-hd`(TTS,Token Plan 计费)/ `image-01`(文生图)/ `Hailuo-2.3`(海螺视频,异步三步引擎);catalog 改 by-provider 路由。
+- **media-gen 第三家小米 MiMo Token Plan 接入**(REQ-030):3 档 TTS + Omni-ASR + 首次加 `tts_clone` / `tts_design` 能力;前端模式菜单加两档 + VoiceDesign 输入框 + capability 联动。
+- **创作模式 @<路径> 文件引用** 接入 refFile / audioUrl(图编辑 / ASR / 图生视频可直接 @ 项目文件)。
+- **国内 sidecar npm 走国内镜像 + 探活自愈**:Clash 网络环境下 sidecar 安装不再卡 registry。
+- **冷启动 sidebar ready gate**:project tile 等 globalSync.ready 才出,顺手修 `globalSync.ready` 语义反了的 bug;splash 屏改极简版。
+
+**修复**:
+- **主窗口标题品牌泄漏修复**:`title` 改读 `productName`(`DeskFox`),不再泄漏上游硬编码 `OpenCode`。
+- **REQ-031 托盘图标重开窗口**:关闭到托盘后点桌面 / Dock 图标重开窗口无反应。
+- **REQ-032 选区菜单贴边沿被遮挡**:共享 `clampMenuToViewport` helper,溢出视口看不到点不到的菜单回正。
+- **officeToolingInstall HttpApi 跟 Hono 对齐**:去掉多余 `payload Schema.Struct({})`(P1 fix,SDK 同步 regen)。
+- **e2e Phase 2 真桌面 e2e 启用**(Win + Mac 双端):saveDialog mock + md-to-word-real 跑通,Phase 1 mock e2e 收敛三条 fixme。
+
+**配套 plugin**(随安装包,同 2026.5.27.1 起的 bundle 机制):feishu-bridge + media-gen(`{app}\plugin\` 下,启动自动注入 user opencode 配置)。
+**质量**:全仓 typecheck 17/17 cached;pre-push e2e 14 pass / 3 skipped。
+**installer**:`DeskFox-2026.5.29.1-setup.exe`(~60 MB,Inno Setup,未签名)。
+
+---
+
 ## [Windows] 2026.5.29.1-dev - 2026-05-29 16:02
 
 (待填: ship 后回填本条 — 包含 commits / 配套 plugin / installer 路径等)
