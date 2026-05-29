@@ -1,18 +1,6 @@
-// [WIP — 2026-05-29] Chat-loop e2e 测试套件 in-progress, 3 case 都 fixme 状态
-//
-// 起源:2026-05-29 早上开始写,3 case 都没跑通 / Phase 1 mock e2e 模式
-// 当前状态:
-//   - mock 链路设好(installServerMock + bootstrapMock + mockChatSSE)
-//   - product UI selector / DOM 期望可能跟现状不匹配
-//   - 3 case 全 fail —— 全标 .fixme() 避开 pre-push gate 拦截 main push
-//
-// 谁接手:
-//   1) 确认 mock setup 跟当前 packages/app 状态一致
-//   2) 跑单个 case 看 fail 原因 (UI selector / 时序 / SSE event shape)
-//   3) 修通 1 个就把 .fixme 改回 test —— 一个一个来
-//   4) docs/features/ 同步建 e2e-chat-loop/{1-spec,2-plan,3-changelog}.md 三文档
-//
-// 不动这套测试 (rebase / merge 时):移到 .skip 或直接 fixme 永远不会引入新 fail
+// FORK: chat-loop user flow e2e — Phase 1 mock mode
+// [feat: e2e-chat-loop] 2026-05-29
+// 3 case 覆盖聊天主循环:发消息→user msg→assistant 回复 / sidebar 新 session 出现 / busy 期 progress 显示
 import { test, expect, installServerMock, bootstrapMock } from "./fixtures"
 import {
   mockChatSSE,
@@ -72,7 +60,7 @@ async function waitForAssistantResponse(page: import("@playwright/test").Page, t
 }
 
 test.describe("Chat Loop — User Flow E2E", () => {
-  test.fixme("C1 — new session: send message → see user msg → receive AI response", async ({ page }) => {
+  test("C1 — new session: send message → see user msg → receive AI response", async ({ page }) => {
     const errors: string[] = []
     page.on("pageerror", (e) => errors.push(`PAGE: ${e.message}`))
     page.on("console", (msg) => {
@@ -82,12 +70,7 @@ test.describe("Chat Loop — User Flow E2E", () => {
     await installServerMock(page)
     await bootstrapMock(page, {
       projects: [
-        {
-          id: "e2e-mock-project",
-          worktree: DIRECTORY,
-          vcs: undefined,
-          time: { created: Date.now() },
-        },
+        { id: "e2e-mock-project", worktree: DIRECTORY, vcs: undefined, time: { created: Date.now() } },
       ],
     })
     const chatHandle = await mockChatSSE(page)
@@ -96,36 +79,20 @@ test.describe("Chat Loop — User Flow E2E", () => {
     await page.waitForLoadState("domcontentloaded")
     await page.waitForTimeout(3000)
 
-    const homeBody = await page.locator("body").innerText()
-    console.log("[C1] home body length:", homeBody.length)
-    expect(homeBody.length).toBeGreaterThan(0)
-
     await enterWorkspace(page)
-
-    const wsBody = await page.locator("body").innerText()
-    console.log("[C1] workspace body length:", wsBody.length)
-    const hasComposer = await page.locator('[data-component="prompt-input"]').count()
-    console.log("[C1] has composer:", hasComposer)
-
-    if (hasComposer === 0) {
-      console.log("[C1] workspace body preview:", wsBody.slice(0, 500))
-    }
-    expect(hasComposer).toBeGreaterThan(0)
+    await expect(page.locator('[data-component="prompt-input"]')).toBeVisible()
 
     await submitPrompt(page, "Hello AI")
     await page.waitForTimeout(500)
-
-    const hasSessionInUrl = page.url().includes("/session/")
-    console.log("[C1] URL after submit:", page.url(), "has session:", hasSessionInUrl)
+    expect(page.url()).toContain("/session/")
 
     await waitForUserMessage(page, "Hello AI")
-    console.log("[C1] user message appeared (optimistic or SSE)")
 
     const userMessageID = "msg_user_cloop001"
     const assistantMessageID = "msg_assistant_cloop001"
     const partID = "part_text_cloop001"
 
-    chatHandle.pushEvents(
+    await chatHandle.pushEvents(
       buildChatFlowEvents({
         sessionID: chatHandle.sessionID,
         directory: DIRECTORY,
@@ -138,25 +105,22 @@ test.describe("Chat Loop — User Flow E2E", () => {
           assistantMessageID,
           "mock-provider",
           "mock-model",
+          userMessageID,
         ),
         assistantParts: [
           createMockTextPart(chatHandle.sessionID, assistantMessageID, partID, "Hi! How can I help?"),
         ],
       }),
     )
-    console.log("[C1] pushed SSE events, waiting for AI response...")
 
     await waitForAssistantResponse(page, "Hi! How can I help?")
-    console.log("[C1] assistant response appeared!")
 
-    const turnCount = await page.locator('[data-component="session-turn"]').count()
-    console.log("[C1] total turns:", turnCount)
-    expect(turnCount).toBeGreaterThanOrEqual(2)
-
+    expect(await page.locator('[data-component="session-turn"]').count()).toBeGreaterThanOrEqual(2)
     const body = await page.locator("body").innerText()
     expect(body).toContain("Hello AI")
     expect(body).toContain("Hi! How can I help?")
 
+    // SSE 重连 / SDK 空 body fallback 在 mock 环境是常态错误,不算 fatal
     const fatalErrors = errors.filter(
       (e) =>
         !e.includes("event stream") &&
@@ -165,12 +129,10 @@ test.describe("Chat Loop — User Flow E2E", () => {
         !e.includes("skipToken") &&
         !e.includes("Failed to load resource"),
     )
-    console.log("[C1] fatal errors:", fatalErrors.length)
-    for (const e of fatalErrors) console.log("  ", e.slice(0, 120))
     expect(fatalErrors.length).toBe(0)
   })
 
-  test.fixme("C2 — session appears in sidebar after creation", async ({ page }) => {
+  test("C2 — session appears in sidebar after creation", async ({ page }) => {
     await installServerMock(page)
     await bootstrapMock(page, {
       projects: [
@@ -196,8 +158,10 @@ test.describe("Chat Loop — User Flow E2E", () => {
       title: "Chat Loop Test",
     })
 
-    chatHandle.pushEvents([
+    await chatHandle.pushEvents([
       {
+        // 必须带 directory — 否则 global-sdk 路由到 "global" channel,per-project sync 不会收到
+        directory: DIRECTORY,
         payload: {
           id: "evt_c2_session_created",
           type: "session.created",
@@ -206,12 +170,12 @@ test.describe("Chat Loop — User Flow E2E", () => {
       },
     ])
 
-    const sessionInSidebar = page.locator(`[data-session-id="${chatHandle.sessionID}"]`)
+    // data-session-id 在 sidebar + recents panel 两处都 render,用 first() 避开 strict mode
+    const sessionInSidebar = page.locator(`[data-session-id="${chatHandle.sessionID}"]`).first()
     await expect(sessionInSidebar).toBeVisible({ timeout: 15_000 })
-    console.log("[C2] session appeared in sidebar")
   })
 
-  test.fixme("C3 — loading indicator shows during AI processing", async ({ page }) => {
+  test("C3 — loading indicator shows during AI processing", async ({ page }) => {
     await installServerMock(page)
     await bootstrapMock(page, {
       projects: [
@@ -237,7 +201,7 @@ test.describe("Chat Loop — User Flow E2E", () => {
     await waitForUserMessage(page, "Tell me something")
 
     const sessionID = chatHandle.sessionID
-    chatHandle.pushEvents([
+    await chatHandle.pushEvents([
       {
         directory: DIRECTORY,
         payload: {
@@ -256,15 +220,12 @@ test.describe("Chat Loop — User Flow E2E", () => {
         },
       },
     ])
-    console.log("[C3] pushed busy status")
-
     const progress = page.locator('[data-component="session-progress"]')
-    const progressVisible = await progress.isVisible({ timeout: 5_000 }).catch(() => false)
-    console.log("[C3] progress indicator visible:", progressVisible)
+    await expect(progress).toBeVisible({ timeout: 5_000 })
 
     const assistantMsgID = "msg_assistant_c3"
     const partID = "part_text_c3"
-    chatHandle.pushEvents([
+    await chatHandle.pushEvents([
       {
         directory: DIRECTORY,
         payload: {
@@ -281,7 +242,7 @@ test.describe("Chat Loop — User Flow E2E", () => {
           id: "evt_c3_asst_msg",
           type: "message.updated",
           properties: {
-            info: createMockAssistantMessage(sessionID, assistantMsgID, "mock-provider", "mock-model"),
+            info: createMockAssistantMessage(sessionID, assistantMsgID, "mock-provider", "mock-model", "msg_user_c3"),
           },
         },
       },
@@ -304,13 +265,8 @@ test.describe("Chat Loop — User Flow E2E", () => {
         },
       },
     ])
-    console.log("[C3] pushed completion events, waiting for idle...")
-
     await waitForAssistantResponse(page, "Here's something interesting.")
-    console.log("[C3] done — AI responded and went idle")
-
-    await page.waitForTimeout(1000)
-    const progressGone = !(await progress.isVisible().catch(() => false))
-    console.log("[C3] progress hidden after idle:", progressGone)
+    // progress 是否在 idle 后立刻隐藏行为不稳定(取决于 hiding 动画),
+    // 这里只确认 assistant 文本到达 + busy 阶段曾经显示过 progress;hiding 行为留给 unit 测覆盖
   })
 })
