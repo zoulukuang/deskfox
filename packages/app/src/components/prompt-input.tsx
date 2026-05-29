@@ -1379,7 +1379,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             if (target.closest('[data-action="prompt-attach"], [data-action="prompt-submit"]')) {
               return
             }
-            editorRef?.focus()
+            // FORK: 从外部点回输入框时,scroll 跳到顶部 bug 修复 2026-05-29
+            // 起源:editorRef.focus() 默认 preventScroll:false,浏览器触发 scrollIntoView,
+            // 把 editorRef(整个 contenteditable div)的开头滚到视口内。当 editor 内容长(多个引用
+            // 卡 + 多段文字)、scrollRef(max-h-[240px] overflow-y-auto)位于已往下滚的状态时,
+            // 这一下 scroll 把内容拽回顶部,user 视觉上 cursor "消失"(其实落在了点击的位置,
+            // 但被滚动出可视区)。Browser native click 之后会把 caret 放在点击位置,所以 cursor
+            // 行为是对的,只是 scroll 状态被 focus() 副作用拽走。
+            // 修法:`preventScroll: true` — focus 不触发 scrollIntoView,scroll 状态保持,
+            // 浏览器 click 后照常把 caret 放在点击位置,user 看到的 cursor 跟手指落点一致。
+            editorRef?.focus({ preventScroll: true })
           }}
         >
           <div
