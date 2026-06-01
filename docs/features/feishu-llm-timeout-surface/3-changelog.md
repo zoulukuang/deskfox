@@ -142,6 +142,48 @@ $ bun run typecheck (全 monorepo)
 - friendlyErrorReply 失去 5 类新 pattern
 - pre-existing superseded bug 复活
 
+## Review-followup(2026-06-01,本笔 amend commit)
+
+`/code-review` 高 effort review 找到 4 个 correctness 缺陷 + 多个 cleanup 项,严重的属于本 spec AC5 范畴(任何情况下用户最终都会在飞书收到一条 reply),本笔同步修补:
+
+### 修复 #1 — session.idle 路径不走 partial 兜底(asymmetric)
+runOpencode 3 个下游 fallback 分支(`!wrap.data` / `data.length===0` / `!assistantEntry`)旧条件 `dispatchResult.source === "timeout-partial" && dispatchResult.reply.trim()` 只兜 timeout-partial,session.idle 路径下 session.messages 失败 / 为空 / 找不到 useful assistant 时直接 throw,**丢弃 dispatcher 已累积的 LLM 真实文本**。
+
+修法:抽 `const fallbackReply: string | undefined = dispatchResult.reply || undefined`,4 个分支统一 `if (fallbackReply) return fallbackReply`,**任何 source 有 reply 就用**。`source: session.idle | timeout-partial` 仍保留区分,只用于诊断 log 和短路判断。
+
+### 修复 #2 — assistantEntry.info.error 路径不走 partial 兜底
+第 4 个 throw 路径(`if (err)`)旧代码直接 throw,即使 dispatcher 已累积了 LLM mid-stream partial 也丢弃。
+
+修法:`if (fallbackReply) return fallbackReply` 在 throw 之前。LLM 中途报错时,用户能看到 error 前生成的半截答案,比纯错误文案强。
+
+### 修复 #3 — handleMergeForward empty reply 丢失 image-count warning
+旧代码 `if (!finalReply.trim())` 走 `sendFeishuText(EMPTY_REPLY_FALLBACK) + return`,跳过下面 lines 951-955 的"📷 合并转发里的 N 张图片我读不了"image-count warning 注入。**合并转发含图 + empty reply 场景用户看不到关键提示**。
+
+修法:把 empty 分支从"立即 send + return"改成"`finalReply = EMPTY_REPLY_FALLBACK`,fall through 到下面 image-count 注入 + sendFeishuText 共用路径"。两个 message 自然拼接(image-count warning 头 + EMPTY_REPLY_FALLBACK 体)。
+
+### 修复 #4 — texts.join('') 空返回 bypass partial fallback
+runOpencode 末尾 `texts.join("").trim()` 在 assistant 只有 tool/reasoning/step 无 text part 时返空,bypass 整套 throw 基础设施,handle 走 EMPTY_REPLY_FALLBACK 通用兜底而非更具体的 dispatcher.reply。
+
+修法:`if (!finalText && fallbackReply) return fallbackReply`,无 text part 但 dispatcher 有累积时用 dispatcher.reply。
+
+### 改进 #5 — timeout-partial happy path 短路 session.messages
+旧代码所有 dispatcher resolve 路径都 await setImmediate + await session.messages,即使 timeout-partial 已有完整 reply。session.messages 跟 dispatcher 同源(都从 message.part.updated 事件累积),timeout-partial happy path 多一次 RPC 0 收益。
+
+修法:`dispatcher.register` resolve 后立即 `if (source === "timeout-partial" && fallbackReply) return fallbackReply`,跳过 setImmediate + session.messages 调用。session.idle 不能短路,需要 session.messages 拿 assistantEntry.info.error 来感知 LLM 报错。
+
+### 测试(R5 复现测试)
+`message-pipeline.test.ts` 新增 4 个 e2e case 锁住 #1 / #2 / #4 / #5(标记 `[review-followup #N]`)。#3 是 control-flow 改动,逻辑通过 code-review 验证,merge_forward 完整集成测试(mock fetchMergeForwardItems + flatten + 嵌套)成本约 100+ 行远超改动本身,留 backlog;在 `imageCount>0` 的真桌面合并转发测试场景手工验证。
+
+### 验证(amend 后)
+- `bun test`(adapter-feishu-lark 全包):**650 pass / 0 fail**(原 646 + 4 新)
+- `bun run typecheck`(全 monorepo):**17/17 successful**
+- 0 改上游 / 0 R4 / fork-only 包
+
+### 还有 cleanup 项未做(留下一笔 commit 或 backlog)
+- `.trim()` 冗余 — 4 处 `.trim()` 调用对已 trimmed string 是死操作。本次顺手去掉了(`dispatchResult.reply || undefined` 用 falsy 检查代替)
+- friendlyErrorReply 7-branch if-chain → pattern table(留 backlog,5 个 pattern 不至于上升)
+- console.warn 前缀 `[pipeline ${this.opts.accountId}]` 重复(留 backlog,需要建 logger helper)
+
 ## 已知 follow-up(不在本 spec)
 
 - **dispatcher 累积 part 包括 user 自己 prompt 文本**(echo bug,代码注释里 2026-05-09 已知):本次没修,需要按 message role 区分,留 feat-id `feishu-dispatcher-echo-fix`。

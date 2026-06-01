@@ -937,14 +937,12 @@ export class MessagePipeline {
     let finalReply = await this.processAttachments(reply, event.chatId)
     if (!finalReply.trim()) {
       // [feat: feishu-llm-timeout-surface] 2026-06-01 同 handle() 兜底
+      // [review-followup #3] 2026-06-01 — 把 image-count warning 注入提前到 empty
+      // 检查之前,空 reply + 含图场景仍能告诉用户"合并转发里的图我读不了",不只剩
+      // 通用 EMPTY_REPLY_FALLBACK。把 finalReply 改成 EMPTY_REPLY_FALLBACK,继续
+      // 走下面的 image-count 注入 + sendFeishuText,共用一条路径。
       console.warn(`[pipeline ${this.opts.accountId}] empty reply for merge_forward`)
-      await this.sendFeishuText(event.chatId, EMPTY_REPLY_FALLBACK).catch((err) => {
-        console.error(
-          `[pipeline ${this.opts.accountId}] empty-reply fallback send failed (merge_forward):`,
-          err,
-        )
-      })
-      return
+      finalReply = EMPTY_REPLY_FALLBACK
     }
     // FORK: 合并转发含图 → 回复头部加一行诚实提示(飞书 API 不支持读取合并转发内图片)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
@@ -1255,6 +1253,23 @@ export class MessagePipeline {
     // catch → friendlyErrorReply 给 user surface,不再静默丢弃。
     const dispatchResult = await dispatchPromise
 
+    // [feat: feishu-llm-timeout-surface review-followup] 2026-06-01
+    // dispatcher 已经累积的 LLM 文本(collectText 已 trim,空字符串就是 "")。
+    // 任何下游异常分支(session.messages 失败 / 空 / 无 useful / LLM error)优先用它兜底,
+    // 总比让用户看到错误文案强。collectText 已 trim,这里不再 .trim()。
+    const fallbackReply: string | undefined = dispatchResult.reply || undefined
+
+    // [review-followup #5] timeout-partial happy path 短路:dispatcher 累积的就是
+    // LLM 在超时窗口内流出过的全部 text part,session.messages 是同源持久化,多一次
+    // RPC 无收益。session.idle 不能短路 — 那条路径需要从 session.messages 拿
+    // assistantEntry.info.error 判断 LLM 是否报错。
+    if (dispatchResult.source === "timeout-partial" && fallbackReply) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] timeout-partial 短路 — dispatcher partial 即 LLM 全量输出,跳过 session.messages RPC`,
+      )
+      return fallbackReply
+    }
+
     // setImmediate 跳出当前 event hook 的 microtask scope,确保 server 端 message/part db 写完 + auth context 正常
     await new Promise<void>((resolve) => setImmediate(resolve))
 
@@ -1279,13 +1294,16 @@ export class MessagePipeline {
     // [feat: feishu-llm-timeout-surface] 2026-06-01
     // 所有原"返空字符串"的兜底分支改 throw,让上层 handle() catch 走 friendlyErrorReply,
     // 用户至少能收到一条说明文本,而不是静默无回复。
+    //
+    // [review-followup #1] 4 个分支兜底条件从 timeout-partial 专属升级到"任何源有 fallbackReply",
+    // session.idle + session.messages 失败 / 空 / no-useful / LLM error 现在也能用 dispatcher
+    // 累积的 LLM 文本兜底,不再静默丢弃 session.idle 路径下的 partial。
     if (!wrap.data) {
-      // timeout-partial 时即使 messages 读取失败,partial 是有内容的 — 用 partial 保命
-      if (dispatchResult.source === "timeout-partial" && dispatchResult.reply.trim()) {
+      if (fallbackReply) {
         console.warn(
-          `[pipeline ${this.opts.accountId}] messages fetch failed status=${wrap.response?.status},timeout-partial 兜底返 partial`,
+          `[pipeline ${this.opts.accountId}] messages fetch failed status=${wrap.response?.status},dispatcher.reply (source=${dispatchResult.source}) 兜底`,
         )
-        return dispatchResult.reply
+        return fallbackReply
       }
       throw new Error(
         `opencode session.messages 读取失败(status=${wrap.response?.status}),LLM 回复无法获取`,
@@ -1293,11 +1311,11 @@ export class MessagePipeline {
     }
     const data = wrap.data
     if (data.length === 0) {
-      if (dispatchResult.source === "timeout-partial" && dispatchResult.reply.trim()) {
+      if (fallbackReply) {
         console.warn(
-          `[pipeline ${this.opts.accountId}] session.messages 为空,timeout-partial 兜底返 partial`,
+          `[pipeline ${this.opts.accountId}] session.messages 为空,dispatcher.reply (source=${dispatchResult.source}) 兜底`,
         )
-        return dispatchResult.reply
+        return fallbackReply
       }
       throw new Error("opencode session 为空(LLM 未产出任何消息)")
     }
@@ -1316,20 +1334,25 @@ export class MessagePipeline {
       console.warn(
         `[pipeline ${this.opts.accountId}] 本轮无 useful assistant(user msg=${userMsgId ?? "?"})— 可能 reject + LLM 无后续输出`,
       )
-      // timeout-partial 时 partial 已经是 LLM 真实产出 → 返给用户(总比空好)
-      if (dispatchResult.source === "timeout-partial" && dispatchResult.reply.trim()) {
-        return dispatchResult.reply
-      }
+      if (fallbackReply) return fallbackReply
       throw new Error(
         "本轮 LLM 无 useful 输出(可能权限被拒 / provider 链路异常 / 30 分钟超时降级)",
       )
     }
 
     // 检查 LLM 错误(opencode 把 LLM API error 存进 assistant message.error)
+    // [review-followup #2] LLM mid-stream 报错时,如果 dispatcher 已累积部分文本,
+    // 优先返 partial — 用户能看到 LLM error 之前生成的半截答案,比纯 error 文案强。
     const err = assistantEntry.info.error
     if (err) {
       const errMsg =
         (err as { data?: { message?: string } }).data?.message ?? err.message ?? "opencode LLM error"
+      if (fallbackReply) {
+        console.warn(
+          `[pipeline ${this.opts.accountId}] LLM 报错(${errMsg}),但 dispatcher 有 partial,返 partial 兜底`,
+        )
+        return fallbackReply
+      }
       throw new Error(errMsg)
     }
 
@@ -1340,7 +1363,11 @@ export class MessagePipeline {
         texts.push(p.text)
       }
     }
-    return texts.join("").trim()
+    // [review-followup #4] LLM 只用 tool / reasoning 无 text part 时 texts 为空,
+    // 改返 fallbackReply(如果有);仍空就走最末层 EMPTY_REPLY_FALLBACK 兜底链路。
+    const finalText = texts.join("").trim()
+    if (!finalText && fallbackReply) return fallbackReply
+    return finalText
   }
 
   /** 测试 / debug 入口:外部调用直接驱动 handle(传 ImMessageEvent 模拟飞书消息) */
