@@ -39,6 +39,9 @@ export type CatalogEntry = {
   model: string // 厂商模型 id
   displayName: string // 下拉显示名
   isDefault?: boolean // 该 capability 的缺省主模型
+  // FORK: 人类可读的踩坑/决策备注,随数据一起走 [feat: media-catalog-data-extract] 2026-06-01
+  // 抽数据到 catalog.data.json 后,原内联注释里有价值的部分落到这个字段保留。
+  note?: string
   params?: {
     sizes?: string[]
     voices?: string[]
@@ -48,173 +51,28 @@ export type CatalogEntry = {
   }
 }
 
-const ALIBABA = "通义万相"
+// providerKey 常量:auth.json 键名,判可用 + 取 key 用,dispatch.ts 依赖,保留导出。
+// 供应商显示名(原 ALIBABA / MINIMAX / XIAOMI 等常量)随数据搬进 catalog.data.json 后已无引用,移除。
+// [feat: media-catalog-data-extract] 2026-06-01
 export const ALIBABA_KEY = "alibaba-cn"
-
-// FORK: 第二家 provider 接入 [feat: media-gen-minimax] 2026-05-28
-const MINIMAX = "MiniMax"
-const MINIMAX_HAILUO = "MiniMax·海螺"
 // 对齐 opencode 上游 minimax auth 默认 id(配套 Coding Plan 套餐)
 export const MINIMAX_KEY = "minimax-cn-coding-plan"
-
-// FORK: 第三家 provider 接入 [feat: media-gen-xiaomi] 2026-05-28
-const XIAOMI = "小米 MiMo"
 // 对齐 opencode 上游 xiaomi auth id(配套 Token Plan 套餐)
 export const XIAOMI_KEY = "xiaomi-token-plan-cn"
 
-/** 内置目录(首批 = 阿里 8 模型,均已 probe 实测,详见 REQ-030 §0.4/§0.5) */
-export const BUILTIN_CATALOG: CatalogEntry[] = [
-  {
-    id: "alibaba-wanx2.1-t2i-turbo",
-    capability: "image",
-    provider: ALIBABA,
-    providerKey: ALIBABA_KEY,
-    model: "wanx2.1-t2i-turbo",
-    displayName: "通义万相·文生图(快)",
-    isDefault: true,
-    params: { sizes: ["1024*1024", "1280*720", "720*1280"] },
-  },
-  {
-    id: "alibaba-wanx2.1-t2i-plus",
-    capability: "image",
-    provider: ALIBABA,
-    providerKey: ALIBABA_KEY,
-    model: "wanx2.1-t2i-plus",
-    displayName: "通义万相·文生图(高清)",
-    params: { sizes: ["1024*1024", "1280*720", "720*1280"] },
-  },
-  {
-    id: "alibaba-qwen-image-edit",
-    capability: "image_edit",
-    provider: ALIBABA,
-    providerKey: ALIBABA_KEY,
-    model: "qwen-image-edit",
-    displayName: "通义万相·图片编辑",
-    isDefault: true,
-    params: { needFile: "image" },
-  },
-  {
-    id: "alibaba-wanx2.1-t2v-turbo",
-    capability: "video",
-    provider: ALIBABA,
-    providerKey: ALIBABA_KEY,
-    model: "wanx2.1-t2v-turbo",
-    displayName: "通义万相·文生视频",
-    isDefault: true,
-    params: { sizes: ["1280*720", "720*1280"] },
-  },
-  {
-    id: "alibaba-wanx2.1-i2v-turbo",
-    capability: "video_i2v",
-    provider: ALIBABA,
-    providerKey: ALIBABA_KEY,
-    model: "wanx2.1-i2v-turbo",
-    displayName: "通义万相·图生视频",
-    isDefault: true,
-    params: { needFile: "image" },
-  },
-  {
-    id: "alibaba-qwen-tts",
-    capability: "tts",
-    provider: "通义",
-    providerKey: ALIBABA_KEY,
-    model: "qwen-tts",
-    displayName: "通义·配音(qwen-tts)",
-    isDefault: true,
-    params: { voices: ["Cherry", "Serena", "Ethan", "Chelsie"] },
-  },
-  {
-    id: "alibaba-paraformer-v2",
-    capability: "asr",
-    provider: "通义",
-    providerKey: ALIBABA_KEY,
-    model: "paraformer-v2",
-    displayName: "通义·转写(paraformer-v2)",
-    isDefault: true,
-    params: { needFile: "audio" },
-  },
-  {
-    id: "alibaba-qwen-mt-turbo",
-    capability: "translate",
-    provider: "通义",
-    providerKey: ALIBABA_KEY,
-    model: "qwen-mt-turbo",
-    displayName: "通义·专业翻译(qwen-mt)",
-    isDefault: true,
-  },
-  // FORK: MiniMax 接入 — image-01 / Hailuo-02 / speech-02-turbo [feat: media-gen-minimax] 2026-05-28
-  {
-    id: "minimax-image-01",
-    capability: "image",
-    provider: MINIMAX,
-    providerKey: MINIMAX_KEY,
-    model: "image-01",
-    displayName: "MiniMax·文生图(image-01)",
-    // 不标 isDefault — 阿里 wanx2.1-t2i-turbo 已是默认,MiniMax 作为可选第二档
-    params: { sizes: ["1024*1024", "1280*720", "720*1280"] },
-  },
-  {
-    id: "minimax-hailuo-2.3",
-    capability: "video",
-    provider: MINIMAX_HAILUO,
-    providerKey: MINIMAX_KEY,
-    model: "MiniMax-Hailuo-2.3", // 2026-05-28 实测真实 API id(文档写 Hailuo-2.3 / Hailuo-2.3-Fast,实际带 MiniMax- 前缀)
-    displayName: "海螺·文生视频(Hailuo-2.3)",
-    params: { sizes: ["768P", "1080P"] },
-  },
-  {
-    id: "minimax-speech-2.8-hd",
-    capability: "tts",
-    provider: MINIMAX,
-    providerKey: MINIMAX_KEY,
-    // 2026-05-28 实测确认:Token Plan 走 -hd 后缀(speech-2.8-hd / 2.6-hd / 02-hd),-turbo 走积分计费。
-    // FAQ 原文:"Token Plan 支持的非语言模型包括: TTS HD (speech-2.8-hd / speech-2.6-hd / speech-02-hd)..."
-    model: "speech-2.8-hd",
-    displayName: "MiniMax·配音(speech-2.8-hd)",
-    params: { voices: ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
-  },
-  // FORK: 小米 MiMo 接入 — 3 档 TTS + Omni 当 ASR [feat: media-gen-xiaomi] 2026-05-28
-  // 限免:TTS 三档 Token Plan 不消耗额度;ASR 走 Omni(mimo-v2.5)消耗 1x token
-  {
-    id: "xiaomi-mimo-v2.5-tts",
-    capability: "tts",
-    provider: XIAOMI,
-    providerKey: XIAOMI_KEY,
-    model: "mimo-v2.5-tts",
-    displayName: "MiMo·配音(预设音色)",
-    // 不标 isDefault — 阿里 qwen-tts 已是默认,小米作为可选第三档
-    // voices 全集(probe 阶段查官方):中文 冰糖/茉莉/苏打/白桦/MimoDefault/DefaultZh,英文 Chloe/Mia/Milo/Dean/DefaultEn
-    params: { voices: ["茉莉", "冰糖", "苏打", "白桦", "Chloe", "Mia", "Milo", "Dean", "MimoDefault"] },
-  },
-  {
-    id: "xiaomi-mimo-v2.5-tts-voiceclone",
-    capability: "tts_clone",
-    provider: XIAOMI,
-    providerKey: XIAOMI_KEY,
-    model: "mimo-v2.5-tts-voiceclone",
-    displayName: "MiMo·语音克隆",
-    isDefault: true, // tts_clone capability 目前只此一家,自动是默认
-    params: { needFile: "audio" },
-  },
-  {
-    id: "xiaomi-mimo-v2.5-tts-voicedesign",
-    capability: "tts_design",
-    provider: XIAOMI,
-    providerKey: XIAOMI_KEY,
-    model: "mimo-v2.5-tts-voicedesign",
-    displayName: "MiMo·语音设计",
-    isDefault: true, // tts_design capability 目前只此一家
-    params: { voiceDesignHint: true },
-  },
-  {
-    id: "xiaomi-mimo-v2.5-asr",
-    capability: "asr",
-    provider: XIAOMI,
-    providerKey: XIAOMI_KEY,
-    // 用 Omni 当 ASR — mimo-v2.5-asr 直 model id 在 Token Plan 没暴露(probe 实测 "Not supported model")
-    model: "mimo-v2.5",
-    displayName: "MiMo·转写(Omni)",
-    // 不标 isDefault — 阿里 paraformer-v2 已是默认且更快(1-3s vs 此 7.8s)
-    params: { needFile: "audio" },
-  },
-]
+// FORK-BEGIN: 模型目录数据抽到 catalog.data.json [feat: media-catalog-data-extract] 2026-06-01
+// 阶段 1(数据/代码分层):BUILTIN_CATALOG 的"数据"部分移到同目录 catalog.data.json(纯数据,
+// 受 catalog.schema.json 约束,catalog-data.test.ts 校验),"代码/类型"留本文件。
+// 运行时读法不变:Bun.build 把 JSON 内联进单文件 plugin.js,这里 import 后原样导出。
+// 不在运行时做 schema 校验(保持与抽取前行为一致,零新增风险);校验在测试/打包期跑。
+// 完整背景:OPENCODE-PLAN/需求池/媒体模型适配-数据代码分层与开源registry.md
+//
+// 注:provider 显示名 / providerKey 在 JSON 里是字面量;ALIBABA / MINIMAX / XIAOMI 等常量
+// 仍保留导出(dispatch.ts 等依赖),只是数据本体不再引用它们。
+import catalogData from "./catalog.data.json"
+
+// JSON 的 capability/needFile 推断为 string,与 Capability/字面量联合类型不等价,
+// 经 catalog-data.test.ts 校验后用 unknown 跨过结构性差异。
+/** 内置目录(阿里 8 + MiniMax 3 + 小米 MiMo 4,均已 probe 实测,详见 REQ-030)。数据源:catalog.data.json */
+export const BUILTIN_CATALOG: CatalogEntry[] = catalogData as unknown as CatalogEntry[]
+// FORK-END

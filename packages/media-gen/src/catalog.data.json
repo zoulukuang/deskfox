@@ -1,0 +1,152 @@
+[
+  {
+    "id": "alibaba-wanx2.1-t2i-turbo",
+    "capability": "image",
+    "provider": "通义万相",
+    "providerKey": "alibaba-cn",
+    "model": "wanx2.1-t2i-turbo",
+    "displayName": "通义万相·文生图(快)",
+    "isDefault": true,
+    "params": { "sizes": ["1024*1024", "1280*720", "720*1280"] }
+  },
+  {
+    "id": "alibaba-wanx2.1-t2i-plus",
+    "capability": "image",
+    "provider": "通义万相",
+    "providerKey": "alibaba-cn",
+    "model": "wanx2.1-t2i-plus",
+    "displayName": "通义万相·文生图(高清)",
+    "params": { "sizes": ["1024*1024", "1280*720", "720*1280"] }
+  },
+  {
+    "id": "alibaba-qwen-image-edit",
+    "capability": "image_edit",
+    "provider": "通义万相",
+    "providerKey": "alibaba-cn",
+    "model": "qwen-image-edit",
+    "displayName": "通义万相·图片编辑",
+    "isDefault": true,
+    "params": { "needFile": "image" }
+  },
+  {
+    "id": "alibaba-wanx2.1-t2v-turbo",
+    "capability": "video",
+    "provider": "通义万相",
+    "providerKey": "alibaba-cn",
+    "model": "wanx2.1-t2v-turbo",
+    "displayName": "通义万相·文生视频",
+    "isDefault": true,
+    "params": { "sizes": ["1280*720", "720*1280"] }
+  },
+  {
+    "id": "alibaba-wanx2.1-i2v-turbo",
+    "capability": "video_i2v",
+    "provider": "通义万相",
+    "providerKey": "alibaba-cn",
+    "model": "wanx2.1-i2v-turbo",
+    "displayName": "通义万相·图生视频",
+    "isDefault": true,
+    "params": { "needFile": "image" }
+  },
+  {
+    "id": "alibaba-qwen-tts",
+    "capability": "tts",
+    "provider": "通义",
+    "providerKey": "alibaba-cn",
+    "model": "qwen-tts",
+    "displayName": "通义·配音(qwen-tts)",
+    "isDefault": true,
+    "params": { "voices": ["Cherry", "Serena", "Ethan", "Chelsie"] }
+  },
+  {
+    "id": "alibaba-paraformer-v2",
+    "capability": "asr",
+    "provider": "通义",
+    "providerKey": "alibaba-cn",
+    "model": "paraformer-v2",
+    "displayName": "通义·转写(paraformer-v2)",
+    "isDefault": true,
+    "params": { "needFile": "audio" }
+  },
+  {
+    "id": "alibaba-qwen-mt-turbo",
+    "capability": "translate",
+    "provider": "通义",
+    "providerKey": "alibaba-cn",
+    "model": "qwen-mt-turbo",
+    "displayName": "通义·专业翻译(qwen-mt)",
+    "isDefault": true
+  },
+  {
+    "id": "minimax-image-01",
+    "capability": "image",
+    "provider": "MiniMax",
+    "providerKey": "minimax-cn-coding-plan",
+    "model": "image-01",
+    "displayName": "MiniMax·文生图(image-01)",
+    "params": { "sizes": ["1024*1024", "1280*720", "720*1280"] },
+    "note": "不标 isDefault — 阿里 wanx2.1-t2i-turbo 已是默认,MiniMax 作为可选第二档。[feat: media-gen-minimax] 2026-05-28"
+  },
+  {
+    "id": "minimax-hailuo-2.3",
+    "capability": "video",
+    "provider": "MiniMax·海螺",
+    "providerKey": "minimax-cn-coding-plan",
+    "model": "MiniMax-Hailuo-2.3",
+    "displayName": "海螺·文生视频(Hailuo-2.3)",
+    "params": { "sizes": ["768P", "1080P"] },
+    "note": "model id 2026-05-28 实测:文档写 Hailuo-2.3 / Hailuo-2.3-Fast,实际 API 带 MiniMax- 前缀。"
+  },
+  {
+    "id": "minimax-speech-2.8-hd",
+    "capability": "tts",
+    "provider": "MiniMax",
+    "providerKey": "minimax-cn-coding-plan",
+    "model": "speech-2.8-hd",
+    "displayName": "MiniMax·配音(speech-2.8-hd)",
+    "params": { "voices": ["male-qn-qingse", "female-shaonv", "male-qn-jingying", "female-tianmei"] },
+    "note": "2026-05-28 实测:Token Plan 走 -hd 后缀(speech-2.8-hd / 2.6-hd / 02-hd),-turbo 走积分计费。FAQ:Token Plan 支持的非语言模型含 TTS HD。"
+  },
+  {
+    "id": "xiaomi-mimo-v2.5-tts",
+    "capability": "tts",
+    "provider": "小米 MiMo",
+    "providerKey": "xiaomi-token-plan-cn",
+    "model": "mimo-v2.5-tts",
+    "displayName": "MiMo·配音(预设音色)",
+    "params": { "voices": ["茉莉", "冰糖", "苏打", "白桦", "Chloe", "Mia", "Milo", "Dean", "MimoDefault"] },
+    "note": "限免:TTS 三档 Token Plan 不消耗额度。不标 isDefault — 阿里 qwen-tts 已是默认,小米作为可选第三档。voices 全集(probe 查官方):中文 冰糖/茉莉/苏打/白桦/MimoDefault/DefaultZh,英文 Chloe/Mia/Milo/Dean/DefaultEn。[feat: media-gen-xiaomi] 2026-05-28"
+  },
+  {
+    "id": "xiaomi-mimo-v2.5-tts-voiceclone",
+    "capability": "tts_clone",
+    "provider": "小米 MiMo",
+    "providerKey": "xiaomi-token-plan-cn",
+    "model": "mimo-v2.5-tts-voiceclone",
+    "displayName": "MiMo·语音克隆",
+    "isDefault": true,
+    "params": { "needFile": "audio" },
+    "note": "tts_clone capability 目前只此一家,自动是默认。Token Plan 限免不消耗额度。"
+  },
+  {
+    "id": "xiaomi-mimo-v2.5-tts-voicedesign",
+    "capability": "tts_design",
+    "provider": "小米 MiMo",
+    "providerKey": "xiaomi-token-plan-cn",
+    "model": "mimo-v2.5-tts-voicedesign",
+    "displayName": "MiMo·语音设计",
+    "isDefault": true,
+    "params": { "voiceDesignHint": true },
+    "note": "tts_design capability 目前只此一家。Token Plan 限免不消耗额度。"
+  },
+  {
+    "id": "xiaomi-mimo-v2.5-asr",
+    "capability": "asr",
+    "provider": "小米 MiMo",
+    "providerKey": "xiaomi-token-plan-cn",
+    "model": "mimo-v2.5",
+    "displayName": "MiMo·转写(Omni)",
+    "params": { "needFile": "audio" },
+    "note": "用 Omni(mimo-v2.5)当 ASR — mimo-v2.5-asr 直 model id 在 Token Plan 没暴露(probe 实测 Not supported model),消耗 1x token。不标 isDefault — 阿里 paraformer-v2 已是默认且更快(1-3s vs 此 7.8s)。⚠️ 关注:MiMo Omni 计划 2026-06-30 下线,需核实并迁移 V2.5 系新模型。"
+  }
+]
