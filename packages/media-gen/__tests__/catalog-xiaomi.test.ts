@@ -72,10 +72,10 @@ describe("新增 capability 类型 labels", () => {
   test("tts_design label = 语音设计", () => {
     expect(CAPABILITY_LABEL.tts_design).toBe("语音设计")
   })
-  test("既有 7 个 label 不动", () => {
+  test("既有 label 对齐真 UI(CREATION_MODES):tts=语音合成 / asr=语音识别 [feat: catalog-capability-label-sync]", () => {
     expect(CAPABILITY_LABEL.image).toBe("文生图")
-    expect(CAPABILITY_LABEL.tts).toBe("配音")
-    expect(CAPABILITY_LABEL.asr).toBe("转写")
+    expect(CAPABILITY_LABEL.tts).toBe("语音合成")
+    expect(CAPABILITY_LABEL.asr).toBe("语音识别")
     expect(CAPABILITY_LABEL.translate).toBe("专业翻译")
   })
 })
