@@ -1162,3 +1162,137 @@ describe("getSystemPrompt (feat: feishu-group-slash-command)", () => {
     expect(prompt).toContain("反问")
   })
 })
+
+// ============================================================
+// [feat: feishu-llm-timeout-surface] 2026-06-01
+// LLM 超时 / 空响应 surface — runOpencode throw 后用户拿到 friendly text
+// ============================================================
+// [bug-repro: bot 收到消息后 LLM 30 分钟超时静默丢弃 → 用户拿不到任何反馈]
+//
+// 旧行为(repro):dispatcher timeout 无 partial → resolve("") → runOpencode 返 "" →
+// handle() 拿到 finalText="" → console.warn + return,飞书侧 0 reply。
+// 新行为(fix):dispatcher reject → runOpencode throw → handle catch → sendFeishuText(
+// friendlyErrorReply(err)),用户在飞书收到 "⏱️ LLM 模型回复超时..." 类引导文案。
+
+describe("LLM 超时 / 空响应 surface (feat: feishu-llm-timeout-surface)", () => {
+  let tmpDir: string
+  let store: ChatSessionStore
+  let dispatcher: PromptDispatcher
+  let fakes: ReturnType<typeof makeNewCmdFakes>
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "llm-timeout-surface-test-"))
+    store = new ChatSessionStore(join(tmpDir, "sessions.json"))
+    dispatcher = new PromptDispatcher()
+    fakes = makeNewCmdFakes()
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  function buildPipeline(timeoutMs: number): MessagePipeline {
+    return new MessagePipeline({
+      account: makeAccount(),
+      accountId: "acc1",
+      opencodeClient: fakes.opencodeClient,
+      dispatcher,
+      chatSessionStore: store,
+      larkClient: fakes.larkClient,
+      promptTimeoutMs: timeoutMs,
+    })
+  }
+
+  test("[bug-repro] dispatcher timeout 无 partial → 用户收到 '⏱️ LLM 模型回复超时' 而非 0 reply", async () => {
+    // mock: promptAsync 永不完成 + messages 不会被走到(timeout 先 reject)
+    fakes.opencodeClient.session.create = async () => ({ data: { id: "ses_hang" } } as any)
+    fakes.opencodeClient.session.promptAsync = async () => {
+      // 模拟 LLM 完全 hang — 不返回也不抛
+      return await new Promise(() => {})
+    }
+    fakes.opencodeClient.session.messages = async () => ({ data: [] } as any)
+
+    const pipeline = buildPipeline(50) // 50ms 短超时,加速测试
+    await pipeline.testHandle(makeEvent({ content: JSON.stringify({ text: "hi" }) }))
+
+    // 关键断言:用户拿到了 friendly fallback,不是 0 reply
+    expect(fakes.sentTexts.length).toBeGreaterThanOrEqual(1)
+    const lastReply = fakes.sentTexts[fakes.sentTexts.length - 1]!.text
+    expect(lastReply).toContain("LLM 模型回复超时")
+    expect(lastReply).toContain("稍后重试")
+  })
+
+  test("dispatcher session.error → 用户收到 '❌ API key 可能无效' 类提示(不静默)", async () => {
+    fakes.opencodeClient.session.create = async () => ({ data: { id: "ses_err" } } as any)
+    fakes.opencodeClient.session.promptAsync = async () => {
+      // 模拟 provider 报 401 — opencode 把 error 通过 session.error event 推出
+      setTimeout(() => {
+        dispatcher.dispatch({
+          type: "session.error",
+          properties: {
+            sessionID: "ses_err",
+            error: { message: "401 invalid API key" },
+          },
+        })
+      }, 5)
+      return await new Promise(() => {})
+    }
+
+    const pipeline = buildPipeline(5000)
+    await pipeline.testHandle(makeEvent({ content: JSON.stringify({ text: "hi" }) }))
+
+    expect(fakes.sentTexts.length).toBeGreaterThanOrEqual(1)
+    const lastReply = fakes.sentTexts[fakes.sentTexts.length - 1]!.text
+    expect(lastReply).toContain("API key 可能无效")
+  })
+
+  test("session.messages 返 data: [] 且 dispatcher 已 idle(无 partial) → 用户收到 '🤔 LLM 这轮没产出...' 提示", async () => {
+    fakes.opencodeClient.session.create = async () => ({ data: { id: "ses_empty" } } as any)
+    fakes.opencodeClient.session.promptAsync = async () => {
+      // 模拟 LLM 走到 idle 但完全没输出(罕见,但 dispatcher 累积空 part 时 collectText 为空)
+      setTimeout(() => {
+        dispatcher.dispatch({ type: "session.idle", properties: { sessionID: "ses_empty" } })
+      }, 5)
+      return await new Promise(() => {})
+    }
+    fakes.opencodeClient.session.messages = async () => ({ data: [] } as any)
+
+    const pipeline = buildPipeline(5000)
+    await pipeline.testHandle(makeEvent({ content: JSON.stringify({ text: "hi" }) }))
+
+    expect(fakes.sentTexts.length).toBeGreaterThanOrEqual(1)
+    const lastReply = fakes.sentTexts[fakes.sentTexts.length - 1]!.text
+    // "LLM 未产出" 关键字命中 no-useful 友好文案
+    expect(lastReply).toContain("LLM 这轮没产出")
+  })
+
+  test("dispatcher timeout 有 partial → 用户收到 partial(不抛错,保留现有 partial 兜底)", async () => {
+    fakes.opencodeClient.session.create = async () => ({ data: { id: "ses_partial" } } as any)
+    fakes.opencodeClient.session.promptAsync = async () => {
+      // 模拟 LLM 发了 part 但永不发 session.idle
+      setTimeout(() => {
+        dispatcher.dispatch({
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: "p1",
+              sessionID: "ses_partial",
+              type: "text",
+              text: "我说到一半被掐了。",
+            },
+          },
+        })
+      }, 5)
+      return await new Promise(() => {})
+    }
+    // session.messages 也返 [],强制走 timeout-partial 兜底分支
+    fakes.opencodeClient.session.messages = async () => ({ data: [] } as any)
+
+    const pipeline = buildPipeline(50)
+    await pipeline.testHandle(makeEvent({ content: JSON.stringify({ text: "hi" }) }))
+
+    expect(fakes.sentTexts.length).toBeGreaterThanOrEqual(1)
+    const lastReply = fakes.sentTexts[fakes.sentTexts.length - 1]!.text
+    expect(lastReply).toContain("我说到一半被掐了")
+  })
+})
