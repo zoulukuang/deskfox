@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://deskfox.ai/schemas/media-gen-catalog.schema.json",
+  "title": "DeskFox media-gen 模型目录",
+  "description": "[fork-only] 专业媒体模型目录(Layer 1)的可移植契约。catalog.data.json 必须满足本 schema。阶段 2 开源 registry 复用此 schema 做 PR 校验 CI。capability 枚举须与 catalog.ts 的 Capability / CAPABILITY_LABEL 保持一致(catalog-data.test.ts 自动防漂移)。",
+  "type": "array",
+  "items": { "$ref": "#/definitions/CatalogEntry" },
+  "definitions": {
+    "Capability": {
+      "type": "string",
+      "enum": [
+        "image",
+        "image_edit",
+        "video",
+        "video_i2v",
+        "tts",
+        "tts_clone",
+        "tts_design",
+        "asr",
+        "translate"
+      ]
+    },
+    "CatalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "capability", "provider", "providerKey", "model", "displayName"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "全局唯一,如 alibaba-wanx2.1-t2i-turbo"
+        },
+        "capability": { "$ref": "#/definitions/Capability" },
+        "provider": { "type": "string", "minLength": 1, "description": "供应商显示名" },
+        "providerKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "auth.json 键名,用于判可用 + 取 key"
+        },
+        "model": { "type": "string", "minLength": 1, "description": "厂商模型 id" },
+        "displayName": { "type": "string", "minLength": 1, "description": "下拉显示名" },
+        "isDefault": {
+          "type": "boolean",
+          "description": "该 capability 的缺省主模型"
+        },
+        "note": {
+          "type": "string",
+          "description": "人类可读的踩坑/决策备注(随数据一起走,供 registry 维护者参考)"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sizes": { "type": "array", "items": { "type": "string" } },
+            "voices": { "type": "array", "items": { "type": "string" } },
+            "needFile": {
+              "type": "string",
+              "enum": ["image", "audio"],
+              "description": "需素材(图片编辑/图生视频/转写/语音克隆)→ 输入框 + 高亮"
+            },
+            "voiceDesignHint": {
+              "type": "boolean",
+              "description": "VoiceDesign 用 — UI 显示声线描述输入框"
+            }
+          }
+        }
+      }
+    }
+  }
+}
