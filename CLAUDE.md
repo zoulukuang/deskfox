@@ -50,7 +50,9 @@
   - 加入 / 移出双清单靠 user 拍板;helper extract 模式正式承认 — 组件抽出的 helper 进 Logic 清单,原组件留 View 清单
   - View 清单硬门槛**等 e2e 基础设施 setup 后**生效(opencode sidecar 或前端 mock mode)
 - **测试 fail 绝不 retry / skip 一键掩盖** — flaky 测试 48 小时内修或移除
-- **第 1 期实施时机由 user 单独决定**,本规则现在落地但 pre-push hook 守门待第 1 期接入
+- **R8 测试用例清单**(2026-06-01):Medium+ 的 `1-spec.md` 必须**在动工前**列出逐条可勾选的测试用例(验什么 / 哪个层级 / 预期),运行时·native 风险点显式列入(对照"CDP 自测 ≠ 真桌面 QA")
+- **R9 分支内验收闸**(2026-06-01):开发完按 R8 清单跑全套 + 旧测试全绿、问题在 feat 分支内解决干净,**才向 user 提 merge**;`pre-push` 在 push 含 main 时跑 fork 包单元测试(media-gen/adapter-feishu-lark/app)作自动 backstop
+- **第 1 期实施时机由 user 单独决定**;`pre-push` 守门现状:typecheck(任何 push)+ fork 包单元测试 + Phase 1 e2e(后两者仅 push 含 main 时)
 
 完整规范:[`docs/governance/自动化测试规范.md`](docs/governance/自动化测试规范.md)
 长期规划(5 期分级 + KPI):[需求池](file:../OPENCODE-PLAN/需求池/自动化测试-长期规划.md)
@@ -198,6 +200,7 @@ grep `[feat: <id>]` 能反查到对应文档。
 
 ## 规范修订记录
 
+- **v3.2(2026-06-01)**:R5 新增 **R8 测试用例清单**(Medium+ spec 动工前列逐条用例)+ **R9 分支内验收闸**(按 R8 跑全绿、问题分支内解决,才问 merge);`pre-push` 接入 fork 包单元测试自动 backstop(media-gen/adapter-feishu-lark/app);删《自动化测试规范》流程里与三铁律矛盾的过时「ff merge dev → push」步骤。起源:catalog 数据/代码分层后才发现 UI 标签不一致,暴露"测试范围未在动工前定 + 绿了再 merge 未成硬门槛"。详见 `docs/governance/自动化测试规范.md` v5。 [feat: test-gate-and-spec-cases]
 - **v3.1(2026-05-07,选项 C)**:R5 决策 2 单清单 → **双清单**(Logic 行覆盖 80% + View e2e ≥ 1 happy path)。起源:D 系列实施(D1 / D2)发现 SolidJS 组件文件用 unit 测无意义,helper extract 模式自然形成。把这条结构性区分写进规则,长期防止 view layer 测试空白。详见 `docs/governance/自动化测试规范.md` v2 修订段。
 - **v3(2026-05-07)**:R5 测试纪律新增(决策 1/2/3/4/5 一次性固化)。新 feat 必带测试 + 修 bug 必先写复现测试 + 关键模块覆盖率 ≥ 80% + 70/20/10 金字塔比例 + Claude 自审起步。详见 `docs/governance/自动化测试规范.md`。**只定纪律不启动开发**,第 1 期实施时机由 user 单独决定。
 - **v2(2026-04-27)**:三文档分离(spec/plan/changelog 各自独立) + diff 阈值 200→500 + sprite/types 出黑名单 + commit message 加 `[feat: <feat-id>]` tag。理由见 `docs/features/规范-v2/1-spec.md`(略,首笔 v2 commit 同时落地)。
