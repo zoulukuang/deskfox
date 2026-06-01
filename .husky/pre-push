@@ -37,7 +37,30 @@ done
 
 if [ "$push_to_main" = "1" ] || [ "$FORCE_E2E_GATE" = "1" ]; then
   echo ""
-  echo "[pre-push] e2e gate — push 目标含 main(或 FORCE_E2E_GATE=1)"
+  echo "[pre-push] main gate — push 目标含 main(或 FORCE_E2E_GATE=1)"
+
+  # ----------------------------------------------------------
+  # FORK: fork 自家包单元测试闸(R5 决策 2「绿了再 merge」的自动 backstop)
+  # [feat: test-gate-and-spec-cases] 2026-06-01
+  #
+  # 只跑 fork 自家维护、且有 test script 的包(media-gen / adapter-feishu-lark / app),
+  # 不跑上游包(根 test 被故意禁;上游测试非我们维护,不该卡我们的 push)。
+  # 主闸是 agent 在 feat 分支按 spec 测试用例清单跑全绿才问 merge;这里是 push-main 的兜底。
+  # 实测耗时:media-gen ~1s / adapter-feishu-lark ~12s / app ~12s,合计 ~25s,可接受。
+  # 跳过:git push --no-verify(需 commit/改动日志加 [override-pre-push: 理由])。
+  # ----------------------------------------------------------
+  echo "[pre-push] 跑 fork 自家包单元测试(media-gen / adapter-feishu-lark / app)..."
+  fork_unit_fail=0
+  (cd packages/media-gen && bun test) || fork_unit_fail=1
+  (cd packages/adapter-feishu-lark && bun test) || fork_unit_fail=1
+  (cd packages/app && bun run test:unit) || fork_unit_fail=1
+  if [ "$fork_unit_fail" = "1" ]; then
+    echo ""
+    echo "❌ [pre-push] fork 单元测试 fail — push 被拦截"
+    echo "(在分支内修绿,或 git push --no-verify [override-pre-push: 理由] 跳过)"
+    exit 1
+  fi
+  echo "✅ [pre-push] fork 单元测试 all pass"
 
   if ! curl -s -o /dev/null --connect-timeout 2 http://127.0.0.1:3000/; then
     echo ""
