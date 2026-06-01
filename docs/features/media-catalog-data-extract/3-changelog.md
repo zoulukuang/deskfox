@@ -25,9 +25,19 @@ Medium(单一主题:数据/代码分层抽取;无行为变化的重构 + 测试)
 
 ## 回归测试
 
-- `bun run typecheck`(media-gen):pass。
+- `bun run typecheck`(全仓 turbo 全量):**17/17 successful**(下游类型不破)。
 - `bun test`(media-gen 全包):**140 pass / 0 fail**(原 128 + 新 12)。
 - `bun run build` 重建 `dist/plugin.js`:成功,验证标志值(`wanx2.1-t2i-turbo` / `mimo-v2.5-tts-voiceclone` / `MiniMax-Hailuo-2.3`)均内联,无 `require/import/readFileSync` 外部 json。
+
+## 运行时验证(CDP 自测,2026-06-01)
+
+按「CDP 自测 ≠ 真桌面 QA」原则补运行时 smoke,验证内联 JSON 的 catalog 在**真实边车**里加载正常(这是本改动唯一真风险:数据从 TS 数组改内联 JSON 后,sidecar 运行时行为是否一致)。
+
+- 流程:`build-deskfox.ps1 -Env dev -NoBundle` 出新 exe(media-gen 插件 staged 进 branding,grep 确认含新数据)→ 启动开 `--remote-debugging-port=9222` → `scripts/cdp-catalog-verify.ts` 遍历创作模式 9 档能力,逐档展开模型下拉收集 model id,与 catalog.data.json 比对。
+- 本机三家供应商全连(alibaba-cn / minimax-cn-coding-plan / xiaomi-token-plan-cn)。
+- **结果 PASS**:9 个创作能力档全在;15 个 model id 0 缺失;语音合成档三家齐(`qwen-tts` + `speech-2.8-hd` + `mimo-v2.5-tts`),语音识别档 `paraformer-v2` + `mimo-v2.5`(Omni)。
+- 新增验证脚本:`packages/media-gen/scripts/cdp-catalog-verify.ts`(可供阶段 2/3 重跑)。
+- 注:前端创作模式能力标签是独立副本(UI 显示「语音合成/语音识别」),与 catalog.ts `CAPABILITY_LABEL`(「配音/转写」)不同名 —— 本改动不涉及,记录备忘。
 
 ## commit
 
