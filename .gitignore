@@ -49,3 +49,7 @@ packages/branding/installer/*.lnk
 
 # FORK: Installer /LOG=<file> 写出的临时排查日志(每次 ship 产生新名字)2026-05-25
 .install-*.log
+
+# FORK: 运行时创作产物(用户媒体创作输出)+ app 测试报告产物(test:ci 生成的 junit),均可重建不入仓 2026-06-01
+/creations/
+packages/app/.artifacts/
