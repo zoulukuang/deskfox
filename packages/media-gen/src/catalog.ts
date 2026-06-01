@@ -19,15 +19,20 @@ export type Capability =
   | "asr"
   | "translate"
 
+// FORK: 标签对齐真 UI [feat: catalog-capability-label-sync] 2026-06-01
+// 用户可见的创作模式标签真相源在前端 `packages/app/src/components/media-creation-store.ts`
+// 的 CREATION_MODES;此处是插件侧 capability 集合的标签副本,值须与之一致(两端分属不同 package,
+// 暂以人工同步 + 此注释维系)。本次把掉队的 tts「配音」→「语音合成」、asr「转写」→「语音识别」
+// 对齐真 UI(插件 index.ts 工具描述早已用语音合成/语音识别,catalog 是最后一处旧词)。
 export const CAPABILITY_LABEL: Record<Capability, string> = {
   image: "文生图",
   image_edit: "图片编辑",
   video: "文生视频",
   video_i2v: "图生视频",
-  tts: "配音",
+  tts: "语音合成",
   tts_clone: "语音克隆",
   tts_design: "语音设计",
-  asr: "转写",
+  asr: "语音识别",
   translate: "专业翻译",
 }
 

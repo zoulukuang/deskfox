@@ -53,8 +53,9 @@ if (!modeTrig || (modeTrig as any).__exception) {
   ws.close(); process.exit(2)
 }
 
-// UI 模型下拉显示「厂商 model id」,UI 能力标签是前端独立副本(与 catalog.ts CAPABILITY_LABEL 不同名),
-// 所以:模型按 model id 比对;能力遍历直接用菜单里的实际标签(排除 Chat)。
+// UI 模型下拉显示「厂商 model id」;UI 能力标签真相源在前端 CREATION_MODES(catalog.ts CAPABILITY_LABEL
+// 是插件侧副本,已对齐同名,见 catalog-capability-label-sync)。为稳健,能力遍历仍直接用菜单实际标签
+// (排除 Chat),模型按 model id 比对。
 const expectedModelIds = [...new Set(BUILTIN_CATALOG.map((e) => e.model))]
 const catalogCapCount = new Set(BUILTIN_CATALOG.map((e) => e.capability)).size // 9
 
@@ -65,7 +66,7 @@ const modes = (await itemTexts()) as string[]
 await pressEscape(); await sleep(200)
 console.log("\n[模式/能力菜单] 实际:", JSON.stringify(modes))
 const creationModes = modes.filter((m) => m && m !== "Chat")
-console.log(`参考:catalog.ts CAPABILITY_LABEL = ${JSON.stringify(Object.values(CAPABILITY_LABEL))}(前端标签是独立副本,名称可不同)`)
+console.log(`参考:catalog.ts CAPABILITY_LABEL = ${JSON.stringify(Object.values(CAPABILITY_LABEL))}(已对齐前端 CREATION_MODES)`)
 
 // 2) 逐个能力 → 选中 → 展开模型下拉 → 收集模型名
 const seenModels = new Set<string>()
