@@ -9,6 +9,22 @@
 ---
 
 
+
+## [macOS] 2026.6.1.1 — 2026-06-01 18:33
+
+**主题**:🔏 **首个 Apple Developer ID 签名 + 公证的 macOS 包**(自 prod `2026.5.29.1` 以来)。下载双击直接打开,不再被 Gatekeeper 拦/报「已损坏」。
+
+**本次内容**:
+- **macOS 代码签名 + 公证落地**(feat `macos-codesign-notarize`):集成进 `build-deskfox.sh`,Tauri 自动签 sidecar+.app(Developer ID + Hardened Runtime + 时间戳)+ API Key 公证 + staple。⚠️ 公证当时本地 `--wait` 超时,苹果服务端后来 `Accepted`,已 `stapler staple` 补票据。
+- 创作模式 catalog 数据/代码分层 + 能力标签统一(feat `media-catalog-data-extract` / `catalog-capability-label-sync`)
+- 测试治理:R8 测试用例清单 + R9 分支内验收闸 + pre-push 单测 backstop(feat `test-gate-and-spec-cases`)
+- 工具:打包产物自动化验证脚本 A+B(feat `package-verify-script`)+ macOS `/ship` 一键发版命令(feat `macos-ship-命令`)
+
+**Release**:GitHub `ship-mac-prod-2026.6.1.1`(主仓 `zoulukuang/deskfox`)+ Gitee 镜像
+**installer**:`packages/desktop/src-tauri/target/release/bundle/dmg/DeskFox-2026.6.1.1_aarch64.dmg`(已签名+公证+钉票)
+**公证验证**:`stapler validate` ✅ / `spctl -a` = `Notarized Developer ID` ✅
+
+---
 ## [macOS] 2026.5.29.1 — 2026-05-29
 
 **主题**:多模态创作模式扩到三家 + Phase 2 Mac 真桌面 e2e 启用 + 桌面体验修复 + sortable bug 入需求池(自 prod `2026.5.28.1` 以来)
