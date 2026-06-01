@@ -169,6 +169,23 @@ bash "$SCRIPT_DIR/apply-icons.sh" -Env "$ENV"
 # === 1.5 注入 VITE_DESKFOX_ENV 让前端 logo.tsx Mark 组件按 env 选样式 ===
 export VITE_DESKFOX_ENV="$ENV"
 
+# === 1.8 (FORK) 代码签名配置:prod 构建若存在本地签名配置则启用 [feat: macos-codesign-notarize] 2026-06-01 ===
+# ~/.deskfox-signing/config.env 导出 APPLE_SIGNING_IDENTITY,Tauri bundler 自动识别并签名 sidecar + .app
+# (hardened runtime + entitlements.plist 均已就绪)。配置不存在(他人 clone / CI 无证书)则跳过,
+# 产出 unsigned 包,不报错。身份/公证 key 全部来自本机私密配置,绝不入仓(见 feedback_open_source_privacy)。
+SIGN_ENABLED=0
+NOTARIZE_OK=0
+if [[ "$ENV" == "prod" && -f "$HOME/.deskfox-signing/config.env" ]]; then
+    # shellcheck disable=SC1090
+    source "$HOME/.deskfox-signing/config.env"
+    if [[ -n "$APPLE_SIGNING_IDENTITY" ]]; then
+        SIGN_ENABLED=1
+        echo "[deskfox] 代码签名已启用:$APPLE_SIGNING_IDENTITY"
+    fi
+else
+    echo "[deskfox] 未启用代码签名(非 prod 或无 ~/.deskfox-signing/config.env)"
+fi
+
 # === 2. tauri build ===
 BUILD_EXIT=0
 (
@@ -230,6 +247,31 @@ if [[ "$BUILD_EXIT" -eq 0 ]]; then
     done
 fi
 
+# === 3.6 (FORK) 公证 + 钉票(仅 prod + 已签名 + Darwin + 出了 .dmg)[feat: macos-codesign-notarize] 2026-06-01 ===
+# Tauri build 已用 Developer ID 签好 .app + .dmg,这里把 .dmg 提交苹果公证并 staple 票据。
+# 公证一律用直接 API Key(--key/--key-id/--issuer),不用 --keychain-profile:
+# 非交互 shell 读钥匙串会报 "User interaction is not allowed"(2026-05-29 实测)。
+if [[ "$BUILD_EXIT" -eq 0 && "$SIGN_ENABLED" -eq 1 && "$(uname -s)" == "Darwin" ]]; then
+    DMG_DIR="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/dmg"
+    DMG=$(ls "$DMG_DIR"/*.dmg 2>/dev/null | head -1)
+    if [[ -n "$DMG" && -f "$DMG" ]]; then
+        echo "[deskfox] 提交公证(5-15 min,偶发更久):$(basename "$DMG")"
+        if xcrun notarytool submit "$DMG" \
+             --key "$DESKFOX_NOTARY_KEY" \
+             --key-id "$DESKFOX_NOTARY_KEY_ID" \
+             --issuer "$DESKFOX_NOTARY_ISSUER" \
+             --wait --timeout 30m; then
+            xcrun stapler staple "$DMG"
+            NOTARIZE_OK=1
+            echo "[deskfox] ✅ 公证 + 钉票完成:$(basename "$DMG")"
+        else
+            echo "[deskfox] ⚠️ 公证失败,产出的是已签名但未公证的 .dmg(Sequoia 仍会拦)" >&2
+        fi
+    else
+        echo "[deskfox] 未找到 .dmg,跳过公证" >&2
+    fi
+fi
+
 # === 4. 提示产物路径 ===
 echo ""
 case "$(uname -s)" in
@@ -263,8 +305,16 @@ case "$(uname -s)" in
             fi
         fi
         echo ""
-        echo "macOS Gatekeeper(不签名):首次打开 → 右键 .app → 打开 → 仍要打开"
-        echo "或彻底去 quarantine:xattr -cr \"$APP_PATH\""
+        # FORK: 签名时提示已公证可直接打开,否则给未签名绕过指引 [feat: macos-codesign-notarize] 2026-06-01
+        if [[ "${SIGN_ENABLED:-0}" -eq 1 && "${NOTARIZE_OK:-0}" -eq 1 ]]; then
+            echo "✅ 已 Developer ID 签名 + 公证 — 用户下载双击直接打开,无 Gatekeeper 拦截"
+        elif [[ "${SIGN_ENABLED:-0}" -eq 1 ]]; then
+            echo "⚠️ 已 Developer ID 签名,但公证未完成(苹果侧超时/故障)— Sequoia 仍可能拦"
+            echo "   待苹果服务恢复后单独补公证:bash ~/.deskfox-signing/3-notarize.sh \"<已签名.dmg>\""
+        else
+            echo "macOS Gatekeeper(未签名):首次打开 → 右键 .app → 打开 → 仍要打开"
+            echo "或彻底去 quarantine:xattr -cr \"$APP_PATH\""
+        fi
         ;;
     Linux)
         BIN_PATH="$REPO_ROOT/packages/desktop/src-tauri/target/release/DeskFox"
