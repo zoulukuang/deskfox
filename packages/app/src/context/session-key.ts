@@ -3,7 +3,7 @@
 // sessionKey 形如 `${dir}` 或 `${dir}/${sessionId}`(dir 为 base64)。文件 tab 按「项目 dir」段存储:
 // 同项目不同会话(dir/idA、dir/idB)→ 同一 key → 共享一套文件 tab,切会话不变;
 // 切项目(dirA、dirB)→ 不同 key → 各自一套。
-export const projectTabKey = (sessionKey: string) => sessionKey.split("/")[0] || sessionKey
+export const projectTabKey = (sessionKey: string) => sessionKey.split("/")[0]
 
 // 项目级文件 tab:打开的文件列表 + 当前选中的文件 tab。
 export type ProjectTabs = { all: string[]; active?: string }

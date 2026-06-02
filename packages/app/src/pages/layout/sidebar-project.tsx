@@ -130,7 +130,6 @@ const ProjectTile = (props: {
 
 export const SortableProject = (props: {
   project: LocalProject
-  mobile?: boolean
   ctx: ProjectSidebarContext
   sortNow: Accessor<number>
 }): JSX.Element => {

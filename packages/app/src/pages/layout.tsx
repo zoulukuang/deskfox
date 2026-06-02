@@ -153,7 +153,6 @@ export default function Layout(props: ParentProps) {
     autoselect: !initialDirectory,
     busyWorkspaces: {} as Record<string, boolean>,
     scrollSessionKey: undefined as string | undefined,
-    nav: undefined as HTMLElement | undefined,
     sortNow: Date.now(),
     sizing: false,
   })
@@ -2237,7 +2236,7 @@ export default function Layout(props: ParentProps) {
       mobile={mobile}
       projects={projects}
       renderProject={(project) => (
-        <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
+        <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} />
       )}
       handleDragStart={handleDragStart}
       handleDragEnd={handleDragEnd}
