@@ -53,6 +53,6 @@ onOpenHelp={() => platform.openLink("https://deskfox.ai/#community")}
 
 - **「帮助 → 文档」(`menu.ts:169` `opencode.ai/docs` + i18n 文案「OpenCode 文档」)用户决定暂不动**,留待 DeskFox 文档站就绪后再改。
 - 两处上游文件改动均加 FORK marker(menu.ts 支持论坛单行 marker + 反馈/报错 FORK-BEGIN/END;error.tsx 单行 marker)。
-- **遗留 UI 小瑕疵**:error.tsx 反馈按钮仍配 discord 图标 + `error.page.report.discord` 文案,链接已改 GitHub —— icon/文案是否同步调整待用户定(本次只按要求改链接)。
-- 规模:Follow-up Tiny,2 上游文件 4 处 URL / typecheck 17/17 全过 / 0 R4。
+- **图标 + 文案同步去 discord 化**(用户追加要求):error.tsx 反馈按钮图标 `discord` → `github`;文案 i18n 全 19 locale 两个 key 行定位替换 —— `error.page.report.prefix` 里 `OpenCode` → `DeskFox`(顺修 brand leak)、`error.page.report.discord` value `Discord`/`Discord 上` 等 → `GitHub`(key 名保留不影响显示)。i18n parity + completeness 9 pass。
+- 规模:Follow-up Tiny,2 上游文件 4 处 URL + 1 图标 + 19 locale × 2 文案行 / typecheck 17/17 / i18n 9 pass / 0 R4。
 - 回退:`git revert` follow-up commit。

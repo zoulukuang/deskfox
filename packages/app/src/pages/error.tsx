@@ -322,7 +322,8 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
               onClick={() => platform.openLink("https://github.com/zoulukuang/deskfox/issues/new")}
             >
               <div>{language.t("error.page.report.discord")}</div>
-              <Icon name="discord" class="text-text-interactive-base" />
+              {/* FORK: 反馈渠道改 GitHub Issues,图标随之 discord → github 2026-06-02 */}
+              <Icon name="github" class="text-text-interactive-base" />
             </button>
           </div>
           <Show when={platform.version}>
