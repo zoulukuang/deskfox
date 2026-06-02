@@ -1723,3 +1723,181 @@ describe("LLM 超时 / 空响应 surface (feat: feishu-llm-timeout-surface)", ()
     expect(messagesCalled).toBe(0)
   })
 })
+
+// ============================================================
+// REQ-035 文件消息 handleFileMessage 集成测(F10-F13)
+// FORK: feishu-file-and-quote-recv 2026-06-02
+// ============================================================
+
+describe("REQ-035 文件消息接收(F10-F13)", () => {
+  let tmpDir: string
+  let store: ChatSessionStore
+  let dispatcher: PromptDispatcher
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "file-msg-test-"))
+    store = new ChatSessionStore(join(tmpDir, "sessions.json"))
+    dispatcher = new PromptDispatcher()
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  /** 构造文件消息 event */
+  function makeFileEvent(
+    fileKey: string,
+    fileName: string,
+    overrides: Partial<ImMessageEvent> = {},
+  ): ImMessageEvent {
+    return makeEvent({
+      messageType: "file",
+      content: JSON.stringify({ file_key: fileKey, file_name: fileName }),
+      ...overrides,
+    })
+  }
+
+  /** 构造 larkClient + opencodeClient fakes 用于文件消息测试 */
+  function buildFilePipeline(opts: {
+    fileBytes?: Uint8Array
+    fetchThrows?: Error
+    promptResponse?: string
+  } = {}) {
+    const sentTexts: string[] = []
+    const capturedPromptTexts: string[] = []
+
+    const fileBytes = opts.fileBytes ?? new TextEncoder().encode("文件内容示例")
+    const originalFetch = globalThis.fetch
+
+    const larkClient = {
+      domain: "https://open.feishu.cn",
+      tokenManager: {
+        getTenantAccessToken: async (_o: object) => "fake_token",
+      },
+      im: {
+        v1: {
+          message: {
+            create: async (args: any) => {
+              sentTexts.push(JSON.parse(args.data.content).text)
+              return { data: { message_id: "om_reply" } }
+            },
+          },
+          messageReaction: { create: async () => ({ data: {} }) },
+        },
+      },
+    } as any
+
+    // fetch mock: 覆盖 downloadFileBuffer + getClientAuthContext 走的 tokenManager
+    const installFetchMock = () => {
+      globalThis.fetch = (async (input: any, _init?: any) => {
+        if (opts.fetchThrows) throw opts.fetchThrows
+        const url = typeof input === "string" ? input : String(input)
+        if (url.includes("/resources/")) {
+          // 文件下载 endpoint
+          return new Response(fileBytes.buffer as ArrayBuffer, {
+            status: 200,
+            headers: { "content-type": "application/octet-stream" },
+          })
+        }
+        throw new Error(`unexpected fetch: ${url}`)
+      }) as unknown as typeof fetch
+    }
+    const uninstallFetchMock = () => {
+      globalThis.fetch = originalFetch
+    }
+
+    const opencodeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_file" } }),
+        promptAsync: async (args: any) => {
+          capturedPromptTexts.push(args.body?.parts?.[0]?.text ?? "")
+          // 不发 idle,让测试只检测 promptAsync 被调用
+          return await new Promise(() => {})
+        },
+        messages: async () => ({
+          data: [
+            { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "file" }] },
+            {
+              info: { id: "a1", role: "assistant", parentID: "u1" },
+              parts: [
+                {
+                  type: "text",
+                  text: opts.promptResponse ?? "文件内容我已读取,请问有什么问题?",
+                },
+              ],
+            },
+          ],
+        }),
+        _client: { patch: async () => ({}) },
+      },
+    } as any
+
+    const pipeline = new MessagePipeline({
+      account: makeAccount(),
+      accountId: "acc1",
+      opencodeClient,
+      dispatcher,
+      chatSessionStore: store,
+      larkClient,
+    })
+
+    return { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock }
+  }
+
+  test("F13: file 消息类型不被 skip(进入 handleFileMessage)", async () => {
+    // 不支持格式 → 友好回复,不 skip(说明 type 门控通过了)
+    const { pipeline, sentTexts } = buildFilePipeline()
+    await pipeline.testHandle(makeFileEvent("fk_1", "image.png"))
+    // 应收到"暂不支持"提示,不是"skip unsupported message"静默丢弃
+    expect(sentTexts).toHaveLength(1)
+    expect(sentTexts[0]).toContain("暂不支持")
+    expect(sentTexts[0]).toContain("image.png")
+  })
+
+  test("F12: 不支持格式 → 友好回复,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts } = buildFilePipeline()
+    await pipeline.testHandle(makeFileEvent("fk_xlsx", "data.xlsx"))
+    expect(sentTexts).toHaveLength(1)
+    expect(sentTexts[0]).toContain("暂不支持")
+    expect(capturedPromptTexts).toHaveLength(0)
+  })
+
+  test("F12b: PDF 格式 → 友好回复引导转格式,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts } = buildFilePipeline()
+    await pipeline.testHandle(makeFileEvent("fk_pdf", "slides.pdf"))
+    expect(sentTexts.some((t) => t.includes("PDF"))).toBe(true)
+    expect(sentTexts.some((t) => t.includes(".txt") || t.includes(".docx"))).toBe(true)
+    expect(capturedPromptTexts).toHaveLength(0)
+  })
+
+  test("F10: txt 文件 → promptAsync 收到的 text 含文件内容", async () => {
+    const content = "这是文件里的内容"
+    const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fileBytes: new TextEncoder().encode(content) })
+    installFetchMock()
+    try {
+      void pipeline.testHandle(makeFileEvent("fk_txt", "note.txt"))
+      await new Promise((r) => setTimeout(r, 100))
+      expect(capturedPromptTexts).toHaveLength(1)
+      expect(capturedPromptTexts[0]).toContain("note.txt")
+      expect(capturedPromptTexts[0]).toContain("这是文件里的内容")
+      expect(capturedPromptTexts[0]).toContain("已读取")
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F11: 文件下载失败 → 友好回复,不 throw", async () => {
+    const { pipeline, sentTexts, installFetchMock, uninstallFetchMock } = buildFilePipeline({
+      fetchThrows: new Error("Connection refused"),
+    })
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_fail", "doc.txt"))
+      expect(sentTexts.some((t) => t.includes("没能下载"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("Connection refused"))).toBe(true)
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+})
