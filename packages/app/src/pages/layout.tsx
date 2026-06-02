@@ -51,7 +51,6 @@ import { usePermission } from "@/context/permission"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { retry } from "@opencode-ai/core/util/retry"
 import { playSoundById } from "@/utils/sound"
-import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
@@ -86,7 +85,7 @@ import {
   type WorkspaceSidebarContext,
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
-import { SidebarContent } from "./layout/sidebar-shell"
+import { SidebarContent, SidebarRail } from "./layout/sidebar-shell"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -153,13 +152,10 @@ export default function Layout(props: ParentProps) {
   const [state, setState] = createStore({
     autoselect: !initialDirectory,
     busyWorkspaces: {} as Record<string, boolean>,
-    hoverProject: undefined as string | undefined,
     scrollSessionKey: undefined as string | undefined,
     nav: undefined as HTMLElement | undefined,
     sortNow: Date.now(),
     sizing: false,
-    peek: undefined as string | undefined,
-    peeked: false,
   })
 
   const editor = createInlineEditorController()
@@ -177,7 +173,6 @@ export default function Layout(props: ParentProps) {
     )
   }
   const isBusy = (directory: string) => !!state.busyWorkspaces[pathKey(directory)]
-  const navLeave = { current: undefined as number | undefined }
   const sortNow = () => state.sortNow
   let sizet: number | undefined
   let sortNowInterval: ReturnType<typeof setInterval> | undefined
@@ -189,39 +184,19 @@ export default function Layout(props: ParentProps) {
     60_000 - (Date.now() % 60_000),
   )
 
-  const aim = createAim({
-    enabled: () => !layout.sidebar.opened(),
-    active: () => state.hoverProject,
-    el: () => state.nav?.querySelector<HTMLElement>("[data-component='sidebar-rail']") ?? state.nav,
-    onActivate: (directory) => {
-      globalSync.child(directory)
-      setState("hoverProject", directory)
-    },
-  })
-
   onCleanup(() => {
     dialogDead = true
     dialogRun += 1
-    if (navLeave.current !== undefined) clearTimeout(navLeave.current)
     clearTimeout(sortNowTimeout)
     if (sortNowInterval) clearInterval(sortNowInterval)
     if (sizet !== undefined) clearTimeout(sizet)
-    if (peekt !== undefined) clearTimeout(peekt)
-    aim.reset()
   })
 
   onMount(() => {
     const stop = () => setState("sizing", false)
-    const blur = () => reset()
-    const hide = () => {
-      if (document.visibilityState !== "hidden") return
-      reset()
-    }
     makeEventListener(window, "pointerup", stop)
     makeEventListener(window, "pointercancel", stop)
     makeEventListener(window, "blur", stop)
-    makeEventListener(window, "blur", blur)
-    makeEventListener(document, "visibilitychange", hide)
   })
 
   // FORK: window close 时 Tauri 发 "deskfox-flush-before-close" event,这里转成 DOM custom event
@@ -240,75 +215,9 @@ export default function Layout(props: ParentProps) {
     onCleanup(() => unlisten?.())
   })
 
-  const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
-  const sidebarExpanded = createMemo(() => layout.sidebar.opened() || sidebarHovering())
-  const setHoverProject = (value: string | undefined) => {
-    setState("hoverProject", value)
-    if (value !== undefined) return
-    aim.reset()
-  }
-  const clearHoverProjectSoon = () => queueMicrotask(() => setHoverProject(undefined))
-
-  const disarm = () => {
-    if (navLeave.current === undefined) return
-    clearTimeout(navLeave.current)
-    navLeave.current = undefined
-  }
-
-  const reset = () => {
-    disarm()
-    setHoverProject(undefined)
-  }
-
-  const arm = () => {
-    if (layout.sidebar.opened()) return
-    if (state.hoverProject === undefined) return
-    disarm()
-    navLeave.current = window.setTimeout(() => {
-      navLeave.current = undefined
-      setHoverProject(undefined)
-    }, 300)
-  }
-
-  let peekt: number | undefined
-
-  const hoverProjectData = createMemo(() => {
-    const id = state.hoverProject
-    if (!id) return
-    return layout.projects.list().find((project) => project.worktree === id)
-  })
-
-  const peekProject = createMemo(() => {
-    const id = state.peek
-    if (!id) return
-    return layout.projects.list().find((project) => project.worktree === id)
-  })
-
-  createEffect(() => {
-    const p = hoverProjectData()
-    if (p) {
-      if (peekt !== undefined) {
-        clearTimeout(peekt)
-        peekt = undefined
-      }
-      setState("peek", p.worktree)
-      setState("peeked", true)
-      return
-    }
-
-    setState("peeked", false)
-    if (state.peek === undefined) return
-    if (peekt !== undefined) clearTimeout(peekt)
-    peekt = window.setTimeout(() => {
-      peekt = undefined
-      setState("peek", undefined)
-    }, 180)
-  })
-
-  createEffect(() => {
-    if (!layout.sidebar.opened()) return
-    setHoverProject(undefined)
-  })
+  // FORK: REQ-041 — 删除 hover 预览/鼠标瞄准(aim)/自动折叠状态机;图标条与会话栏解耦后
+  // sidebarExpanded 仅由顶部 sidebar.toggle 控制(不再有 hover 临时展开)。2026-06-02
+  const sidebarExpanded = createMemo(() => layout.sidebar.opened())
 
   createEffect(() => {
     if (!state.autoselect) return
@@ -325,13 +234,8 @@ export default function Layout(props: ParentProps) {
   const setEditor = editor.setEditor
   const InlineEditor = editor.InlineEditor
 
-  const clearSidebarHoverState = () => {
-    if (layout.sidebar.opened()) return
-    reset()
-  }
-
+  // FORK: REQ-041 — hover 状态已删,此前 navigate 时清 hover 的逻辑随之取消 2026-06-02
   const navigateWithSidebarReset = (href: string) => {
-    clearSidebarHoverState()
     navigate(href)
     layout.mobileSidebar.hide()
   }
@@ -1854,7 +1758,6 @@ export default function Layout(props: ParentProps) {
   function handleDragStart(event: unknown) {
     const id = getDraggableId(event)
     if (!id) return
-    setHoverProject(undefined)
     setStore("activeProject", id)
   }
 
@@ -1893,12 +1796,8 @@ export default function Layout(props: ParentProps) {
     return [...ordered, extra]
   }
 
-  const sidebarProject = createMemo(() => {
-    if (layout.sidebar.opened()) return currentProject()
-    const hovered = hoverProjectData()
-    if (hovered) return hovered
-    return currentProject()
-  })
+  // FORK: REQ-041 — 删 hover 预览后,侧栏面板恒为当前项目(不再因 hover 临时切预览项目)2026-06-02
+  const sidebarProject = createMemo(() => currentProject())
 
   function handleWorkspaceDragStart(event: unknown) {
     const id = getDraggableId(event)
@@ -1935,7 +1834,6 @@ export default function Layout(props: ParentProps) {
   }
 
   const createWorkspace = async (project: LocalProject) => {
-    clearSidebarHoverState()
     const created = await globalSDK.client.worktree
       .create({ directory: project.worktree })
       .then((x) => x.data)
@@ -1978,8 +1876,10 @@ export default function Layout(props: ParentProps) {
     currentDir,
     navList: currentSessions,
     sidebarExpanded,
-    sidebarHovering,
-    clearHoverProjectSoon,
+    // FORK: REQ-041 — hover 机制已删,这两个 context 字段保留签名但恒定置空(下游 sidebar-workspace
+    // / sidebar-items 仍引用,故不连锁改其接口)2026-06-02
+    sidebarHovering: () => false,
+    clearHoverProjectSoon: () => {},
     prefetchSession,
     archiveSession,
     workspaceName,
@@ -2001,21 +1901,11 @@ export default function Layout(props: ParentProps) {
     },
   }
 
+  // FORK: REQ-041 — 精简接口,删去全部 hover/peek/aim 相关字段(图标条只切项目)2026-06-02
   const projectSidebarCtx: ProjectSidebarContext = {
     currentDir,
     currentProject,
-    sidebarOpened: () => layout.sidebar.opened(),
-    sidebarHovering,
-    hoverProject: () => state.hoverProject,
-    onProjectMouseEnter: (worktree, event) => aim.enter(worktree, event),
-    onProjectMouseLeave: (worktree) => aim.leave(worktree),
-    onProjectFocus: (worktree) => aim.activate(worktree),
-    onHoverOpenChanged: (worktree, hoverOpen) => {
-      if (!hoverOpen && state.hoverProject && state.hoverProject !== worktree) return
-      setState("hoverProject", hoverOpen ? worktree : undefined)
-    },
     navigateToProject,
-    openSidebar: () => layout.sidebar.open(),
     closeProject,
     showEditProjectDialog,
     toggleProjectWorkspaces,
@@ -2025,7 +1915,7 @@ export default function Layout(props: ParentProps) {
     sessionProps: {
       navList: currentSessions,
       sidebarExpanded,
-      clearHoverProjectSoon,
+      clearHoverProjectSoon: () => {},
       prefetchSession,
       archiveSession,
     },
@@ -2080,10 +1970,10 @@ export default function Layout(props: ParentProps) {
     return (
       <div
         classList={{
-          // FORK: 镜像翻转 — 会话面板靠右,圆角/边框接缝翻到右侧 2026-06-02
-          "flex flex-col min-h-0 min-w-0 box-border rounded-tr-[12px] px-3": true,
+          // FORK: REQ-041 — 会话面板锚最右、左缘接 main → 圆角/边框回左上(撤销 REQ-040 镜像)2026-06-02
+          "flex flex-col min-h-0 min-w-0 box-border rounded-tl-[12px] px-3": true,
           "border border-b-0 border-border-weak-base": !merged(),
-          "border-r border-t border-border-weaker-base": merged(),
+          "border-l border-t border-border-weaker-base": merged(),
           "bg-background-base": merged() || hover(),
           "bg-background-stronger": !merged() && !hover(),
           "flex-1 min-w-0": panelProps.mobile,
@@ -2147,7 +2037,7 @@ export default function Layout(props: ParentProps) {
                     </Tooltip>
                   </div>
 
-                  <DropdownMenu modal={!sidebarHovering()}>
+                  <DropdownMenu modal>
                     <DropdownMenu.Trigger
                       as={IconButton}
                       icon="dot-grid"
@@ -2341,11 +2231,10 @@ export default function Layout(props: ParentProps) {
 
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
-  const sidebarContent = (mobile?: boolean) => (
-    <SidebarContent
+  // FORK-BEGIN: REQ-041 — 图标条(SidebarRail)独立渲染;桌面端单独锚最左,移动端合并进抽屉 2026-06-02
+  const sidebarRail = (mobile?: boolean) => (
+    <SidebarRail
       mobile={mobile}
-      opened={() => layout.sidebar.opened()}
-      aimMove={aim.move}
       projects={projects}
       renderProject={(project) => (
         <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
@@ -2362,11 +2251,13 @@ export default function Layout(props: ParentProps) {
       onOpenSettings={openSettings}
       helpLabel={() => language.t("sidebar.help")}
       onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
-      renderPanel={() =>
-        mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
-      }
     />
   )
+
+  const mobileSidebarContent = () => (
+    <SidebarContent rail={sidebarRail(true)} renderPanel={() => <SidebarPanel project={currentProject} mobile />} />
+  )
+  // FORK-END
 
   return (
     <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
@@ -2375,39 +2266,38 @@ export default function Layout(props: ParentProps) {
       <div class="flex-1 min-h-0 min-w-0 flex">
         <div class="flex-1 min-h-0 relative">
           <div class="size-full relative overflow-x-hidden">
+            {/* FORK-BEGIN: REQ-041 桌面五栏 — 图标条锚最左 / 会话面板锚最右 / main 夹中间,三块解耦 2026-06-02 */}
+            {/* 图标条:固定最左 64px,纯切项目(无 hover 预览 / 无折叠联动)*/}
             <nav
               aria-label={language.t("sidebar.nav.projectsAndSessions")}
               data-component="sidebar-nav-desktop"
-              classList={{
-                "hidden xl:block": true,
-                // FORK: 镜像翻转 — 侧栏(图标条+会话列表)整体平移到最右 2026-06-02
-                "absolute inset-y-0 right-0": true,
-                "z-10": true,
-              }}
-              style={{ width: `${side()}px` }}
-              ref={(el) => {
-                setState("nav", el)
-              }}
-              onMouseEnter={() => {
-                disarm()
-              }}
-              onMouseLeave={() => {
-                aim.reset()
-                if (!sidebarHovering()) return
-
-                arm()
-              }}
+              class="hidden xl:block absolute inset-y-0 left-0 z-10 w-16"
             >
-              <div class="@container w-full h-full contain-strict">{sidebarContent()}</div>
+              <div class="@container w-full h-full contain-strict">{sidebarRail()}</div>
             </nav>
 
+            {/* 会话面板:锚最右,仅展开时占位(收起 width=0);开合只由顶部 sidebar.toggle 控制 */}
+            <div
+              data-component="sidebar-session-panel"
+              aria-hidden={!layout.sidebar.opened()}
+              inert={!layout.sidebar.opened()}
+              classList={{
+                "hidden xl:block absolute inset-y-0 right-0 z-10 overflow-hidden": true,
+                "transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+                  !state.sizing,
+              }}
+              style={{ width: layout.sidebar.opened() ? `${panel()}px` : "0px" }}
+            >
+              <div class="@container h-full contain-strict" style={{ width: `${panel()}px` }}>
+                <SidebarPanel project={currentProject} merged />
+              </div>
+            </div>
+
+            {/* resize 手柄:会话面板左缘 */}
             <Show when={layout.sidebar.opened()}>
               <div
                 class="hidden xl:block absolute inset-y-0 z-30 w-0 overflow-visible"
-                style={{
-                  // FORK: 镜像翻转 — 侧栏在右,resize 手柄锚定其左边界(right 替 left) 2026-06-02
-                  right: `${side()}px`,
-                }}
+                style={{ right: `${panel()}px` }}
                 onPointerDown={() => setState("sizing", true)}
               >
                 <ResizeHandle
@@ -2426,12 +2316,10 @@ export default function Layout(props: ParentProps) {
               </div>
             </Show>
 
+            {/* 顶部边框辅助条:图标条右侧(64+12)到屏幕右缘 */}
             <div
-              class="hidden xl:block pointer-events-none absolute top-0 left-0 z-0 border-t border-border-weaker-base"
-              style={{
-                // FORK: 镜像翻转 — 顶部边框辅助条镜像(图标条改在右,留白从右起) 2026-06-02
-                right: "calc(4rem + 12px)",
-              }}
+              class="hidden xl:block pointer-events-none absolute top-0 right-0 z-0 border-t border-border-weaker-base"
+              style={{ left: "calc(4rem + 12px)" }}
             />
 
             <div class="xl:hidden">
@@ -2455,77 +2343,34 @@ export default function Layout(props: ParentProps) {
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {sidebarContent(true)}
+                {mobileSidebarContent()}
               </nav>
             </div>
 
+            {/* main:左固定 64(图标条)+ 右留会话面板宽(收起则 0)*/}
             <div
               classList={{
                 "absolute inset-0": true,
-                // FORK: 镜像翻转 — 主区锚定左侧,留白(--main-left)改记到 right;过渡属性随之 left→right 2026-06-02
-                "xl:inset-y-0 xl:left-0 xl:right-[var(--main-left)]": true,
+                "xl:inset-y-0 xl:left-16 xl:right-[var(--main-right)]": true,
                 "z-20": true,
                 "transition-[right] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[right] motion-reduce:transition-none":
                   !state.sizing,
               }}
               style={{
-                "--main-left": layout.sidebar.opened() ? `${side()}px` : "4rem",
+                "--main-right": layout.sidebar.opened() ? `${panel()}px` : "0px",
               }}
             >
-              <main
-                classList={{
-                  // FORK: 镜像翻转 — 主区与侧栏接缝在右,边框/圆角翻到右上角 2026-06-02
-                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-r xl:rounded-tr-[12px]": true,
-                }}
-              >
+              <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]">
                 <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
                   {props.children}
                 </Show>
               </main>
             </div>
-
-            <div
-              classList={{
-                // FORK: 镜像翻转 — peek 项目预览贴在右侧图标条内侧,滑入方向从右起 2026-06-02
-                "hidden xl:flex absolute inset-y-0 right-16 z-30": true,
-                "opacity-100 translate-x-0 pointer-events-auto": state.peeked && !layout.sidebar.opened(),
-                "opacity-0 translate-x-2 pointer-events-none": !state.peeked || layout.sidebar.opened(),
-                "transition-[opacity,transform] motion-reduce:transition-none": true,
-                "duration-180 ease-out": state.peeked && !layout.sidebar.opened(),
-                "duration-120 ease-in": !state.peeked || layout.sidebar.opened(),
-              }}
-              onMouseMove={disarm}
-              onMouseEnter={() => {
-                disarm()
-                aim.reset()
-              }}
-              onPointerDown={disarm}
-              onMouseLeave={() => {
-                arm()
-              }}
-            >
-              <Show when={peekProject()}>
-                <SidebarPanel project={peekProject} merged={false} />
-              </Show>
-            </div>
-
-            <div
-              classList={{
-                // FORK: 镜像翻转 — peek 阴影缝改贴左侧(peek 在右,阴影在其左边界) 2026-06-02
-                "hidden xl:block pointer-events-none absolute inset-y-0 left-0 z-25 overflow-hidden": true,
-                "opacity-100 translate-x-0": state.peeked && !layout.sidebar.opened(),
-                "opacity-0 translate-x-2": !state.peeked || layout.sidebar.opened(),
-                "transition-[opacity,transform] motion-reduce:transition-none": true,
-                "duration-180 ease-out": state.peeked && !layout.sidebar.opened(),
-                "duration-120 ease-in": !state.peeked || layout.sidebar.opened(),
-              }}
-              style={{ right: `calc(4rem + ${panel()}px)` }}
-            >
-              <div class="h-full w-px" style={{ "box-shadow": "var(--shadow-sidebar-overlay)" }} />
-            </div>
+            {/* FORK-END */}
           </div>
         </div>
-        {import.meta.env.DEV && <DebugBar />}
+        {/* FORK: REQ-041 — e2e-mock 模式不渲染 dev 性能浮层(它 fixed 右下,会遮挡靠右下的 prompt-input 输入框致 e2e 点不到;release 无 DebugBar 不受影响)2026-06-02 */}
+        {import.meta.env.DEV && import.meta.env.MODE !== "e2e-mock" && <DebugBar />}
       </div>
       <Toast.Region />
     </div>

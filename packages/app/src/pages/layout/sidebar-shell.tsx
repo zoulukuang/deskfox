@@ -1,4 +1,4 @@
-import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
+import { For, Show, type Accessor, type JSX } from "solid-js"
 import {
   DragDropProvider,
   DragDropSensors,
@@ -12,10 +12,13 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { type LocalProject } from "@/context/layout"
 
-export const SidebarContent = (props: {
+// FORK-BEGIN: REQ-041 界面完整重排(图标栏锚左 + 解耦)2026-06-02
+// 图标条从「焊死在会话面板旁的 flex 兄弟」抽成独立组件 SidebarRail,桌面端由 layout
+// 单独绝对定位到屏幕最左(left-0 w-16),与会话面板(right-0)彻底隔离 —— 两者之间
+// 不再有 hover 预览 / 鼠标瞄准 / 图标控折叠 的任何联动。SidebarContent 仅保留给移动端
+// 抽屉(rail + panel 合并版)使用。
+interface SidebarRailProps {
   mobile?: boolean
-  opened: Accessor<boolean>
-  aimMove: (event: MouseEvent) => void
   projects: Accessor<LocalProject[]>
   renderProject: (project: LocalProject) => JSX.Element
   handleDragStart: (event: unknown) => void
@@ -30,98 +33,83 @@ export const SidebarContent = (props: {
   onOpenSettings: () => void
   helpLabel: Accessor<string>
   onOpenHelp: () => void
-  renderPanel: () => JSX.Element
-}): JSX.Element => {
-  const expanded = createMemo(() => !!props.mobile || props.opened())
-  // FORK: 镜像翻转 — 图标条移到屏幕最右,tooltip 改朝左弹否则被屏幕边缘截断 2026-06-02
-  const placement = () => (props.mobile ? "bottom" : "left")
-  let panel: HTMLDivElement | undefined
+}
 
-  createEffect(() => {
-    const el = panel
-    if (!el) return
-    if (expanded()) {
-      el.removeAttribute("inert")
-      return
-    }
-    el.setAttribute("inert", "")
-  })
+export const SidebarRail = (props: SidebarRailProps): JSX.Element => {
+  const placement = () => (props.mobile ? "bottom" : "right")
 
   return (
-    /* FORK: 镜像翻转 — flex-row-reverse 让图标条↔会话面板内部整体对调(图标条落最右) 2026-06-02 */
-    <div class="flex flex-row-reverse h-full w-full min-w-0 overflow-hidden">
-      <div
-        data-component="sidebar-rail"
-        class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"
-        onMouseMove={props.aimMove}
-      >
-        <div class="flex-1 min-h-0 w-full">
-          <DragDropProvider
-            onDragStart={props.handleDragStart}
-            onDragEnd={props.handleDragEnd}
-            onDragOver={props.handleDragOver}
-            collisionDetector={closestCenter}
-          >
-            <DragDropSensors />
-            <ConstrainDragXAxis />
-            <div class="h-full w-full flex flex-col items-center gap-3 px-3 py-3 overflow-y-auto no-scrollbar">
-              <SortableProvider ids={props.projects().map((p) => p.worktree)}>
-                <For each={props.projects()}>{(project) => props.renderProject(project)}</For>
-              </SortableProvider>
-              <Tooltip
-                placement={placement()}
-                value={
-                  <div class="flex items-center gap-2">
-                    <span>{props.openProjectLabel}</span>
-                    <Show when={!props.mobile && !!props.openProjectKeybind()}>
-                      <span class="text-icon-base text-12-medium">{props.openProjectKeybind()}</span>
-                    </Show>
-                  </div>
-                }
-              >
-                <IconButton
-                  icon="plus"
-                  variant="ghost"
-                  size="large"
-                  onClick={props.onOpenProject}
-                  aria-label={typeof props.openProjectLabel === "string" ? props.openProjectLabel : undefined}
-                />
-              </Tooltip>
-            </div>
-            <DragOverlay>{props.renderProjectOverlay()}</DragOverlay>
-          </DragDropProvider>
-        </div>
-        <div class="shrink-0 w-full pt-3 pb-6 flex flex-col items-center gap-2">
-          <TooltipKeybind placement={placement()} title={props.settingsLabel()} keybind={props.settingsKeybind() ?? ""}>
-            <IconButton
-              icon="settings-gear"
-              variant="ghost"
-              size="large"
-              onClick={props.onOpenSettings}
-              aria-label={props.settingsLabel()}
-            />
-          </TooltipKeybind>
-          <Tooltip placement={placement()} value={props.helpLabel()}>
-            <IconButton
-              icon="help"
-              variant="ghost"
-              size="large"
-              onClick={props.onOpenHelp}
-              aria-label={props.helpLabel()}
-            />
-          </Tooltip>
-        </div>
+    <div
+      data-component="sidebar-rail"
+      class="w-16 shrink-0 h-full bg-background-base flex flex-col items-center overflow-hidden"
+    >
+      <div class="flex-1 min-h-0 w-full">
+        <DragDropProvider
+          onDragStart={props.handleDragStart}
+          onDragEnd={props.handleDragEnd}
+          onDragOver={props.handleDragOver}
+          collisionDetector={closestCenter}
+        >
+          <DragDropSensors />
+          <ConstrainDragXAxis />
+          <div class="h-full w-full flex flex-col items-center gap-3 px-3 py-3 overflow-y-auto no-scrollbar">
+            <SortableProvider ids={props.projects().map((p) => p.worktree)}>
+              <For each={props.projects()}>{(project) => props.renderProject(project)}</For>
+            </SortableProvider>
+            <Tooltip
+              placement={placement()}
+              value={
+                <div class="flex items-center gap-2">
+                  <span>{props.openProjectLabel}</span>
+                  <Show when={!props.mobile && !!props.openProjectKeybind()}>
+                    <span class="text-icon-base text-12-medium">{props.openProjectKeybind()}</span>
+                  </Show>
+                </div>
+              }
+            >
+              <IconButton
+                icon="plus"
+                variant="ghost"
+                size="large"
+                onClick={props.onOpenProject}
+                aria-label={typeof props.openProjectLabel === "string" ? props.openProjectLabel : undefined}
+              />
+            </Tooltip>
+          </div>
+          <DragOverlay>{props.renderProjectOverlay()}</DragOverlay>
+        </DragDropProvider>
       </div>
-
-      <div
-        ref={(el) => {
-          panel = el
-        }}
-        classList={{ "flex-1 flex h-full min-h-0 min-w-0 overflow-hidden": true, "pointer-events-none": !expanded() }}
-        aria-hidden={!expanded()}
-      >
-        {props.renderPanel()}
+      <div class="shrink-0 w-full pt-3 pb-6 flex flex-col items-center gap-2">
+        <TooltipKeybind placement={placement()} title={props.settingsLabel()} keybind={props.settingsKeybind() ?? ""}>
+          <IconButton
+            icon="settings-gear"
+            variant="ghost"
+            size="large"
+            onClick={props.onOpenSettings}
+            aria-label={props.settingsLabel()}
+          />
+        </TooltipKeybind>
+        <Tooltip placement={placement()} value={props.helpLabel()}>
+          <IconButton
+            icon="help"
+            variant="ghost"
+            size="large"
+            onClick={props.onOpenHelp}
+            aria-label={props.helpLabel()}
+          />
+        </Tooltip>
       </div>
     </div>
   )
 }
+
+// 移动端抽屉:图标条 + 会话面板合并版(桌面端不再走这里,两块由 layout 各自独立定位)
+export const SidebarContent = (props: { rail: JSX.Element; renderPanel: () => JSX.Element }): JSX.Element => {
+  return (
+    <div class="flex h-full w-full min-w-0 overflow-hidden">
+      {props.rail}
+      <div class="flex-1 flex h-full min-h-0 min-w-0 overflow-hidden">{props.renderPanel()}</div>
+    </div>
+  )
+}
+// FORK-END
