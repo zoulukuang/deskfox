@@ -163,6 +163,71 @@ export function parseMessageContent(
   return { text: "", imageKey: null }
 }
 
+// FORK-BEGIN: REQ-036 引用/回复原文 2026-06-02
+/**
+ * 拉取飞书引用/回复的原消息文本。失败或取不到时返 null(调用方 graceful 降级)。
+ *
+ * 架构注意:本函数结果以 text part 注入用户消息,**非 system prompt**,因此对所有
+ * opencode agent(imbot / build / claude-code plugin 等)均有效,不依赖 system prompt
+ * 是否被 agent 读取。
+ *
+ * 消息类型映射:
+ *   text / post → 抽取文本;image(纯图无 caption)→ "[图片]"
+ *   file → "[文件:{file_name}]";其他 → "[{msg_type}]"
+ */
+export async function fetchParentMessageText(
+  parentId: string,
+  larkClient: Client,
+  timeoutMs = 10_000,
+): Promise<string | null> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    const h = setTimeout(() => reject(new Error("timeout")), timeoutMs)
+    if (typeof (h as { unref?: () => void }).unref === "function")
+      (h as { unref: () => void }).unref()
+  })
+  let response: unknown
+  try {
+    response = await Promise.race([
+      larkClient.im.v1.message.get({ path: { message_id: parentId } }),
+      timeoutPromise,
+    ])
+  } catch {
+    return null
+  }
+  const items = (
+    response as {
+      data?: { items?: Array<{ msg_type?: string; body?: { content?: string } }> }
+    }
+  )?.data?.items
+  const msg = items?.[0]
+  if (!msg) return null
+
+  const msgType = msg.msg_type ?? ""
+  const content = msg.body?.content ?? ""
+
+  if (msgType === "text" || msgType === "image" || msgType === "post") {
+    try {
+      const parsed = parseMessageContent(msgType, content)
+      if (parsed.text) return parsed.text
+      if (parsed.imageKey) return "[图片]"
+      return null
+    } catch {
+      return null
+    }
+  }
+  if (msgType === "file") {
+    try {
+      const parsed = JSON.parse(content) as { file_name?: string }
+      const name = parsed.file_name ? `:${parsed.file_name}` : ""
+      return `[文件${name}]`
+    } catch {
+      return "[文件]"
+    }
+  }
+  return msgType ? `[${msgType}]` : "[消息]"
+}
+// FORK-END
+
 /**
  * 飞书桥接专用 workspace directory — 所有 plugin 创建的 session 都在这个
  * 目录下,跟 user 主窗口的项目隔离。GUI sidebar 不会显示(因为 archive),
@@ -756,12 +821,32 @@ export class MessagePipeline {
       }
     }
 
+    // FORK-BEGIN: REQ-036 引用/回复原文注入 2026-06-02
+    // 架构说明:注入在 user message parts(text part),对所有 agent 均有效
+    // (包括 claude-code plugin 等不读 system prompt 的 plugin agent)。
+    let quotedContext: string | null = null
+    if (event.parentId) {
+      quotedContext = await fetchParentMessageText(event.parentId, this.larkClient).catch(
+        () => null,
+      )
+      if (quotedContext !== null) {
+        console.log(
+          `[pipeline ${this.opts.accountId}] quote parent=${event.parentId}: "${quotedContext.slice(0, 60)}"`,
+        )
+      }
+    }
+    const promptText =
+      quotedContext !== null
+        ? `[引用原文]\n${quotedContext}\n[/引用原文]\n\n${cleaned}`
+        : cleaned
+    // FORK-END
+
     let reply: string
     try {
       // [feat: feishu-llm-strip-mention-placeholders] 2026-05-24
       // 传 cleaned(已 strip @_user_N 飞书占位符)而非 raw text,避免 LLM 误把
       // 占位符当成另一个联系人(实测 bot reply 含"我不是 @_user_1..."类幻觉)。
-      reply = await this.runOpencode(sessionID, cleaned, this.opts.account.agent, {
+      reply = await this.runOpencode(sessionID, promptText, this.opts.account.agent, {
         imagePart,
         imageDownloadError,
       })

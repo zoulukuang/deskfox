@@ -29,7 +29,7 @@ export interface ImMessageEvent {
   /** chat_id(`oc_xxx`,私聊也是),chatQueue 串行 key */
   chatId: string
   chatType: string
-  /** 消息类型:text / interactive / image / ... */
+  /** 消息类型:text / interactive / image / file / ... */
   messageType: string
   /** 消息内容(JSON 字符串,需根据 messageType 解析) */
   content: string
@@ -39,6 +39,10 @@ export interface ImMessageEvent {
   ts: string
   /** 群消息中 @ 列表(检测是否 @bot 触发) */
   mentions: Array<{ key: string; name: string; openId?: string }>
+  // FORK-BEGIN: REQ-036 引用/回复原文 2026-06-02
+  /** 被引用/回复的原消息 ID(飞书引用回复时携带 parent_id)*/
+  parentId?: string
+  // FORK-END
 }
 
 export type OnMessageHandler = (event: ImMessageEvent) => Promise<void> | void
@@ -113,6 +117,8 @@ export class FeishuWSSClient {
             name: m.name,
             openId: m.id?.open_id,
           })),
+          // FORK: REQ-036 引用/回复原文 2026-06-02
+          parentId: typeof msg.parent_id === "string" && msg.parent_id ? msg.parent_id : undefined,
         }
 
         // dedup 第一层:同 messageId + ts(12h)— 防 WSS 重连重放

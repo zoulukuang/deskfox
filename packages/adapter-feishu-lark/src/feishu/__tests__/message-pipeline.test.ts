@@ -1106,6 +1106,250 @@ describe("processAttachments (feat: feishu-bridge-light Phase 2)", () => {
 
 
 // ============================================================
+// REQ-036 fetchParentMessageText 单测
+// FORK: feishu-file-and-quote-recv 2026-06-02
+// ============================================================
+
+import { fetchParentMessageText } from "../message-pipeline"
+
+/**
+ * 构造一个假 larkClient,im.v1.message.get 返指定 items。
+ * items 的 msg_type / body.content 决定 fetchParentMessageText 输出。
+ */
+function makeParentMsgClient(
+  items: Array<{ msg_type?: string; body?: { content?: string } }>,
+  throwErr?: Error,
+): any {
+  return {
+    im: {
+      v1: {
+        message: {
+          get: async () => {
+            if (throwErr) throw throwErr
+            return { data: { items } }
+          },
+        },
+      },
+    },
+  }
+}
+
+describe("fetchParentMessageText — 单测(Q1-Q5)", () => {
+  test("Q1: 父消息 text → 返回文本内容", async () => {
+    const client = makeParentMsgClient([
+      { msg_type: "text", body: { content: JSON.stringify({ text: "原来说的这段话" }) } },
+    ])
+    const result = await fetchParentMessageText("om_parent_1", client)
+    expect(result).toBe("原来说的这段话")
+  })
+
+  test("Q2: 父消息 post → 返回 flatten 文本", async () => {
+    const postContent = JSON.stringify({
+      title: "标题",
+      content: [
+        [{ tag: "text", text: "第一段" }],
+        [{ tag: "text", text: "第二段" }],
+      ],
+    })
+    const client = makeParentMsgClient([{ msg_type: "post", body: { content: postContent } }])
+    const result = await fetchParentMessageText("om_parent_2", client)
+    expect(result).toContain("标题")
+    expect(result).toContain("第一段")
+    expect(result).toContain("第二段")
+  })
+
+  test("Q3: 父消息 image(纯图无 caption)→ 返回 '[图片]' 占位", async () => {
+    const client = makeParentMsgClient([
+      { msg_type: "image", body: { content: JSON.stringify({ image_key: "img_v3_xxx" }) } },
+    ])
+    const result = await fetchParentMessageText("om_parent_3", client)
+    expect(result).toBe("[图片]")
+  })
+
+  test("Q4: 父消息 file → 返回 '[文件:xxx]' 占位", async () => {
+    const client = makeParentMsgClient([
+      { msg_type: "file", body: { content: JSON.stringify({ file_key: "fk_xxx", file_name: "report.docx" }) } },
+    ])
+    const result = await fetchParentMessageText("om_parent_4", client)
+    expect(result).toBe("[文件:report.docx]")
+  })
+
+  test("Q5: 飞书 API 报错 → 返回 null(graceful 降级)", async () => {
+    const client = makeParentMsgClient([], new Error("401 unauthorized"))
+    const result = await fetchParentMessageText("om_parent_5", client)
+    expect(result).toBeNull()
+  })
+})
+
+// ============================================================
+// REQ-036 pipeline.handle() 引用上下文注入集成测(Q6-Q9)
+// FORK: feishu-file-and-quote-recv 2026-06-02
+//
+// 架构验证:引用原文以 text part 注入,与 agent 类型无关
+// (imbot / build / claude-code plugin 等 agent 全部能收到)
+// ============================================================
+
+describe("REQ-036 引用回复上下文注入(Q6-Q9)", () => {
+  let tmpDir: string
+  let store: ChatSessionStore
+  let dispatcher: PromptDispatcher
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "quote-inject-test-"))
+    store = new ChatSessionStore(join(tmpDir, "sessions.json"))
+    dispatcher = new PromptDispatcher()
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  /**
+   * 构造完整测试 pipeline + 捕获 promptAsync 收到的 text。
+   * larkClient 额外注入 message.get 来返回被引消息。
+   */
+  function buildQuotePipeline(
+    parentMsgItems: Array<{ msg_type?: string; body?: { content?: string } }>,
+    getThrows?: Error,
+  ) {
+    const capturedPromptTexts: string[] = []
+    const sentTexts: string[] = []
+
+    const larkClient = {
+      im: {
+        v1: {
+          message: {
+            get: async () => {
+              if (getThrows) throw getThrows
+              return { data: { items: parentMsgItems } }
+            },
+            create: async (args: any) => {
+              sentTexts.push(JSON.parse(args.data.content).text)
+              return { data: { message_id: "om_reply" } }
+            },
+          },
+          messageReaction: { create: async () => ({ data: {} }) },
+        },
+      },
+    } as any
+
+    const opencodeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_q6" } }),
+        promptAsync: async (args: any) => {
+          capturedPromptTexts.push(args.body?.parts?.[0]?.text ?? "")
+          // 不发 idle,测试通过 dispatcher 手动触发
+          return await new Promise(() => {})
+        },
+        messages: async () => ({
+          data: [
+            { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "user msg" }] },
+            {
+              info: { id: "a1", role: "assistant", parentID: "u1" },
+              parts: [{ type: "text", text: "引用回复已收到" }],
+            },
+          ],
+        }),
+        _client: {
+          patch: async () => ({}),
+        },
+      },
+    } as any
+
+    const pipeline = new MessagePipeline({
+      account: makeAccount(),
+      accountId: "acc1",
+      opencodeClient,
+      dispatcher,
+      chatSessionStore: store,
+      larkClient,
+    })
+
+    return { pipeline, capturedPromptTexts, sentTexts, opencodeClient }
+  }
+
+  test("Q6: 含 parentId → promptAsync 收到的 text 含 [引用原文] 块", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline([
+      { msg_type: "text", body: { content: JSON.stringify({ text: "这是被引用的那句话" }) } },
+    ])
+
+    // fire-and-forget handle,不等 runOpencode 完成
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "这句话是什么意思" }),
+        parentId: "om_quoted",
+      }),
+    )
+    // 给 fetch + promptAsync 时间被调到
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    expect(text).toContain("[引用原文]")
+    expect(text).toContain("这是被引用的那句话")
+    expect(text).toContain("[/引用原文]")
+    expect(text).toContain("这句话是什么意思")
+  })
+
+  test("Q7: 含 parentId 但 message.get 失败 → 正常走 LLM,text 不含引用块(graceful 降级)", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline(
+      [],
+      new Error("403 forbidden"),
+    )
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "随便问一句" }),
+        parentId: "om_inaccessible",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    // 不含引用块,只含用户消息
+    expect(text).not.toContain("[引用原文]")
+    expect(text).toBe("随便问一句")
+  })
+
+  test("Q8: 无 parentId → text 不含 [引用原文]", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline([])
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "普通消息" }),
+        // 不设 parentId
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    expect(capturedPromptTexts[0]).toBe("普通消息")
+    expect(capturedPromptTexts[0]).not.toContain("[引用原文]")
+  })
+
+  test("Q9: 引用图片消息 → text 含 '[图片]' 占位符", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline([
+      { msg_type: "image", body: { content: JSON.stringify({ image_key: "img_key_123" }) } },
+    ])
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "这张图讲了什么" }),
+        parentId: "om_image_msg",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    expect(text).toContain("[引用原文]")
+    expect(text).toContain("[图片]")
+    expect(text).toContain("这张图讲了什么")
+  })
+})
+
+// ============================================================
 // getSystemPrompt 动态拼接 (feat: feishu-bridge-light Phase 3)
 // ============================================================
 
