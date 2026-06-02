@@ -2,6 +2,7 @@ import { createMemo, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { ContextMenu } from "@opencode-ai/ui/context-menu"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { createSortable } from "@thisbeyond/solid-dnd"
 import { type LocalProject } from "@/context/layout"
 import { useLanguage } from "@/context/language"
@@ -67,6 +68,27 @@ const ProjectTile = (props: {
       .forEach((directory) => notification.project.markViewed(directory))
 
   return (
+    // FORK: REQ-041 后续 — 项目图标加悬停 tooltip(项目名 + 完整路径),补 REQ-041 删悬停预览后
+    // 「图标条认不出是哪个项目」的缺口;只补识别,不恢复那套会串味的会话预览。2026-06-02
+    <Tooltip
+      placement="right"
+      openDelay={0}
+      contentStyle={{
+        // FORK: 用 inline style 强制浅底 —— `--surface-panel` 在本主题为空、bg-surface-panel 不生效;
+        // 改用确定存在的 `--background-stronger`(#fcfcfc 浅白),深色主题下该变量也自适应。padding 归零
+        // 交给内层 div 控大小。2026-06-02
+        "background-color": "var(--background-stronger)",
+        border: "1px solid var(--border-weak-base)",
+        padding: "0",
+      }}
+      value={
+        // 浅底卡片 + 页面文字色(项目名 strong 粗 / 路径 weak 弱);大内边距避免拥挤。
+        <div class="flex max-w-96 flex-col gap-1 px-3 py-2">
+          <span class="text-14-medium text-text-strong">{displayName(props.project)}</span>
+          <span class="text-12-regular text-text-weak break-all">{props.project.worktree}</span>
+        </div>
+      }
+    >
     <ContextMenu modal onOpenChange={(value) => props.setMenu(value)}>
       <ContextMenu.Trigger
         as="button"
@@ -125,6 +147,7 @@ const ProjectTile = (props: {
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu>
+    </Tooltip>
   )
 }
 

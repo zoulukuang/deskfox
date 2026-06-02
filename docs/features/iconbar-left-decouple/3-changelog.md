@@ -42,6 +42,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 基线 REQ-040 镜像版:`a24ff35a0`
 - REQ-041 + UI 微调:grep `[feat: iconbar-left-decouple]`(本系列,拆 2 笔:核心解耦 / UI 位置微调)
 
+## 后续补偿:项目图标 tooltip(QA 时 user 反馈)
+删悬停预览后,图标条只剩首字母图标 → 未选中的项目认不出是哪个。给 `sidebar-project.tsx` 的项目图标包一层 `Tooltip`(placement=right / openDelay=500),悬停弹两行「项目名 + 完整路径」。只补"识别",**不恢复**会串味的会话预览。CDP 验:12 个项目按钮全被 tooltip-trigger 包裹、图标条布局无破坏;tooltip 实际弹出靠真桌面 hover(CDP 合成事件验不了)。
+
 ## 回退方法
 `git revert <本笔 commit>` 回到镜像版(REQ-040);再 revert `a24ff35a0` 回原始开发者布局。两笔各自独立可逆(P4)。注:本笔删了 `aim.ts` + 上游 hover 机制,revert 会原样恢复。
 
