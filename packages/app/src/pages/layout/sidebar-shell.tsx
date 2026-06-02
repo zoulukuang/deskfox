@@ -33,7 +33,8 @@ export const SidebarContent = (props: {
   renderPanel: () => JSX.Element
 }): JSX.Element => {
   const expanded = createMemo(() => !!props.mobile || props.opened())
-  const placement = () => (props.mobile ? "bottom" : "right")
+  // FORK: 镜像翻转 — 图标条移到屏幕最右,tooltip 改朝左弹否则被屏幕边缘截断 2026-06-02
+  const placement = () => (props.mobile ? "bottom" : "left")
   let panel: HTMLDivElement | undefined
 
   createEffect(() => {
@@ -47,7 +48,8 @@ export const SidebarContent = (props: {
   })
 
   return (
-    <div class="flex h-full w-full min-w-0 overflow-hidden">
+    /* FORK: 镜像翻转 — flex-row-reverse 让图标条↔会话面板内部整体对调(图标条落最右) 2026-06-02 */
+    <div class="flex flex-row-reverse h-full w-full min-w-0 overflow-hidden">
       <div
         data-component="sidebar-rail"
         class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"

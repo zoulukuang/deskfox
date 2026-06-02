@@ -1825,7 +1825,8 @@ export default function Page() {
           [feat: office-选中加聊天] 2026-05-25 */}
       <ChatSelectionMenu />
       <SessionHeader />
-      <div class="flex-1 min-h-0 flex flex-col md:flex-row">
+      {/* FORK: 镜像翻转 — 桌面下聊天区↔(审查+文件树)整体对调,聊天靠右 2026-06-02 */}
+      <div class="flex-1 min-h-0 flex flex-col md:flex-row-reverse">
         <Show when={!isDesktop() && !!params.id}>
           <Tabs value={store.mobileTab} class="h-auto">
             <Tabs.List>
@@ -1968,6 +1969,7 @@ export default function Page() {
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
                 direction="horizontal"
+                edge="start"
                 size={layout.session.width()}
                 min={450}
                 max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}

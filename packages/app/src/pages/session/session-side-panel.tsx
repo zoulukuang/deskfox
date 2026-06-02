@@ -274,7 +274,8 @@ export function SessionSidePanel(props: {
         }}
         style={{ width: panelWidth() }}
       >
-        <div class="size-full flex border-l border-border-weaker-base">
+        {/* FORK: 镜像翻转 — flex-row-reverse 让文件树↔审查内部对调(文件树落最左);分隔边框翻到右侧 2026-06-02 */}
+        <div class="size-full flex flex-row-reverse border-r border-border-weaker-base">
           <div
             aria-hidden={!reviewOpen()}
             inert={!reviewOpen()}
@@ -429,7 +430,10 @@ export function SessionSidePanel(props: {
             >
               <div
                 class="h-full flex flex-col overflow-hidden group/filetree"
-                classList={{ "border-l border-border-weaker-base": reviewOpen() }}
+                classList={{
+                  // FORK: 镜像翻转 — 文件树在审查左侧,分隔边框翻到右侧 2026-06-02
+                  "border-r border-border-weaker-base": reviewOpen(),
+                }}
               >
                 <Tabs
                   variant="pill"
@@ -495,7 +499,7 @@ export function SessionSidePanel(props: {
                 <div onPointerDown={() => props.size.start()}>
                   <ResizeHandle
                     direction="horizontal"
-                    edge="start"
+                    edge="end"
                     size={layout.fileTree.width()}
                     min={200}
                     max={480}

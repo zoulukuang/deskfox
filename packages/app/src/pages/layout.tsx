@@ -2080,9 +2080,10 @@ export default function Layout(props: ParentProps) {
     return (
       <div
         classList={{
-          "flex flex-col min-h-0 min-w-0 box-border rounded-tl-[12px] px-3": true,
+          // FORK: 镜像翻转 — 会话面板靠右,圆角/边框接缝翻到右侧 2026-06-02
+          "flex flex-col min-h-0 min-w-0 box-border rounded-tr-[12px] px-3": true,
           "border border-b-0 border-border-weak-base": !merged(),
-          "border-l border-t border-border-weaker-base": merged(),
+          "border-r border-t border-border-weaker-base": merged(),
           "bg-background-base": merged() || hover(),
           "bg-background-stronger": !merged() && !hover(),
           "flex-1 min-w-0": panelProps.mobile,
@@ -2379,7 +2380,8 @@ export default function Layout(props: ParentProps) {
               data-component="sidebar-nav-desktop"
               classList={{
                 "hidden xl:block": true,
-                "absolute inset-y-0 left-0": true,
+                // FORK: 镜像翻转 — 侧栏(图标条+会话列表)整体平移到最右 2026-06-02
+                "absolute inset-y-0 right-0": true,
                 "z-10": true,
               }}
               style={{ width: `${side()}px` }}
@@ -2402,11 +2404,15 @@ export default function Layout(props: ParentProps) {
             <Show when={layout.sidebar.opened()}>
               <div
                 class="hidden xl:block absolute inset-y-0 z-30 w-0 overflow-visible"
-                style={{ left: `${side()}px` }}
+                style={{
+                  // FORK: 镜像翻转 — 侧栏在右,resize 手柄锚定其左边界(right 替 left) 2026-06-02
+                  right: `${side()}px`,
+                }}
                 onPointerDown={() => setState("sizing", true)}
               >
                 <ResizeHandle
                   direction="horizontal"
+                  edge="start"
                   size={layout.sidebar.width()}
                   min={244}
                   max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.3 + 64}
@@ -2421,8 +2427,11 @@ export default function Layout(props: ParentProps) {
             </Show>
 
             <div
-              class="hidden xl:block pointer-events-none absolute top-0 right-0 z-0 border-t border-border-weaker-base"
-              style={{ left: "calc(4rem + 12px)" }}
+              class="hidden xl:block pointer-events-none absolute top-0 left-0 z-0 border-t border-border-weaker-base"
+              style={{
+                // FORK: 镜像翻转 — 顶部边框辅助条镜像(图标条改在右,留白从右起) 2026-06-02
+                right: "calc(4rem + 12px)",
+              }}
             />
 
             <div class="xl:hidden">
@@ -2453,9 +2462,10 @@ export default function Layout(props: ParentProps) {
             <div
               classList={{
                 "absolute inset-0": true,
-                "xl:inset-y-0 xl:right-0 xl:left-[var(--main-left)]": true,
+                // FORK: 镜像翻转 — 主区锚定左侧,留白(--main-left)改记到 right;过渡属性随之 left→right 2026-06-02
+                "xl:inset-y-0 xl:left-0 xl:right-[var(--main-left)]": true,
                 "z-20": true,
-                "transition-[left] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[left] motion-reduce:transition-none":
+                "transition-[right] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[right] motion-reduce:transition-none":
                   !state.sizing,
               }}
               style={{
@@ -2464,7 +2474,8 @@ export default function Layout(props: ParentProps) {
             >
               <main
                 classList={{
-                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
+                  // FORK: 镜像翻转 — 主区与侧栏接缝在右,边框/圆角翻到右上角 2026-06-02
+                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-r xl:rounded-tr-[12px]": true,
                 }}
               >
                 <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
@@ -2475,9 +2486,10 @@ export default function Layout(props: ParentProps) {
 
             <div
               classList={{
-                "hidden xl:flex absolute inset-y-0 left-16 z-30": true,
+                // FORK: 镜像翻转 — peek 项目预览贴在右侧图标条内侧,滑入方向从右起 2026-06-02
+                "hidden xl:flex absolute inset-y-0 right-16 z-30": true,
                 "opacity-100 translate-x-0 pointer-events-auto": state.peeked && !layout.sidebar.opened(),
-                "opacity-0 -translate-x-2 pointer-events-none": !state.peeked || layout.sidebar.opened(),
+                "opacity-0 translate-x-2 pointer-events-none": !state.peeked || layout.sidebar.opened(),
                 "transition-[opacity,transform] motion-reduce:transition-none": true,
                 "duration-180 ease-out": state.peeked && !layout.sidebar.opened(),
                 "duration-120 ease-in": !state.peeked || layout.sidebar.opened(),
@@ -2499,14 +2511,15 @@ export default function Layout(props: ParentProps) {
 
             <div
               classList={{
-                "hidden xl:block pointer-events-none absolute inset-y-0 right-0 z-25 overflow-hidden": true,
+                // FORK: 镜像翻转 — peek 阴影缝改贴左侧(peek 在右,阴影在其左边界) 2026-06-02
+                "hidden xl:block pointer-events-none absolute inset-y-0 left-0 z-25 overflow-hidden": true,
                 "opacity-100 translate-x-0": state.peeked && !layout.sidebar.opened(),
-                "opacity-0 -translate-x-2": !state.peeked || layout.sidebar.opened(),
+                "opacity-0 translate-x-2": !state.peeked || layout.sidebar.opened(),
                 "transition-[opacity,transform] motion-reduce:transition-none": true,
                 "duration-180 ease-out": state.peeked && !layout.sidebar.opened(),
                 "duration-120 ease-in": !state.peeked || layout.sidebar.opened(),
               }}
-              style={{ left: `calc(4rem + ${panel()}px)` }}
+              style={{ right: `calc(4rem + ${panel()}px)` }}
             >
               <div class="h-full w-px" style={{ "box-shadow": "var(--shadow-sidebar-overlay)" }} />
             </div>
