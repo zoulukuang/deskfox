@@ -26,9 +26,17 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## commit
 grep `[feat: file-tabs-project-level]`(REQ-041 后续,feat/mirror-layout 分支独立一笔)
 
+## code review 修复(high-effort 7-finder 审查后,合 main 前)
+7 路 finder 审出 tab-store 重构的生命周期问题,修了 3 个:
+- **#1 handoff 死代码 + 地雷**(`session.tsx` / `submit.ts` / `layout.tsx`):解耦后 workspaceTabs(key=dir)与 tabs()(key=dir/id)都解析到同一 `projectTabs[dir]`,新会话继承 tab 的 handoff 拷贝/清空成死代码,且清空分支会误抹项目共享 tab。**整套删除**(session.tsx handoff effect + submit.ts setTabs + layout.tsx layout.handoff/TabHandoff)。
+- **#2 关项目不删 → 重加复活坏标签**(`layout.tsx` `projects.close`):移除项目时没删 `projectTabs[dir]`,重新添加同目录会复活旧/坏标签。`close()` 加按 `base64Encode(dir)` 删。(projectTabs 天然受项目数约束 + close 清理 → 不需额外 LRU。)
+- **#3 切会话 active/上下文串味**(`layout.tsx` tabs() / `session-key.ts`):active 指针 + "上下文"伪标签原是项目级 → 同项目两会话共享 active、串味。**拆分**:文件 tab + 文件 active 仍项目级(`projectTabs`);"审查/上下文"的 active + context-open 改存会话级 `sessionView[sessionKey].tab`(`SessionPseudoTab`)。合成逻辑提纯函数 `synthTabs`(session-key.ts)+ 4 单测。对外 `{ all, active }` 形状不变,helpers/session-side-panel 零改。
+
+验证:typecheck + 790 单测(含 synthTabs 4 + projectTabKey 6)+ e2e 14 全过。
+
 ## 回退方法
 `git revert <本笔 commit>` 回到会话级文件 tab;REQ-041(布局)不受影响,正交。
 
 ## 遗留 backlog
-- 旧会话级 sessionTabs 持久化数据清理(本次留存无害,占用极小)。
-- active="审查" 切无 diff 会话显示"暂无更改"空状态,若 QA 觉突兀可在 helpers.activeTab 加 hasReview fallback(注意 loading 闪烁,见 2-plan note 3)。
+- 死 `sessionTabs` 的 migrate/prune 空转清理(完全无写入,留存无害,占用极小;避免动持久化迁移逻辑故留 backlog)。
+- active="审查" 切无 diff 会话显示"暂无更改"空状态(已 fallback 不崩),若 QA 觉突兀可在 helpers.activeTab 加 hasReview fallback(注意 loading 闪烁,见 2-plan note 3)。

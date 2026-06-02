@@ -8,9 +8,11 @@ import { useServer } from "./server"
 import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
-// FORK: REQ-041 后续 — 文件 tab 项目级存储 key 纯函数 [feat: iconbar-left-decouple] 2026-06-02
-import { projectTabKey } from "./session-key"
+// FORK: REQ-041/042 — 文件 tab 项目级 key + 会话级伪标签合成 [feat: iconbar-left-decouple] 2026-06-02
+import { projectTabKey, synthTabs, type SessionPseudoTab } from "./session-key"
 import { decode64 } from "@/utils/base64"
+// FORK: REQ-042 #2 — 关项目时按项目 key 删其文件 tab [feat: file-tabs-project-level] 2026-06-02
+import { base64Encode } from "@opencode-ai/core/util/encode"
 import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
@@ -45,12 +47,9 @@ type SessionView = {
   reviewOpen?: string[]
   pendingMessage?: string
   pendingMessageAt?: number
-}
-
-type TabHandoff = {
-  dir: string
-  id: string
-  at: number
+  // FORK: REQ-042 #3 — 会话级伪标签(审查/上下文 active + 上下文是否打开),从项目级文件 tab 拆出
+  // 避免切会话串味。随 sessionView 一起持久化 + prune。2026-06-02
+  tab?: SessionPseudoTab
 }
 
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
@@ -264,9 +263,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         // 旧 sessionTabs(会话级)不再写入,自然废弃。2026-06-02
         projectTabs: {} as Record<string, SessionTabs>,
         sessionView: {} as Record<string, SessionView>,
-        handoff: {
-          tabs: undefined as TabHandoff | undefined,
-        },
       }),
     )
 
@@ -551,16 +547,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
 
     return {
       ready,
-      handoff: {
-        tabs: createMemo(() => store.handoff?.tabs),
-        setTabs(dir: string, id: string) {
-          setStore("handoff", "tabs", { dir, id, at: Date.now() })
-        },
-        clearTabs() {
-          if (!store.handoff?.tabs) return
-          setStore("handoff", "tabs", undefined)
-        },
-      },
       projects: {
         list,
         open(directory: string) {
@@ -571,6 +557,17 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         close(directory: string) {
           server.projects.close(directory)
+          // FORK: REQ-042 #2 — 移除项目时删掉它的项目级文件 tab,避免残留;否则重新添加同目录会复活
+          // 旧标签(可能指向已删/改名的文件)。projectTabs 的 key = 路由 dir = base64Encode(worktree)。2026-06-02
+          const tabKey = base64Encode(directory)
+          if (store.projectTabs[tabKey]) {
+            setStore(
+              "projectTabs",
+              produce((draft) => {
+                delete draft[tabKey]
+              }),
+            )
+          }
         },
         expand(directory: string) {
           server.projects.expand(directory)
@@ -860,73 +857,92 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       },
       tabs(sessionKey: string | Accessor<string>) {
         const key = createSessionKeyReader(sessionKey, ensureKey)
-        // FORK-BEGIN: REQ-041 后续 — 文件 tab 按项目(sessionKey 的 dir 段)存储,切会话保持不变。
-        // 「审查/上下文」tab 的内容仍由 session 层按会话提供,标签位置不随会话跳。2026-06-02
+        // FORK-BEGIN: REQ-041/042 — 文件 tab 按项目(dir)存 projectTabs[dir](切会话保持);
+        // 「审查/上下文」是会话级伪标签(active + context-open),存 sessionView[sessionKey].tab,
+        // 不跟项目级文件 tab 串味。对外 { all, active } 形状不变,下游(helpers/session-side-panel)零改。2026-06-02
         const projectKey = createMemo(() => projectTabKey(key()))
         const path = createMemo(() => sessionPath(key()))
-        const tabs = createMemo(() => store.projectTabs[projectKey()] ?? { all: [] })
+        const files = createMemo<SessionTabs>(() => store.projectTabs[projectKey()] ?? { all: [] })
+        const pseudo = createMemo(() => store.sessionView[key()]?.tab)
+        const tabs = createMemo<SessionTabs>(() => synthTabs(files(), pseudo()))
         const normalize = (tab: string) => normalizeSessionTab(path(), tab)
         const normalizeAll = (all: string[]) => normalizeSessionTabList(path(), all)
+
+        const setFileActive = (active: string | undefined) => {
+          const pk = projectKey()
+          if (!store.projectTabs[pk]) setStore("projectTabs", pk, { all: [], active })
+          else setStore("projectTabs", pk, "active", active)
+        }
+        const setFileAll = (all: string[]) => {
+          const pk = projectKey()
+          if (!store.projectTabs[pk]) setStore("projectTabs", pk, { all })
+          else setStore("projectTabs", pk, "all", all)
+        }
+        const setPseudo = (patch: Partial<SessionPseudoTab>) => {
+          const sk = key()
+          if (!store.sessionView[sk]) setStore("sessionView", sk, { scroll: {}, tab: { ...patch } })
+          else setStore("sessionView", sk, "tab", (prev) => ({ ...prev, ...patch }))
+        }
+
         return {
           tabs,
           active: createMemo(() => tabs().active),
           all: createMemo(() => tabs().all.filter((tab) => tab !== "review")),
           setActive(tab: string | undefined) {
-            const pkey = projectKey()
             const next = tab ? normalize(tab) : tab
-            if (!store.projectTabs[pkey]) {
-              setStore("projectTabs", pkey, { all: [], active: next })
-            } else {
-              setStore("projectTabs", pkey, "active", next)
-            }
+            if (next === "review") return setPseudo({ active: "review" })
+            if (next === "context") return setPseudo({ active: "context", context: true })
+            // 文件 tab(或 undefined):项目级 active + 离开会话伪标签
+            setFileActive(next)
+            setPseudo({ active: undefined })
           },
           setAll(all: string[]) {
-            const pkey = projectKey()
-            const next = normalizeAll(all).filter((tab) => tab !== "review")
-            if (!store.projectTabs[pkey]) {
-              setStore("projectTabs", pkey, { all: next, active: undefined })
-            } else {
-              setStore("projectTabs", pkey, "all", next)
-            }
+            // 仅设文件 tab 列表(项目级);伪标签(review/context)不进文件存储
+            setFileAll(normalizeAll(all).filter((tab) => tab !== "review" && tab !== "context"))
           },
           async open(tab: string) {
-            const pkey = projectKey()
-            const next = nextSessionTabsForOpen(store.projectTabs[pkey], normalize(tab))
-            setStore("projectTabs", pkey, next)
+            const n = normalize(tab)
+            if (n === "review") return setPseudo({ active: "review" })
+            if (n === "context") return setPseudo({ active: "context", context: true })
+            // 打开文件:加入项目级文件 tab + active;离开会话伪标签
+            setStore("projectTabs", projectKey(), nextSessionTabsForOpen(store.projectTabs[projectKey()], n))
+            setPseudo({ active: undefined })
           },
           close(tab: string) {
-            const pkey = projectKey()
-            const current = store.projectTabs[pkey]
-            if (!current) return
-
             if (tab === "review") {
-              if (current.active !== tab) return
-              setStore("projectTabs", pkey, "active", current.all[0])
+              if (store.sessionView[key()]?.tab?.active === "review") setPseudo({ active: undefined })
               return
             }
-
+            if (tab === "context") {
+              const wasActive = store.sessionView[key()]?.tab?.active === "context"
+              setPseudo(wasActive ? { context: false, active: undefined } : { context: false })
+              return
+            }
+            // 文件 tab
+            const pk = projectKey()
+            const current = store.projectTabs[pk]
+            if (!current) return
             const all = current.all.filter((x) => x !== tab)
             if (current.active !== tab) {
-              setStore("projectTabs", pkey, "all", all)
+              setStore("projectTabs", pk, "all", all)
               return
             }
-
             const index = current.all.findIndex((f) => f === tab)
             const next = current.all[index - 1] ?? current.all[index + 1] ?? all[0]
             batch(() => {
-              setStore("projectTabs", pkey, "all", all)
-              setStore("projectTabs", pkey, "active", next)
+              setStore("projectTabs", pk, "all", all)
+              setStore("projectTabs", pk, "active", next)
             })
           },
           move(tab: string, to: number) {
-            const pkey = projectKey()
-            const current = store.projectTabs[pkey]
+            const pk = projectKey()
+            const current = store.projectTabs[pk]
             if (!current) return
             const index = current.all.findIndex((f) => f === tab)
             if (index === -1) return
             setStore(
               "projectTabs",
-              pkey,
+              pk,
               "all",
               produce((opened) => {
                 opened.splice(to, 0, opened.splice(index, 1)[0])
