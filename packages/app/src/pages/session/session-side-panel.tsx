@@ -443,14 +443,15 @@ export function SessionSidePanel(props: {
                   data-scope="filetree"
                 >
                   <Tabs.List>
+                    {/* FORK: REQ-041 — 文件树 tab 顺序对调:所有文件 在左、更改 在右 2026-06-02 */}
+                    <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
+                      {language.t("session.files.all")}
+                    </Tabs.Trigger>
                     <Tabs.Trigger value="changes" class="flex-1" classes={{ button: "w-full" }}>
                       {props.reviewCount()}{" "}
                       {language.t(
                         props.reviewCount() === 1 ? "session.review.change.one" : "session.review.change.other",
                       )}
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
-                      {language.t("session.files.all")}
                     </Tabs.Trigger>
                   </Tabs.List>
                   <Tabs.Content value="changes" class="bg-background-stronger px-3 py-0">
