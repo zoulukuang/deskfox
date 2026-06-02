@@ -2360,7 +2360,8 @@ export default function Layout(props: ParentProps) {
       settingsKeybind={() => command.keybind("settings.open")}
       onOpenSettings={openSettings}
       helpLabel={() => language.t("sidebar.help")}
-      onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+      // FORK: 帮助入口指向 DeskFox 社区页,替换上游 opencode.ai feedback (REQ-039) 2026-06-02
+      onOpenHelp={() => platform.openLink("https://deskfox.ai/#community")}
       renderPanel={() =>
         mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
       }
