@@ -8,6 +8,8 @@ import { useServer } from "./server"
 import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
+// FORK: REQ-041 后续 — 文件 tab 项目级存储 key 纯函数 [feat: iconbar-left-decouple] 2026-06-02
+import { projectTabKey } from "./session-key"
 import { decode64 } from "@/utils/base64"
 import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
@@ -258,6 +260,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
         },
         sessionTabs: {} as Record<string, SessionTabs>,
+        // FORK: REQ-041 后续 — 文件 tab 改项目级存储(key=项目 dir),切会话保持不变;
+        // 旧 sessionTabs(会话级)不再写入,自然废弃。2026-06-02
+        projectTabs: {} as Record<string, SessionTabs>,
         sessionView: {} as Record<string, SessionView>,
         handoff: {
           tabs: undefined as TabHandoff | undefined,
@@ -855,8 +860,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       },
       tabs(sessionKey: string | Accessor<string>) {
         const key = createSessionKeyReader(sessionKey, ensureKey)
+        // FORK-BEGIN: REQ-041 后续 — 文件 tab 按项目(sessionKey 的 dir 段)存储,切会话保持不变。
+        // 「审查/上下文」tab 的内容仍由 session 层按会话提供,标签位置不随会话跳。2026-06-02
+        const projectKey = createMemo(() => projectTabKey(key()))
         const path = createMemo(() => sessionPath(key()))
-        const tabs = createMemo(() => store.sessionTabs[key()] ?? { all: [] })
+        const tabs = createMemo(() => store.projectTabs[projectKey()] ?? { all: [] })
         const normalize = (tab: string) => normalizeSessionTab(path(), tab)
         const normalizeAll = (all: string[]) => normalizeSessionTabList(path(), all)
         return {
@@ -864,61 +872,61 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           active: createMemo(() => tabs().active),
           all: createMemo(() => tabs().all.filter((tab) => tab !== "review")),
           setActive(tab: string | undefined) {
-            const session = key()
+            const pkey = projectKey()
             const next = tab ? normalize(tab) : tab
-            if (!store.sessionTabs[session]) {
-              setStore("sessionTabs", session, { all: [], active: next })
+            if (!store.projectTabs[pkey]) {
+              setStore("projectTabs", pkey, { all: [], active: next })
             } else {
-              setStore("sessionTabs", session, "active", next)
+              setStore("projectTabs", pkey, "active", next)
             }
           },
           setAll(all: string[]) {
-            const session = key()
+            const pkey = projectKey()
             const next = normalizeAll(all).filter((tab) => tab !== "review")
-            if (!store.sessionTabs[session]) {
-              setStore("sessionTabs", session, { all: next, active: undefined })
+            if (!store.projectTabs[pkey]) {
+              setStore("projectTabs", pkey, { all: next, active: undefined })
             } else {
-              setStore("sessionTabs", session, "all", next)
+              setStore("projectTabs", pkey, "all", next)
             }
           },
           async open(tab: string) {
-            const session = key()
-            const next = nextSessionTabsForOpen(store.sessionTabs[session], normalize(tab))
-            setStore("sessionTabs", session, next)
+            const pkey = projectKey()
+            const next = nextSessionTabsForOpen(store.projectTabs[pkey], normalize(tab))
+            setStore("projectTabs", pkey, next)
           },
           close(tab: string) {
-            const session = key()
-            const current = store.sessionTabs[session]
+            const pkey = projectKey()
+            const current = store.projectTabs[pkey]
             if (!current) return
 
             if (tab === "review") {
               if (current.active !== tab) return
-              setStore("sessionTabs", session, "active", current.all[0])
+              setStore("projectTabs", pkey, "active", current.all[0])
               return
             }
 
             const all = current.all.filter((x) => x !== tab)
             if (current.active !== tab) {
-              setStore("sessionTabs", session, "all", all)
+              setStore("projectTabs", pkey, "all", all)
               return
             }
 
             const index = current.all.findIndex((f) => f === tab)
             const next = current.all[index - 1] ?? current.all[index + 1] ?? all[0]
             batch(() => {
-              setStore("sessionTabs", session, "all", all)
-              setStore("sessionTabs", session, "active", next)
+              setStore("projectTabs", pkey, "all", all)
+              setStore("projectTabs", pkey, "active", next)
             })
           },
           move(tab: string, to: number) {
-            const session = key()
-            const current = store.sessionTabs[session]
+            const pkey = projectKey()
+            const current = store.projectTabs[pkey]
             if (!current) return
             const index = current.all.findIndex((f) => f === tab)
             if (index === -1) return
             setStore(
-              "sessionTabs",
-              session,
+              "projectTabs",
+              pkey,
               "all",
               produce((opened) => {
                 opened.splice(to, 0, opened.splice(index, 1)[0])
@@ -926,6 +934,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             )
           },
         }
+        // FORK-END
       },
     }
   },
