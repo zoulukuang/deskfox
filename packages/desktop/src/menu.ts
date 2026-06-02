@@ -170,7 +170,8 @@ export async function createMenu(trigger: (id: string) => void) {
             text: t("desktop.menu.help.documentation"),
           }),
           await MenuItem.new({
-            action: () => openUrl("https://discord.com/invite/opencode"),
+            // FORK: 支持论坛指向 DeskFox 社区页 2026-06-02
+            action: () => openUrl("https://deskfox.ai/#community"),
             text: t("desktop.menu.help.supportForum"),
           }),
           await PredefinedMenuItem.new({
@@ -182,14 +183,16 @@ export async function createMenu(trigger: (id: string) => void) {
           await PredefinedMenuItem.new({
             item: "Separator",
           }),
+          // FORK-BEGIN: 反馈/报错指向 DeskFox 自有 GitHub Issues 2026-06-02
           await MenuItem.new({
-            action: () => openUrl("https://github.com/anomalyco/opencode/issues/new?template=feature_request.yml"),
+            action: () => openUrl("https://github.com/zoulukuang/deskfox/issues/new"),
             text: t("desktop.menu.help.shareFeedback"),
           }),
           await MenuItem.new({
-            action: () => openUrl("https://github.com/anomalyco/opencode/issues/new?template=bug_report.yml"),
+            action: () => openUrl("https://github.com/zoulukuang/deskfox/issues/new"),
             text: t("desktop.menu.help.reportBug"),
           }),
+          // FORK-END
         ],
       }),
     ],
