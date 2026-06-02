@@ -384,44 +384,10 @@ export default function Page() {
 
   const composer = createSessionComposerState()
 
-  const workspaceKey = createMemo(() => params.dir ?? "")
-  const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
-
-  createEffect(
-    on(
-      () => params.id,
-      (id, prev) => {
-        if (!id) return
-        if (prev) return
-
-        const pending = layout.handoff.tabs()
-        if (!pending) return
-        if (Date.now() - pending.at > 60_000) {
-          layout.handoff.clearTabs()
-          return
-        }
-
-        if (pending.id !== id) return
-        layout.handoff.clearTabs()
-        if (pending.dir !== (params.dir ?? "")) return
-
-        const from = workspaceTabs().tabs()
-        if (from.all.length === 0 && !from.active) return
-
-        const current = tabs().tabs()
-        if (current.all.length > 0 || current.active) return
-
-        const all = normalizeTabs(from.all)
-        const active = from.active ? normalizeTab(from.active) : undefined
-        tabs().setAll(all)
-        tabs().setActive(active && all.includes(active) ? active : all[0])
-
-        workspaceTabs().setAll([])
-        workspaceTabs().setActive(undefined)
-      },
-      { defer: true },
-    ),
-  )
+  // FORK: REQ-042 — 删除新会话 tab handoff(原从 workspace 继承打开的文件 tab)。
+  // 文件 tab 已项目级共享([feat: file-tabs-project-level]),同项目新会话天然就能看到这些
+  // tab,无需继承;且解耦后 workspaceTabs 与 tabs() 都指向同一 projectTabs[dir],原拷贝/清空
+  // 逻辑既是死代码、清空分支还会误抹掉项目共享 tab。一并删 layout.handoff。2026-06-02
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const size = createSizing()
@@ -438,18 +404,6 @@ export default function Page() {
   function normalizeTab(tab: string) {
     if (!tab.startsWith("file://")) return tab
     return file.tab(tab)
-  }
-
-  function normalizeTabs(list: string[]) {
-    const seen = new Set<string>()
-    const next: string[] = []
-    for (const item of list) {
-      const value = normalizeTab(item)
-      if (seen.has(value)) continue
-      seen.add(value)
-      next.push(value)
-    }
-    return next
   }
 
   const openReviewPanel = () => {
@@ -1825,7 +1779,8 @@ export default function Page() {
           [feat: office-选中加聊天] 2026-05-25 */}
       <ChatSelectionMenu />
       <SessionHeader />
-      <div class="flex-1 min-h-0 flex flex-col md:flex-row">
+      {/* FORK: 镜像翻转 — 桌面下聊天区↔(审查+文件树)整体对调,聊天靠右 2026-06-02 */}
+      <div class="flex-1 min-h-0 flex flex-col md:flex-row-reverse">
         <Show when={!isDesktop() && !!params.id}>
           <Tabs value={store.mobileTab} class="h-auto">
             <Tabs.List>
@@ -1968,6 +1923,7 @@ export default function Page() {
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
                 direction="horizontal"
+                edge="start"
                 size={layout.session.width()}
                 min={450}
                 max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}

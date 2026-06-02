@@ -204,60 +204,25 @@ export function Titlebar() {
             />
           </div>
         </Show>
+        {/* FORK: REQ-041 顶部图标组互换 — 文件夹/工具组(原 titlebar-right portal 注入)落到左上,挨文件树/审查侧 2026-06-02 */}
+        <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 ml-2" />
+      </div>
+
+      <div class="min-w-0 flex items-center justify-center pointer-events-none">
+        <div id="opencode-titlebar-center" class="pointer-events-auto min-w-0 flex justify-center w-fit max-w-full" />
+      </div>
+
+      <div
+        classList={{
+          "flex items-center min-w-0 justify-end": true,
+          "pr-2": !windows(),
+        }}
+        data-tauri-drag-region
+        onMouseDown={drag}
+      >
+        {/* FORK: REQ-041 顶部图标组互换 — 侧栏切换 + 新建会话 + 前进/后退导航(原左上)移到右上,挨会话栏侧 2026-06-02 */}
         <div class="flex items-center gap-1 shrink-0">
-          <TooltipKeybind
-            class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
-            placement="bottom"
-            title={language.t("command.sidebar.toggle")}
-            keybind={command.keybind("sidebar.toggle")}
-          >
-            <Button
-              variant="ghost"
-              class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
-              onClick={layout.sidebar.toggle}
-              aria-label={language.t("command.sidebar.toggle")}
-              aria-expanded={layout.sidebar.opened()}
-            >
-              <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
-            </Button>
-          </TooltipKeybind>
           <div class="hidden xl:flex items-center shrink-0">
-            <Show when={params.dir}>
-              <div
-                class="flex items-center shrink-0 w-8 mr-1"
-                aria-hidden={layout.sidebar.opened() ? "true" : undefined}
-              >
-                <div
-                  class="transition-opacity"
-                  classList={{
-                    "opacity-100 duration-120 ease-out": !layout.sidebar.opened(),
-                    "opacity-0 duration-120 ease-in delay-0 pointer-events-none": layout.sidebar.opened(),
-                  }}
-                >
-                  <TooltipKeybind
-                    placement="bottom"
-                    title={language.t("command.session.new")}
-                    keybind={command.keybind("session.new")}
-                    openDelay={2000}
-                  >
-                    <Button
-                      variant="ghost"
-                      icon={creating() ? "new-session-active" : "new-session"}
-                      class="titlebar-icon w-8 h-6 p-0 box-border"
-                      disabled={layout.sidebar.opened()}
-                      tabIndex={layout.sidebar.opened() ? -1 : undefined}
-                      onClick={() => {
-                        if (!params.dir) return
-                        creation.resetDraft()
-                        navigate(`/${params.dir}/session`)
-                      }}
-                      aria-label={language.t("command.session.new")}
-                      aria-current={creating() ? "page" : undefined}
-                    />
-                  </TooltipKeybind>
-                </div>
-              </div>
-            </Show>
             <div
               class="flex items-center shrink-0"
               classList={{
@@ -297,23 +262,60 @@ export function Titlebar() {
                 </div>
               )}
             </div>
+            <Show when={params.dir}>
+              <div
+                class="flex items-center shrink-0 w-8 ml-1"
+                aria-hidden={layout.sidebar.opened() ? "true" : undefined}
+              >
+                <div
+                  class="transition-opacity"
+                  classList={{
+                    "opacity-100 duration-120 ease-out": !layout.sidebar.opened(),
+                    "opacity-0 duration-120 ease-in delay-0 pointer-events-none": layout.sidebar.opened(),
+                  }}
+                >
+                  <TooltipKeybind
+                    placement="bottom"
+                    title={language.t("command.session.new")}
+                    keybind={command.keybind("session.new")}
+                    openDelay={2000}
+                  >
+                    <Button
+                      variant="ghost"
+                      icon={creating() ? "new-session-active" : "new-session"}
+                      class="titlebar-icon w-8 h-6 p-0 box-border"
+                      disabled={layout.sidebar.opened()}
+                      tabIndex={layout.sidebar.opened() ? -1 : undefined}
+                      onClick={() => {
+                        if (!params.dir) return
+                        creation.resetDraft()
+                        navigate(`/${params.dir}/session`)
+                      }}
+                      aria-label={language.t("command.session.new")}
+                      aria-current={creating() ? "page" : undefined}
+                    />
+                  </TooltipKeybind>
+                </div>
+              </div>
+            </Show>
           </div>
+          <TooltipKeybind
+            class="hidden xl:flex shrink-0"
+            placement="bottom"
+            title={language.t("command.sidebar.toggle")}
+            keybind={command.keybind("sidebar.toggle")}
+          >
+            <Button
+              variant="ghost"
+              class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
+              onClick={layout.sidebar.toggle}
+              aria-label={language.t("command.sidebar.toggle")}
+              aria-expanded={layout.sidebar.opened()}
+            >
+              <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
+            </Button>
+          </TooltipKeybind>
         </div>
-      </div>
-
-      <div class="min-w-0 flex items-center justify-center pointer-events-none">
-        <div id="opencode-titlebar-center" class="pointer-events-auto min-w-0 flex justify-center w-fit max-w-full" />
-      </div>
-
-      <div
-        classList={{
-          "flex items-center min-w-0 justify-end": true,
-          "pr-2": !windows(),
-        }}
-        data-tauri-drag-region
-        onMouseDown={drag}
-      >
-        <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
         <Show when={windows()}>
           {!tauriApi() && <div class="w-36 shrink-0" />}
           <div data-tauri-decorum-tb class="flex flex-row" />
