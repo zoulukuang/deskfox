@@ -10,6 +10,12 @@
 
 
 
+
+## [macOS] 2026.6.2.1 — 2026-06-02 16:23
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [macOS] 2026.6.1.1 — 2026-06-01 18:33
 
 **主题**:🔏 **首个 Apple Developer ID 签名 + 公证的 macOS 包**(自 prod `2026.5.29.1` 以来)。下载双击直接打开,不再被 Gatekeeper 拦/报「已损坏」。
