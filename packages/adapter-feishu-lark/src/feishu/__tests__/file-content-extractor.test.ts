@@ -249,14 +249,14 @@ describe("extractPdfTextAsync", () => {
     expect(result.text.length).toBeGreaterThan(0)
   })
 
-  test("F_PDF3: 最小 PDF(含文字) → 提取到文本,truncated=false", async () => {
-    // 最小合法 PDF — 一页,含"Hello PDF"文本
-    // 字节偏移手动计算,经 pdfjs-dist 验证
+  test("F_PDF3: 最小 PDF(含文字) → 必须成功提取文字(不能只返错误提示)", async () => {
+    // 回归测试:验证 GlobalWorkerOptions.workerSrc 未被错误覆盖为 ""
+    // 若 workerSrc="" 则 pdfjs 报 "No workerSrc specified",此测试会失败
     const pdf = buildMinimalPdf("Hello PDF")
     const result = await extractPdfTextAsync(pdf, "test.pdf")
     expect(result.truncated).toBe(false)
-    // 成功或至少不崩 — pdfjs 能解析这份 PDF
-    // 扫描版/无文字路径返"无可提取文字"提示也 OK;成功路径含文字
+    // 必须是成功提取的文字,不能是 ⚠️ 开头的错误提示
+    expect(result.text).not.toContain("⚠️")
     expect(result.text.length).toBeGreaterThan(0)
   })
 })
@@ -331,6 +331,39 @@ describe("extractTextFromBuffer — xlsx (F_XLSX)", () => {
     expect(result.truncated).toBe(false)
     expect(result.text).toContain("100")
     expect(result.text).toContain("400")
+  })
+
+  test("F_XLSX4: t=inlineStr + &#NNN; 数字字符引用 → 中文正常解码(WPS/部分Excel格式)", () => {
+    // 回归测试:WPS 生成的 xlsx 用 t="inlineStr" 存储中文,文字以 &#NNNN; 数字实体编码
+    // 若 decodeXmlEntities 不处理 &#NNN;,中文会以原始实体形式注入 LLM,此测试会失败
+    const enc = (s: string) => new TextEncoder().encode(s)
+
+    // 把中文字符串转成 &#NNNN; 数字实体(模拟 WPS 导出行为)
+    const toEntities = (s: string) =>
+      [...s].map((c) => `&#${c.codePointAt(0)};`).join("")
+
+    const sheet = [
+      `<?xml version="1.0"?>`,
+      `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`,
+      `<sheetData><row r="1">`,
+      `<c r="A1" t="inlineStr"><is><t>${toEntities("员工姓名")}</t></is></c>`,
+      `<c r="B1" t="inlineStr"><is><t>${toEntities("部门")}</t></is></c>`,
+      `<c r="C1" t="inlineStr"><is><t>${toEntities("出勤率")}</t></is></c>`,
+      `</row><row r="2">`,
+      `<c r="A2" t="inlineStr"><is><t>${toEntities("张三")}</t></is></c>`,
+      `<c r="B2" t="inlineStr"><is><t>${toEntities("研发部")}</t></is></c>`,
+      `<c r="C2" t="inlineStr"><is><t>95%</t></is></c>`,
+      `</row></sheetData></worksheet>`,
+    ].join("")
+    const xlsx = zipSync({ "xl/worksheets/sheet1.xml": enc(sheet) })
+    const result = extractTextFromBuffer(xlsx, "xlsx", "wps_export.xlsx")
+    expect(result.truncated).toBe(false)
+    // 中文字符必须正确解码,不能出现 &#NNNN; 原始实体
+    expect(result.text).not.toMatch(/&#\d+;/)
+    expect(result.text).toContain("员工姓名")
+    expect(result.text).toContain("部门")
+    expect(result.text).toContain("张三")
+    expect(result.text).toContain("研发部")
   })
 })
 
