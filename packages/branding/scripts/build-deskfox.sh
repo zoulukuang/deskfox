@@ -199,9 +199,36 @@ LO_EXTRA_CONFIG=""
 if [[ -d "$LO_BUNDLE_APP" ]]; then
     LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
     echo "[deskfox] LO bundle found: $LO_BUNDLE_APP (${LO_SIZE}MB) — injecting into Tauri resources"
-    # 相对于 packages/desktop/src-tauri/ 的路径
     # 路径相对于 packages/desktop/src-tauri/(同 tauri.conf.json resources 约定)
     LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
+
+    # === 1.9.1 prod 构建时用 Developer ID 预签名 LO bundle ===
+    # 背景:Tauri 的 --deep 签名不覆盖 Resources/ 子树内的已有签名(ad-hoc 签名会被保留)。
+    # prepare-lo-bundle.sh 创建的 ad-hoc 签名(codesign -s -)缺少 Developer ID + timestamp,
+    # Apple 公证会以 "The binary is not signed with a valid Developer ID certificate" 拒绝。
+    # 解法:prod build 前用 APPLE_SIGNING_IDENTITY 预签名所有 dylib/executable,
+    # 让 Tauri 拷贝进 .app 后各 dylib 已有正确 Developer ID 签名。
+    if [[ "$SIGN_ENABLED" -eq 1 && -n "$APPLE_SIGNING_IDENTITY" ]]; then
+        echo "[deskfox] pre-signing LO bundle with Developer ID for notarization..."
+        # 先签所有 dylib + executable(按内到外顺序,从叶节点到根)
+        find "$LO_BUNDLE_APP/Contents" -type f \( -perm +0111 -o -name "*.dylib" -o -name "*.so" \) \
+            | while read -r f; do
+                codesign --sign "$APPLE_SIGNING_IDENTITY" \
+                         --options runtime \
+                         --timestamp \
+                         --force \
+                         "$f" 2>/dev/null || true
+            done
+        # 再签 .app bundle 本体
+        codesign --sign "$APPLE_SIGNING_IDENTITY" \
+                 --options runtime \
+                 --timestamp \
+                 --force \
+                 --deep \
+                 "$LO_BUNDLE_APP" 2>/dev/null \
+            && echo "[deskfox] LO bundle pre-signed with Developer ID OK" \
+            || echo "[deskfox] WARNING: LO bundle pre-signing partial (non-fatal)"
+    fi
 else
     echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
     echo "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"
