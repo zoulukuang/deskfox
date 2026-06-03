@@ -36,6 +36,21 @@
 **公证验证**:`stapler validate` ✅ / `spctl -a` = `Notarized Developer ID` ✅
 
 ---
+## [Windows] 2026.6.1.1 — 2026-06-01 14:44
+
+**主题**:catalog 数据/代码分层 + 测试治理 R8/R9 落地 + 一批桌面/飞书修复(自 Win prod `2026.5.29.1` 起)。
+
+**本次内容**:
+- 创作模式 catalog 数据/代码分层阶段1 + UI 能力标签对齐(CDP 真机验证)
+- 测试纪律:R8 测试用例清单 + R9 分支内验收闸 + pre-push fork 包单测 backstop
+- Ctrl+C 复制错内容 v2 根治 + 聊天输入框 focus scroll 修复
+- 飞书 bot LLM 超时 / 空响应 surface 修复
+
+**Release**:GitHub `ship-prod-2026.6.1.1`(主仓 `zoulukuang/deskfox`)+ Gitee 镜像
+
+> 回填说明:本条 2026-06-03 从 ship 分支 `chore/ship-prod-win-2026.6.1.1` 的 commit `bd7946120`(原为待填占位)回流补录并填实 —— Win ship 流程当时未把台账合回 main,此次清理顺带修复。
+
+---
 ## [macOS] 2026.5.29.1 — 2026-05-29
 
 **主题**:多模态创作模式扩到三家 + Phase 2 Mac 真桌面 e2e 启用 + 桌面体验修复 + sortable bug 入需求池(自 prod `2026.5.28.1` 以来)
