@@ -1,6 +1,6 @@
 ---
 feat-id: lo-bundle-macos
-status: in-progress
+status: done
 related: ./1-spec.md ./3-changelog.md
 ---
 
@@ -67,7 +67,7 @@ bundled 命中时不写 state,`status()` 不报 downloadSizeMB。
 - [ ] **E2**: `prepare-lo-bundle.sh` 剥皮后体积 < 600MB
 - [ ] **E3**: 含 bundle 的 `build-deskfox.sh -Env dev` 产出的 `.app` 内有 `Resources/libreoffice/`
 - [ ] **E4**: 不含 bundle 时 build 正常(降级,仅打印 warning)
-- [ ] **E5**: 含 bundle 的 `.app` 打开 .docx 文件可直接渲染,无下载提示
+- [x] **E5**: 含 bundle 的 `.app` 打开 .docx 文件可直接渲染,无下载提示 ✅ 2026-06-03 user QA 通过
 
 ## 影响范围
 

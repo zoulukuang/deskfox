@@ -1,6 +1,6 @@
 ---
 feat-id: lo-bundle-macos
-status: in-progress
+status: done
 related: ./1-spec.md ./3-changelog.md
 ---
 
@@ -37,4 +37,4 @@ related: ./1-spec.md ./3-changelog.md
 ### 测试结果
 
 - typecheck 17/17 通过
-- E1~E5 手动 QA 待运行(需先执行 prepare-lo-bundle.sh 准备 bundle)
+- E1/E2/E3/E4 自动/脚本验证通过;E5 用户真桌面 QA 通过 2026-06-03
