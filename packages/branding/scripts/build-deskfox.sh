@@ -268,18 +268,63 @@ if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "
         if [[ -n "$OLD_DMG" ]]; then
             rm -f "$OLD_DMG"
             DMG_VOLNAME=$(basename "$APP_BUNDLE" .app)
-            # 用临时目录构建 DMG 内容:放 .app + /Applications 快捷方式
-            # 没有这个快捷方式,用户打开 DMG 只看到 .app 图标,不知道往哪拖(标准 macOS 安装体验)
+
+            # === DMG 布局流程(标准 macOS drag-to-install 体验) ===
+            # 1. 先建可读写 UDRW 镜像(含 .app + /Applications 快捷方式)
+            # 2. 挂载后用 AppleScript 设置 Finder 窗口大小 + 图标位置
+            #    布局:DeskFox 左(170,165),Applications 右(410,165),窗口 580×360,图标 96px
+            # 3. 挂载期间 macOS 会自动建 .fseventsd — 在 AppleScript 前后各删一次,防止出现在用户界面
+            # 4. 转成压缩 UDZO 最终分发格式
             DMG_STAGING=$(mktemp -d)
-            cp -R "$APP_BUNDLE" "$DMG_STAGING/"
+            DMG_TMPIMG=$(mktemp /tmp/deskfox_rw_XXXXXX.dmg)
+            cp -R "$APP_BUNDLE" "$DMG_STAGING/DeskFox.app"
             ln -s /Applications "$DMG_STAGING/Applications"
-            hdiutil create -volname "$DMG_VOLNAME" \
-                           -srcfolder "$DMG_STAGING" \
-                           -ov -format UDZO \
-                           "$OLD_DMG" 2>/dev/null \
-                && echo "[deskfox]   DMG recreated (with Applications shortcut): $OLD_DMG" \
-                || echo "[deskfox]   DMG recreate WARN"
+            hdiutil create -srcfolder "$DMG_STAGING" \
+                           -volname "$DMG_VOLNAME" \
+                           -fs HFS+ -format UDRW \
+                           -size 1600m \
+                           "$DMG_TMPIMG" 2>/dev/null
             rm -rf "$DMG_STAGING"
+
+            DMG_MOUNT_PT=$(hdiutil attach "$DMG_TMPIMG" -readwrite -noverify -noautoopen 2>/dev/null \
+                           | tail -1 | awk -F'\t' '{print $NF}')
+
+            if [[ -n "$DMG_MOUNT_PT" ]]; then
+                # 第一轮清除(挂载后 macOS 立即建的)
+                rm -rf "$DMG_MOUNT_PT/.fseventsd" "$DMG_MOUNT_PT/.Spotlight-V100" "$DMG_MOUNT_PT/.Trashes" 2>/dev/null || true
+
+                # AppleScript 设置 Finder 窗口布局
+                osascript 2>/dev/null <<APPLESCRIPT
+tell application "Finder"
+  tell disk "$DMG_VOLNAME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set bounds of container window to {400, 120, 980, 480}
+    set theViewOptions to icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 96
+    set position of item "DeskFox.app" of container window to {170, 165}
+    set position of item "Applications" of container window to {410, 165}
+    update without registering applications
+    delay 3
+    close
+  end tell
+end tell
+APPLESCRIPT
+
+                # 第二轮清除(Finder 打开期间 macOS 可能重建)
+                rm -rf "$DMG_MOUNT_PT/.fseventsd" "$DMG_MOUNT_PT/.Spotlight-V100" "$DMG_MOUNT_PT/.Trashes" 2>/dev/null || true
+                sync
+
+                hdiutil detach "$DMG_MOUNT_PT" -force 2>/dev/null
+            fi
+
+            hdiutil convert "$DMG_TMPIMG" -format UDZO -imagekey zlib-level=9 -o "$OLD_DMG" 2>/dev/null \
+                && echo "[deskfox]   DMG recreated with layout (DeskFox left, Applications right): $OLD_DMG" \
+                || echo "[deskfox]   DMG recreate WARN"
+            rm -f "$DMG_TMPIMG"
         fi
 
         echo "[deskfox] === post-build LO signing complete ==="
