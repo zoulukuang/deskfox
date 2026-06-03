@@ -1953,8 +1953,7 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     installFetchMock()
     try {
       await pipeline.testHandle(makeFileEvent("fk_fail", "doc.txt"))
-      expect(sentTexts.some((t) => t.includes("没能保存"))).toBe(true)
-      expect(sentTexts.some((t) => t.includes("Connection refused"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("没能保存") && t.includes("Connection refused"))).toBe(true)
     } finally {
       uninstallFetchMock()
     }

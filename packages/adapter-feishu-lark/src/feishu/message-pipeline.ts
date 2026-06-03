@@ -1223,7 +1223,7 @@ export class MessagePipeline {
       console.warn(`[pipeline ${this.opts.accountId}] file download/save failed (${fileName}):`, msg)
       await this.sendFeishuText(
         event.chatId,
-        `😅 没能保存《${fileName}》(原因:${msg})。`,
+        `😅 没能保存《${fileName}》\n${msg}`,
       ).catch(() => {})
       return
     }
@@ -1356,22 +1356,21 @@ export class MessagePipeline {
     }
     clearTimeout(handle)
     if (!res.ok) {
-      // 飞书 API 返 400：大文件超出飞书服务端限制，或 .exe 等类型被飞书安全策略屏蔽
-      // 属于飞书平台限制，DeskFox 无法绕过
       throw new Error(
         res.status === 400
-          ? `飞书不允许下载该文件(HTTP 400，可能文件过大或飞书安全策略限制此类型，非 DeskFox 问题)`
-          : `飞书文件下载失败 ${res.status} ${res.statusText} for file_key=${fileKey}`,
+          ? `飞书 API 不支持下载此文件（HTTP 400）\n飞书消息资源 API 仅支持 100MB 以内的文件，超出则返回 400。请直接在飞书客户端手动下载保存。`
+          : `飞书文件下载失败（HTTP ${res.status}）`,
       )
     }
     const buf = new Uint8Array(await res.arrayBuffer())
     if (buf.length > maxBytes) {
+      // 飞书 API 本身限制 100MB，实际上 >100MB 的文件会被飞书先返回 400，极少走到这里
       throw new Error(
-        `文件过大 ${(buf.length / 1024 / 1024).toFixed(1)}MB 超出 ${(maxBytes / 1024 / 1024).toFixed(0)}MB 限制`,
+        `文件 ${(buf.length / 1024 / 1024).toFixed(1)}MB 超出处理上限 ${(maxBytes / 1024 / 1024).toFixed(0)}MB`,
       )
     }
     if (buf.length === 0) {
-      throw new Error(`飞书文件空 (0 bytes) for file_key=${fileKey}`)
+      throw new Error(`飞书返回了空文件`)
     }
 
     // 保存到磁盘: {feishuFilesRoot}/{safeChatId}/{YYYYMMDD}-{safeFileName}
@@ -1438,7 +1437,7 @@ export class MessagePipeline {
       console.warn(`[pipeline ${this.opts.accountId}] image file download failed (${fileName}):`, msg)
       await this.sendFeishuText(
         event.chatId,
-        `😅 没能下载图片《${fileName}》(原因:${msg})。请重新发送试试?`,
+        `😅 没能下载图片《${fileName}》\n${msg}`,
       ).catch(() => {})
       return
     }
