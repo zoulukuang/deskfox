@@ -15,11 +15,11 @@
 //   legacy_office(xls/ppt/doc) — "请另存为现代格式"提示
 //   unsupported — "暂不支持"提示
 
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist"
+import { getDocument } from "pdfjs-dist"
 import { unzipSync } from "fflate"
 
-// Bun plugin bundle 单线程运行,禁用 Web Worker
-GlobalWorkerOptions.workerSrc = ""
+// pdfjs-dist 默认 workerSrc = "./pdf.worker.mjs",在 Bun bundle 环境中可正常工作
+// 不要覆盖为 "" — 空字符串会触发 "No workerSrc specified" 报错,反而让 PDF 抽取失败
 
 /** 支持的文件格式档位 */
 export type FileFormat =
