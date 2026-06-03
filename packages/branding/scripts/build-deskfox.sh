@@ -202,45 +202,7 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
     # 路径相对于 packages/desktop/src-tauri/(同 tauri.conf.json resources 约定)
     LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
 
-    # === 1.9.1 prod 构建时用 Developer ID 预签名 LO bundle ===
-    # 背景:Tauri 的 --deep 签名不覆盖 Resources/ 子树内的已有签名(ad-hoc 签名会被保留)。
-    # prepare-lo-bundle.sh 创建的 ad-hoc 签名(codesign -s -)缺少 Developer ID + timestamp,
-    # Apple 公证会以 "The binary is not signed with a valid Developer ID certificate" 拒绝。
-    # 解法:prod build 前用 APPLE_SIGNING_IDENTITY 预签名所有 dylib/executable,
-    # 让 Tauri 拷贝进 .app 后各 dylib 已有正确 Developer ID 签名。
-    if [[ "$SIGN_ENABLED" -eq 1 && -n "$APPLE_SIGNING_IDENTITY" ]]; then
-        echo "[deskfox] pre-signing LO bundle (dylibs + executables) with Developer ID..."
-        # Tauri 签名不覆盖 DeskFox.app/Contents/Resources/ 子树。
-        # 需要手动签:
-        #   1. .dylib/.so — Contents/Frameworks/ 下的共享库
-        #   2. Contents/MacOS/ 下的可执行文件(soffice 等)
-        # 注意:不签 LO.app bundle seal(codesign --deep on LO_BUNDLE_APP) —
-        # 那会创建 sealed resource 列表;Tauri 再签时 dylib hash 变化会让 seal 失效 → Invalid。
-        # 叶节点先签,outer bundle seal 由 DeskFox.app 的 Tauri 签名覆盖整个 Resources/ 即可。
-
-        # 1. 签所有 dylib / .so
-        find "$LO_BUNDLE_APP/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) \
-            | while read -r f; do
-                codesign --sign "$APPLE_SIGNING_IDENTITY" \
-                         --options runtime \
-                         --timestamp \
-                         --force \
-                         "$f" 2>/dev/null || true
-            done
-
-        # 2. 签 Contents/MacOS/ 里的可执行文件(soffice 等)
-        # Tauri 不处理 Resources/ 子树里的 executable,必须手签
-        find "$LO_BUNDLE_APP/Contents/MacOS" -type f -perm +0111 \
-            | while read -r f; do
-                codesign --sign "$APPLE_SIGNING_IDENTITY" \
-                         --options runtime \
-                         --timestamp \
-                         --force \
-                         "$f" 2>/dev/null || true
-            done
-
-        echo "[deskfox] LO bundle dylibs + executables pre-signed (no bundle seal — avoids double-sign)"
-    fi
+    # 无预签名 — 嵌套 bundle 签名必须在 Tauri 构建后按顺序做(见步骤 2.5)
 else
     echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
     echo "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"
@@ -261,6 +223,66 @@ BUILD_EXIT=0
         bun run tauri build "${TAURI_CONFIGS[@]}"
     fi
 ) || BUILD_EXIT=$?
+
+# === 2.5 post-build: 对 .app 里的 LO 嵌套 bundle 做正确顺序的 Developer ID 签名 + 重建 DMG ===
+# Apple 嵌套 bundle 签名规则:先签叶节点(dylib),再签 executable,再签 inner bundle,最后签 outer bundle。
+# Tauri 只签 Contents/MacOS/(sidecar + main binary)和 .app 本体,不覆盖 Resources/ 子树。
+# 因此 LO bundle 需要在 Tauri 签完 .app 后手动补签,然后重新封 DeskFox.app 外层 seal,最后重建 DMG。
+if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "$NO_BUNDLE" -eq 0 ]]; then
+    APP_BUNDLE="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/macos/DeskFox.app"
+    LO_IN_APP="$APP_BUNDLE/Contents/Resources/libreoffice"
+    ENTITLEMENTS="$REPO_ROOT/packages/desktop/src-tauri/entitlements.plist"
+    if [[ -d "$LO_IN_APP" ]]; then
+        echo "[deskfox] === post-build LO signing (nested bundle order) ==="
+
+        # 1. 签叶节点 dylib / .so
+        echo "[deskfox] step 1: signing LO dylibs..."
+        find "$LO_IN_APP/Contents/Frameworks" -type f \( -name "*.dylib" -o -name "*.so" \) \
+            | while read -r f; do
+                codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force "$f" 2>/dev/null || true
+            done
+
+        # 2. 签 Contents/MacOS/ 可执行文件(soffice 等)
+        echo "[deskfox] step 2: signing LO executables in MacOS/..."
+        find "$LO_IN_APP/Contents/MacOS" -type f -perm +0111 \
+            | while read -r f; do
+                codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force "$f" 2>/dev/null || true
+            done
+
+        # 3. 签 LO inner bundle(不带 --deep,叶节点已在步骤 1/2 签好)
+        echo "[deskfox] step 3: sealing LO inner bundle..."
+        codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force \
+                 "$LO_IN_APP" 2>/dev/null \
+            && echo "[deskfox]   LO bundle seal OK" || echo "[deskfox]   LO bundle seal WARN"
+
+        # 4. 重签 DeskFox.app 外层 seal(不带 --deep,只更新 outer seal 覆盖新 LO seal)
+        echo "[deskfox] step 4: re-sealing DeskFox.app outer bundle..."
+        codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force \
+                 --entitlements "$ENTITLEMENTS" \
+                 "$APP_BUNDLE" 2>/dev/null \
+            && echo "[deskfox]   DeskFox.app re-sealed OK" || echo "[deskfox]   DeskFox.app re-seal WARN"
+
+        # 5. 重建 DMG(Tauri 已经建了一个,但那个 .app 是重签前的;重建保证 DMG 里是正确签名的版本)
+        echo "[deskfox] step 5: recreating DMG from re-signed .app..."
+        DMG_DIR="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/dmg"
+        OLD_DMG=$(ls "$DMG_DIR"/*.dmg 2>/dev/null | grep -v "DeskFox Dev" | head -1)
+        if [[ -z "$OLD_DMG" ]]; then
+            OLD_DMG=$(ls "$DMG_DIR"/*.dmg 2>/dev/null | head -1)
+        fi
+        if [[ -n "$OLD_DMG" ]]; then
+            rm -f "$OLD_DMG"
+            DMG_VOLNAME=$(basename "$APP_BUNDLE" .app)
+            hdiutil create -volname "$DMG_VOLNAME" \
+                           -srcfolder "$APP_BUNDLE" \
+                           -ov -format UDZO \
+                           "$OLD_DMG" 2>/dev/null \
+                && echo "[deskfox]   DMG recreated: $OLD_DMG" \
+                || echo "[deskfox]   DMG recreate WARN"
+        fi
+
+        echo "[deskfox] === post-build LO signing complete ==="
+    fi
+fi
 
 # === 3. restore(无论 build 成败都还原)===
 bash "$SCRIPT_DIR/restore-icons.sh"
