@@ -122,8 +122,31 @@ lo-bundle 捆绑 LibreOffice 落地 + 实测 314MB pptx 19s 转完后,user 拍�
 
 **R4 override 论证（`libreoffice.ts` 黑名单）**:该文件是 fork 新建的 office→PDF 功能(上游 opencode 无此文件,头部 FORK marker),黑名单按 `packages/opencode/` 路径前缀误伤;`CONVERSION_TIMEOUT_MS` 是文件内硬编码常量,无法在文件外用 wrapper 修改(wrapper 方案需新建配置注入层 + 改更多文件,3:1 反向);改动 = 1 行常量值 + 3 行注释,不改转换逻辑,风险极低,可单独 revert。本季第 2 笔 override(首笔 office-installer.ts 同属黑名单误伤 fork-only),仍在配额内(≤2/季)。
 
+## code-review 后续修复（2026-06-03，high effort 多 agent 审查）
+
+7 角度 finder + verify,10 条发现,处理如下:
+
+| # | 发现 | 处理 |
+|---|------|------|
+| 1 | **raw .pdf 跟 office 一起放到 1GB,但 PDF 走 base64 inline 进 webview(不经 sidecar),会 V8 OOM** | ✅ 修:PDF 从 office 拆出单列 `pdf` 类,限 200MB(file-size-guard.ts);docx/pptx/xlsx 仍 1GB(走 sidecar 转换+懒加载) |
+| 2 | bundled 字段没进 Effect Schema,跨 HTTP 边界被 strip,前端恒 undefined | ✅ 修:删 bundled 字段(YAGNI 当前无消费者),保留 isBundled 内部判 downloadSizeMB;注释标明未来要外露须同步 schema |
+| 3 | 内置版 25.8.7 vs 在线下载版 26.2.2 两套引擎 | ✅ 修:office-installer.ts LIBREOFFICE_VERSION 26.2.2→25.8.7,与 bundle 统一稳定线(user 拍板) |
+| 7 | status() 用 `===` 比较 bundled 路径,Win 大小写/派生差异可能误判 | ✅ 修:改 `.toLowerCase()` 大小写不敏感比较 |
+| 5 | 脚本缺剥皮后体积自检,loBaseDir 推错则静默全失效仍报 OK | ✅ 修:剥皮后体积 >700MB 告警提示核对 |
+| 6 | soffice.exe 发现 -First 1 仅排除 UninstallHelper,未来多变体可能选错 | ✅ 修:加 `program\` 目录过滤,只认主程序 |
+| 9 | 下载仅 size 检查无 checksum,截断的错误页可能通过 | ✅ 修:加 MSI 文件头(复合文档 magic)校验 |
+| 4 | 近 1GB 复杂文件可能超 120s 超时 | 📝 已知权衡(user 选 1GB+120s),注释已警示,不改 |
+| 8 | 前端 1GB / 后端 120s 两处 magic number 无机器化锁定 | 📝 注释已交叉引用,跨包难共享常量,不改 |
+| 10 | 镜像列表 TS+PS1 双份手工同步 | 📝 跨语言难共享,accepted tax,注释已标 |
+
+**两条 finder 报的"剥皮删坏功能"(resource 删 en-US / wordbook 整删触发 profile 失败)被实测 REFUTED** —— 纯脚本产出 bundle 实测 docx/xlsx/pptx+中文+320MB 全转换成功、soffice 正常创建 profile。
+
+**R4 override 论证（`office-installer.ts` 黑名单,本季第 3 笔）**:fork 新建文件(上游 opencode 无 office→PDF 功能),黑名单按 `packages/opencode/` 前缀误伤。改动 = 版本默认值 1 处 + 删 bundled 字段(typecheck 确认无消费者) + isBundled 比较大小写化;均为文件内常量/类型/函数,无法 wrapper 外改;不碰核心检测/转换逻辑,可单独 revert。三笔 override(office-installer ×2 + libreoffice ×1)同属 packages/opencode/ 下 fork-only office 文件的系统性误伤 —— **建议后续给 pre-commit EXCEPTION_REGEX 加 office 文件豁免根治**(类比 provider-icons sprite/types 豁免)。
+
 ## Commit hash
 
 - `934c964a0` —— 首笔（office-installer 检测 + iss 条件编译 + 脚本初版 + 文档）
 - `c7e629d3d` —— 二笔（prepare-lo-bundle.ps1 实测修正:25.8.7/管理员放宽/extensions 留骨架/BOM + changelog 落地）
-- 待填写 —— 三笔（office 预览上限 200MB→1GB + 后端超时 30s→120s + 测试）
+- `18ee7a6ca` —— 三笔（office 预览上限 200MB→1GB + 后端超时 30s→120s + 测试）
+- 待填写 —— 四笔（code-review 非黑名单修复:PDF 拆分 200MB + 脚本健壮性 #5/#6/#9）
+- 待填写 —— 五笔（code-review 黑名单:office-installer.ts 版本统一 + 删 bundled + 大小写比较,R4 第 3 笔 override）

@@ -90,6 +90,18 @@ if ($reuse) {
     if (-not $downloaded) { throw "所有镜像均下载失败。请检查网络或手动下载 MSI 到: $msiPath" }
 }
 
+# 校验 MSI 文件头(复合文档 magic D0CF11E0A1B11AE1),防 CDN/代理截断的 HTML 错误页或半截文件
+# 通过 size>100MB 检查却不是有效 MSI(2026-06-03 code-review #9)。只读前 8 字节,不整文件载入。
+$fsCheck = [System.IO.File]::OpenRead($msiPath)
+try {
+    $head = New-Object byte[] 8
+    $null = $fsCheck.Read($head, 0, 8)
+} finally { $fsCheck.Close() }
+$msiMagic = @(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1)
+if (@(Compare-Object $head $msiMagic -SyncWindow 0).Count -ne 0) {
+    throw "MSI 文件头校验失败 — 非有效 MSI(可能下载被截断/返回错误页): $msiPath。删除后重跑(加 -Force)。"
+}
+
 # -- Step 2: msiexec /a 解压 ---------------------------------------------------
 Write-Host "[2/4] 解压 MSI(msiexec /a) -> $extractBase ..."
 Remove-Item $extractBase -Recurse -Force -ErrorAction SilentlyContinue
@@ -103,10 +115,12 @@ if ($proc.ExitCode -ne 0) {
 }
 
 # 找 soffice.exe 确定 LO base dir
+# 只认 program\soffice.exe(真正的 LO 主程序),排除 UninstallHelper 及未来可能新增的其它
+# soffice.exe 变体 — 否则 -First 1 选错会让 loBaseDir 推导错位、剥皮全静默失效(2026-06-03 code-review #6)
 $sofficeExe = Get-ChildItem -Path $extractBase -Filter "soffice.exe" -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notlike "*\UninstallHelper*" } |
+    Where-Object { $_.FullName -notlike "*\UninstallHelper*" -and $_.DirectoryName -like "*\program" } |
     Select-Object -First 1
-if (-not $sofficeExe) { throw "解压目录中找不到 soffice.exe: $extractBase" }
+if (-not $sofficeExe) { throw "解压目录中找不到 program\soffice.exe: $extractBase" }
 
 $loProgramDir = $sofficeExe.DirectoryName
 $loBaseDir    = Split-Path $loProgramDir -Parent
@@ -194,5 +208,15 @@ Write-Host "  版本: LibreOffice $Version"
 Write-Host "  路径: $outputDir"
 Write-Host "  大小: $([math]::Round($finalSize/1MB)) MB (未压缩,LZMA2 压缩后约减半)"
 Write-Host ""
+
+# 剥皮后体积 sanity check(2026-06-03 code-review #5):脚本通篇 Test-Path 跳过 + SilentlyContinue,
+# 一旦 loBaseDir 推导错位,所有剥皮静默跳过、bundle 仍 1GB+ 但脚本照报 [OK]。这里兜底告警:
+# 剥皮成功后预期 ~636MB,远超 700MB 说明剥皮大概率未生效,提示运维核对上面各剥皮项是否都是 0 MB。
+if (($finalSize / 1MB) -gt 700) {
+    Write-Warning "[!] bundle 体积 $([math]::Round($finalSize/1MB)) MB 超过预期上限 700MB!"
+    Write-Warning "    剥皮可能未生效(loBaseDir 推导错位?) — 请核对上面剥皮日志,若各项显示 0 MB 即未剥到。"
+    Write-Warning "    不要直接打包此 bundle,否则安装包会暴增。"
+}
+
 Write-Host "下一步: 运行 pack-installer.ps1 将自动打入 installer"
 Write-Host "=============================================="
