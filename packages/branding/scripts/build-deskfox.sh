@@ -268,12 +268,18 @@ if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "
         if [[ -n "$OLD_DMG" ]]; then
             rm -f "$OLD_DMG"
             DMG_VOLNAME=$(basename "$APP_BUNDLE" .app)
+            # 用临时目录构建 DMG 内容:放 .app + /Applications 快捷方式
+            # 没有这个快捷方式,用户打开 DMG 只看到 .app 图标,不知道往哪拖(标准 macOS 安装体验)
+            DMG_STAGING=$(mktemp -d)
+            cp -R "$APP_BUNDLE" "$DMG_STAGING/"
+            ln -s /Applications "$DMG_STAGING/Applications"
             hdiutil create -volname "$DMG_VOLNAME" \
-                           -srcfolder "$APP_BUNDLE" \
+                           -srcfolder "$DMG_STAGING" \
                            -ov -format UDZO \
                            "$OLD_DMG" 2>/dev/null \
-                && echo "[deskfox]   DMG recreated: $OLD_DMG" \
+                && echo "[deskfox]   DMG recreated (with Applications shortcut): $OLD_DMG" \
                 || echo "[deskfox]   DMG recreate WARN"
+            rm -rf "$DMG_STAGING"
         fi
 
         echo "[deskfox] === post-build LO signing complete ==="
