@@ -114,9 +114,45 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ---
 
+---
+
+## Commit 4: REQ-035 PDF 文本抽取 via pdfjs-dist
+
+**commit**: `43c1c4525`
+**分支**: `feat/feishu-file-and-quote-recv`
+**规模**: ~158 行净代码(6 文件)
+**override-blacklist**: `bun.lock` — pdfjs-dist 新依赖必然修改,无 wrapper 替代方案
+
+### 改动文件
+
+| 文件 | 类型 | 改动说明 |
+|---|---|---|
+| `packages/adapter-feishu-lark/package.json` | fork-only | 新增 pdfjs-dist ^4.4.168(实装 4.10.38) |
+| `bun.lock` | 自动生成 | bun install 后 lockfile 更新(override-blacklist) |
+| `packages/adapter-feishu-lark/src/feishu/file-content-extractor.ts` | fork-only | 新增 `extractPdfTextAsync`;pdfjs import + `GlobalWorkerOptions.workerSrc=""`; pdf sync 路径改为兜底提示 |
+| `packages/adapter-feishu-lark/src/feishu/message-pipeline.ts` | 上游改 | import 加 `extractPdfTextAsync`;`handleFileMessage` PDF 路径从"直接回复"改为 `extractPdfTextAsync` → 注入 LLM(与 txt/docx 统一) |
+| `packages/adapter-feishu-lark/src/feishu/__tests__/file-content-extractor.test.ts` | fork-only | 新增 F_PDF1/2/3(错误路径 + 最小真实 PDF 成功路径) |
+| `packages/adapter-feishu-lark/src/feishu/__tests__/message-pipeline.test.ts` | fork-only | F12b 改为 fetch mock + 验 promptAsync 被调用 |
+
+### 关键实现决策
+
+- **pdfjs-dist 选型理由**: 使用 `Uint8Array` 不依赖 `Buffer.isBuffer()`(回避 Bun bundle CJS 兼容问题);有 ESM build(`build/pdf.mjs`);文本抽取路径不需要 canvas/DOM
+- **Worker 禁用**: `GlobalWorkerOptions.workerSrc = ""` 模块级设置,Bun plugin 单线程无 Web Worker
+- **graceful 降级**:
+  - 扫描版/全图 PDF(无文字层) → "无可提取文字"提示 → 注入 LLM
+  - 加密/损坏 → 具体 error 提示 → 注入 LLM
+  - 正常 PDF → 逐页 `getTextContent()` 拼文本 → truncate(50000) → 注入 LLM
+- **统一注入格式**: PDF 与 txt/docx 完全相同格式(`路径+大小+格式+文件内容`)
+
+### 测试结果
+691 tests pass(全量),typecheck clean
+
+---
+
 ## 回退方法
 
-三笔均可独立 `git revert`:
+四笔均可独立 `git revert`:
+- `git revert 43c1c4525` — 回退 PDF pdfjs-dist 支持
 - `git revert be11111fa` — 回退磁盘存储 + 注入格式升级
 - `git revert 6050a9bd8` — 回退 REQ-035 文件接收(内存版)
 - `git revert 9e430f5a9` — 回退 REQ-036 引用回复
