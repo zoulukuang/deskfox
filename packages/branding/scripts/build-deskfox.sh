@@ -338,12 +338,13 @@ if [[ "$BUILD_EXIT" -eq 0 && "$SIGN_ENABLED" -eq 1 && "$(uname -s)" == "Darwin" 
     DMG_DIR="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/dmg"
     DMG=$(ls "$DMG_DIR"/*.dmg 2>/dev/null | head -1)
     if [[ -n "$DMG" && -f "$DMG" ]]; then
-        echo "[deskfox] 提交公证(5-15 min,偶发更久):$(basename "$DMG")"
+        echo "[deskfox] 提交公证(通常 5-30 min,含 LO bundle 的大 DMG 可能需 1-2h):$(basename "$DMG")"
+        # FORK: 含 LO bundle 的 DMG 约 270MB,苹果公证实测需 ~2h;原 30m 超时不够用 2026-06-03
         if xcrun notarytool submit "$DMG" \
              --key "$DESKFOX_NOTARY_KEY" \
              --key-id "$DESKFOX_NOTARY_KEY_ID" \
              --issuer "$DESKFOX_NOTARY_ISSUER" \
-             --wait --timeout 30m; then
+             --wait --timeout 2h; then
             xcrun stapler staple "$DMG"
             NOTARIZE_OK=1
             echo "[deskfox] ✅ 公证 + 钉票完成:$(basename "$DMG")"

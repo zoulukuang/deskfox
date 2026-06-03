@@ -1,5 +1,8 @@
 #!/bin/sh
 set -e
+# FORK: bun 安装在外置 SSD,系统 PATH 里找不到,显式补进来
+# ship 过程多次因 "bun: command not found" 被 pre-push 卡住 2026-06-03
+export PATH="/Volumes/ExtSSD/.bun/bin:$PATH"
 # Check if bun version matches package.json
 # keep in sync with packages/script/src/index.ts semver qualifier
 bun -e '
