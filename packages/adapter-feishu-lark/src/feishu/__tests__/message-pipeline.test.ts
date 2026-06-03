@@ -293,6 +293,7 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach } from "bun:test"
+import { zipSync } from "fflate"
 
 interface SentText {
   chatId: string
@@ -1845,21 +1846,45 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     return { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock }
   }
 
-  test("F13: file 消息类型不被 skip(进入 handleFileMessage)", async () => {
-    // 不支持格式 → 友好回复,不 skip(说明 type 门控通过了)
-    const { pipeline, sentTexts } = buildFilePipeline()
-    await pipeline.testHandle(makeFileEvent("fk_1", "image.png"))
-    // 应收到"暂不支持"提示,不是"skip unsupported message"静默丢弃
-    expect(sentTexts).toHaveLength(1)
-    expect(sentTexts[0]).toContain("暂不支持")
-    expect(sentTexts[0]).toContain("image.png")
+  test("F13: png file → 进入 vision 路径(而非静默 skip 或 '暂不支持')", async () => {
+    // 图片格式 → 走 handleImageFile,有"识别中"进度提示
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fetchThrows: new Error("no network in test") })
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_1", "image.png"))
+      // vision 路径进入 → 有"识别中"提示
+      expect(sentTexts.some((t) => t.includes("识别中"))).toBe(true)
+      // 不走"暂不支持"
+      expect(sentTexts.some((t) => t.includes("暂不支持"))).toBe(false)
+      // 下载失败 → LLM 未调用
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
   })
 
-  test("F12: 不支持格式 → 友好回复,不走 LLM", async () => {
+  test("F12: xlsx → 下载+提取+注入 LLM", async () => {
+    const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fileBytes: makeMinimalXlsxForTest() })
+    installFetchMock()
+    try {
+      void pipeline.testHandle(makeFileEvent("fk_xlsx", "data.xlsx"))
+      await new Promise((r) => setTimeout(r, 200))
+      expect(capturedPromptTexts).toHaveLength(1)
+      expect(capturedPromptTexts[0]).toContain("data.xlsx")
+      expect(capturedPromptTexts[0]).toContain("已保存")
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F12c: xls(旧格式) → 友好'请另存为'回复,不走 LLM", async () => {
     const { pipeline, sentTexts, capturedPromptTexts } = buildFilePipeline()
-    await pipeline.testHandle(makeFileEvent("fk_xlsx", "data.xlsx"))
+    await pipeline.testHandle(makeFileEvent("fk_xls", "old.xls"))
     expect(sentTexts).toHaveLength(1)
-    expect(sentTexts[0]).toContain("暂不支持")
+    expect(sentTexts[0]).toContain("old.xls")
+    expect(sentTexts[0]).toContain("xlsx")
     expect(capturedPromptTexts).toHaveLength(0)
   })
 
@@ -1914,3 +1939,11 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     }
   })
 })
+
+/** 构造含共享字符串的最小 xlsx(用于 F12 pipeline 测试) */
+function makeMinimalXlsxForTest(): Uint8Array {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const ss = `<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Name</t></si><si><t>Score</t></si></sst>`
+  const sheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row></sheetData></worksheet>`
+  return zipSync({ "xl/sharedStrings.xml": enc(ss), "xl/worksheets/sheet1.xml": enc(sheet) })
+}

@@ -40,11 +40,26 @@ describe("detectFileFormat (F1-F5)", () => {
   test("F4: pdf → 'pdf'", () => {
     expect(detectFileFormat("slides.pdf")).toBe("pdf")
   })
-  test("F5: png → 'unsupported'", () => {
-    expect(detectFileFormat("image.png")).toBe("unsupported")
+  test("F5: png → 'image'", () => {
+    expect(detectFileFormat("image.png")).toBe("image")
   })
-  test("F5b: xlsx → 'unsupported'", () => {
-    expect(detectFileFormat("table.xlsx")).toBe("unsupported")
+  test("F5b: xlsx → 'xlsx'", () => {
+    expect(detectFileFormat("table.xlsx")).toBe("xlsx")
+  })
+  test("F5c: pptx → 'pptx'", () => {
+    expect(detectFileFormat("slides.pptx")).toBe("pptx")
+  })
+  test("F5d: xls → 'legacy_office'", () => {
+    expect(detectFileFormat("old.xls")).toBe("legacy_office")
+  })
+  test("F5e: jpg → 'image'", () => {
+    expect(detectFileFormat("photo.jpg")).toBe("image")
+  })
+  test("F5f: webp → 'image'", () => {
+    expect(detectFileFormat("anim.webp")).toBe("image")
+  })
+  test("F5g: exe → 'unsupported'", () => {
+    expect(detectFileFormat("app.exe")).toBe("unsupported")
   })
   test("大写扩展名不敏感", () => {
     expect(detectFileFormat("FILE.TXT")).toBe("text")
@@ -288,4 +303,113 @@ function buildMinimalPdf(text: string): Uint8Array {
   const trailer = `trailer<</Size 6/Root 1 0 R>>\nstartxref\n${xrefStart}\n%%EOF\n`
 
   return new TextEncoder().encode(body + xref + trailer)
+}
+
+// ============================================================
+// F_XLSX — xlsx 文本抽取
+// ============================================================
+
+describe("extractTextFromBuffer — xlsx (F_XLSX)", () => {
+  test("F_XLSX1: 无效字节 → 不抛,返解析失败提示", () => {
+    const buf = new TextEncoder().encode("not a zip")
+    const result = extractTextFromBuffer(buf, "xlsx", "data.xlsx")
+    expect(result.truncated).toBe(false)
+    expect(result.text).toContain("data.xlsx")
+    expect(result.text.length).toBeGreaterThan(0)
+  })
+
+  test("F_XLSX2: 最小 xlsx(共享字符串) → 提取到表格内容", () => {
+    const xlsx = makeMinimalXlsx([["姓名", "分数"], ["张三", "95"]])
+    const result = extractTextFromBuffer(xlsx, "xlsx", "test.xlsx")
+    expect(result.truncated).toBe(false)
+    expect(result.text).toContain("姓名")
+    expect(result.text).toContain("分数")
+    expect(result.text).toContain("张三")
+  })
+
+  test("F_XLSX3: 数值单元格 → 正常提取数字", () => {
+    const xlsx = makeMinimalXlsxNumeric([[100, 200], [300, 400]])
+    const result = extractTextFromBuffer(xlsx, "xlsx", "numbers.xlsx")
+    expect(result.truncated).toBe(false)
+    expect(result.text).toContain("100")
+    expect(result.text).toContain("400")
+  })
+})
+
+// ============================================================
+// F_PPTX — pptx 文本抽取
+// ============================================================
+
+describe("extractTextFromBuffer — pptx (F_PPTX)", () => {
+  test("F_PPTX1: 无效字节 → 不抛,返解析失败提示", () => {
+    const buf = new TextEncoder().encode("not a zip")
+    const result = extractTextFromBuffer(buf, "pptx", "slides.pptx")
+    expect(result.truncated).toBe(false)
+    expect(result.text).toContain("slides.pptx")
+  })
+
+  test("F_PPTX2: 最小 pptx(两页) → 提取各页文本", () => {
+    const pptx = makeMinimalPptx(["第一页标题", "第二页内容"])
+    const result = extractTextFromBuffer(pptx, "pptx", "test.pptx")
+    expect(result.truncated).toBe(false)
+    expect(result.text).toContain("第一页标题")
+    expect(result.text).toContain("第二页内容")
+    expect(result.text).toContain("第1页")
+    expect(result.text).toContain("第2页")
+  })
+})
+
+// ============================================================
+// F_LEGACY — legacy_office friendly message
+// ============================================================
+
+describe("extractTextFromBuffer — legacy_office", () => {
+  test("xls → 返回'请另存为 xlsx'提示,不抛", () => {
+    const result = extractTextFromBuffer(new Uint8Array(4), "legacy_office", "old.xls")
+    expect(result.truncated).toBe(false)
+    expect(result.text).toContain("old.xls")
+    expect(result.text).toContain("xlsx")
+  })
+})
+
+// ============================================================
+// Helpers
+// ============================================================
+
+/** 构造含共享字符串的最小 xlsx */
+function makeMinimalXlsx(rows: string[][]): Uint8Array {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const allStrings: string[] = []
+  const idx = new Map<string, number>()
+  for (const row of rows) for (const cell of row) if (!idx.has(cell)) { idx.set(cell, allStrings.length); allStrings.push(cell) }
+
+  const ss = `<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${allStrings.map((s) => `<si><t>${s}</t></si>`).join("")}</sst>`
+  const cols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  const sheetRows = rows.map((row, ri) =>
+    `<row r="${ri + 1}">${row.map((cell, ci) => `<c r="${cols[ci]}${ri + 1}" t="s"><v>${idx.get(cell)}</v></c>`).join("")}</row>`,
+  ).join("")
+  const sheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`
+  return zipSync({ "xl/sharedStrings.xml": enc(ss), "xl/worksheets/sheet1.xml": enc(sheet) })
+}
+
+/** 构造含数值单元格的最小 xlsx */
+function makeMinimalXlsxNumeric(rows: number[][]): Uint8Array {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const cols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  const sheetRows = rows.map((row, ri) =>
+    `<row r="${ri + 1}">${row.map((n, ci) => `<c r="${cols[ci]}${ri + 1}"><v>${n}</v></c>`).join("")}</row>`,
+  ).join("")
+  const sheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`
+  return zipSync({ "xl/worksheets/sheet1.xml": enc(sheet) })
+}
+
+/** 构造含 N 页的最小 pptx */
+function makeMinimalPptx(slideTexts: string[]): Uint8Array {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const files: Record<string, Uint8Array> = {}
+  for (let i = 0; i < slideTexts.length; i++) {
+    const xml = `<?xml version="1.0"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>${slideTexts[i]}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`
+    files[`ppt/slides/slide${i + 1}.xml`] = enc(xml)
+  }
+  return zipSync(files)
 }

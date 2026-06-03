@@ -49,8 +49,13 @@ import {
   type SubMessage,
 } from "./merge-forward-flatten"
 import type { PromptDispatcher } from "./prompt-dispatcher"
-// FORK: REQ-035 文件内容抽取 2026-06-02 / PDF 支持 2026-06-03
-import { detectFileFormat, extractPdfTextAsync, extractTextFromBuffer } from "./file-content-extractor"
+// FORK: REQ-035 文件内容抽取 2026-06-02 / PDF 2026-06-03 / xlsx+pptx+image 2026-06-03
+import {
+  detectFileFormat,
+  extractPdfTextAsync,
+  extractTextFromBuffer,
+  getImageMime,
+} from "./file-content-extractor"
 
 // FORK-BEGIN: REQ-035 文件路径注入辅助函数 2026-06-03
 function formatFileSize(bytes: number): string {
@@ -1179,16 +1184,23 @@ export class MessagePipeline {
     // FORK-BEGIN: REQ-035 文件格式判断 + 下载保存 + 注入格式升级 2026-06-03
     const format = detectFileFormat(fileName)
 
-    // 不支持格式 → 直接友好回复,不下载
-    if (format === "unsupported") {
-      await this.sendFeishuText(
-        event.chatId,
-        `⚠️ 暂不支持读取《${fileName}》格式。\n目前支持:txt / md / csv / json / 常见代码文件 / docx。`,
-      ).catch(() => {})
+    // 不支持 / 旧版 Office → 直接友好回复,不下载
+    if (format === "unsupported" || format === "legacy_office") {
+      const msg =
+        format === "legacy_office"
+          ? `⚠️ 旧版 Office 格式《${fileName}》暂不支持直接解析。\n请另存为 .xlsx / .docx / .pptx 后重发。`
+          : `⚠️ 暂不支持读取《${fileName}》格式。\n目前支持:图片 / txt / md / csv / json / 代码文件 / docx / xlsx / pptx / pdf。`
+      await this.sendFeishuText(event.chatId, msg).catch(() => {})
       return
     }
 
-    // ack + 进度反馈(pdf 和 text/docx 都下载)
+    // 图片 → 多模态 vision 路径(vision 预检 → 下载 → file part 注入)
+    if (format === "image") {
+      await this.handleImageFile(event, fileName, fileKey)
+      return
+    }
+
+    // ack + 进度反馈(text/docx/xlsx/pptx/pdf 都下载)
     void this.ackMessage(event.messageId).catch((err) =>
       console.warn(`[pipeline ${this.opts.accountId}] file ack failed:`, (err as Error).message),
     )
@@ -1362,6 +1374,111 @@ export class MessagePipeline {
     writeFileSync(absolutePath, buf)
 
     return { absolutePath, buf }
+  }
+
+  /**
+   * FORK: 图片文件消息多模态路径 2026-06-03
+   * 从飞书 file 类型消息里收到图片扩展名 → vision 预检 → 下载保存 → file part 注入 LLM。
+   * 与 handle() 里 messageType="image" 的处理逻辑对称,但走的是文件下载 endpoint。
+   */
+  private async handleImageFile(
+    event: ImMessageEvent,
+    fileName: string,
+    fileKey: string,
+  ): Promise<void> {
+    // vision 预检(同 handle() 路径)
+    const visionOk = await this.checkModelVisionSupport().catch(() => true)
+    if (!visionOk) {
+      const modelHint = this.opts.account.model
+        ? `${this.opts.account.model.providerID}/${this.opts.account.model.modelID}`
+        : "当前默认 model"
+      await this.sendFeishuText(
+        event.chatId,
+        `⚠️ ${modelHint} 不支持图片识别。请到 DeskFox 设置 → 飞书桥接 → 选当前账号 → 编辑 → Model，换成支持视觉的模型(如 Claude/GPT-4o/Gemini 等)。`,
+      ).catch(() => {})
+      return
+    }
+
+    void this.ackMessage(event.messageId).catch((err) =>
+      console.warn(`[pipeline ${this.opts.accountId}] image file ack failed:`, (err as Error).message),
+    )
+    await this.sendFeishuText(event.chatId, `🖼️ 收到图片文件《${fileName}》,识别中...`).catch(() => {})
+
+    // 下载 + 保存
+    let imagePart: { mime: string; filename: string; absolutePath: string }
+    try {
+      const auth = await getClientAuthContext(this.larkClient)
+      const saved = await this.downloadAndSaveFile(
+        fileKey,
+        event.messageId,
+        event.chatId,
+        fileName,
+        auth.token,
+        auth.domain,
+      )
+      imagePart = { mime: getImageMime(fileName), filename: fileName, absolutePath: saved.absolutePath }
+      console.log(
+        `[pipeline ${this.opts.accountId}] downloaded image file ${fileName} ${saved.buf.length}B → ${saved.absolutePath}`,
+      )
+    } catch (err) {
+      const msg = (err as Error).message
+      console.warn(`[pipeline ${this.opts.accountId}] image file download failed (${fileName}):`, msg)
+      await this.sendFeishuText(
+        event.chatId,
+        `😅 没能下载图片《${fileName}》(原因:${msg})。请重新发送试试?`,
+      ).catch(() => {})
+      return
+    }
+
+    // 获取 / 创建 session(同 handleFileMessage)
+    let sessionID = this.chatToSession.get(event.chatId)
+    if (!sessionID) {
+      try {
+        const res = await this.opts.opencodeClient.session.create({
+          query: { directory: IMBOT_WORKSPACE },
+          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
+        })
+        const id = (res as { data?: { id?: string } }).data?.id
+        if (!id) throw new Error("session.create returned no id")
+        sessionID = id
+        this.chatToSession.set(event.chatId, sessionID)
+        this.sessionToChat.set(sessionID, event.chatId)
+        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
+        await this.archiveSession(sessionID).catch((archErr) => {
+          console.warn(`[pipeline ${this.opts.accountId}] archive session (image file) failed:`, archErr)
+        })
+        console.log(`[pipeline ${this.opts.accountId}] new session ${sessionID} (image file:${fileName})`)
+      } catch (err) {
+        console.error(`[pipeline ${this.opts.accountId}] createSession failed (image file):`, err)
+        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+        return
+      }
+    }
+
+    let reply: string
+    try {
+      // 空 text + imagePart → LLM 直接看图描述/回答
+      reply = await this.runOpencode(sessionID, "", this.opts.account.agent, {
+        imagePart,
+        imageDownloadError: null,
+      })
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] opencode error (image file):`, err)
+      await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+      return
+    }
+
+    const finalReply = await this.processAttachments(reply, event.chatId)
+    if (!finalReply.trim()) {
+      await this.sendFeishuText(event.chatId, EMPTY_REPLY_FALLBACK).catch(() => {})
+      return
+    }
+    try {
+      await this.sendFeishuText(event.chatId, finalReply)
+      console.log(`[pipeline ${this.opts.accountId}] image file reply sent (${fileName}, len=${finalReply.length})`)
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] sendFeishuText (image file) failed:`, err)
+    }
   }
   // FORK-END
 

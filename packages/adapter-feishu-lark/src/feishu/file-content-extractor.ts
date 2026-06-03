@@ -5,11 +5,15 @@
 // 架构说明:抽取结果以 text part 注入 user message,对所有 opencode agent
 //   (imbot / build / claude-code plugin 等)均有效,不依赖 system prompt。
 //
-// 格式支持清单(v2 2026-06-03):
+// 格式支持清单(v3 2026-06-03):
 //   text 类(txt/md/csv/json/常见代码后缀) — UTF-8 直读,无依赖
 //   docx — fflate unzip + word/document.xml XML 文本抽取
+//   xlsx — fflate unzip + sharedStrings + sheet XML 抽取
+//   pptx — fflate unzip + ppt/slides/slideN.xml <a:t> 抽取
 //   pdf  — pdfjs-dist 4.x 异步文本抽取;扫描版/加密 graceful 降级
-//   其他 — "暂不支持"提示
+//   image(png/jpg/webp 等) — message-pipeline 走多模态 vision 路径
+//   legacy_office(xls/ppt/doc) — "请另存为现代格式"提示
+//   unsupported — "暂不支持"提示
 
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist"
 import { unzipSync } from "fflate"
@@ -17,8 +21,16 @@ import { unzipSync } from "fflate"
 // Bun plugin bundle 单线程运行,禁用 Web Worker
 GlobalWorkerOptions.workerSrc = ""
 
-/** MVP 支持的文件格式档位 */
-export type FileFormat = "text" | "docx" | "pdf" | "unsupported"
+/** 支持的文件格式档位 */
+export type FileFormat =
+  | "text"
+  | "docx"
+  | "xlsx"
+  | "pptx"
+  | "pdf"
+  | "image"
+  | "legacy_office"
+  | "unsupported"
 
 /** 抽取结果 */
 export interface ExtractResult {
@@ -30,6 +42,28 @@ export interface ExtractResult {
 
 /** 文本截断上限:50000 字符 ≈ 12500-16500 tokens,覆盖普通学术论文长度 */
 export const MAX_TEXT_CHARS = 50_000
+
+/** 图片扩展名 → MIME 映射 */
+const IMAGE_MIME_MAP: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
+  ico: "image/x-icon",
+}
+
+/** 旧版 Office 二进制格式 → 对应的现代格式名 */
+const LEGACY_OFFICE_MAP: Record<string, string> = {
+  xls: "xlsx", xlsm: "xlsx", xlsb: "xlsx",
+  doc: "docx",
+  ppt: "pptx", pptm: "pptx",
+}
 
 /** 常见代码/文本扩展名集合(小写) */
 const TEXT_EXTS: ReadonlySet<string> = new Set([
@@ -53,8 +87,23 @@ export function detectFileFormat(fileName: string): FileFormat {
   const ext = fileName.slice(dot + 1).toLowerCase()
   if (TEXT_EXTS.has(ext)) return "text"
   if (ext === "docx") return "docx"
+  if (ext === "xlsx") return "xlsx"
+  if (ext === "pptx") return "pptx"
   if (ext === "pdf") return "pdf"
+  if (ext in IMAGE_MIME_MAP) return "image"
+  if (ext in LEGACY_OFFICE_MAP) return "legacy_office"
   return "unsupported"
+}
+
+/**
+ * 根据文件名返回图片 MIME type。
+ * 仅对 `detectFileFormat` 返回 "image" 的格式有意义。
+ */
+export function getImageMime(fileName: string): string {
+  const dot = fileName.lastIndexOf(".")
+  if (dot === -1) return "image/png"
+  const ext = fileName.slice(dot + 1).toLowerCase()
+  return IMAGE_MIME_MAP[ext] ?? "image/jpeg"
 }
 
 /**
@@ -74,15 +123,33 @@ export function extractTextFromBuffer(
       return extractPlainText(buf)
     case "docx":
       return extractDocxText(buf)
+    case "xlsx":
+      return extractXlsxText(buf, fileName)
+    case "pptx":
+      return extractPptxText(buf, fileName)
     case "pdf":
       // PDF 应走 extractPdfTextAsync(async);此同步路径仅作兜底
       return {
         text: `⚠️ PDF 文件《${fileName}》需要异步解析,请调用 extractPdfTextAsync。`,
         truncated: false,
       }
+    case "image":
+      // 图片应走 message-pipeline 多模态 vision 路径
+      return {
+        text: `⚠️ 图片文件《${fileName}》需要多模态 LLM 识别,请走 vision 注入路径。`,
+        truncated: false,
+      }
+    case "legacy_office": {
+      const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase()
+      const modern = LEGACY_OFFICE_MAP[ext] ?? "xlsx/docx/pptx"
+      return {
+        text: `⚠️ 旧版 Office 格式《${fileName}》暂不支持直接解析。\n请在 Excel/Word/PowerPoint 中另存为 .${modern} 后重发。`,
+        truncated: false,
+      }
+    }
     case "unsupported":
       return {
-        text: `⚠️ 暂不支持读取《${fileName}》格式。\n目前支持:txt / md / csv / json / 常见代码文件 / docx。`,
+        text: `⚠️ 暂不支持读取《${fileName}》格式。\n目前支持:图片 / txt / md / csv / json / 代码文件 / docx / xlsx / pptx / pdf。`,
         truncated: false,
       }
   }
@@ -192,6 +259,132 @@ function decodeXmlEntities(s: string): string {
     .replace(/&apos;/g, "'")
 }
 
+// FORK-BEGIN: xlsx / pptx 文本抽取 2026-06-03
+
+/**
+ * xlsx 文本抽取。
+ * xlsx = ZIP(OOXML)格式:
+ *   - xl/sharedStrings.xml: 共享字符串表(大多数文本都在这里)
+ *   - xl/worksheets/sheetN.xml: 单元格数据(引用 sharedStrings 或内联数值)
+ * 输出格式:每行 tab 分隔的单元格值。
+ */
+function extractXlsxText(buf: Uint8Array, fileName: string): ExtractResult {
+  try {
+    const files = unzipSync(buf)
+    const dec = (b: Uint8Array) => new TextDecoder("utf-8", { fatal: false }).decode(b)
+
+    // 1. 解析共享字符串表
+    const sharedStrings: string[] = []
+    if (files["xl/sharedStrings.xml"]) {
+      const ssXml = dec(files["xl/sharedStrings.xml"])
+      // 每个 <si>...</si> 块是一条共享字符串,内部可能有多个 <t> 拼接
+      for (const siBlock of ssXml.split("</si>")) {
+        const texts: string[] = []
+        for (const m of siBlock.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)) {
+          texts.push(decodeXmlEntities(m[1]))
+        }
+        sharedStrings.push(texts.join(""))
+      }
+      // split 会多一个空尾部
+      if (sharedStrings.length > 0) sharedStrings.pop()
+    }
+
+    // 2. 找所有 sheet 文件并排序
+    const sheetFiles = Object.keys(files)
+      .filter((k) => /^xl\/worksheets\/sheet\d+\.xml$/.test(k))
+      .sort((a, b) => {
+        const na = parseInt(a.match(/\d+/)?.[0] ?? "0", 10)
+        const nb = parseInt(b.match(/\d+/)?.[0] ?? "0", 10)
+        return na - nb
+      })
+
+    if (sheetFiles.length === 0) {
+      return { text: `⚠️ xlsx 文件《${fileName}》内未找到 worksheet`, truncated: false }
+    }
+
+    // 3. 抽取每个 sheet 的单元格值
+    const lines: string[] = []
+    for (const sheetFile of sheetFiles) {
+      const xml = dec(files[sheetFile])
+      // 逐行提取
+      for (const rowMatch of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+        const cells: string[] = []
+        for (const cellMatch of rowMatch[1].matchAll(/<c[^>]*>([\s\S]*?)<\/c>/g)) {
+          const cellXml = cellMatch[0]
+          // t="s" → shared string index; t="str" → inline string; 无 t → 数值
+          const isShared = /\bt="s"/.test(cellXml)
+          const isInline = /\bt="str"/.test(cellXml) || /\bt="inlineStr"/.test(cellXml)
+          if (isInline) {
+            const tMatch = cellXml.match(/<(?:t|is)[^>]*>([\s\S]*?)<\/(?:t|is)>/)
+            cells.push(tMatch ? decodeXmlEntities(tMatch[1]) : "")
+          } else {
+            const vMatch = cellXml.match(/<v>([\s\S]*?)<\/v>/)
+            if (!vMatch) { cells.push(""); continue }
+            const raw = decodeXmlEntities(vMatch[1])
+            if (isShared) {
+              const idx = parseInt(raw, 10)
+              cells.push(isNaN(idx) ? raw : (sharedStrings[idx] ?? raw))
+            } else {
+              cells.push(raw)
+            }
+          }
+        }
+        if (cells.some((c) => c.trim())) lines.push(cells.join("\t"))
+      }
+    }
+
+    const fullText = lines.join("\n").trim()
+    if (!fullText) return { text: `⚠️ xlsx 文件《${fileName}》内容为空`, truncated: false }
+    return truncate(fullText)
+  } catch (e) {
+    return { text: `⚠️ xlsx 解析失败《${fileName}》:${(e as Error).message ?? e}`, truncated: false }
+  }
+}
+
+/**
+ * pptx 文本抽取。
+ * pptx = ZIP(OOXML),每页幻灯片在 ppt/slides/slideN.xml。
+ * 提取所有 <a:t> 文本节点,按页组织输出。
+ */
+function extractPptxText(buf: Uint8Array, fileName: string): ExtractResult {
+  try {
+    const files = unzipSync(buf)
+    const dec = (b: Uint8Array) => new TextDecoder("utf-8", { fatal: false }).decode(b)
+
+    const slideFiles = Object.keys(files)
+      .filter((k) => /^ppt\/slides\/slide\d+\.xml$/.test(k))
+      .sort((a, b) => {
+        const na = parseInt(a.match(/\d+/)?.[0] ?? "0", 10)
+        const nb = parseInt(b.match(/\d+/)?.[0] ?? "0", 10)
+        return na - nb
+      })
+
+    if (slideFiles.length === 0) {
+      return { text: `⚠️ pptx 文件《${fileName}》内未找到幻灯片`, truncated: false }
+    }
+
+    const slideParts: string[] = []
+    for (let i = 0; i < slideFiles.length; i++) {
+      const xml = dec(files[slideFiles[i]])
+      const texts: string[] = []
+      for (const m of xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)) {
+        const t = decodeXmlEntities(m[1]).trim()
+        if (t) texts.push(t)
+      }
+      if (texts.length > 0) slideParts.push(`第${i + 1}页:\n${texts.join(" ")}`)
+    }
+
+    const fullText = slideParts.join("\n\n").trim()
+    if (!fullText) {
+      return { text: `⚠️ pptx 文件《${fileName}》内容为空或全为图片`, truncated: false }
+    }
+    return truncate(fullText)
+  } catch (e) {
+    return { text: `⚠️ pptx 解析失败《${fileName}》:${(e as Error).message ?? e}`, truncated: false }
+  }
+}
+// FORK-END
+
 // FORK-BEGIN: PDF 异步文本抽取 via pdfjs-dist 2026-06-03
 /**
  * 从 PDF buffer 抽取纯文本。异步,不抛(失败返友好提示)。
@@ -214,10 +407,13 @@ export async function extractPdfTextAsync(
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i)
       const content = await page.getTextContent()
-      // TextItem 有 str 字段;TextMarkedContent 无 — 用 in 判断过滤
+      // TextItem 有 str 字段;TextMarkedContent 无 — 过滤后用 unknown 转换绕开 union 类型限制
       const pageText = content.items
-        .filter((item): item is { str: string; hasEOL: boolean } => "str" in item)
-        .map((item) => item.str + (item.hasEOL ? "\n" : ""))
+        .filter((item) => "str" in item)
+        .map((item) => {
+          const t = item as unknown as { str: string; hasEOL?: boolean }
+          return t.str + (t.hasEOL ? "\n" : "")
+        })
         .join("")
       if (pageText.trim()) pageParts.push(pageText.trim())
     }
