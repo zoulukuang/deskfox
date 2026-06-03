@@ -170,16 +170,38 @@ if [[ -d "$EXT_DIR" ]]; then
     echo "[lo-bundle-mac]   cleared extensions/ contents (~${EXT_SIZE}MB, kept dir skeleton)"
 fi
 
-# Java 相关(headless PDF 转换不需要 JVM)
-JAVA_DIR="$DEST_APP/Contents/Frameworks"
-if [[ -d "$JAVA_DIR" ]]; then
-    # 删 JVM 但保留 dylib(部分 LO 内部 lib 在 Frameworks 下)
-    find "$JAVA_DIR" -name "*.jdk" -o -name "*.jre" | while read -r J; do
-        JVM_SIZE=$(du -sm "$J" 2>/dev/null | awk '{print $1}')
-        rm -rf "$J"
-        echo "[lo-bundle-mac]   deleted JVM $J (~${JVM_SIZE}MB)"
-    done
+# LibreOfficePython.framework (~110MB) — headless docx/xlsx/pptx→pdf 不需要 Python
+PYTHON_FW="$DEST_APP/Contents/Frameworks/LibreOfficePython.framework"
+if [[ -d "$PYTHON_FW" ]]; then
+    PY_SIZE=$(du -sm "$PYTHON_FW" 2>/dev/null | awk '{print $1}')
+    rm -rf "$PYTHON_FW"
+    echo "[lo-bundle-mac]   deleted LibreOfficePython.framework (~${PY_SIZE}MB)"
 fi
+
+# Java scripting bridge
+if [[ -d "$RESOURCES/java" ]]; then
+    JAVA_SIZE=$(du -sm "$RESOURCES/java" 2>/dev/null | awk '{print $1}')
+    rm -rf "$RESOURCES/java"
+    echo "[lo-bundle-mac]   deleted Resources/java (~${JAVA_SIZE}MB)"
+fi
+
+# Firebird DB engine (不用于 PDF 转换)
+if [[ -d "$RESOURCES/firebird" ]]; then
+    rm -rf "$RESOURCES/firebird"
+    echo "[lo-bundle-mac]   deleted Resources/firebird"
+fi
+
+# 非默认 UI 图标主题(保留 colibre 默认,删其他主题 ~35MB)
+for IMG_THEME in karasa_jaga elementary sukapura; do
+    for f in "$RESOURCES/config/images_${IMG_THEME}"*.zip; do
+        [[ -f "$f" ]] && rm "$f" && echo "[lo-bundle-mac]   deleted $(basename "$f")"
+    done
+done
+
+# 大型文本文件(不影响运行)
+for f in "$RESOURCES/CREDITS.fodt" "$RESOURCES/LICENSE.html" "$RESOURCES/LICENSE"; do
+    [[ -f "$f" ]] && rm "$f" && echo "[lo-bundle-mac]   deleted $(basename "$f")"
+done
 
 # 多语言 UI 翻译文件:只保留 en-US
 # (Windows 实测:zh-CN 等翻译文件 ~200MB,UTF-8 headless 转换不需要 UI locale)
@@ -190,9 +212,9 @@ fi
 # --- 体积检查 ---
 FINAL_SIZE_MB=$(du -sm "$DEST_APP" 2>/dev/null | awk '{print $1}')
 echo "[lo-bundle-mac] stripped size: ${FINAL_SIZE_MB} MB"
-if [[ "$FINAL_SIZE_MB" -gt 800 ]]; then
-    echo "[lo-bundle-mac] WARNING: size > 800MB, stripping may not have worked correctly"
-    echo "                Check: du -sh $RESOURCES/*"
+if [[ "$FINAL_SIZE_MB" -gt 600 ]]; then
+    echo "[lo-bundle-mac] WARNING: size > 600MB, stripping may not have worked correctly"
+    echo "                Check: du -sh $APP/Contents/Resources/* $APP/Contents/Frameworks/*"
 fi
 
 # --- 移除 LibreOffice 原有代码签名 ---
