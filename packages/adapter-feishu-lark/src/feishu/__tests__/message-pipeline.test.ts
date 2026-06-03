@@ -293,6 +293,7 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach } from "bun:test"
+import { zipSync } from "fflate"
 
 interface SentText {
   chatId: string
@@ -1106,6 +1107,250 @@ describe("processAttachments (feat: feishu-bridge-light Phase 2)", () => {
 
 
 // ============================================================
+// REQ-036 fetchParentMessageText 单测
+// FORK: feishu-file-and-quote-recv 2026-06-02
+// ============================================================
+
+import { fetchParentMessageText } from "../message-pipeline"
+
+/**
+ * 构造一个假 larkClient,im.v1.message.get 返指定 items。
+ * items 的 msg_type / body.content 决定 fetchParentMessageText 输出。
+ */
+function makeParentMsgClient(
+  items: Array<{ msg_type?: string; body?: { content?: string } }>,
+  throwErr?: Error,
+): any {
+  return {
+    im: {
+      v1: {
+        message: {
+          get: async () => {
+            if (throwErr) throw throwErr
+            return { data: { items } }
+          },
+        },
+      },
+    },
+  }
+}
+
+describe("fetchParentMessageText — 单测(Q1-Q5)", () => {
+  test("Q1: 父消息 text → 返回文本内容", async () => {
+    const client = makeParentMsgClient([
+      { msg_type: "text", body: { content: JSON.stringify({ text: "原来说的这段话" }) } },
+    ])
+    const result = await fetchParentMessageText("om_parent_1", client)
+    expect(result).toBe("原来说的这段话")
+  })
+
+  test("Q2: 父消息 post → 返回 flatten 文本", async () => {
+    const postContent = JSON.stringify({
+      title: "标题",
+      content: [
+        [{ tag: "text", text: "第一段" }],
+        [{ tag: "text", text: "第二段" }],
+      ],
+    })
+    const client = makeParentMsgClient([{ msg_type: "post", body: { content: postContent } }])
+    const result = await fetchParentMessageText("om_parent_2", client)
+    expect(result).toContain("标题")
+    expect(result).toContain("第一段")
+    expect(result).toContain("第二段")
+  })
+
+  test("Q3: 父消息 image(纯图无 caption)→ 返回 '[图片]' 占位", async () => {
+    const client = makeParentMsgClient([
+      { msg_type: "image", body: { content: JSON.stringify({ image_key: "img_v3_xxx" }) } },
+    ])
+    const result = await fetchParentMessageText("om_parent_3", client)
+    expect(result).toBe("[图片]")
+  })
+
+  test("Q4: 父消息 file → 返回 '[文件:xxx]' 占位", async () => {
+    const client = makeParentMsgClient([
+      { msg_type: "file", body: { content: JSON.stringify({ file_key: "fk_xxx", file_name: "report.docx" }) } },
+    ])
+    const result = await fetchParentMessageText("om_parent_4", client)
+    expect(result).toBe("[文件:report.docx]")
+  })
+
+  test("Q5: 飞书 API 报错 → 返回 null(graceful 降级)", async () => {
+    const client = makeParentMsgClient([], new Error("401 unauthorized"))
+    const result = await fetchParentMessageText("om_parent_5", client)
+    expect(result).toBeNull()
+  })
+})
+
+// ============================================================
+// REQ-036 pipeline.handle() 引用上下文注入集成测(Q6-Q9)
+// FORK: feishu-file-and-quote-recv 2026-06-02
+//
+// 架构验证:引用原文以 text part 注入,与 agent 类型无关
+// (imbot / build / claude-code plugin 等 agent 全部能收到)
+// ============================================================
+
+describe("REQ-036 引用回复上下文注入(Q6-Q9)", () => {
+  let tmpDir: string
+  let store: ChatSessionStore
+  let dispatcher: PromptDispatcher
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "quote-inject-test-"))
+    store = new ChatSessionStore(join(tmpDir, "sessions.json"))
+    dispatcher = new PromptDispatcher()
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  /**
+   * 构造完整测试 pipeline + 捕获 promptAsync 收到的 text。
+   * larkClient 额外注入 message.get 来返回被引消息。
+   */
+  function buildQuotePipeline(
+    parentMsgItems: Array<{ msg_type?: string; body?: { content?: string } }>,
+    getThrows?: Error,
+  ) {
+    const capturedPromptTexts: string[] = []
+    const sentTexts: string[] = []
+
+    const larkClient = {
+      im: {
+        v1: {
+          message: {
+            get: async () => {
+              if (getThrows) throw getThrows
+              return { data: { items: parentMsgItems } }
+            },
+            create: async (args: any) => {
+              sentTexts.push(JSON.parse(args.data.content).text)
+              return { data: { message_id: "om_reply" } }
+            },
+          },
+          messageReaction: { create: async () => ({ data: {} }) },
+        },
+      },
+    } as any
+
+    const opencodeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_q6" } }),
+        promptAsync: async (args: any) => {
+          capturedPromptTexts.push(args.body?.parts?.[0]?.text ?? "")
+          // 不发 idle,测试通过 dispatcher 手动触发
+          return await new Promise(() => {})
+        },
+        messages: async () => ({
+          data: [
+            { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "user msg" }] },
+            {
+              info: { id: "a1", role: "assistant", parentID: "u1" },
+              parts: [{ type: "text", text: "引用回复已收到" }],
+            },
+          ],
+        }),
+        _client: {
+          patch: async () => ({}),
+        },
+      },
+    } as any
+
+    const pipeline = new MessagePipeline({
+      account: makeAccount(),
+      accountId: "acc1",
+      opencodeClient,
+      dispatcher,
+      chatSessionStore: store,
+      larkClient,
+    })
+
+    return { pipeline, capturedPromptTexts, sentTexts, opencodeClient }
+  }
+
+  test("Q6: 含 parentId → promptAsync 收到的 text 含 [引用原文] 块", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline([
+      { msg_type: "text", body: { content: JSON.stringify({ text: "这是被引用的那句话" }) } },
+    ])
+
+    // fire-and-forget handle,不等 runOpencode 完成
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "这句话是什么意思" }),
+        parentId: "om_quoted",
+      }),
+    )
+    // 给 fetch + promptAsync 时间被调到
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    expect(text).toContain("[引用原文]")
+    expect(text).toContain("这是被引用的那句话")
+    expect(text).toContain("[/引用原文]")
+    expect(text).toContain("这句话是什么意思")
+  })
+
+  test("Q7: 含 parentId 但 message.get 失败 → 正常走 LLM,text 不含引用块(graceful 降级)", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline(
+      [],
+      new Error("403 forbidden"),
+    )
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "随便问一句" }),
+        parentId: "om_inaccessible",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    // 不含引用块,只含用户消息
+    expect(text).not.toContain("[引用原文]")
+    expect(text).toBe("随便问一句")
+  })
+
+  test("Q8: 无 parentId → text 不含 [引用原文]", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline([])
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "普通消息" }),
+        // 不设 parentId
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    expect(capturedPromptTexts[0]).toBe("普通消息")
+    expect(capturedPromptTexts[0]).not.toContain("[引用原文]")
+  })
+
+  test("Q9: 引用图片消息 → text 含 '[图片]' 占位符", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline([
+      { msg_type: "image", body: { content: JSON.stringify({ image_key: "img_key_123" }) } },
+    ])
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "这张图讲了什么" }),
+        parentId: "om_image_msg",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    expect(text).toContain("[引用原文]")
+    expect(text).toContain("[图片]")
+    expect(text).toContain("这张图讲了什么")
+  })
+})
+
+// ============================================================
 // getSystemPrompt 动态拼接 (feat: feishu-bridge-light Phase 3)
 // ============================================================
 
@@ -1479,3 +1724,246 @@ describe("LLM 超时 / 空响应 surface (feat: feishu-llm-timeout-surface)", ()
     expect(messagesCalled).toBe(0)
   })
 })
+
+// ============================================================
+// REQ-035 文件消息 handleFileMessage 集成测(F10-F13)
+// FORK: feishu-file-and-quote-recv 2026-06-02
+// ============================================================
+
+describe("REQ-035 文件消息接收(F10-F13)", () => {
+  let tmpDir: string
+  let store: ChatSessionStore
+  let dispatcher: PromptDispatcher
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "file-msg-test-"))
+    store = new ChatSessionStore(join(tmpDir, "sessions.json"))
+    dispatcher = new PromptDispatcher()
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  /** 构造文件消息 event */
+  function makeFileEvent(
+    fileKey: string,
+    fileName: string,
+    overrides: Partial<ImMessageEvent> = {},
+  ): ImMessageEvent {
+    return makeEvent({
+      messageType: "file",
+      content: JSON.stringify({ file_key: fileKey, file_name: fileName }),
+      ...overrides,
+    })
+  }
+
+  /** 构造 larkClient + opencodeClient fakes 用于文件消息测试 */
+  function buildFilePipeline(opts: {
+    fileBytes?: Uint8Array
+    fetchThrows?: Error
+    promptResponse?: string
+  } = {}) {
+    const sentTexts: string[] = []
+    const capturedPromptTexts: string[] = []
+
+    const fileBytes = opts.fileBytes ?? new TextEncoder().encode("文件内容示例")
+    const originalFetch = globalThis.fetch
+
+    const larkClient = {
+      domain: "https://open.feishu.cn",
+      tokenManager: {
+        getTenantAccessToken: async (_o: object) => "fake_token",
+      },
+      im: {
+        v1: {
+          message: {
+            create: async (args: any) => {
+              sentTexts.push(JSON.parse(args.data.content).text)
+              return { data: { message_id: "om_reply" } }
+            },
+          },
+          messageReaction: { create: async () => ({ data: {} }) },
+        },
+      },
+    } as any
+
+    // fetch mock: 覆盖 downloadFileBuffer + getClientAuthContext 走的 tokenManager
+    const installFetchMock = () => {
+      globalThis.fetch = (async (input: any, _init?: any) => {
+        if (opts.fetchThrows) throw opts.fetchThrows
+        const url = typeof input === "string" ? input : String(input)
+        if (url.includes("/resources/")) {
+          // 文件下载 endpoint
+          return new Response(fileBytes.buffer as ArrayBuffer, {
+            status: 200,
+            headers: { "content-type": "application/octet-stream" },
+          })
+        }
+        throw new Error(`unexpected fetch: ${url}`)
+      }) as unknown as typeof fetch
+    }
+    const uninstallFetchMock = () => {
+      globalThis.fetch = originalFetch
+    }
+
+    const opencodeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_file" } }),
+        promptAsync: async (args: any) => {
+          capturedPromptTexts.push(args.body?.parts?.[0]?.text ?? "")
+          // 不发 idle,让测试只检测 promptAsync 被调用
+          return await new Promise(() => {})
+        },
+        messages: async () => ({
+          data: [
+            { info: { id: "u1", role: "user" }, parts: [{ type: "text", text: "file" }] },
+            {
+              info: { id: "a1", role: "assistant", parentID: "u1" },
+              parts: [
+                {
+                  type: "text",
+                  text: opts.promptResponse ?? "文件内容我已读取,请问有什么问题?",
+                },
+              ],
+            },
+          ],
+        }),
+        _client: { patch: async () => ({}) },
+      },
+    } as any
+
+    const pipeline = new MessagePipeline({
+      account: makeAccount(),
+      accountId: "acc1",
+      opencodeClient,
+      dispatcher,
+      chatSessionStore: store,
+      larkClient,
+      feishuFilesRoot: join(tmpDir, "feishu-files"),
+    })
+
+    return { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock }
+  }
+
+  test("F13: png file → 进入 vision 路径(而非静默 skip 或 '暂不支持')", async () => {
+    // 图片格式 → 走 handleImageFile,有"识别中"进度提示
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fetchThrows: new Error("no network in test") })
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_1", "image.png"))
+      // vision 路径进入 → 有"识别中"提示
+      expect(sentTexts.some((t) => t.includes("识别中"))).toBe(true)
+      // 不走"暂不支持"
+      expect(sentTexts.some((t) => t.includes("暂不支持"))).toBe(false)
+      // 下载失败 → LLM 未调用
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F12: xlsx → 下载+提取+注入 LLM", async () => {
+    const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fileBytes: makeMinimalXlsxForTest() })
+    installFetchMock()
+    try {
+      void pipeline.testHandle(makeFileEvent("fk_xlsx", "data.xlsx"))
+      await new Promise((r) => setTimeout(r, 200))
+      expect(capturedPromptTexts).toHaveLength(1)
+      expect(capturedPromptTexts[0]).toContain("data.xlsx")
+      expect(capturedPromptTexts[0]).toContain("已保存")
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F12c: xls(旧格式) → 下载保存 + 回路径信息,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline()
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_xls", "old.xls"))
+      // 应有"已保存" + 路径信息 + "旧版 Office"提示
+      expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("old.xls"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("旧版 Office"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("暂不识别"))).toBe(true)
+      // 不走 LLM
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F12d: 不支持格式(zip) → 下载保存 + 回路径信息,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline()
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_zip", "archive.zip"))
+      expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("archive.zip"))).toBe(true)
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F12b: PDF 格式 → 下载保存+pdfjs提取+注入 LLM", async () => {
+    const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fileBytes: new TextEncoder().encode("%PDF-1.4 not real") })
+    installFetchMock()
+    try {
+      void pipeline.testHandle(makeFileEvent("fk_pdf", "slides.pdf"))
+      await new Promise((r) => setTimeout(r, 300))
+      // PDF 走 LLM,promptAsync 应被调用
+      expect(capturedPromptTexts).toHaveLength(1)
+      expect(capturedPromptTexts[0]).toContain("slides.pdf")
+      expect(capturedPromptTexts[0]).toContain("已保存")
+      expect(capturedPromptTexts[0]).toContain("路径:")
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F10: txt 文件 → promptAsync 收到的 text 含文件内容 + 路径信息", async () => {
+    const content = "这是文件里的内容"
+    const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fileBytes: new TextEncoder().encode(content) })
+    installFetchMock()
+    try {
+      void pipeline.testHandle(makeFileEvent("fk_txt", "note.txt"))
+      await new Promise((r) => setTimeout(r, 100))
+      expect(capturedPromptTexts).toHaveLength(1)
+      expect(capturedPromptTexts[0]).toContain("note.txt")
+      expect(capturedPromptTexts[0]).toContain("这是文件里的内容")
+      expect(capturedPromptTexts[0]).toContain("已保存")
+      expect(capturedPromptTexts[0]).toContain("路径:")
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F11: 文件下载失败 → 友好回复,不 throw", async () => {
+    const { pipeline, sentTexts, installFetchMock, uninstallFetchMock } = buildFilePipeline({
+      fetchThrows: new Error("Connection refused"),
+    })
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_fail", "doc.txt"))
+      expect(sentTexts.some((t) => t.includes("没能保存") && t.includes("Connection refused"))).toBe(true)
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+})
+
+/** 构造含共享字符串的最小 xlsx(用于 F12 pipeline 测试) */
+function makeMinimalXlsxForTest(): Uint8Array {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const ss = `<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Name</t></si><si><t>Score</t></si></sst>`
+  const sheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row></sheetData></worksheet>`
+  return zipSync({ "xl/sharedStrings.xml": enc(ss), "xl/worksheets/sheet1.xml": enc(sheet) })
+}

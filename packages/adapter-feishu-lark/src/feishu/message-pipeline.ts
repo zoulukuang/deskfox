@@ -15,8 +15,10 @@
 //   6. await replyPromise(dispatcher 累积 token,session.idle 时 resolve)
 //   7. lark Client.im.v1.message.create 发回飞书
 
+import { existsSync, mkdirSync, statSync } from "node:fs"
+import { readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve, sep } from "node:path"
 import { Client } from "@larksuiteoapi/node-sdk"
 import type { createOpencodeClient } from "@opencode-ai/sdk"
 import type { FeishuAccount } from "../core/config-schema"
@@ -48,6 +50,26 @@ import {
   type SubMessage,
 } from "./merge-forward-flatten"
 import type { PromptDispatcher } from "./prompt-dispatcher"
+// FORK: REQ-035 文件内容抽取 2026-06-02 / xlsx+pptx+image+pdf 2026-06-03
+import {
+  detectFileFormat,
+  extractPdfTextAsync,
+  extractTextFromBuffer,
+  getImageMime,
+} from "./file-content-extractor"
+
+// FORK-BEGIN: REQ-035 文件路径注入辅助函数 2026-06-03
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
+function getFormatDisplay(fileName: string): string {
+  const dot = fileName.lastIndexOf(".")
+  return dot === -1 ? "文件" : fileName.slice(dot + 1).toUpperCase()
+}
+// FORK-END
 import {
   classifyAttachment,
   GROUP_NAME_MAX_LEN,
@@ -162,6 +184,71 @@ export function parseMessageContent(
   // 其它 messageType — caller 已 skip 不该到这,兜底返空值
   return { text: "", imageKey: null }
 }
+
+// FORK-BEGIN: REQ-036 引用/回复原文 2026-06-02
+/**
+ * 拉取飞书引用/回复的原消息文本。失败或取不到时返 null(调用方 graceful 降级)。
+ *
+ * 架构注意:本函数结果以 text part 注入用户消息,**非 system prompt**,因此对所有
+ * opencode agent(imbot / build / claude-code plugin 等)均有效,不依赖 system prompt
+ * 是否被 agent 读取。
+ *
+ * 消息类型映射:
+ *   text / post → 抽取文本;image(纯图无 caption)→ "[图片]"
+ *   file → "[文件:{file_name}]";其他 → "[{msg_type}]"
+ */
+export async function fetchParentMessageText(
+  parentId: string,
+  larkClient: Client,
+  timeoutMs = 10_000,
+): Promise<string | null> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    const h = setTimeout(() => reject(new Error("timeout")), timeoutMs)
+    if (typeof (h as { unref?: () => void }).unref === "function")
+      (h as { unref: () => void }).unref()
+  })
+  let response: unknown
+  try {
+    response = await Promise.race([
+      larkClient.im.v1.message.get({ path: { message_id: parentId } }),
+      timeoutPromise,
+    ])
+  } catch {
+    return null
+  }
+  const items = (
+    response as {
+      data?: { items?: Array<{ msg_type?: string; body?: { content?: string } }> }
+    }
+  )?.data?.items
+  const msg = items?.[0]
+  if (!msg) return null
+
+  const msgType = msg.msg_type ?? ""
+  const content = msg.body?.content ?? ""
+
+  if (msgType === "text" || msgType === "image" || msgType === "post") {
+    try {
+      const parsed = parseMessageContent(msgType, content)
+      if (parsed.text) return parsed.text
+      if (parsed.imageKey) return "[图片]"
+      return null
+    } catch {
+      return null
+    }
+  }
+  if (msgType === "file") {
+    try {
+      const parsed = JSON.parse(content) as { file_name?: string }
+      const name = parsed.file_name ? `:${parsed.file_name}` : ""
+      return `[文件${name}]`
+    } catch {
+      return "[文件]"
+    }
+  }
+  return msgType ? `[${msgType}]` : "[消息]"
+}
+// FORK-END
 
 /**
  * 飞书桥接专用 workspace directory — 所有 plugin 创建的 session 都在这个
@@ -363,6 +450,12 @@ export interface PipelineOptions {
    * [feat: feishu-bridge-light]
    */
   attachWorkspaceRoot?: string
+  /**
+   * 飞书文件磁盘存储根目录 — 默认 ~/.opencode/imbot-workspace/feishu-files。
+   * 单测用 tmpDir 覆盖,避免污染真实 workspace。
+   * FORK: REQ-035 2026-06-03
+   */
+  feishuFilesRoot?: string
 }
 
 export class MessagePipeline {
@@ -468,12 +561,14 @@ export class MessagePipeline {
     // [feat: feishu-merge-forward] 2026-05-26 — merge_forward 走拉子消息 flatten 路径
     // text=纯文字 / image=纯图 / post=富文本(图+文混合,飞书拖图+输文字默认走 post)
     // merge_forward = user 长按多条消息合并转发
-    // 其它(file/audio/video/sticker/interactive 等)留 backlog
+    // FORK: REQ-035 2026-06-02 — file 走文本抽取路径
+    // 其它(audio/video/sticker/interactive 等)留 backlog
     if (
       event.messageType !== "text" &&
       event.messageType !== "image" &&
       event.messageType !== "post" &&
-      event.messageType !== "merge_forward"
+      event.messageType !== "merge_forward" &&
+      event.messageType !== "file"
     ) {
       console.log(
         `[pipeline ${this.opts.accountId}] skip unsupported message: type=${event.messageType}`,
@@ -487,6 +582,13 @@ export class MessagePipeline {
       await this.handleMergeForward(event)
       return
     }
+
+    // FORK-BEGIN: REQ-035 文件消息走独立路径(下载 + 抽取文本)2026-06-02
+    if (event.messageType === "file") {
+      await this.handleFileMessage(event)
+      return
+    }
+    // FORK-END
 
     // 解析 content — text/image/post 各自 shape(helper 可单测)
     let parseResult: ParsedContent | null = null
@@ -756,12 +858,32 @@ export class MessagePipeline {
       }
     }
 
+    // FORK-BEGIN: REQ-036 引用/回复原文注入 2026-06-02
+    // 架构说明:注入在 user message parts(text part),对所有 agent 均有效
+    // (包括 claude-code plugin 等不读 system prompt 的 plugin agent)。
+    let quotedContext: string | null = null
+    if (event.parentId) {
+      quotedContext = await fetchParentMessageText(event.parentId, this.larkClient).catch(
+        () => null,
+      )
+      if (quotedContext !== null) {
+        console.log(
+          `[pipeline ${this.opts.accountId}] quote parent=${event.parentId}: "${quotedContext.slice(0, 60)}"`,
+        )
+      }
+    }
+    const promptText =
+      quotedContext !== null
+        ? `[引用原文]\n${quotedContext}\n[/引用原文]\n\n${cleaned}`
+        : cleaned
+    // FORK-END
+
     let reply: string
     try {
       // [feat: feishu-llm-strip-mention-placeholders] 2026-05-24
       // 传 cleaned(已 strip @_user_N 飞书占位符)而非 raw text,避免 LLM 误把
       // 占位符当成另一个联系人(实测 bot reply 含"我不是 @_user_1..."类幻觉)。
-      reply = await this.runOpencode(sessionID, cleaned, this.opts.account.agent, {
+      reply = await this.runOpencode(sessionID, promptText, this.opts.account.agent, {
         imagePart,
         imageDownloadError,
       })
@@ -1026,6 +1148,427 @@ export class MessagePipeline {
 
     return { flat: () => resultText, nestedCount }
   }
+
+  // FORK-BEGIN: REQ-035 文件消息独立处理路径 2026-06-02
+  /**
+   * 处理飞书 file 类型消息:下载 → 抽取文本 → 喂 LLM → 发回复。
+   *
+   * 架构说明:文件内容以 text part 注入 user message,对所有 opencode agent
+   * (imbot/build/claude-code plugin 等)均有效,不依赖 system prompt。
+   */
+  private async handleFileMessage(event: ImMessageEvent): Promise<void> {
+    // 解析 file_key + file_name
+    let fileKey: string
+    let fileName: string
+    try {
+      const parsed = JSON.parse(event.content) as { file_key?: string; file_name?: string }
+      fileKey = parsed.file_key ?? ""
+      fileName = parsed.file_name ?? "未知文件"
+    } catch {
+      console.warn(`[pipeline ${this.opts.accountId}] file msg: invalid content JSON`)
+      return
+    }
+    if (!fileKey) {
+      console.warn(`[pipeline ${this.opts.accountId}] file msg: missing file_key`)
+      return
+    }
+
+    // 群消息 mention policy(与 handle() 主路径一致)
+    if (
+      event.chatType !== "p2p" &&
+      this.opts.account.requireMention &&
+      !isBotMentioned(event.mentions, this.opts.account.botName ?? "")
+    ) {
+      return
+    }
+
+    // FORK-BEGIN: REQ-035 文件格式判断 + 下载保存 + 注入格式升级 2026-06-03
+    const format = detectFileFormat(fileName)
+
+    // 图片 → 多模态 vision 路径(vision 预检 → 下载 → file part 注入)
+    if (format === "image") {
+      await this.handleImageFile(event, fileName, fileKey)
+      return
+    }
+
+    // 所有格式(含 unsupported / legacy_office)都下载保存 — "发来的文件都要保存"
+    void this.ackMessage(event.messageId).catch((err) =>
+      console.warn(`[pipeline ${this.opts.accountId}] file ack failed:`, (err as Error).message),
+    )
+    await this.sendFeishuText(event.chatId, `📄 收到文件《${fileName}》,保存中...`).catch(() => {})
+
+    // 可提取格式(正向白名单,新增格式必须显式加入)用 30MB;纯存档格式用 500MB
+    const EXTRACTABLE: ReadonlySet<string> = new Set(["text", "docx", "xlsx", "pptx", "pdf"])
+    const isExtractable = EXTRACTABLE.has(format)
+    const maxBytes = isExtractable ? 30 * 1024 * 1024 : 500 * 1024 * 1024
+
+    // 下载 + 保存到磁盘
+    let absolutePath: string
+    let fileBuf: Uint8Array
+    try {
+      const auth = await getClientAuthContext(this.larkClient)
+      const saved = await this.downloadAndSaveFile(
+        fileKey,
+        event.messageId,
+        event.chatId,
+        fileName,
+        auth.token,
+        auth.domain,
+        maxBytes,
+      )
+      absolutePath = saved.absolutePath
+      fileBuf = saved.buf
+      console.log(
+        `[pipeline ${this.opts.accountId}] downloaded+saved file ${fileName} ${fileBuf.length}B → ${absolutePath}`,
+      )
+    } catch (err) {
+      const msg = (err as Error).message
+      console.warn(`[pipeline ${this.opts.accountId}] file download/save failed (${fileName}):`, msg)
+      await this.sendFeishuText(
+        event.chatId,
+        `😅 没能保存《${fileName}》\n${msg}`,
+      ).catch(() => {})
+      return
+    }
+
+    const sizeStr = formatFileSize(fileBuf.length)
+    const formatDisplay = getFormatDisplay(fileName)
+
+    // 不支持内容抽取的格式 → 直接回"已保存"路径信息,不走 LLM
+    if (format === "unsupported" || format === "legacy_office") {
+      const note =
+        format === "legacy_office"
+          ? `${formatDisplay}（旧版 Office 格式，暂不识别）`
+          : `${formatDisplay}（暂不支持内容提取）`
+      const directReply = [
+        `[文件《${fileName}》已接收，已保存]`,
+        `路径: ${absolutePath}`,
+        `大小: ${sizeStr} | 格式: ${note}`,
+      ].join("\n")
+      await this.sendFeishuText(event.chatId, directReply).catch(() => {})
+      console.log(`[pipeline ${this.opts.accountId}] saved (no-extract) ${format}: ${absolutePath}`)
+      return
+    }
+
+    // text/docx/xlsx/pptx/pdf — 抽取文本 + 注入 LLM(pdf 用 pdfjs 异步抽取)
+    const extracted =
+      format === "pdf"
+        ? await extractPdfTextAsync(fileBuf, fileName)
+        : extractTextFromBuffer(fileBuf, format, fileName)
+
+    const fileContext = [
+      `[文件《${fileName}》已保存]`,
+      `路径: ${absolutePath}`,
+      `大小: ${sizeStr} | 格式: ${formatDisplay}`,
+      ``,
+      `文件内容(共 ${extracted.text.length} 字${extracted.truncated ? ",已截断" : ""}):`,
+      extracted.text,
+    ].join("\n")
+    // FORK-END
+
+    // 获取 / 创建 session(跟 handle() 主路径同款)
+    let sessionID = this.chatToSession.get(event.chatId)
+    if (!sessionID) {
+      try {
+        const res = await this.opts.opencodeClient.session.create({
+          query: { directory: IMBOT_WORKSPACE },
+          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
+        })
+        const id = (res as { data?: { id?: string } }).data?.id
+        if (!id) throw new Error("session.create returned no id")
+        sessionID = id
+        this.chatToSession.set(event.chatId, sessionID)
+        this.sessionToChat.set(sessionID, event.chatId)
+        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
+        await this.archiveSession(sessionID).catch((archErr) => {
+          console.warn(
+            `[pipeline ${this.opts.accountId}] archive session ${sessionID} (file) failed:`,
+            archErr,
+          )
+        })
+        console.log(
+          `[pipeline ${this.opts.accountId}] new session ${sessionID} (file:${fileName}) for chat=${event.chatId}`,
+        )
+      } catch (err) {
+        console.error(`[pipeline ${this.opts.accountId}] createSession failed (file):`, err)
+        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+        return
+      }
+    }
+
+    // runOpencode
+    let reply: string
+    try {
+      reply = await this.runOpencode(sessionID, fileContext, this.opts.account.agent)
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] opencode error (file):`, err)
+      await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+      return
+    }
+
+    // 后处理 + 发送
+    const finalReply = await this.processAttachments(reply, event.chatId)
+    if (!finalReply.trim()) {
+      await this.sendFeishuText(event.chatId, EMPTY_REPLY_FALLBACK).catch(() => {})
+      return
+    }
+    try {
+      await this.sendFeishuText(event.chatId, finalReply)
+      console.log(
+        `[pipeline ${this.opts.accountId}] file reply sent (${fileName}, len=${finalReply.length})`,
+      )
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] sendFeishuText (file) failed:`, err)
+    }
+  }
+
+  /**
+   * 飞书文件下载 + 保存到磁盘。
+   * 同 downloadFeishuImage 的 Bun-native fetch 模式,避开 axios+Buffer 兼容问题。
+   * FORK: REQ-035 downloadAndSaveFile 2026-06-03(原 downloadFileBuffer 加磁盘写入)
+   *
+   * @returns { absolutePath, buf, contentType } — absolutePath 供注入 prompt,buf 供文本抽取
+   */
+  private async downloadAndSaveFile(
+    fileKey: string,
+    messageId: string,
+    chatId: string,
+    fileName: string,
+    tenantAccessToken: string,
+    domain = "https://open.feishu.cn",
+    /** 下载大小上限:可提取格式默认 30MB,纯存档格式传 500MB */
+    maxBytes = 30 * 1024 * 1024,
+  ): Promise<{ absolutePath: string; buf: Uint8Array; contentType: string }> {
+    const url =
+      `${domain}/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}?type=file`
+    const ctrl = new AbortController()
+    // 超时覆盖完整下载(headers + body),clearTimeout 移至 body 读取完成后
+    const handle = setTimeout(() => ctrl.abort(), 30_000)
+    let res: Response
+    try {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${tenantAccessToken}` },
+        signal: ctrl.signal,
+      })
+    } catch (err) {
+      clearTimeout(handle)
+      throw new Error(
+        (err as Error).name === "AbortError"
+          ? `飞书文件下载超时 for file_key=${fileKey}`
+          : `飞书文件下载网络错误 for file_key=${fileKey}: ${(err as Error).message}`,
+      )
+    }
+    if (!res.ok) {
+      clearTimeout(handle)
+      throw new Error(
+        res.status === 400
+          ? `飞书 API 不支持下载此文件（HTTP 400）\n飞书消息资源 API 仅支持 100MB 以内的文件，超出则返回 400。请直接在飞书客户端手动下载保存。`
+          : `飞书文件下载失败（HTTP ${res.status}）`,
+      )
+    }
+    const contentType = res.headers.get("content-type") ?? ""
+    let buf: Uint8Array
+    try {
+      buf = new Uint8Array(await res.arrayBuffer())
+    } catch (err) {
+      clearTimeout(handle)
+      throw new Error(
+        (err as Error).name === "AbortError"
+          ? `飞书文件下载超时(body) for file_key=${fileKey}`
+          : `飞书文件下载中断 for file_key=${fileKey}: ${(err as Error).message}`,
+      )
+    }
+    clearTimeout(handle)
+    if (buf.length > maxBytes) {
+      // 飞书 API 本身限制 100MB，实际上 >100MB 的文件会被飞书先返回 400，极少走到这里
+      throw new Error(
+        `文件 ${(buf.length / 1024 / 1024).toFixed(1)}MB 超出处理上限 ${(maxBytes / 1024 / 1024).toFixed(0)}MB`,
+      )
+    }
+    if (buf.length === 0) {
+      throw new Error(`飞书返回了空文件`)
+    }
+
+    // 保存到磁盘: {feishuFilesRoot}/{safeChatId}/{YYYYMMDDTHHmmss}-{safeFileName}
+    // HHmmss 防止同日同名文件覆盖(如用户上午/下午分别发了两份 report.xlsx)
+    const filesRoot = this.opts.feishuFilesRoot ?? join(IMBOT_WORKSPACE, "feishu-files")
+    const safeChatId = chatId.replace(/[/\\:*?"<>|]/g, "_").slice(0, 64)
+    const safeFileName = fileName.replace(/[/\\:*?"<>|]/g, "_")
+    const d = new Date()
+    const dateStr =
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`
+    const dir = join(filesRoot, safeChatId)
+    mkdirSync(dir, { recursive: true })
+
+    // 去重路径选择:同名同内容 → 复用;同名不同内容 → _2/_3 后缀
+    const { absolutePath, skipWrite } = await this._resolveFilePath(dir, dateStr, safeFileName, buf)
+
+    // 路径安全校验:防止 chatId/fileName 含 ".." 等绕过 safeChatId 替换逻辑
+    const resolvedPath = resolve(absolutePath)
+    const resolvedRoot = resolve(filesRoot) + sep
+    if (!resolvedPath.startsWith(resolvedRoot)) {
+      throw new Error(`文件路径安全校验失败,拒绝写入`)
+    }
+
+    // 异步写磁盘(skipWrite=true 表示内容完全相同,复用已有文件,不重写)
+    if (!skipWrite) await writeFile(absolutePath, buf)
+
+    return { absolutePath, buf, contentType }
+  }
+
+  /**
+   * 确定文件保存路径,避免同名不同内容文件互相覆盖。
+   *
+   * 策略:
+   *   - 路径不存在 → 直接用(skipWrite=false)
+   *   - 路径已存在 + 大小&字节完全一致 → 复用已有路径(skipWrite=true,不重写)
+   *   - 路径已存在 + 内容不同 → 尝试 _2/_3 ... _99 后缀(skipWrite=false)
+   */
+  private async _resolveFilePath(
+    dir: string,
+    dateStr: string,
+    safeFileName: string,
+    buf: Uint8Array,
+  ): Promise<{ absolutePath: string; skipWrite: boolean }> {
+    const basePath = join(dir, `${dateStr}-${safeFileName}`)
+
+    if (!existsSync(basePath)) return { absolutePath: basePath, skipWrite: false }
+
+    // 已有同名文件 → 先比大小(快),大小相同再比字节(慢但只在碰撞时触发)
+    try {
+      const existingSize = statSync(basePath).size
+      if (existingSize === buf.length) {
+        const existing = new Uint8Array(await readFile(basePath))
+        const identical = existing.length === buf.length && existing.every((byte, i) => byte === buf[i])
+        if (identical) {
+          // 完全相同 → 复用,不重复写入磁盘
+          return { absolutePath: basePath, skipWrite: true }
+        }
+      }
+    } catch { /* 读取失败,视为内容不同,继续找新名字 */ }
+
+    // 内容不同 → 找下一个可用的 _N 后缀
+    const dotIdx = safeFileName.lastIndexOf(".")
+    const base = dotIdx === -1 ? safeFileName : safeFileName.slice(0, dotIdx)
+    const ext = dotIdx === -1 ? "" : safeFileName.slice(dotIdx)
+    for (let n = 2; n <= 99; n++) {
+      const candidate = join(dir, `${dateStr}-${base}_${n}${ext}`)
+      if (!existsSync(candidate)) return { absolutePath: candidate, skipWrite: false }
+    }
+    // 极端兜底(100+ 个同名文件):加毫秒时间戳
+    return { absolutePath: join(dir, `${dateStr}-${Date.now()}-${safeFileName}`), skipWrite: false }
+  }
+
+  /**
+   * FORK: 图片文件消息多模态路径 2026-06-03
+   * 从飞书 file 类型消息里收到图片扩展名 → vision 预检 → 下载保存 → file part 注入 LLM。
+   * 与 handle() 里 messageType="image" 的处理逻辑对称,但走的是文件下载 endpoint。
+   */
+  private async handleImageFile(
+    event: ImMessageEvent,
+    fileName: string,
+    fileKey: string,
+  ): Promise<void> {
+    // vision 预检(同 handle() 路径)
+    const visionOk = await this.checkModelVisionSupport().catch(() => true)
+    if (!visionOk) {
+      const modelHint = this.opts.account.model
+        ? `${this.opts.account.model.providerID}/${this.opts.account.model.modelID}`
+        : "当前默认 model"
+      await this.sendFeishuText(
+        event.chatId,
+        `⚠️ ${modelHint} 不支持图片识别。请到 DeskFox 设置 → 飞书桥接 → 选当前账号 → 编辑 → Model，换成支持视觉的模型(如 Claude/GPT-4o/Gemini 等)。`,
+      ).catch(() => {})
+      return
+    }
+
+    void this.ackMessage(event.messageId).catch((err) =>
+      console.warn(`[pipeline ${this.opts.accountId}] image file ack failed:`, (err as Error).message),
+    )
+    await this.sendFeishuText(event.chatId, `🖼️ 收到图片文件《${fileName}》,识别中...`).catch(() => {})
+
+    // 下载 + 保存
+    let imagePart: { mime: string; filename: string; absolutePath: string }
+    try {
+      const auth = await getClientAuthContext(this.larkClient)
+      const saved = await this.downloadAndSaveFile(
+        fileKey,
+        event.messageId,
+        event.chatId,
+        fileName,
+        auth.token,
+        auth.domain,
+      )
+      // Content-Type 校验:防止飞书 token 过期时返回 HTML 错误页被当作图片注入 LLM
+      if (saved.contentType && !saved.contentType.startsWith("image/") && !saved.contentType.includes("octet-stream")) {
+        throw new Error(`飞书返回了非图片内容(Content-Type: ${saved.contentType})，可能 token 已过期，请重启 DeskFox`)
+      }
+      const mime = saved.contentType.startsWith("image/") ? saved.contentType.split(";")[0] : getImageMime(fileName)
+      imagePart = { mime, filename: fileName, absolutePath: saved.absolutePath }
+      console.log(
+        `[pipeline ${this.opts.accountId}] downloaded image file ${fileName} ${saved.buf.length}B → ${saved.absolutePath}`,
+      )
+    } catch (err) {
+      const msg = (err as Error).message
+      console.warn(`[pipeline ${this.opts.accountId}] image file download failed (${fileName}):`, msg)
+      await this.sendFeishuText(
+        event.chatId,
+        `😅 没能下载图片《${fileName}》\n${msg}`,
+      ).catch(() => {})
+      return
+    }
+
+    // 获取 / 创建 session(同 handleFileMessage)
+    let sessionID = this.chatToSession.get(event.chatId)
+    if (!sessionID) {
+      try {
+        const res = await this.opts.opencodeClient.session.create({
+          query: { directory: IMBOT_WORKSPACE },
+          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
+        })
+        const id = (res as { data?: { id?: string } }).data?.id
+        if (!id) throw new Error("session.create returned no id")
+        sessionID = id
+        this.chatToSession.set(event.chatId, sessionID)
+        this.sessionToChat.set(sessionID, event.chatId)
+        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
+        await this.archiveSession(sessionID).catch((archErr) => {
+          console.warn(`[pipeline ${this.opts.accountId}] archive session (image file) failed:`, archErr)
+        })
+        console.log(`[pipeline ${this.opts.accountId}] new session ${sessionID} (image file:${fileName})`)
+      } catch (err) {
+        console.error(`[pipeline ${this.opts.accountId}] createSession failed (image file):`, err)
+        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+        return
+      }
+    }
+
+    let reply: string
+    try {
+      // 空 text + imagePart → LLM 直接看图描述/回答
+      reply = await this.runOpencode(sessionID, "", this.opts.account.agent, {
+        imagePart,
+        imageDownloadError: null,
+      })
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] opencode error (image file):`, err)
+      await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+      return
+    }
+
+    const finalReply = await this.processAttachments(reply, event.chatId)
+    if (!finalReply.trim()) {
+      await this.sendFeishuText(event.chatId, EMPTY_REPLY_FALLBACK).catch(() => {})
+      return
+    }
+    try {
+      await this.sendFeishuText(event.chatId, finalReply)
+      console.log(`[pipeline ${this.opts.accountId}] image file reply sent (${fileName}, len=${finalReply.length})`)
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] sendFeishuText (image file) failed:`, err)
+    }
+  }
+  // FORK-END
 
   /**
    * [feat: feishu-bridge-light] 解析 reply 里的 [ATTACH:path] marker、上传文件、strip marker。
