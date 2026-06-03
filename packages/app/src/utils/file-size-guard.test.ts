@@ -82,13 +82,13 @@ describe("limitFor + tooLargeFor", () => {
     expect(tooLargeFor("archive.zip", 10 * 1024 * MB)).toBe(false)
   })
 
-  test("office 200MB 阈值(2026-05-21 user 决议 50MB→200MB,覆盖含图/含视频 PPT)", () => {
-    expect(limitFor("doc.docx")).toBe(200 * MB)
-    expect(tooLargeFor("doc.docx", 150 * MB)).toBe(false)
-    expect(tooLargeFor("doc.docx", 100 * MB)).toBe(false)
-    expect(tooLargeFor("doc.docx", 250 * MB)).toBe(true)
-    expect(tooLargeFor("slides.pptx", 199 * MB)).toBe(false)
-    expect(tooLargeFor("slides.pptx", 201 * MB)).toBe(true)
+  test("office 1GB 阈值(2026-06-03 lo-bundle 捆绑 LibreOffice 后 200MB→1GB,配套后端 120s 超时)", () => {
+    expect(limitFor("doc.docx")).toBe(1024 * MB)
+    expect(tooLargeFor("doc.docx", 200 * MB)).toBe(false) // 原阈值,现在不再超
+    expect(tooLargeFor("doc.docx", 314 * MB)).toBe(false) // 实测大 pptx(19s 转完)
+    expect(tooLargeFor("doc.docx", 1024 * MB)).toBe(false) // 等于阈值不算超
+    expect(tooLargeFor("slides.pptx", 1024 * MB + 1)).toBe(true) // 超 1GB 才拦
+    expect(tooLargeFor("slides.pptx", 2048 * MB)).toBe(true) // 2GB 异常文件拦
   })
 
   test("html 10MB 阈值(对齐 HTML_PREVIEW_MAX_BYTES)", () => {

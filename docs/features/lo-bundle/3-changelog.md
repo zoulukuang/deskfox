@@ -111,7 +111,19 @@ ISCC 编译前插入 bundle 状态检测，输出 ✓（已就绪/大小）或 �
 - extensions 从"整目录删"改为"删内容留骨架"
 - 全文 emoji → ASCII + UTF-8 BOM
 
+## 后续：Office 预览上限 200MB → 1GB（2026-06-03，同分支）
+
+lo-bundle 捆绑 LibreOffice 落地 + 实测 314MB pptx 19s 转完后,user 拍板放宽 office 预览大小上限(原 200MB)。
+
+- **前端**(`packages/app/src/utils/file-size-guard.ts`,app 非黑名单):`office` 阈值 200MB → **1GB**,注释说明前端非瓶颈(只拿 PDF 引用 OFFICE_PDF_REF_MIME + 懒加载分页,V8 不背锅)
+- **后端**(`packages/opencode/src/file/libreoffice.ts`,opencode **黑名单 fork-only 文件**):`CONVERSION_TIMEOUT_MS` 30s → **120s**,配套前端阈值(放行的文件须能可靠转成功;314MB/19s,1GB 约 60s,120s 有余量)
+- **测试**:`file-size-guard.test.ts` office 断言更新(200MB→1GB,加 314MB/1GB 边界);app 全包 790 pass / typecheck 17/17
+- **决策依据**:不完全去限制 —— GB 级异常文件提前拦优于"转半天超时失败";1GB 上限也防 sidecar 被超大文件长占拖累飞书桥接/chat 等其他 plugin(对齐元原则"稳定>一切")
+
+**R4 override 论证（`libreoffice.ts` 黑名单）**:该文件是 fork 新建的 office→PDF 功能(上游 opencode 无此文件,头部 FORK marker),黑名单按 `packages/opencode/` 路径前缀误伤;`CONVERSION_TIMEOUT_MS` 是文件内硬编码常量,无法在文件外用 wrapper 修改(wrapper 方案需新建配置注入层 + 改更多文件,3:1 反向);改动 = 1 行常量值 + 3 行注释,不改转换逻辑,风险极低,可单独 revert。本季第 2 笔 override(首笔 office-installer.ts 同属黑名单误伤 fork-only),仍在配额内(≤2/季)。
+
 ## Commit hash
 
 - `934c964a0` —— 首笔（office-installer 检测 + iss 条件编译 + 脚本初版 + 文档）
-- 待填写 —— 二笔（prepare-lo-bundle.ps1 实测修正 + changelog 落地）
+- `c7e629d3d` —— 二笔（prepare-lo-bundle.ps1 实测修正:25.8.7/管理员放宽/extensions 留骨架/BOM + changelog 落地）
+- 待填写 —— 三笔（office 预览上限 200MB→1GB + 后端超时 30s→120s + 测试）
