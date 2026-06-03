@@ -4,3 +4,5 @@
 # 都是 build 派生物,不进 git。
 src/assets/icons/*/icon.ico
 src/assets/icons/*/icon.icns
+# FORK: LO bundle — prepare-lo-bundle.ps1 产物,100-200MB 二进制不进 git 2026-06-03
+libreoffice-bundle/

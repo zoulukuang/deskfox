@@ -11,7 +11,10 @@ import { detectSofficePath } from "./office-installer"
 const log = Log.create({ service: "libreoffice" })
 
 const CACHE_DIR = path.join(Global.Path.cache, "office-pdf-cache")
-const CONVERSION_TIMEOUT_MS = 30_000
+// FORK: 30s→120s 2026-06-03 — lo-bundle 捆绑 LibreOffice 后放宽 office 预览上限到 1GB,
+// 后端转换超时配套提高,让大文件有足够时间转完(实测 314MB pptx 19s;1GB 约 60s,120s 有余量)。
+// 与前端 file-size-guard.ts office 阈值(1GB)匹配 — 放行的文件须能可靠转成功。
+const CONVERSION_TIMEOUT_MS = 120_000
 
 async function resolveSofficeBinary(): Promise<string | undefined> {
   return detectSofficePath()

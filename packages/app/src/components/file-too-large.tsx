@@ -27,6 +27,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   markdown: "Markdown",
   media: "音视频/图片",
   office: "Office 文档",
+  pdf: "PDF",
   html: "HTML",
   binary: "二进制",
   default: "文件",

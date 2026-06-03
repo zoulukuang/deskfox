@@ -10,7 +10,9 @@ const log = Log.create({ service: "office-installer" })
 const STATE_FILE = path.join(Global.Path.state, "office-tooling.json")
 const DOWNLOAD_DIR = path.join(Global.Path.cache, "office-installer")
 
-const LIBREOFFICE_VERSION = process.env.OPENCODE_LIBREOFFICE_VERSION ?? "26.2.2"
+// FORK: 26.2.2(Fresh)→ 25.8.7(Still 稳定线)2026-06-03 — 与 prepare-lo-bundle.ps1 捆绑版本统一,
+// 避免"内置版 vs 在线下载版"两套渲染引擎(code-review #3)。user 拍板求稳走稳定线。
+const LIBREOFFICE_VERSION = process.env.OPENCODE_LIBREOFFICE_VERSION ?? "25.8.7"
 
 type Mirror = { name: string; baseUrl: string }
 
@@ -122,6 +124,16 @@ async function whichSoffice(): Promise<string | undefined> {
   }
 }
 
+// FORK-BEGIN: bundled LO path — DeskFox installer に同梱 2026-06-03
+// process.execPath は Bun コンパイル済みバイナリの絶対パスを返す。
+// インストール済み環境では {app}\opencode-cli.exe と隣接して {app}\libreoffice\ が存在する。
+// 開発中は sidecars\ 以下に libreoffice\ は存在しないので自動的に fallthrough する。
+function bundledSofficePath(): string {
+  if (process.platform !== "win32") return ""
+  return path.join(path.dirname(process.execPath), "libreoffice", "program", "soffice.exe")
+}
+// FORK-END
+
 function commonInstallPaths(): string[] {
   if (process.platform === "win32") {
     return [
@@ -152,6 +164,16 @@ export async function detectSofficePath(force = false): Promise<string | undefin
     return env
   }
 
+  // FORK-BEGIN: bundled LO 检测 — 优先于 state/PATH/common，不写 state（路径由安装决定，不缓存）2026-06-03
+  if (process.platform === "win32") {
+    const bundled = bundledSofficePath()
+    if (bundled && (await exists(bundled))) {
+      detectCache = { path: bundled, checked: Date.now() }
+      return bundled
+    }
+  }
+  // FORK-END
+
   const st = await readState()
   if (st.sofficePath && (await exists(st.sofficePath))) {
     detectCache = { path: st.sofficePath, checked: Date.now() }
@@ -178,11 +200,17 @@ export async function detectSofficePath(force = false): Promise<string | undefin
 
 export async function status(): Promise<ToolingStatus> {
   const sofficePath = await detectSofficePath()
+  // FORK: bundled LO 命中时不报下载大小(已内置无需下载)。大小写不敏感比较 —— Win 路径
+  // C:\ vs c:\ / execPath 派生差异不应误判为"非内置"导致误报需下载(2026-06-03 code-review #7)。
+  // 注:isBundled 只用于内部判 downloadSizeMB,不外露为字段(当前无消费者,YAGNI);若未来 UI 要
+  // 显示"已内置 LO",需同步在 file-office.ts 的 OfficeToolingStatus Effect Schema 里加字段。
+  const bundledPath = process.platform === "win32" ? bundledSofficePath() : ""
+  const isBundled = !!bundledPath && !!sofficePath && sofficePath.toLowerCase() === bundledPath.toLowerCase()
   return {
     installed: !!sofficePath,
     sofficePath,
     platformSupported: isPlatformSupported(),
-    downloadSizeMB: process.platform === "darwin" ? 281 : 355, // FORK: macOS DMG smaller 2026-04-29
+    downloadSizeMB: isBundled ? undefined : process.platform === "darwin" ? 281 : 355, // FORK: macOS DMG smaller 2026-04-29
     progress,
   }
 }

@@ -84,6 +84,19 @@ if ($SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw "[pack] build-deskfox.ps1 failed with exit $LASTEXITCODE" }
 }
 
+# FORK: LO bundle 状态提示 — bundle 存在则打入 installer,缺失只提示不 block 2026-06-03
+$loBundleSoffice = Join-Path $root "libreoffice-bundle\windows\program\soffice.exe"
+if (Test-Path $loBundleSoffice) {
+    $bundleSize = [math]::Round(
+        (Get-ChildItem (Join-Path $root "libreoffice-bundle\windows") -Recurse -ErrorAction SilentlyContinue |
+         Measure-Object -Property Length -Sum).Sum / 1MB)
+    Write-Output "[pack] ✓ LibreOffice bundle 已就绪 ($bundleSize MB) — 将内置进 installer"
+} else {
+    Write-Output "[pack] ⚠  LibreOffice bundle 未准备 — installer 不含内置 LO"
+    Write-Output "[pack]    用户首次开 Office 文件仍需在线下载 355MB"
+    Write-Output "[pack]    如需内置,请先(管理员权限)运行: .\packages\branding\scripts\prepare-lo-bundle.ps1"
+}
+
 # 2. compile installer (传 AppEnv 给 .iss 选三档身份)
 & $iscc "/DAppEnv=$Env" $issPath
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit $LASTEXITCODE" }
