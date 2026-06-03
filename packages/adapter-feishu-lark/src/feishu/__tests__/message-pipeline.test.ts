@@ -1863,18 +1863,20 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     expect(capturedPromptTexts).toHaveLength(0)
   })
 
-  test("F12b: PDF 格式 → 下载保存+直接回路径信息,不走 LLM", async () => {
-    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
-      buildFilePipeline()
+  test("F12b: PDF 格式 → 下载保存+pdfjs提取+注入 LLM", async () => {
+    // PDF bytes: 非法 PDF → extractPdfTextAsync 返解析失败提示 → 注入 LLM
+    const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline({ fileBytes: new TextEncoder().encode("%PDF-1.4 not real") })
     installFetchMock()
     try {
-      await pipeline.testHandle(makeFileEvent("fk_pdf", "slides.pdf"))
-      // 应有路径信息 + "已保存" 回复
-      expect(sentTexts.some((t) => t.includes("PDF"))).toBe(true)
-      expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
-      expect(sentTexts.some((t) => t.includes("路径:"))).toBe(true)
-      // 不走 LLM
-      expect(capturedPromptTexts).toHaveLength(0)
+      void pipeline.testHandle(makeFileEvent("fk_pdf", "slides.pdf"))
+      await new Promise((r) => setTimeout(r, 300))
+      // PDF 现在走 LLM,promptAsync 应被调用
+      expect(capturedPromptTexts).toHaveLength(1)
+      // 注入文本含文件名 + 路径信息
+      expect(capturedPromptTexts[0]).toContain("slides.pdf")
+      expect(capturedPromptTexts[0]).toContain("已保存")
+      expect(capturedPromptTexts[0]).toContain("路径:")
     } finally {
       uninstallFetchMock()
     }

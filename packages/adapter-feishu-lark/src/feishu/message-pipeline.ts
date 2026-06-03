@@ -49,8 +49,8 @@ import {
   type SubMessage,
 } from "./merge-forward-flatten"
 import type { PromptDispatcher } from "./prompt-dispatcher"
-// FORK: REQ-035 文件内容抽取 2026-06-02
-import { detectFileFormat, extractTextFromBuffer } from "./file-content-extractor"
+// FORK: REQ-035 文件内容抽取 2026-06-02 / PDF 支持 2026-06-03
+import { detectFileFormat, extractPdfTextAsync, extractTextFromBuffer } from "./file-content-extractor"
 
 // FORK-BEGIN: REQ-035 文件路径注入辅助函数 2026-06-03
 function formatFileSize(bytes: number): string {
@@ -1227,20 +1227,12 @@ export class MessagePipeline {
     const sizeStr = formatFileSize(fileBuf.length)
     const formatDisplay = getFormatDisplay(fileName)
 
-    // PDF → 直接回路径信息,不走 LLM(zero content token)
-    if (format === "pdf") {
-      const directReply = [
-        `[文件《${fileName}》已接收，已保存]`,
-        `路径: ${absolutePath}`,
-        `大小: ${sizeStr} | 格式: ${formatDisplay}（内容提取暂不支持，如需分析请告知）`,
-      ].join("\n")
-      await this.sendFeishuText(event.chatId, directReply).catch(() => {})
-      console.log(`[pipeline ${this.opts.accountId}] PDF saved, direct reply (no LLM): ${absolutePath}`)
-      return
-    }
+    // FORK: PDF 支持 2026-06-03 — 统一走 LLM,pdf 用异步抽取,text/docx 用同步抽取
+    const extracted =
+      format === "pdf"
+        ? await extractPdfTextAsync(fileBuf, fileName)
+        : extractTextFromBuffer(fileBuf, format, fileName)
 
-    // txt/docx → 抽取文本 + 注入 LLM
-    const extracted = extractTextFromBuffer(fileBuf, format, fileName)
     const fileContext = [
       `[文件《${fileName}》已保存]`,
       `路径: ${absolutePath}`,

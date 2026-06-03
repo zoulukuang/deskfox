@@ -5,17 +5,17 @@
 // 架构说明:抽取结果以 text part 注入 user message,对所有 opencode agent
 //   (imbot / build / claude-code plugin 等)均有效,不依赖 system prompt。
 //
-// MVP 格式支持清单:
+// 格式支持清单(v2 2026-06-03):
 //   text 类(txt/md/csv/json/常见代码后缀) — UTF-8 直读,无依赖
 //   docx — fflate unzip + word/document.xml XML 文本抽取
-//   pdf  — graceful skip(提示转 txt/docx),原因:pure-JS PDF 解析库内部大量依赖
-//          Buffer.isBuffer(),与 Bun plugin bundle CJS 模式存在已知兼容风险,
-//          见 reference_bun_plugin_form_data_trap.md。二期专项。
+//   pdf  — pdfjs-dist 4.x 异步文本抽取;扫描版/加密 graceful 降级
 //   其他 — "暂不支持"提示
-//
-// Pure functions,便于单测,0 IO。
 
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist"
 import { unzipSync } from "fflate"
+
+// Bun plugin bundle 单线程运行,禁用 Web Worker
+GlobalWorkerOptions.workerSrc = ""
 
 /** MVP 支持的文件格式档位 */
 export type FileFormat = "text" | "docx" | "pdf" | "unsupported"
@@ -75,8 +75,9 @@ export function extractTextFromBuffer(
     case "docx":
       return extractDocxText(buf)
     case "pdf":
+      // PDF 应走 extractPdfTextAsync(async);此同步路径仅作兜底
       return {
-        text: `⚠️ 暂不支持读取 PDF 文件《${fileName}》(PDF 解析功能开发中)。\n请将内容另存为 .txt 或 .docx 后重新发送。`,
+        text: `⚠️ PDF 文件《${fileName}》需要异步解析,请调用 extractPdfTextAsync。`,
         truncated: false,
       }
     case "unsupported":
@@ -190,3 +191,50 @@ function decodeXmlEntities(s: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
 }
+
+// FORK-BEGIN: PDF 异步文本抽取 via pdfjs-dist 2026-06-03
+/**
+ * 从 PDF buffer 抽取纯文本。异步,不抛(失败返友好提示)。
+ *
+ * - 正常 PDF → 逐页 getTextContent() 拼文本 → truncate(MAX_TEXT_CHARS)
+ * - 扫描版 / 全图 PDF → 返"无可提取文字"提示
+ * - 加密 / 损坏 → 返具体 error 提示
+ *
+ * GlobalWorkerOptions.workerSrc = "" 已在模块级别设置(Bun 单线程,无 Web Worker)。
+ *
+ * 导出供单测覆盖。
+ */
+export async function extractPdfTextAsync(
+  buf: Uint8Array,
+  fileName: string,
+): Promise<ExtractResult> {
+  try {
+    const pdf = await getDocument({ data: buf, verbosity: 0 }).promise
+    const pageParts: string[] = []
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const content = await page.getTextContent()
+      // TextItem 有 str 字段;TextMarkedContent 无 — 用 in 判断过滤
+      const pageText = content.items
+        .filter((item): item is { str: string; hasEOL: boolean } => "str" in item)
+        .map((item) => item.str + (item.hasEOL ? "\n" : ""))
+        .join("")
+      if (pageText.trim()) pageParts.push(pageText.trim())
+    }
+    const fullText = pageParts.join("\n\n").trim()
+    if (!fullText) {
+      return {
+        text: `⚠️ PDF 文件《${fileName}》无可提取文字(可能是扫描版 / 全图 PDF,文字层缺失)。\n如需识别文字请用 OCR 工具转换后重发。`,
+        truncated: false,
+      }
+    }
+    return truncate(fullText)
+  } catch (e) {
+    const msg = (e as Error).message ?? String(e)
+    return {
+      text: `⚠️ PDF 解析失败《${fileName}》:${msg}\n可能原因:文件已加密 / 损坏 / 格式不标准。请转换为 .txt 或 .docx 后重发。`,
+      truncated: false,
+    }
+  }
+}
+// FORK-END
