@@ -15,9 +15,10 @@
 //   6. await replyPromise(dispatcher 累积 token,session.idle 时 resolve)
 //   7. lark Client.im.v1.message.create 发回飞书
 
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve, sep } from "node:path"
 import { Client } from "@larksuiteoapi/node-sdk"
 import type { createOpencodeClient } from "@opencode-ai/sdk"
 import type { FeishuAccount } from "../core/config-schema"
@@ -1196,8 +1197,9 @@ export class MessagePipeline {
     )
     await this.sendFeishuText(event.chatId, `📄 收到文件《${fileName}》,保存中...`).catch(() => {})
 
-    // 纯存档格式(不解析)用 500MB 上限;可提取格式用 30MB(解析大文件性能差)
-    const isExtractable = format !== "unsupported" && format !== "legacy_office"
+    // 可提取格式(正向白名单,新增格式必须显式加入)用 30MB;纯存档格式用 500MB
+    const EXTRACTABLE: ReadonlySet<string> = new Set(["text", "docx", "xlsx", "pptx", "pdf"])
+    const isExtractable = EXTRACTABLE.has(format)
     const maxBytes = isExtractable ? 30 * 1024 * 1024 : 500 * 1024 * 1024
 
     // 下载 + 保存到磁盘
@@ -1325,7 +1327,7 @@ export class MessagePipeline {
    * 同 downloadFeishuImage 的 Bun-native fetch 模式,避开 axios+Buffer 兼容问题。
    * FORK: REQ-035 downloadAndSaveFile 2026-06-03(原 downloadFileBuffer 加磁盘写入)
    *
-   * @returns { absolutePath, buf } — absolutePath 供注入 prompt,buf 供文本抽取
+   * @returns { absolutePath, buf, contentType } — absolutePath 供注入 prompt,buf 供文本抽取
    */
   private async downloadAndSaveFile(
     fileKey: string,
@@ -1336,10 +1338,11 @@ export class MessagePipeline {
     domain = "https://open.feishu.cn",
     /** 下载大小上限:可提取格式默认 30MB,纯存档格式传 500MB */
     maxBytes = 30 * 1024 * 1024,
-  ): Promise<{ absolutePath: string; buf: Uint8Array }> {
+  ): Promise<{ absolutePath: string; buf: Uint8Array; contentType: string }> {
     const url =
       `${domain}/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}?type=file`
     const ctrl = new AbortController()
+    // 超时覆盖完整下载(headers + body),clearTimeout 移至 body 读取完成后
     const handle = setTimeout(() => ctrl.abort(), 30_000)
     let res: Response
     try {
@@ -1355,15 +1358,27 @@ export class MessagePipeline {
           : `飞书文件下载网络错误 for file_key=${fileKey}: ${(err as Error).message}`,
       )
     }
-    clearTimeout(handle)
     if (!res.ok) {
+      clearTimeout(handle)
       throw new Error(
         res.status === 400
           ? `飞书 API 不支持下载此文件（HTTP 400）\n飞书消息资源 API 仅支持 100MB 以内的文件，超出则返回 400。请直接在飞书客户端手动下载保存。`
           : `飞书文件下载失败（HTTP ${res.status}）`,
       )
     }
-    const buf = new Uint8Array(await res.arrayBuffer())
+    const contentType = res.headers.get("content-type") ?? ""
+    let buf: Uint8Array
+    try {
+      buf = new Uint8Array(await res.arrayBuffer())
+    } catch (err) {
+      clearTimeout(handle)
+      throw new Error(
+        (err as Error).name === "AbortError"
+          ? `飞书文件下载超时(body) for file_key=${fileKey}`
+          : `飞书文件下载中断 for file_key=${fileKey}: ${(err as Error).message}`,
+      )
+    }
+    clearTimeout(handle)
     if (buf.length > maxBytes) {
       // 飞书 API 本身限制 100MB，实际上 >100MB 的文件会被飞书先返回 400，极少走到这里
       throw new Error(
@@ -1374,19 +1389,30 @@ export class MessagePipeline {
       throw new Error(`飞书返回了空文件`)
     }
 
-    // 保存到磁盘: {feishuFilesRoot}/{safeChatId}/{YYYYMMDD}-{safeFileName}
+    // 保存到磁盘: {feishuFilesRoot}/{safeChatId}/{YYYYMMDDTHHmmss}-{safeFileName}
+    // HHmmss 防止同日同名文件覆盖(如用户上午/下午分别发了两份 report.xlsx)
     const filesRoot = this.opts.feishuFilesRoot ?? join(IMBOT_WORKSPACE, "feishu-files")
     const safeChatId = chatId.replace(/[/\\:*?"<>|]/g, "_").slice(0, 64)
     const safeFileName = fileName.replace(/[/\\:*?"<>|]/g, "_")
     const d = new Date()
     const dateStr =
-      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}` +
+      `T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`
     const dir = join(filesRoot, safeChatId)
     mkdirSync(dir, { recursive: true })
     const absolutePath = join(dir, `${dateStr}-${safeFileName}`)
-    writeFileSync(absolutePath, buf)
 
-    return { absolutePath, buf }
+    // 路径安全校验:防止 chatId/fileName 含 ".." 等绕过 safeChatId 替换逻辑
+    const resolvedPath = resolve(absolutePath)
+    const resolvedRoot = resolve(filesRoot) + sep
+    if (!resolvedPath.startsWith(resolvedRoot)) {
+      throw new Error(`文件路径安全校验失败,拒绝写入`)
+    }
+
+    // 异步写磁盘,避免 writeFileSync 阻塞 Bun 事件循环
+    await writeFile(absolutePath, buf)
+
+    return { absolutePath, buf, contentType }
   }
 
   /**
@@ -1429,7 +1455,12 @@ export class MessagePipeline {
         auth.token,
         auth.domain,
       )
-      imagePart = { mime: getImageMime(fileName), filename: fileName, absolutePath: saved.absolutePath }
+      // Content-Type 校验:防止飞书 token 过期时返回 HTML 错误页被当作图片注入 LLM
+      if (saved.contentType && !saved.contentType.startsWith("image/") && !saved.contentType.includes("octet-stream")) {
+        throw new Error(`飞书返回了非图片内容(Content-Type: ${saved.contentType})，可能 token 已过期，请重启 DeskFox`)
+      }
+      const mime = saved.contentType.startsWith("image/") ? saved.contentType.split(";")[0] : getImageMime(fileName)
+      imagePart = { mime, filename: fileName, absolutePath: saved.absolutePath }
       console.log(
         `[pipeline ${this.opts.accountId}] downloaded image file ${fileName} ${saved.buf.length}B → ${saved.absolutePath}`,
       )

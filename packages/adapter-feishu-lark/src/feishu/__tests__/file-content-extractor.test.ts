@@ -122,12 +122,10 @@ describe("extractTextFromBuffer — 截断 (F8)", () => {
 // ============================================================
 
 describe("extractTextFromBuffer — pdf (F9)", () => {
-  test("F9: pdf sync path → 兜底提示(要求调用 extractPdfTextAsync),不抛", () => {
+  test("F9: pdf sync path → 直接抛出(调用方必须用 extractPdfTextAsync)", () => {
     const buf = new Uint8Array([0x25, 0x50, 0x44, 0x46]) // PDF header magic
-    const result = extractTextFromBuffer(buf, "pdf", "report.pdf")
-    expect(result.truncated).toBe(false)
-    // 同步兜底 — 提示应调用 async 版本
-    expect(result.text).toContain("extractPdfTextAsync")
+    // pdf 和 image 格式已改为 throw,防止 stub 字符串被注入 LLM prompt
+    expect(() => extractTextFromBuffer(buf, "pdf", "report.pdf")).toThrow("extractPdfTextAsync")
   })
 })
 

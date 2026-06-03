@@ -128,17 +128,11 @@ export function extractTextFromBuffer(
     case "pptx":
       return extractPptxText(buf, fileName)
     case "pdf":
-      // PDF 应走 extractPdfTextAsync(async);此同步路径仅作兜底
-      return {
-        text: `⚠️ PDF 文件《${fileName}》需要异步解析,请调用 extractPdfTextAsync。`,
-        truncated: false,
-      }
+      // PDF 必须走 extractPdfTextAsync(async) — 调用方须在 switch 外处理
+      throw new Error(`extractTextFromBuffer: pdf 格式必须使用 extractPdfTextAsync()`)
     case "image":
-      // 图片应走 message-pipeline 多模态 vision 路径
-      return {
-        text: `⚠️ 图片文件《${fileName}》需要多模态 LLM 识别,请走 vision 注入路径。`,
-        truncated: false,
-      }
+      // 图片必须走 handleImageFile vision 路径 — 不应到达此分支
+      throw new Error(`extractTextFromBuffer: image 格式必须使用 vision 注入路径`)
     case "legacy_office": {
       const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase()
       const modern = LEGACY_OFFICE_MAP[ext] ?? "xlsx/docx/pptx"
@@ -311,13 +305,20 @@ function extractXlsxText(buf: Uint8Array, fileName: string): ExtractResult {
         const cells: string[] = []
         for (const cellMatch of rowMatch[1].matchAll(/<c[^>]*>([\s\S]*?)<\/c>/g)) {
           const cellXml = cellMatch[0]
-          // t="s" → shared string index; t="str" → inline string; 无 t → 数值
+          // OOXML 单元格类型:
+          //   t="s"        → shared string index,值在 <v>(数字索引)
+          //   t="str"      → 公式字符串(formula string),缓存值在 <v>(字符串)
+          //   t="inlineStr"→ 内联字符串,值在 <is><t>...</t></is>
+          //   无 t 或其他   → 数值/布尔,值在 <v>
+          // 注:t="str" 与 t="inlineStr" 不同 — "str" 值在 <v> 不在 <t>/<is>
           const isShared = /\bt="s"/.test(cellXml)
-          const isInline = /\bt="str"/.test(cellXml) || /\bt="inlineStr"/.test(cellXml)
-          if (isInline) {
-            const tMatch = cellXml.match(/<(?:t|is)[^>]*>([\s\S]*?)<\/(?:t|is)>/)
+          const isInlineStr = /\bt="inlineStr"/.test(cellXml)
+          if (isInlineStr) {
+            // <is><t>text</t></is> 结构 — 取第一个 <t> 的内容
+            const tMatch = cellXml.match(/<t[^>]*>([\s\S]*?)<\/t>/)
             cells.push(tMatch ? decodeXmlEntities(tMatch[1]) : "")
           } else {
+            // t="s" / t="str" / 数值 — 值统一在 <v>
             const vMatch = cellXml.match(/<v>([\s\S]*?)<\/v>/)
             if (!vMatch) { cells.push(""); continue }
             const raw = decodeXmlEntities(vMatch[1])
