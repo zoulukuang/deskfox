@@ -49,9 +49,10 @@ import {
   type SubMessage,
 } from "./merge-forward-flatten"
 import type { PromptDispatcher } from "./prompt-dispatcher"
-// FORK: REQ-035 文件内容抽取 2026-06-02 / xlsx+pptx+image 2026-06-03 / PDF→直接回复 2026-06-03
+// FORK: REQ-035 文件内容抽取 2026-06-02 / xlsx+pptx+image+pdf 2026-06-03
 import {
   detectFileFormat,
+  extractPdfTextAsync,
   extractTextFromBuffer,
   getImageMime,
 } from "./file-content-extractor"
@@ -1196,7 +1197,7 @@ export class MessagePipeline {
     await this.sendFeishuText(event.chatId, `📄 收到文件《${fileName}》,保存中...`).catch(() => {})
 
     // 纯存档格式(不解析)用 500MB 上限;可提取格式用 30MB(解析大文件性能差)
-    const isExtractable = format !== "unsupported" && format !== "legacy_office" && format !== "pdf"
+    const isExtractable = format !== "unsupported" && format !== "legacy_office"
     const maxBytes = isExtractable ? 30 * 1024 * 1024 : 500 * 1024 * 1024
 
     // 下载 + 保存到磁盘
@@ -1231,14 +1232,11 @@ export class MessagePipeline {
     const sizeStr = formatFileSize(fileBuf.length)
     const formatDisplay = getFormatDisplay(fileName)
 
-    // 不支持内容抽取的格式(含 PDF) → 直接回"已保存"路径信息,不走 LLM
-    // PDF 不走 LLM:用户通常只想存档;需要解析时可回复"解析这个PDF"再重发文件触发
-    if (format === "unsupported" || format === "legacy_office" || format === "pdf") {
+    // 不支持内容抽取的格式 → 直接回"已保存"路径信息,不走 LLM
+    if (format === "unsupported" || format === "legacy_office") {
       const note =
         format === "legacy_office"
           ? `${formatDisplay}（旧版 Office 格式，暂不识别）`
-          : format === "pdf"
-          ? `${formatDisplay}（已保存，如需解析内容请回复"解析"）`
           : `${formatDisplay}（暂不支持内容提取）`
       const directReply = [
         `[文件《${fileName}》已接收，已保存]`,
@@ -1250,8 +1248,11 @@ export class MessagePipeline {
       return
     }
 
-    // text/docx/xlsx/pptx — 抽取文本 + 注入 LLM
-    const extracted = extractTextFromBuffer(fileBuf, format, fileName)
+    // text/docx/xlsx/pptx/pdf — 抽取文本 + 注入 LLM(pdf 用 pdfjs 异步抽取)
+    const extracted =
+      format === "pdf"
+        ? await extractPdfTextAsync(fileBuf, fileName)
+        : extractTextFromBuffer(fileBuf, format, fileName)
 
     const fileContext = [
       `[文件《${fileName}》已保存]`,
