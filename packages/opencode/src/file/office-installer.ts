@@ -76,6 +76,8 @@ export type ToolingStatus = {
   sofficePath?: string
   platformSupported: boolean
   downloadSizeMB?: number
+  // FORK: bundled = DeskFox installer に同梱 LO を使用中（追加ダウンロード不要）2026-06-03
+  bundled?: boolean
   selectedMirror?: { name: string; url: string }
   progress: InstallProgress
 }
@@ -122,6 +124,16 @@ async function whichSoffice(): Promise<string | undefined> {
   }
 }
 
+// FORK-BEGIN: bundled LO path — DeskFox installer に同梱 2026-06-03
+// process.execPath は Bun コンパイル済みバイナリの絶対パスを返す。
+// インストール済み環境では {app}\opencode-cli.exe と隣接して {app}\libreoffice\ が存在する。
+// 開発中は sidecars\ 以下に libreoffice\ は存在しないので自動的に fallthrough する。
+function bundledSofficePath(): string {
+  if (process.platform !== "win32") return ""
+  return path.join(path.dirname(process.execPath), "libreoffice", "program", "soffice.exe")
+}
+// FORK-END
+
 function commonInstallPaths(): string[] {
   if (process.platform === "win32") {
     return [
@@ -152,6 +164,16 @@ export async function detectSofficePath(force = false): Promise<string | undefin
     return env
   }
 
+  // FORK-BEGIN: bundled LO 检测 — 优先于 state/PATH/common，不写 state（路径由安装决定，不缓存）2026-06-03
+  if (process.platform === "win32") {
+    const bundled = bundledSofficePath()
+    if (bundled && (await exists(bundled))) {
+      detectCache = { path: bundled, checked: Date.now() }
+      return bundled
+    }
+  }
+  // FORK-END
+
   const st = await readState()
   if (st.sofficePath && (await exists(st.sofficePath))) {
     detectCache = { path: st.sofficePath, checked: Date.now() }
@@ -178,11 +200,15 @@ export async function detectSofficePath(force = false): Promise<string | undefin
 
 export async function status(): Promise<ToolingStatus> {
   const sofficePath = await detectSofficePath()
+  // FORK: bundled = 使用 DeskFox installer 同梱 LO,不需要额外下载 2026-06-03
+  const isBundled =
+    process.platform === "win32" && !!sofficePath && sofficePath === bundledSofficePath()
   return {
     installed: !!sofficePath,
     sofficePath,
     platformSupported: isPlatformSupported(),
-    downloadSizeMB: process.platform === "darwin" ? 281 : 355, // FORK: macOS DMG smaller 2026-04-29
+    downloadSizeMB: isBundled ? undefined : process.platform === "darwin" ? 281 : 355, // FORK: macOS DMG smaller 2026-04-29
+    bundled: isBundled || undefined,
     progress,
   }
 }

@@ -45,6 +45,14 @@
 #define AppPublisher   "DeskFox"
 #define AppExeName     "DeskFox.exe"
 #define ReleaseDir     "..\..\desktop\src-tauri\target\release"
+
+; FORK: LibreOffice bundle 条件编译 — bundle 目录存在则打入 installer 2026-06-03
+; 由 prepare-lo-bundle.ps1 提前准备,不进 git (packages/branding/.gitignore 已忽略)
+; 不存在时静默跳过,installer 正常 build,用户仍可在线安装 LO (原有 onboarding 流程)
+#define LoBundleDir "..\libreoffice-bundle\windows"
+#if FileExists(LoBundleDir + "\program\soffice.exe")
+  #define LoBundled 1
+#endif
 ; IconFile 按 AppEnv 走,跟 AppId/AppName 三档身份一致 — 否则 dev/beta build 时会找不到 prod 的 icon.ico
 ; (icon.ico 由 apply-icons.ps1 -Env <env> 现场生成到对应 env 子目录,被 .gitignore 不进 git)
 #define IconFile       "..\src\assets\icons\" + AppEnv + "\icon.ico"
@@ -95,6 +103,16 @@ Source: "{#ReleaseDir}\plugin\feishu-bridge\dist\plugin.js";  DestDir: "{app}\pl
 ;   runtime 由 feishu_plugin_install.rs 的 ensure_media_gen_plugin_in_config 注入 user opencode 配置。
 Source: "{#ReleaseDir}\plugin\media-gen\package.json";        DestDir: "{app}\plugin\media-gen";      Flags: ignoreversion
 Source: "{#ReleaseDir}\plugin\media-gen\dist\plugin.js";      DestDir: "{app}\plugin\media-gen\dist"; Flags: ignoreversion
+; FORK: LibreOffice 预捆绑 — 存在时打入 {app}\libreoffice\,零下载直接渲染 Office 文档 2026-06-03
+#ifdef LoBundled
+Source: "{#LoBundleDir}\*"; DestDir: "{app}\libreoffice"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
+
+[UninstallDelete]
+; FORK: 卸载 DeskFox 时同步删除同梱 LO 目录 2026-06-03
+#ifdef LoBundled
+Type: filesandordirs; Name: "{app}\libreoffice"
+#endif
 
 [Icons]
 Name: "{group}\{#AppName}";        Filename: "{app}\{#AppExeName}"
