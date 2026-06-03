@@ -76,10 +76,49 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ---
 
+---
+
+## Commit 3: REQ-035 磁盘存储 + 注入格式升级 + MAX_TEXT_CHARS 50k
+
+**commit**: `be11111fa`
+**分支**: `feat/feishu-file-and-quote-recv`
+**规模**: ~108 行净代码(4 文件)
+
+### 改动文件
+
+| 文件 | 类型 | 改动说明 |
+|---|---|---|
+| `packages/adapter-feishu-lark/src/feishu/file-content-extractor.ts` | fork-only | MAX_TEXT_CHARS 20000→50000 + 注释更新 |
+| `packages/adapter-feishu-lark/src/feishu/message-pipeline.ts` | 上游改 | `downloadFileBuffer`→`downloadAndSaveFile`(加 chatId/fileName 参数,磁盘写入);新增 `formatFileSize/getFormatDisplay` helpers;`handleFileMessage` 注入格式升级;PDF 路径:下载保存→直接回复(zero LLM token);`PipelineOptions` 加 `feishuFilesRoot` 字段 |
+| `packages/adapter-feishu-lark/src/feishu/__tests__/file-content-extractor.test.ts` | fork-only | 描述字符串同步 50k |
+| `packages/adapter-feishu-lark/src/feishu/__tests__/message-pipeline.test.ts` | fork-only | F10 断言含"已保存"+"路径:";F12b 改用 fetch mock + 验路径信息;buildFilePipeline 传 feishuFilesRoot 隔离 tmpDir |
+
+### 关键实现决策
+
+- **磁盘路径**: `{feishuFilesRoot}/{safeChatId}/{YYYYMMDD}-{safeFileName}` — chatId/fileName 中 `/\\:*?"<>|` 替换为 `_`
+- **txt/docx 注入格式**:
+  ```
+  [文件《report.docx》已保存]
+  路径: /...feishu-files/oc_xxx/20260603-report.docx
+  大小: 45KB | 格式: DOCX
+
+  文件内容(共 N 字):
+  {extracted_text}
+  ```
+- **PDF 处理**: 下载保存 → 直接回 `路径+大小+格式(PDF，内容提取暂不支持)` — 不调 LLM
+- **unsupported 保持原样**: 早退"暂不支持",不下载
+- **`feishuFilesRoot` 选项**: 单测传 tmpDir 隔离,生产走 `IMBOT_WORKSPACE/feishu-files`
+
+### 测试结果
+688 tests pass(全量),typecheck clean
+
+---
+
 ## 回退方法
 
-两笔均可独立 `git revert`:
-- `git revert 6050a9bd8` — 回退 REQ-035 文件接收
+三笔均可独立 `git revert`:
+- `git revert be11111fa` — 回退磁盘存储 + 注入格式升级
+- `git revert 6050a9bd8` — 回退 REQ-035 文件接收(内存版)
 - `git revert 9e430f5a9` — 回退 REQ-036 引用回复
 
 影响范围:仅 `adapter-feishu-lark` 包,不影响主程序 / UI / 其他插件。
