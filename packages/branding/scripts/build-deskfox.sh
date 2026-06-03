@@ -235,25 +235,21 @@ if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "
     if [[ -d "$LO_IN_APP" ]]; then
         echo "[deskfox] === post-build LO signing (nested bundle order) ==="
 
-        # 1. 签叶节点 dylib / .so
-        echo "[deskfox] step 1: signing LO dylibs..."
-        find "$LO_IN_APP/Contents/Frameworks" -type f \( -name "*.dylib" -o -name "*.so" \) \
-            | while read -r f; do
-                codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force "$f" 2>/dev/null || true
-            done
-
-        # 2. 签 Contents/MacOS/ 可执行文件(soffice 等)
-        echo "[deskfox] step 2: signing LO executables in MacOS/..."
-        find "$LO_IN_APP/Contents/MacOS" -type f -perm +0111 \
-            | while read -r f; do
-                codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force "$f" 2>/dev/null || true
-            done
-
-        # 3. 签 LO inner bundle(不带 --deep,叶节点已在步骤 1/2 签好)
-        echo "[deskfox] step 3: sealing LO inner bundle..."
-        codesign --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp --force \
-                 "$LO_IN_APP" 2>/dev/null \
-            && echo "[deskfox]   LO bundle seal OK" || echo "[deskfox]   LO bundle seal WARN"
+        # 1-3. 用 --deep 一次性签 LO 内所有组件(按 inner→outer 顺序):
+        #   - Frameworks/ 下的 .dylib / .so / .jnilib
+        #   - PlugIns/ 下的 .appex (App Extension 子 bundle)
+        #   - Library/Spotlight/ 下的 .mdimporter
+        #   - Contents/MacOS/ 下的可执行文件(soffice 等)
+        #   - LO inner bundle 本体 seal
+        # --deep 按正确顺序处理所有嵌套层级,--force 覆盖现有 ad-hoc 签名
+        echo "[deskfox] steps 1-3: signing LO nested bundle with --deep..."
+        codesign --sign "$APPLE_SIGNING_IDENTITY" \
+                 --options runtime \
+                 --timestamp \
+                 --force \
+                 --deep \
+                 "$LO_IN_APP" 2>&1 | tail -3 || true
+        echo "[deskfox]   LO deep-signed (dylibs + .appex + .mdimporter + .jnilib + executables)"
 
         # 4. 重签 DeskFox.app 外层 seal(不带 --deep,只更新 outer seal 覆盖新 LO seal)
         echo "[deskfox] step 4: re-sealing DeskFox.app outer bundle..."
