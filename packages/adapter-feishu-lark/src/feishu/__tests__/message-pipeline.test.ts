@@ -1879,13 +1879,35 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     }
   })
 
-  test("F12c: xls(旧格式) → 友好'请另存为'回复,不走 LLM", async () => {
-    const { pipeline, sentTexts, capturedPromptTexts } = buildFilePipeline()
-    await pipeline.testHandle(makeFileEvent("fk_xls", "old.xls"))
-    expect(sentTexts).toHaveLength(1)
-    expect(sentTexts[0]).toContain("old.xls")
-    expect(sentTexts[0]).toContain("xlsx")
-    expect(capturedPromptTexts).toHaveLength(0)
+  test("F12c: xls(旧格式) → 下载保存 + 回路径信息,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline()
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_xls", "old.xls"))
+      // 应有"已保存" + 路径信息 + "旧版 Office"提示
+      expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("old.xls"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("xlsx"))).toBe(true)
+      // 不走 LLM
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
+  })
+
+  test("F12d: 不支持格式(zip) → 下载保存 + 回路径信息,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline()
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_zip", "archive.zip"))
+      expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("archive.zip"))).toBe(true)
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
   })
 
   test("F12b: PDF 格式 → 下载保存+pdfjs提取+注入 LLM", async () => {
@@ -1932,7 +1954,7 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     installFetchMock()
     try {
       await pipeline.testHandle(makeFileEvent("fk_fail", "doc.txt"))
-      expect(sentTexts.some((t) => t.includes("没能下载"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("没能保存") || t.includes("没能下载"))).toBe(true)
       expect(sentTexts.some((t) => t.includes("Connection refused"))).toBe(true)
     } finally {
       uninstallFetchMock()

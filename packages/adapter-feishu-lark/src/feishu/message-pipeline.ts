@@ -1184,29 +1184,17 @@ export class MessagePipeline {
     // FORK-BEGIN: REQ-035 文件格式判断 + 下载保存 + 注入格式升级 2026-06-03
     const format = detectFileFormat(fileName)
 
-    // 不支持 / 旧版 Office → 直接友好回复,不下载
-    if (format === "unsupported" || format === "legacy_office") {
-      const msg =
-        format === "legacy_office"
-          ? `⚠️ 旧版 Office 格式《${fileName}》暂不支持直接解析。\n请另存为 .xlsx / .docx / .pptx 后重发。`
-          : `⚠️ 暂不支持读取《${fileName}》格式。\n目前支持:图片 / txt / md / csv / json / 代码文件 / docx / xlsx / pptx / pdf。`
-      await this.sendFeishuText(event.chatId, msg).catch(() => {})
-      return
-    }
-
     // 图片 → 多模态 vision 路径(vision 预检 → 下载 → file part 注入)
     if (format === "image") {
       await this.handleImageFile(event, fileName, fileKey)
       return
     }
 
-    // ack + 进度反馈(text/docx/xlsx/pptx/pdf 都下载)
+    // 所有格式(含 unsupported / legacy_office)都下载保存 — "发来的文件都要保存"
     void this.ackMessage(event.messageId).catch((err) =>
       console.warn(`[pipeline ${this.opts.accountId}] file ack failed:`, (err as Error).message),
     )
-    await this.sendFeishuText(event.chatId, `📄 收到文件《${fileName}》,读取中...`).catch(
-      () => {},
-    )
+    await this.sendFeishuText(event.chatId, `📄 收到文件《${fileName}》,保存中...`).catch(() => {})
 
     // 下载 + 保存到磁盘
     let absolutePath: string
@@ -1231,7 +1219,7 @@ export class MessagePipeline {
       console.warn(`[pipeline ${this.opts.accountId}] file download/save failed (${fileName}):`, msg)
       await this.sendFeishuText(
         event.chatId,
-        `😅 没能下载《${fileName}》(原因:${msg})。请重新发送试试?`,
+        `😅 没能保存《${fileName}》(原因:${msg})。请重新发送试试?`,
       ).catch(() => {})
       return
     }
@@ -1239,7 +1227,27 @@ export class MessagePipeline {
     const sizeStr = formatFileSize(fileBuf.length)
     const formatDisplay = getFormatDisplay(fileName)
 
-    // FORK: PDF 支持 2026-06-03 — 统一走 LLM,pdf 用异步抽取,text/docx 用同步抽取
+    // 不支持内容抽取的格式 → 直接回"已保存"路径信息,不走 LLM
+    if (format === "unsupported" || format === "legacy_office") {
+      const note =
+        format === "legacy_office"
+          ? (() => {
+              const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase()
+              const modernMap: Record<string, string> = { xls: "xlsx", xlsm: "xlsx", xlsb: "xlsx", doc: "docx", ppt: "pptx", pptm: "pptx" }
+              return `${formatDisplay}（旧版 Office，请另存为 .${modernMap[ext] ?? "xlsx/docx/pptx"} 后重发可读取内容）`
+            })()
+          : `${formatDisplay}（暂不支持内容提取）`
+      const directReply = [
+        `[文件《${fileName}》已接收，已保存]`,
+        `路径: ${absolutePath}`,
+        `大小: ${sizeStr} | 格式: ${note}`,
+      ].join("\n")
+      await this.sendFeishuText(event.chatId, directReply).catch(() => {})
+      console.log(`[pipeline ${this.opts.accountId}] saved (no-extract) ${format}: ${absolutePath}`)
+      return
+    }
+
+    // FORK: PDF 支持 2026-06-03 — 统一走 LLM,pdf 用异步抽取,text/docx/xlsx/pptx 用同步抽取
     const extracted =
       format === "pdf"
         ? await extractPdfTextAsync(fileBuf, fileName)
