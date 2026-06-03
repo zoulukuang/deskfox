@@ -10,7 +10,9 @@ const log = Log.create({ service: "office-installer" })
 const STATE_FILE = path.join(Global.Path.state, "office-tooling.json")
 const DOWNLOAD_DIR = path.join(Global.Path.cache, "office-installer")
 
-const LIBREOFFICE_VERSION = process.env.OPENCODE_LIBREOFFICE_VERSION ?? "26.2.2"
+// FORK: 26.2.2(Fresh)→ 25.8.7(Still 稳定线)2026-06-03 — 与 prepare-lo-bundle.ps1 捆绑版本统一,
+// 避免"内置版 vs 在线下载版"两套渲染引擎(code-review #3)。user 拍板求稳走稳定线。
+const LIBREOFFICE_VERSION = process.env.OPENCODE_LIBREOFFICE_VERSION ?? "25.8.7"
 
 type Mirror = { name: string; baseUrl: string }
 
@@ -76,8 +78,6 @@ export type ToolingStatus = {
   sofficePath?: string
   platformSupported: boolean
   downloadSizeMB?: number
-  // FORK: bundled = DeskFox installer に同梱 LO を使用中（追加ダウンロード不要）2026-06-03
-  bundled?: boolean
   selectedMirror?: { name: string; url: string }
   progress: InstallProgress
 }
@@ -200,15 +200,17 @@ export async function detectSofficePath(force = false): Promise<string | undefin
 
 export async function status(): Promise<ToolingStatus> {
   const sofficePath = await detectSofficePath()
-  // FORK: bundled = 使用 DeskFox installer 同梱 LO,不需要额外下载 2026-06-03
-  const isBundled =
-    process.platform === "win32" && !!sofficePath && sofficePath === bundledSofficePath()
+  // FORK: bundled LO 命中时不报下载大小(已内置无需下载)。大小写不敏感比较 —— Win 路径
+  // C:\ vs c:\ / execPath 派生差异不应误判为"非内置"导致误报需下载(2026-06-03 code-review #7)。
+  // 注:isBundled 只用于内部判 downloadSizeMB,不外露为字段(当前无消费者,YAGNI);若未来 UI 要
+  // 显示"已内置 LO",需同步在 file-office.ts 的 OfficeToolingStatus Effect Schema 里加字段。
+  const bundledPath = process.platform === "win32" ? bundledSofficePath() : ""
+  const isBundled = !!bundledPath && !!sofficePath && sofficePath.toLowerCase() === bundledPath.toLowerCase()
   return {
     installed: !!sofficePath,
     sofficePath,
     platformSupported: isPlatformSupported(),
     downloadSizeMB: isBundled ? undefined : process.platform === "darwin" ? 281 : 355, // FORK: macOS DMG smaller 2026-04-29
-    bundled: isBundled || undefined,
     progress,
   }
 }
