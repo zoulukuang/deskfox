@@ -1839,6 +1839,7 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
       dispatcher,
       chatSessionStore: store,
       larkClient,
+      feishuFilesRoot: join(tmpDir, "feishu-files"),
     })
 
     return { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock }
@@ -1862,15 +1863,24 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
     expect(capturedPromptTexts).toHaveLength(0)
   })
 
-  test("F12b: PDF 格式 → 友好回复引导转格式,不走 LLM", async () => {
-    const { pipeline, sentTexts, capturedPromptTexts } = buildFilePipeline()
-    await pipeline.testHandle(makeFileEvent("fk_pdf", "slides.pdf"))
-    expect(sentTexts.some((t) => t.includes("PDF"))).toBe(true)
-    expect(sentTexts.some((t) => t.includes(".txt") || t.includes(".docx"))).toBe(true)
-    expect(capturedPromptTexts).toHaveLength(0)
+  test("F12b: PDF 格式 → 下载保存+直接回路径信息,不走 LLM", async () => {
+    const { pipeline, sentTexts, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
+      buildFilePipeline()
+    installFetchMock()
+    try {
+      await pipeline.testHandle(makeFileEvent("fk_pdf", "slides.pdf"))
+      // 应有路径信息 + "已保存" 回复
+      expect(sentTexts.some((t) => t.includes("PDF"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("路径:"))).toBe(true)
+      // 不走 LLM
+      expect(capturedPromptTexts).toHaveLength(0)
+    } finally {
+      uninstallFetchMock()
+    }
   })
 
-  test("F10: txt 文件 → promptAsync 收到的 text 含文件内容", async () => {
+  test("F10: txt 文件 → promptAsync 收到的 text 含文件内容 + 路径信息", async () => {
     const content = "这是文件里的内容"
     const { pipeline, capturedPromptTexts, installFetchMock, uninstallFetchMock } =
       buildFilePipeline({ fileBytes: new TextEncoder().encode(content) })
@@ -1881,7 +1891,8 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
       expect(capturedPromptTexts).toHaveLength(1)
       expect(capturedPromptTexts[0]).toContain("note.txt")
       expect(capturedPromptTexts[0]).toContain("这是文件里的内容")
-      expect(capturedPromptTexts[0]).toContain("已读取")
+      expect(capturedPromptTexts[0]).toContain("已保存")
+      expect(capturedPromptTexts[0]).toContain("路径:")
     } finally {
       uninstallFetchMock()
     }

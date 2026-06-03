@@ -28,8 +28,8 @@ export interface ExtractResult {
   truncated: boolean
 }
 
-/** 文本截断上限:20000 字符 ≈ 5000-8000 tokens,多数 LLM 上下文友好 */
-export const MAX_TEXT_CHARS = 20_000
+/** 文本截断上限:50000 字符 ≈ 12500-16500 tokens,覆盖普通学术论文长度 */
+export const MAX_TEXT_CHARS = 50_000
 
 /** 常见代码/文本扩展名集合(小写) */
 const TEXT_EXTS: ReadonlySet<string> = new Set([

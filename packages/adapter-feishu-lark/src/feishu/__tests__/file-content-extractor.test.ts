@@ -82,7 +82,7 @@ describe("extractTextFromBuffer — text (F6)", () => {
 // ============================================================
 
 describe("extractTextFromBuffer — 截断 (F8)", () => {
-  test("F8: 超 20000 字 → 截断 + truncated=true", () => {
+  test("F8: 超 50000 字 → 截断 + truncated=true", () => {
     const longText = "a".repeat(MAX_TEXT_CHARS + 500)
     const buf = new TextEncoder().encode(longText)
     const result = extractTextFromBuffer(buf, "text", "big.txt")
@@ -92,7 +92,7 @@ describe("extractTextFromBuffer — 截断 (F8)", () => {
     expect(result.text).toContain(String(MAX_TEXT_CHARS))
   })
 
-  test("恰好 20000 字 → 不截断", () => {
+  test("恰好 50000 字 → 不截断", () => {
     const text = "x".repeat(MAX_TEXT_CHARS)
     const buf = new TextEncoder().encode(text)
     const result = extractTextFromBuffer(buf, "text", "exact.txt")

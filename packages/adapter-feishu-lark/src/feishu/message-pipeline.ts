@@ -15,6 +15,7 @@
 //   6. await replyPromise(dispatcher 累积 token,session.idle 时 resolve)
 //   7. lark Client.im.v1.message.create 发回飞书
 
+import { mkdirSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { Client } from "@larksuiteoapi/node-sdk"
@@ -50,6 +51,19 @@ import {
 import type { PromptDispatcher } from "./prompt-dispatcher"
 // FORK: REQ-035 文件内容抽取 2026-06-02
 import { detectFileFormat, extractTextFromBuffer } from "./file-content-extractor"
+
+// FORK-BEGIN: REQ-035 文件路径注入辅助函数 2026-06-03
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
+function getFormatDisplay(fileName: string): string {
+  const dot = fileName.lastIndexOf(".")
+  return dot === -1 ? "文件" : fileName.slice(dot + 1).toUpperCase()
+}
+// FORK-END
 import {
   classifyAttachment,
   GROUP_NAME_MAX_LEN,
@@ -430,6 +444,12 @@ export interface PipelineOptions {
    * [feat: feishu-bridge-light]
    */
   attachWorkspaceRoot?: string
+  /**
+   * 飞书文件磁盘存储根目录 — 默认 ~/.opencode/imbot-workspace/feishu-files。
+   * 单测用 tmpDir 覆盖,避免污染真实 workspace。
+   * FORK: REQ-035 2026-06-03
+   */
+  feishuFilesRoot?: string
 }
 
 export class MessagePipeline {
@@ -1156,8 +1176,10 @@ export class MessagePipeline {
       return
     }
 
-    // 提前判断格式:不支持的格式直接友好回复,不下载文件
+    // FORK-BEGIN: REQ-035 文件格式判断 + 下载保存 + 注入格式升级 2026-06-03
     const format = detectFileFormat(fileName)
+
+    // 不支持格式 → 直接友好回复,不下载
     if (format === "unsupported") {
       await this.sendFeishuText(
         event.chatId,
@@ -1165,15 +1187,8 @@ export class MessagePipeline {
       ).catch(() => {})
       return
     }
-    if (format === "pdf") {
-      await this.sendFeishuText(
-        event.chatId,
-        `⚠️ 暂不支持读取 PDF 文件《${fileName}》(PDF 解析功能开发中)。\n请将内容另存为 .txt 或 .docx 后重新发送。`,
-      ).catch(() => {})
-      return
-    }
 
-    // ack + 进度反馈
+    // ack + 进度反馈(pdf 和 text/docx 都下载)
     void this.ackMessage(event.messageId).catch((err) =>
       console.warn(`[pipeline ${this.opts.accountId}] file ack failed:`, (err as Error).message),
     )
@@ -1181,17 +1196,27 @@ export class MessagePipeline {
       () => {},
     )
 
-    // 下载文件
+    // 下载 + 保存到磁盘
+    let absolutePath: string
     let fileBuf: Uint8Array
     try {
       const auth = await getClientAuthContext(this.larkClient)
-      fileBuf = await this.downloadFileBuffer(fileKey, event.messageId, auth.token, auth.domain)
+      const saved = await this.downloadAndSaveFile(
+        fileKey,
+        event.messageId,
+        event.chatId,
+        fileName,
+        auth.token,
+        auth.domain,
+      )
+      absolutePath = saved.absolutePath
+      fileBuf = saved.buf
       console.log(
-        `[pipeline ${this.opts.accountId}] downloaded file ${fileName} ${fileBuf.length}B`,
+        `[pipeline ${this.opts.accountId}] downloaded+saved file ${fileName} ${fileBuf.length}B → ${absolutePath}`,
       )
     } catch (err) {
       const msg = (err as Error).message
-      console.warn(`[pipeline ${this.opts.accountId}] file download failed (${fileName}):`, msg)
+      console.warn(`[pipeline ${this.opts.accountId}] file download/save failed (${fileName}):`, msg)
       await this.sendFeishuText(
         event.chatId,
         `😅 没能下载《${fileName}》(原因:${msg})。请重新发送试试?`,
@@ -1199,11 +1224,32 @@ export class MessagePipeline {
       return
     }
 
-    // 抽取文本
+    const sizeStr = formatFileSize(fileBuf.length)
+    const formatDisplay = getFormatDisplay(fileName)
+
+    // PDF → 直接回路径信息,不走 LLM(zero content token)
+    if (format === "pdf") {
+      const directReply = [
+        `[文件《${fileName}》已接收，已保存]`,
+        `路径: ${absolutePath}`,
+        `大小: ${sizeStr} | 格式: ${formatDisplay}（内容提取暂不支持，如需分析请告知）`,
+      ].join("\n")
+      await this.sendFeishuText(event.chatId, directReply).catch(() => {})
+      console.log(`[pipeline ${this.opts.accountId}] PDF saved, direct reply (no LLM): ${absolutePath}`)
+      return
+    }
+
+    // txt/docx → 抽取文本 + 注入 LLM
     const extracted = extractTextFromBuffer(fileBuf, format, fileName)
-    const fileContext =
-      `[文件《${fileName}》已读取,共 ${extracted.text.length} 字${extracted.truncated ? "(内容已截断)" : ""}]\n\n` +
-      extracted.text
+    const fileContext = [
+      `[文件《${fileName}》已保存]`,
+      `路径: ${absolutePath}`,
+      `大小: ${sizeStr} | 格式: ${formatDisplay}`,
+      ``,
+      `文件内容(共 ${extracted.text.length} 字${extracted.truncated ? ",已截断" : ""}):`,
+      extracted.text,
+    ].join("\n")
+    // FORK-END
 
     // 获取 / 创建 session(跟 handle() 主路径同款)
     let sessionID = this.chatToSession.get(event.chatId)
@@ -1262,15 +1308,20 @@ export class MessagePipeline {
   }
 
   /**
-   * 飞书文件下载(message resources endpoint,type=file)。
+   * 飞书文件下载 + 保存到磁盘。
    * 同 downloadFeishuImage 的 Bun-native fetch 模式,避开 axios+Buffer 兼容问题。
+   * FORK: REQ-035 downloadAndSaveFile 2026-06-03(原 downloadFileBuffer 加磁盘写入)
+   *
+   * @returns { absolutePath, buf } — absolutePath 供注入 prompt,buf 供文本抽取
    */
-  private async downloadFileBuffer(
+  private async downloadAndSaveFile(
     fileKey: string,
     messageId: string,
+    chatId: string,
+    fileName: string,
     tenantAccessToken: string,
     domain = "https://open.feishu.cn",
-  ): Promise<Uint8Array> {
+  ): Promise<{ absolutePath: string; buf: Uint8Array }> {
     const MAX_FILE_BYTES = 30 * 1024 * 1024
     const url =
       `${domain}/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}?type=file`
@@ -1305,7 +1356,20 @@ export class MessagePipeline {
     if (buf.length === 0) {
       throw new Error(`飞书文件空 (0 bytes) for file_key=${fileKey}`)
     }
-    return buf
+
+    // 保存到磁盘: {feishuFilesRoot}/{safeChatId}/{YYYYMMDD}-{safeFileName}
+    const filesRoot = this.opts.feishuFilesRoot ?? join(IMBOT_WORKSPACE, "feishu-files")
+    const safeChatId = chatId.replace(/[/\\:*?"<>|]/g, "_").slice(0, 64)
+    const safeFileName = fileName.replace(/[/\\:*?"<>|]/g, "_")
+    const d = new Date()
+    const dateStr =
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`
+    const dir = join(filesRoot, safeChatId)
+    mkdirSync(dir, { recursive: true })
+    const absolutePath = join(dir, `${dateStr}-${safeFileName}`)
+    writeFileSync(absolutePath, buf)
+
+    return { absolutePath, buf }
   }
   // FORK-END
 
