@@ -20,6 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
+| [win-ship-命令](./win-ship-命令/) | done | Windows /ship 一键发版 SOP 入仓 + 台账填实(2026-06-03,Medium)— 对齐 Mac `macos-ship-命令` 既定架构(command 各端本机 gitignored 避冲突 / SOP 知识入仓)。补 Win 侧缺失的 SOP 入仓文档;ship.md 加**步骤 3.5 填实台账**(用 code-review 摘要 + `git log` 填实 `installer-versions.md`,杜绝空占位回流 main)。不强行跨平台合并 command(尊重既定决策 + Win 端拿不到 Mac 完整 SOP 无法验证)。0 改上游 / 0 R4 / 纯文档 + 本机 command。|
 | [lo-bundle](./lo-bundle/) | in-progress | LibreOffice 预捆绑安装包(2026-06-03,Medium)— 精简版 LO 内置进 DeskFox Windows installer,用户安装后无需二次下载即可渲染 Office 文档。`prepare-lo-bundle.ps1` 一次性 bundle 准备 + `DeskFox.iss` 条件编译 + `office-installer.ts` bundled 路径检测(优先级仅次于 env var)。|
 | [lo-bundle-macos](./lo-bundle-macos/) | done | LibreOffice 预捆绑 macOS 适配(2026-06-03,Medium)— 对称 Windows lo-bundle,将 LO 25.8.7 arm64 打入 DeskFox.app/Contents/Resources/libreoffice/。`prepare-lo-bundle.sh` + `build-deskfox.sh` 条件注入 Tauri resources + `office-installer.ts` darwin bundled 路径检测。|
 | [help-icon-community-link](./help-icon-community-link/) | done | REQ-039 左下角"?"帮助入口加链接 → DeskFox 社区页(2026-06-02)— sidebar footer 设置齿轮下方的"?"图标早已接好 `onOpenHelp`,本需求只把 `platform.openLink` 目标 `https://opencode.ai/desktop-feedback` → `https://deskfox.ai/#community`(顺手修一处上游 brand leak)。Tauri 端 `openLink` 走 `shellOpen` 真外部浏览器打开,符合需求。Tiny 1 行 + FORK marker / `layout.tsx:2363` / typecheck 17/17 / 0 R4 / 上游侵入 1 行(已 marker)。error.tsx 另一处同链接不在范围未动。|
