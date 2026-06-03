@@ -1888,7 +1888,8 @@ describe("REQ-035 文件消息接收(F10-F13)", () => {
       // 应有"已保存" + 路径信息 + "旧版 Office"提示
       expect(sentTexts.some((t) => t.includes("已保存"))).toBe(true)
       expect(sentTexts.some((t) => t.includes("old.xls"))).toBe(true)
-      expect(sentTexts.some((t) => t.includes("xlsx"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("旧版 Office"))).toBe(true)
+      expect(sentTexts.some((t) => t.includes("暂不识别"))).toBe(true)
       // 不走 LLM
       expect(capturedPromptTexts).toHaveLength(0)
     } finally {

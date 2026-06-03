@@ -1234,7 +1234,7 @@ export class MessagePipeline {
           ? (() => {
               const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase()
               const modernMap: Record<string, string> = { xls: "xlsx", xlsm: "xlsx", xlsb: "xlsx", doc: "docx", ppt: "pptx", pptm: "pptx" }
-              return `${formatDisplay}（旧版 Office，请另存为 .${modernMap[ext] ?? "xlsx/docx/pptx"} 后重发可读取内容）`
+              return `${formatDisplay}（旧版 Office 格式，暂不识别）`
             })()
           : `${formatDisplay}（暂不支持内容提取）`
       const directReply = [
