@@ -49,10 +49,9 @@ import {
   type SubMessage,
 } from "./merge-forward-flatten"
 import type { PromptDispatcher } from "./prompt-dispatcher"
-// FORK: REQ-035 文件内容抽取 2026-06-02 / PDF 2026-06-03 / xlsx+pptx+image 2026-06-03
+// FORK: REQ-035 文件内容抽取 2026-06-02 / xlsx+pptx+image 2026-06-03 / PDF→直接回复 2026-06-03
 import {
   detectFileFormat,
-  extractPdfTextAsync,
   extractTextFromBuffer,
   getImageMime,
 } from "./file-content-extractor"
@@ -1196,6 +1195,10 @@ export class MessagePipeline {
     )
     await this.sendFeishuText(event.chatId, `📄 收到文件《${fileName}》,保存中...`).catch(() => {})
 
+    // 纯存档格式(不解析)用 500MB 上限;可提取格式用 30MB(解析大文件性能差)
+    const isExtractable = format !== "unsupported" && format !== "legacy_office" && format !== "pdf"
+    const maxBytes = isExtractable ? 30 * 1024 * 1024 : 500 * 1024 * 1024
+
     // 下载 + 保存到磁盘
     let absolutePath: string
     let fileBuf: Uint8Array
@@ -1208,6 +1211,7 @@ export class MessagePipeline {
         fileName,
         auth.token,
         auth.domain,
+        maxBytes,
       )
       absolutePath = saved.absolutePath
       fileBuf = saved.buf
@@ -1219,7 +1223,7 @@ export class MessagePipeline {
       console.warn(`[pipeline ${this.opts.accountId}] file download/save failed (${fileName}):`, msg)
       await this.sendFeishuText(
         event.chatId,
-        `😅 没能保存《${fileName}》(原因:${msg})。请重新发送试试?`,
+        `😅 没能保存《${fileName}》(原因:${msg})。`,
       ).catch(() => {})
       return
     }
@@ -1227,15 +1231,14 @@ export class MessagePipeline {
     const sizeStr = formatFileSize(fileBuf.length)
     const formatDisplay = getFormatDisplay(fileName)
 
-    // 不支持内容抽取的格式 → 直接回"已保存"路径信息,不走 LLM
-    if (format === "unsupported" || format === "legacy_office") {
+    // 不支持内容抽取的格式(含 PDF) → 直接回"已保存"路径信息,不走 LLM
+    // PDF 不走 LLM:用户通常只想存档;需要解析时可回复"解析这个PDF"再重发文件触发
+    if (format === "unsupported" || format === "legacy_office" || format === "pdf") {
       const note =
         format === "legacy_office"
-          ? (() => {
-              const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase()
-              const modernMap: Record<string, string> = { xls: "xlsx", xlsm: "xlsx", xlsb: "xlsx", doc: "docx", ppt: "pptx", pptm: "pptx" }
-              return `${formatDisplay}（旧版 Office 格式，暂不识别）`
-            })()
+          ? `${formatDisplay}（旧版 Office 格式，暂不识别）`
+          : format === "pdf"
+          ? `${formatDisplay}（已保存，如需解析内容请回复"解析"）`
           : `${formatDisplay}（暂不支持内容提取）`
       const directReply = [
         `[文件《${fileName}》已接收，已保存]`,
@@ -1247,11 +1250,8 @@ export class MessagePipeline {
       return
     }
 
-    // FORK: PDF 支持 2026-06-03 — 统一走 LLM,pdf 用异步抽取,text/docx/xlsx/pptx 用同步抽取
-    const extracted =
-      format === "pdf"
-        ? await extractPdfTextAsync(fileBuf, fileName)
-        : extractTextFromBuffer(fileBuf, format, fileName)
+    // text/docx/xlsx/pptx — 抽取文本 + 注入 LLM
+    const extracted = extractTextFromBuffer(fileBuf, format, fileName)
 
     const fileContext = [
       `[文件《${fileName}》已保存]`,
@@ -1333,8 +1333,9 @@ export class MessagePipeline {
     fileName: string,
     tenantAccessToken: string,
     domain = "https://open.feishu.cn",
+    /** 下载大小上限:可提取格式默认 30MB,纯存档格式传 500MB */
+    maxBytes = 30 * 1024 * 1024,
   ): Promise<{ absolutePath: string; buf: Uint8Array }> {
-    const MAX_FILE_BYTES = 30 * 1024 * 1024
     const url =
       `${domain}/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}?type=file`
     const ctrl = new AbortController()
@@ -1355,14 +1356,18 @@ export class MessagePipeline {
     }
     clearTimeout(handle)
     if (!res.ok) {
+      // 飞书 API 返 400：大文件超出飞书服务端限制，或 .exe 等类型被飞书安全策略屏蔽
+      // 属于飞书平台限制，DeskFox 无法绕过
       throw new Error(
-        `飞书文件下载失败 ${res.status} ${res.statusText} for file_key=${fileKey}`,
+        res.status === 400
+          ? `飞书不允许下载该文件(HTTP 400，可能文件过大或飞书安全策略限制此类型，非 DeskFox 问题)`
+          : `飞书文件下载失败 ${res.status} ${res.statusText} for file_key=${fileKey}`,
       )
     }
     const buf = new Uint8Array(await res.arrayBuffer())
-    if (buf.length > MAX_FILE_BYTES) {
+    if (buf.length > maxBytes) {
       throw new Error(
-        `飞书文件过大 ${(buf.length / 1024 / 1024).toFixed(1)}MB > 30MB for file_key=${fileKey}`,
+        `文件过大 ${(buf.length / 1024 / 1024).toFixed(1)}MB 超出 ${(maxBytes / 1024 / 1024).toFixed(0)}MB 限制`,
       )
     }
     if (buf.length === 0) {
