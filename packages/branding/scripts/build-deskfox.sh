@@ -200,7 +200,8 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
     LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
     echo "[deskfox] LO bundle found: $LO_BUNDLE_APP (${LO_SIZE}MB) — injecting into Tauri resources"
     # 相对于 packages/desktop/src-tauri/ 的路径
-    LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
+    # 路径相对于 packages/desktop/src-tauri/(同 tauri.conf.json resources 约定)
+    LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
 else
     echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
     echo "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"

@@ -209,6 +209,16 @@ if [[ -d "$RESOURCES/registry" ]]; then
     find "$RESOURCES/registry" -name "*_*.xcu" ! -name "*en_US*" -delete 2>/dev/null || true
 fi
 
+# 清理剥皮后产生的悬空符号链接(如 Frameworks/intl/fbintl.conf → firebird/fbintl.conf)
+# Tauri 处理 resources 时会解析 symlink,悬空链接导致 "resource path doesn't exist" 报错
+echo "[lo-bundle-mac] removing broken symlinks..."
+find "$DEST_APP" -type l | while read -r f; do
+    if [[ ! -e "$f" ]]; then
+        rm "$f"
+        echo "[lo-bundle-mac]   removed broken symlink: $(basename "$f")"
+    fi
+done
+
 # --- 体积检查 ---
 FINAL_SIZE_MB=$(du -sm "$DEST_APP" 2>/dev/null | awk '{print $1}')
 echo "[lo-bundle-mac] stripped size: ${FINAL_SIZE_MB} MB"
