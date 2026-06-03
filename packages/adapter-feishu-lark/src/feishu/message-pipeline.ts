@@ -15,8 +15,8 @@
 //   6. await replyPromise(dispatcher 累积 token,session.idle 时 resolve)
 //   7. lark Client.im.v1.message.create 发回飞书
 
-import { mkdirSync } from "node:fs"
-import { writeFile } from "node:fs/promises"
+import { existsSync, mkdirSync, statSync } from "node:fs"
+import { readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { Client } from "@larksuiteoapi/node-sdk"
@@ -1396,11 +1396,12 @@ export class MessagePipeline {
     const safeFileName = fileName.replace(/[/\\:*?"<>|]/g, "_")
     const d = new Date()
     const dateStr =
-      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}` +
-      `T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`
     const dir = join(filesRoot, safeChatId)
     mkdirSync(dir, { recursive: true })
-    const absolutePath = join(dir, `${dateStr}-${safeFileName}`)
+
+    // 去重路径选择:同名同内容 → 复用;同名不同内容 → _2/_3 后缀
+    const { absolutePath, skipWrite } = await this._resolveFilePath(dir, dateStr, safeFileName, buf)
 
     // 路径安全校验:防止 chatId/fileName 含 ".." 等绕过 safeChatId 替换逻辑
     const resolvedPath = resolve(absolutePath)
@@ -1409,10 +1410,53 @@ export class MessagePipeline {
       throw new Error(`文件路径安全校验失败,拒绝写入`)
     }
 
-    // 异步写磁盘,避免 writeFileSync 阻塞 Bun 事件循环
-    await writeFile(absolutePath, buf)
+    // 异步写磁盘(skipWrite=true 表示内容完全相同,复用已有文件,不重写)
+    if (!skipWrite) await writeFile(absolutePath, buf)
 
     return { absolutePath, buf, contentType }
+  }
+
+  /**
+   * 确定文件保存路径,避免同名不同内容文件互相覆盖。
+   *
+   * 策略:
+   *   - 路径不存在 → 直接用(skipWrite=false)
+   *   - 路径已存在 + 大小&字节完全一致 → 复用已有路径(skipWrite=true,不重写)
+   *   - 路径已存在 + 内容不同 → 尝试 _2/_3 ... _99 后缀(skipWrite=false)
+   */
+  private async _resolveFilePath(
+    dir: string,
+    dateStr: string,
+    safeFileName: string,
+    buf: Uint8Array,
+  ): Promise<{ absolutePath: string; skipWrite: boolean }> {
+    const basePath = join(dir, `${dateStr}-${safeFileName}`)
+
+    if (!existsSync(basePath)) return { absolutePath: basePath, skipWrite: false }
+
+    // 已有同名文件 → 先比大小(快),大小相同再比字节(慢但只在碰撞时触发)
+    try {
+      const existingSize = statSync(basePath).size
+      if (existingSize === buf.length) {
+        const existing = new Uint8Array(await readFile(basePath))
+        const identical = existing.length === buf.length && existing.every((byte, i) => byte === buf[i])
+        if (identical) {
+          // 完全相同 → 复用,不重复写入磁盘
+          return { absolutePath: basePath, skipWrite: true }
+        }
+      }
+    } catch { /* 读取失败,视为内容不同,继续找新名字 */ }
+
+    // 内容不同 → 找下一个可用的 _N 后缀
+    const dotIdx = safeFileName.lastIndexOf(".")
+    const base = dotIdx === -1 ? safeFileName : safeFileName.slice(0, dotIdx)
+    const ext = dotIdx === -1 ? "" : safeFileName.slice(dotIdx)
+    for (let n = 2; n <= 99; n++) {
+      const candidate = join(dir, `${dateStr}-${base}_${n}${ext}`)
+      if (!existsSync(candidate)) return { absolutePath: candidate, skipWrite: false }
+    }
+    // 极端兜底(100+ 个同名文件):加毫秒时间戳
+    return { absolutePath: join(dir, `${dateStr}-${Date.now()}-${safeFileName}`), skipWrite: false }
   }
 
   /**
