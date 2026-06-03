@@ -209,10 +209,16 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
     # 解法:prod build 前用 APPLE_SIGNING_IDENTITY 预签名所有 dylib/executable,
     # 让 Tauri 拷贝进 .app 后各 dylib 已有正确 Developer ID 签名。
     if [[ "$SIGN_ENABLED" -eq 1 && -n "$APPLE_SIGNING_IDENTITY" ]]; then
-        echo "[deskfox] pre-signing LO dylibs with Developer ID for notarization..."
-        # 只签 .dylib / .so — 这些在 Contents/Frameworks/ 下,Tauri --deep 不覆盖 Resources/ 子树。
-        # 不签可执行文件(soffice 等在 Contents/MacOS/ 下)——Tauri 的 --deep 会处理它们。
-        # 如果我们签了 soffice 后 Tauri 再签一次,会导致 CodeDirectory hashes 冲突 → Invalid 拒绝。
+        echo "[deskfox] pre-signing LO bundle (dylibs + executables) with Developer ID..."
+        # Tauri 签名不覆盖 DeskFox.app/Contents/Resources/ 子树。
+        # 需要手动签:
+        #   1. .dylib/.so — Contents/Frameworks/ 下的共享库
+        #   2. Contents/MacOS/ 下的可执行文件(soffice 等)
+        # 注意:不签 LO.app bundle seal(codesign --deep on LO_BUNDLE_APP) —
+        # 那会创建 sealed resource 列表;Tauri 再签时 dylib hash 变化会让 seal 失效 → Invalid。
+        # 叶节点先签,outer bundle seal 由 DeskFox.app 的 Tauri 签名覆盖整个 Resources/ 即可。
+
+        # 1. 签所有 dylib / .so
         find "$LO_BUNDLE_APP/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) \
             | while read -r f; do
                 codesign --sign "$APPLE_SIGNING_IDENTITY" \
@@ -221,7 +227,19 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
                          --force \
                          "$f" 2>/dev/null || true
             done
-        echo "[deskfox] LO dylibs pre-signed with Developer ID (executables left for Tauri)"
+
+        # 2. 签 Contents/MacOS/ 里的可执行文件(soffice 等)
+        # Tauri 不处理 Resources/ 子树里的 executable,必须手签
+        find "$LO_BUNDLE_APP/Contents/MacOS" -type f -perm +0111 \
+            | while read -r f; do
+                codesign --sign "$APPLE_SIGNING_IDENTITY" \
+                         --options runtime \
+                         --timestamp \
+                         --force \
+                         "$f" 2>/dev/null || true
+            done
+
+        echo "[deskfox] LO bundle dylibs + executables pre-signed (no bundle seal — avoids double-sign)"
     fi
 else
     echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
