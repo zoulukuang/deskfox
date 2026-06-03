@@ -124,13 +124,34 @@ async function whichSoffice(): Promise<string | undefined> {
   }
 }
 
-// FORK-BEGIN: bundled LO path — DeskFox installer に同梱 2026-06-03
+// FORK-BEGIN: bundled LO path — DeskFox installer に同梱 2026-06-03 / macOS 適応 [feat: lo-bundle-macos]
 // process.execPath は Bun コンパイル済みバイナリの絶対パスを返す。
-// インストール済み環境では {app}\opencode-cli.exe と隣接して {app}\libreoffice\ が存在する。
-// 開発中は sidecars\ 以下に libreoffice\ は存在しないので自動的に fallthrough する。
+//
+// Windows: sidecar は {app}\opencode-cli.exe、隣接 {app}\libreoffice\program\soffice.exe
+// macOS:   sidecar は DeskFox.app/Contents/MacOS/opencode-cli (Tauri sidecar 配置位置)
+//          Resources は DeskFox.app/Contents/Resources/
+//          bundled LO は Resources/libreoffice/Contents/MacOS/soffice
+//          → path.dirname(execPath) = .../MacOS/
+//          → ../Resources/libreoffice/Contents/MacOS/soffice
+//
+// 開発中は libreoffice/ が存在しないので自動的に fallthrough する。
 function bundledSofficePath(): string {
-  if (process.platform !== "win32") return ""
-  return path.join(path.dirname(process.execPath), "libreoffice", "program", "soffice.exe")
+  if (process.platform === "win32") {
+    return path.join(path.dirname(process.execPath), "libreoffice", "program", "soffice.exe")
+  }
+  if (process.platform === "darwin") {
+    // FORK: macOS bundled LO path [feat: lo-bundle-macos]
+    return path.resolve(
+      path.dirname(process.execPath),
+      "..",
+      "Resources",
+      "libreoffice",
+      "Contents",
+      "MacOS",
+      "soffice",
+    )
+  }
+  return ""
 }
 // FORK-END
 
@@ -164,8 +185,9 @@ export async function detectSofficePath(force = false): Promise<string | undefin
     return env
   }
 
-  // FORK-BEGIN: bundled LO 检测 — 优先于 state/PATH/common，不写 state（路径由安装决定，不缓存）2026-06-03
-  if (process.platform === "win32") {
+  // FORK-BEGIN: bundled LO 检测 — 优先于 state/PATH/common，不写 state（路径由安装决定，不缓存）
+  // 2026-06-03 Win; macOS 适配 [feat: lo-bundle-macos]
+  if (process.platform === "win32" || process.platform === "darwin") {
     const bundled = bundledSofficePath()
     if (bundled && (await exists(bundled))) {
       detectCache = { path: bundled, checked: Date.now() }
@@ -204,7 +226,8 @@ export async function status(): Promise<ToolingStatus> {
   // C:\ vs c:\ / execPath 派生差异不应误判为"非内置"导致误报需下载(2026-06-03 code-review #7)。
   // 注:isBundled 只用于内部判 downloadSizeMB,不外露为字段(当前无消费者,YAGNI);若未来 UI 要
   // 显示"已内置 LO",需同步在 file-office.ts 的 OfficeToolingStatus Effect Schema 里加字段。
-  const bundledPath = process.platform === "win32" ? bundledSofficePath() : ""
+  // FORK: macOS bundled 检测加入 darwin [feat: lo-bundle-macos]
+  const bundledPath = (process.platform === "win32" || process.platform === "darwin") ? bundledSofficePath() : ""
   const isBundled = !!bundledPath && !!sofficePath && sofficePath.toLowerCase() === bundledPath.toLowerCase()
   return {
     installed: !!sofficePath,

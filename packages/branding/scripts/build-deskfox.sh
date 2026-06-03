@@ -186,14 +186,40 @@ else
     echo "[deskfox] 未启用代码签名(非 prod 或无 ~/.deskfox-signing/config.env)"
 fi
 
+# === 1.9 macOS LO bundle 检测 — 若 libreoffice-bundle/macos/LibreOffice.app 存在则注入 Tauri resources ===
+# [feat: lo-bundle-macos]
+# Windows 用 DeskFox.iss 条件编译;macOS 没有 NSIS,改在 build script 动态注入额外 --config。
+# Tauri v2 支持多 --config 参数,后者 deep-merge 到前者。
+# 路径约定(对应 office-installer.ts bundledSofficePath):
+#   source: branding/libreoffice-bundle/macos/LibreOffice.app
+#   dest in .app: Contents/Resources/libreoffice  (=LibreOffice.app 重命名)
+#   soffice exec: Contents/Resources/libreoffice/Contents/MacOS/soffice
+LO_BUNDLE_APP="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
+LO_EXTRA_CONFIG=""
+if [[ -d "$LO_BUNDLE_APP" ]]; then
+    LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
+    echo "[deskfox] LO bundle found: $LO_BUNDLE_APP (${LO_SIZE}MB) — injecting into Tauri resources"
+    # 相对于 packages/desktop/src-tauri/ 的路径
+    # 路径相对于 packages/desktop/src-tauri/(同 tauri.conf.json resources 约定)
+    LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
+else
+    echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
+    echo "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"
+    echo "[deskfox]   run prepare-lo-bundle.sh to prepare the bundle"
+fi
+
 # === 2. tauri build ===
 BUILD_EXIT=0
 (
     cd "$REPO_ROOT/packages/desktop"
+    TAURI_CONFIGS=("--config" "$OVERRIDE")
+    if [[ -n "$LO_EXTRA_CONFIG" ]]; then
+        TAURI_CONFIGS+=("--config" "$LO_EXTRA_CONFIG")
+    fi
     if [[ "$NO_BUNDLE" -eq 1 ]]; then
-        bun run tauri build --no-bundle --config "$OVERRIDE"
+        bun run tauri build --no-bundle "${TAURI_CONFIGS[@]}"
     else
-        bun run tauri build --config "$OVERRIDE"
+        bun run tauri build "${TAURI_CONFIGS[@]}"
     fi
 ) || BUILD_EXIT=$?
 
