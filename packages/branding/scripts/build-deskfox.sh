@@ -209,9 +209,11 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
     # 解法:prod build 前用 APPLE_SIGNING_IDENTITY 预签名所有 dylib/executable,
     # 让 Tauri 拷贝进 .app 后各 dylib 已有正确 Developer ID 签名。
     if [[ "$SIGN_ENABLED" -eq 1 && -n "$APPLE_SIGNING_IDENTITY" ]]; then
-        echo "[deskfox] pre-signing LO bundle with Developer ID for notarization..."
-        # 先签所有 dylib + executable(按内到外顺序,从叶节点到根)
-        find "$LO_BUNDLE_APP/Contents" -type f \( -perm +0111 -o -name "*.dylib" -o -name "*.so" \) \
+        echo "[deskfox] pre-signing LO dylibs with Developer ID for notarization..."
+        # 只签 .dylib / .so — 这些在 Contents/Frameworks/ 下,Tauri --deep 不覆盖 Resources/ 子树。
+        # 不签可执行文件(soffice 等在 Contents/MacOS/ 下)——Tauri 的 --deep 会处理它们。
+        # 如果我们签了 soffice 后 Tauri 再签一次,会导致 CodeDirectory hashes 冲突 → Invalid 拒绝。
+        find "$LO_BUNDLE_APP/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) \
             | while read -r f; do
                 codesign --sign "$APPLE_SIGNING_IDENTITY" \
                          --options runtime \
@@ -219,15 +221,7 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
                          --force \
                          "$f" 2>/dev/null || true
             done
-        # 再签 .app bundle 本体
-        codesign --sign "$APPLE_SIGNING_IDENTITY" \
-                 --options runtime \
-                 --timestamp \
-                 --force \
-                 --deep \
-                 "$LO_BUNDLE_APP" 2>/dev/null \
-            && echo "[deskfox] LO bundle pre-signed with Developer ID OK" \
-            || echo "[deskfox] WARNING: LO bundle pre-signing partial (non-fatal)"
+        echo "[deskfox] LO dylibs pre-signed with Developer ID (executables left for Tauri)"
     fi
 else
     echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
