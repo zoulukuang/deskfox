@@ -11,6 +11,21 @@
 
 
 
+## [Windows] 2026.6.3.1 - 2026-06-03 19:10
+
+**主题**:飞书文件接收(REQ-035/036)+ Windows LibreOffice 预捆绑 —— 装完零下载渲染 Office 文档(自 prod `2026.6.2.1` 起)。
+
+**本次内容**:
+- **飞书文件接收**(REQ-035/036):接收 txt/docx/pdf/xlsx/pptx/图片并提取文本注入会话 + 引用回复上下文注入;`file-content-extractor` + `message-pipeline` 大幅扩展,配套回归测试(xlsx 数字实体解码 / PDF pdfjs-dist 提取)。
+- **Windows LibreOffice 预捆绑**(lo-bundle):精简版 LO 25.8.7 内置进安装包,装完无需二次下载即可渲染 Office 文档(安装包净增 ~123MB → 总 ~192MB)。
+- Office 预览上限 200MB→1GB + 后端转换超时 30s→120s;`file-size-guard` 适配。
+- Win ship SOP 入仓(`win-ship-命令` feat)+ ship 流程新增「步骤 3.5 填实台账」(**本条即首次实践**)。
+
+**Release**:GitHub `ship-prod-2026.6.3.1`(主仓 `zoulukuang/deskfox`)+ Gitee 镜像
+**installer**:`packages/branding/installer/Output/DeskFox-2026.6.3.1-setup.exe`(含 LibreOffice,192 MB)
+
+---
+
 ## [macOS] 2026.6.3.1 — 2026-06-03 16:51
 
 (to be filled: commits / plugin / installer path after ship)
