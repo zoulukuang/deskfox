@@ -246,6 +246,9 @@ export function stripDocxXml(xml: string): string {
 
 function decodeXmlEntities(s: string): string {
   return s
+    // 数字字符引用必须先解码,否则 &amp; → & 后可能二次误处理
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCodePoint(parseInt(code, 16)))
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
