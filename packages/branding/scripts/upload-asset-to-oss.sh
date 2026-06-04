@@ -45,7 +45,7 @@ OSS_CDN_BASE="${OSS_CDN_BASE%/}"   # strip trailing slash
 
 # ossutil 装到 ExtSSD（内置盘空间不足，全部装外置盘）
 OSSUTIL_DIR="${OSSUTIL_DIR:-/Volumes/ExtSSD/.ossutil}"
-OSSUTIL_VER="1.7.19"
+OSSUTIL_VER="1.7.18"  # v1 mac 单文件二进制存在的版本(1.7.19 只有 Windows exe,mac 404)
 
 # ─── parse args ────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -125,18 +125,12 @@ if [[ -z "$OSSUTIL_BIN" ]]; then
   if [[ ! -x "$OSSUTIL_BIN" ]]; then
     echo -e "${YELLOW}[INFO] 未发现 ossutil，下载 v$OSSUTIL_VER 到 $OSSUTIL_DIR ...${RESET}"
     mkdir -p "$OSSUTIL_DIR"
-    # Apple Silicon 用 arm64 包；下载失败回退 x86_64（Rosetta 可跑）
-    ARCH=$(uname -m)
-    if [[ "$ARCH" == "arm64" ]]; then
-      DL="https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VER}/ossutilmac-arm64"
-    else
-      DL="https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VER}/ossutilmac64"
-    fi
-    if ! curl -fsSL "$DL" -o "$OSSUTIL_BIN"; then
-      echo -e "${YELLOW}[INFO] arm64 包下载失败，回退 x86_64...${RESET}"
-      curl -fsSL "https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VER}/ossutilmac64" -o "$OSSUTIL_BIN" \
-        || { echo -e "${RED}[ERROR] ossutil 下载失败${RESET}" >&2; exit 1; }
-    fi
+    # ossutil v1 的 mac 包是单文件 x86_64 二进制(ossutilmac64),Apple Silicon 走 Rosetta 可跑;
+    # v1 无独立 arm64 包(ossutilmac-arm64 404)。原生 arm64 在 ossutil v2(zip 包 + 不同 CLI),
+    # 本脚本用 v1 语法故固定 v1。
+    DL="https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VER}/ossutilmac64"
+    curl -fsSL "$DL" -o "$OSSUTIL_BIN" \
+      || { echo -e "${RED}[ERROR] ossutil 下载失败:$DL${RESET}" >&2; exit 1; }
     chmod +x "$OSSUTIL_BIN"
   fi
 fi
