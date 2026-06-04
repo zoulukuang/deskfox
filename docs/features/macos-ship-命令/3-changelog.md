@@ -40,3 +40,17 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 ## 回退
 
 删 `.claude/commands/ship.md`(本机)+ `git revert` docs。无运行时状态。
+
+---
+
+## Follow-up(2026-06-04):国内镜像 Gitee 附件 → 阿里云 OSS [feat: ship-oss-upload]
+
+**起因**:.dmg 内嵌 LibreOffice 后已 **~274MB**,远超 Gitee 100MB 单文件上限 —— 原步骤 7b `mirror-asset-to-gitee.sh` 附件上传**已失效**。官网 `deskfox-site/update-version.ps1` 此前已把国内镜像从 Gitee release URL 迁到阿里云 CDN `dl.clawtray.com/<AssetName>`(Gitee 仅 fallback),本次让 ship 流程对齐这条链路。
+
+**改造**:
+- 新增 `packages/branding/scripts/upload-asset-to-oss.sh`(入仓,fork-only 新文件):自动定位/下载 ossutil(到 ExtSSD)→ `ossutil cp` 传到 `oss://downloadbot/<文件名>`(分片+断点续传,无 100MB 上限)→ HEAD 验证 `https://dl.clawtray.com/<文件名>` → 打印机器可解析 `OSS_DOWNLOAD_URL=`。凭据全走环境变量(`OSS_ACCESS_KEY_ID/SECRET/ENDPOINT/BUCKET/CDN_BASE`),**零硬编码**。
+- ship skill 步骤 7 重写:7a 跑 OSS 上传取链接;7b Gitee release **正文嵌 CDN 下载链接,不再传附件**。步骤 10 报告 + 隐私段同步更新。
+- OSS 凭据写入 `~/.deskfox-signing/config.env`(本机 gitignored,**不入仓**);凭据原始出处 `deskfox-site/deploy/alibaba-cdn.md`(该仓 `deploy/` 亦 gitignored)。
+- `mirror-asset-to-gitee.sh` 保留不动(<100MB 包 / Win fallback 仍可用)。
+
+**验证**:脚本 `bash -n` 语法通过 + `--help`/缺凭据报错路径自检通过;真上传(传 274MB 到生产 OSS)按 user 决策留到下次实际发版时跑。
