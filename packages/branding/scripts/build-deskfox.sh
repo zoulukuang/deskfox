@@ -329,6 +329,14 @@ APPLESCRIPT
                 && echo "[deskfox]   DMG recreated with layout (DeskFox left, Applications right): $OLD_DMG" \
                 || echo "[deskfox]   DMG recreate WARN"
             rm -f "$DMG_TMPIMG"
+            # FORK: 重建的 dmg 是 hdiutil convert 产物(未签名)— 必须补签 Developer ID。
+            # 否则 3.6 公证块提交的是未签名 dmg:apple 仍 Accept(只查内部 .app),但 staple 后
+            # spctl -t open 判 "no usable signature",用户下载双击挂载被 Gatekeeper 拦。
+            # 顺序铁律:签 dmg → 公证(3.6)→ staple;公证后再签会改 hash 废掉 ticket。
+            # [bug-repro: recreated dmg unsigned -> spctl no usable signature] 2026-06-04
+            codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$OLD_DMG" \
+                && echo "[deskfox]   DMG re-signed (Developer ID): $OLD_DMG" \
+                || echo "[deskfox]   DMG re-sign WARN"
         fi
 
         echo "[deskfox] === post-build LO signing complete ==="
