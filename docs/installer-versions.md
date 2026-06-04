@@ -11,6 +11,12 @@
 
 
 
+
+## [macOS] 2026.6.5.1 — 2026-06-05 00:10
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows] 2026.6.4.1 - 2026-06-04 09:53
 
 **主题**:sidecar 稳定性加固(REQ-049 看门狗自愈 + 插件截流)+ UI 细节优化 + 国内分发改走阿里云 CDN。
