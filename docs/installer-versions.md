@@ -11,6 +11,22 @@
 
 
 
+## [Windows] 2026.6.4.1 - 2026-06-04 09:53
+
+**主题**:sidecar 稳定性加固(REQ-049 看门狗自愈 + 插件截流)+ UI 细节优化 + 国内分发改走阿里云 CDN。
+
+**本次内容**:
+- **sidecar 看门狗自动重启**(REQ-049 Layer③):sidecar 崩溃/假死后,主进程每 5s 健康轮询、连续 3 次失败即**同 port 自动重启**(~15-20s 自愈),带熔断防 restart storm + 主动退出防误重启;前台"正在重连"提示。真机验证「杀 sidecar → 自愈」通过。起因 6/03 内置 agent 经 claude-code 插件跑重型 Workflow 撑爆 sidecar 致卡死。
+- **claude-code 插件截流**(REQ-049 Layer①,配套 `deskfox-plugins` 仓):claude 海量 Workflow 事件(超长思考 / 大工具结果 / 大入参)进 sidecar 前有界化,防单进程内存撑爆(exit `0x80000003`),**答案与执行不变**。
+- **UI**:toast 弹窗宽度收窄 1/5(400→320px,右下角更紧凑);文件树再次点击「正在查看 + 面板已开」的文件 → toggle 收起查看面板。
+- **分发**:国内镜像改走阿里云 OSS/CDN(`dl.clawtray.com`),Gitee release 仅挂下载地址(prod 含 LibreOffice 超 Gitee 100MB 上限)。**本条为首次用阿里云 CDN 发 prod**。
+
+**Release**:GitHub `ship-prod-2026.6.4.1`(主仓 `zoulukuang/deskfox`)+ Gitee 镜像(正文挂 CDN 地址)
+**installer**:`packages/branding/installer/Output/DeskFox-2026.6.4.1-setup.exe`(含 LibreOffice,192 MB)
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.6.4.1-setup.exe`
+
+---
+
 ## [Windows] 2026.6.3.1 - 2026-06-03 19:10
 
 **主题**:飞书文件接收(REQ-035/036)+ Windows LibreOffice 预捆绑 —— 装完零下载渲染 Office 文档(自 prod `2026.6.2.1` 起)。
