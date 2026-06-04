@@ -214,6 +214,48 @@ export default function Layout(props: ParentProps) {
     onCleanup(() => unlisten?.())
   })
 
+  // FORK: sidecar watchdog — 后台引擎(sidecar)死/挂时 Rust 看门狗会同 port 自动重启,
+  // 这里把 "sidecar-watchdog" 事件转成前台"正在重连/已恢复"提示,避免用户面对静默卡死。
+  // 功能性恢复不依赖本提示(同 port 重启后请求自动通);提示仅为体感。 (REQ-049 Layer③) 2026-06-04
+  onMount(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return
+    let unlisten: (() => void) | undefined
+    let restartingToastId: ReturnType<typeof showToast> | undefined
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      void listen<string>("sidecar-watchdog", (e) => {
+        const phase = e.payload
+        if (phase === "restarting") {
+          if (restartingToastId === undefined) {
+            restartingToastId = showToast({
+              variant: "error",
+              title: "后台引擎重启中",
+              description: "检测到后台无响应，正在自动重连…",
+            })
+          }
+        } else if (phase === "ready") {
+          if (restartingToastId !== undefined) {
+            toaster.dismiss(restartingToastId)
+            restartingToastId = undefined
+          }
+          showToast({ title: "后台已恢复", description: "可以继续使用了" })
+        } else if (phase === "gave-up") {
+          if (restartingToastId !== undefined) {
+            toaster.dismiss(restartingToastId)
+            restartingToastId = undefined
+          }
+          showToast({
+            variant: "error",
+            title: "后台引擎多次重启失败",
+            description: "请手动关闭并重新打开 DeskFox",
+          })
+        }
+      }).then((fn) => {
+        unlisten = fn
+      })
+    })
+    onCleanup(() => unlisten?.())
+  })
+
   // FORK: REQ-041 — 删除 hover 预览/鼠标瞄准(aim)/自动折叠状态机;图标条与会话栏解耦后
   // sidebarExpanded 仅由顶部 sidebar.toggle 控制(不再有 hover 临时展开)。2026-06-02
   const sidebarExpanded = createMemo(() => layout.sidebar.opened())

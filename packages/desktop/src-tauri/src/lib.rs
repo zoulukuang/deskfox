@@ -30,7 +30,10 @@ use std::{
     net::TcpListener,
     path::{Path, PathBuf},
     process::Command,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use tauri::{AppHandle, Emitter, Listener, Manager, RunEvent, State, ipc::Channel};
@@ -74,6 +77,8 @@ struct InitState {
 
 struct ServerState {
     child: Arc<Mutex<Option<CommandChild>>>,
+    // FORK: watchdog — kill_sidecar 主动退出时置位,阻止看门狗误重启 (REQ-049 Layer③) 2026-06-04
+    shutting_down: Arc<AtomicBool>,
 }
 
 /// Resolves with sidecar credentials as soon as the sidecar is spawned (before health check).
@@ -86,6 +91,9 @@ fn kill_sidecar(app: AppHandle) {
         tracing::info!("Server not running");
         return;
     };
+
+    // FORK: watchdog — 标记主动退出,阻止看门狗在主动 kill 后误重启 (REQ-049 Layer③)
+    server_state.shutting_down.store(true, Ordering::SeqCst);
 
     let Some(server_state) = server_state
         .child
@@ -672,12 +680,28 @@ async fn initialize(app: AppHandle) {
     let _ = ready_tx.send(ServerReadyData {
         url: url.clone(),
         username: Some("opencode".to_string()),
-        password: Some(password),
+        // FORK: 留 password 给 watchdog 复用(同 port 重启,前台凭据不变)
+        password: Some(password.clone()),
     });
     app.manage(SidecarReady(ready_rx.shared()));
+
+    // FORK-BEGIN: sidecar watchdog 自动重启 (REQ-049 Layer③) 2026-06-04
+    // 共享 child handle 给看门狗,死/挂时同 port + 同 password 重启,前台请求自动恢复。
+    let child = Arc::new(Mutex::new(Some(child)));
+    let shutting_down = Arc::new(AtomicBool::new(false));
     app.manage(ServerState {
-        child: Arc::new(Mutex::new(Some(child))),
+        child: child.clone(),
+        shutting_down: shutting_down.clone(),
     });
+    server::spawn_watchdog(
+        app.clone(),
+        hostname.to_string(),
+        port,
+        password,
+        child,
+        shutting_down,
+    );
+    // FORK-END
 
     let loading_window_complete = event_once_fut::<LoadingWindowComplete>(&app);
 
