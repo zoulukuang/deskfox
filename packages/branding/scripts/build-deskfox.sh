@@ -272,7 +272,8 @@ if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "
             # === DMG 布局流程(标准 macOS drag-to-install 体验) ===
             # 1. 先建可读写 UDRW 镜像(含 .app + /Applications 快捷方式)
             # 2. 挂载后用 AppleScript 设置 Finder 窗口大小 + 图标位置
-            #    布局:DeskFox 左(170,165),Applications 右(410,165),窗口 580×360,图标 96px
+            #    布局(规范固化值,user 2026-06-05 拍板):窗口 640×400(bounds {400,100,1040,500}),
+            #    图标 128px,DeskFox 左(180,200),Applications 右(460,200)。改这些值前先出预览 dmg 给 user 看。
             # 3. 挂载期间 macOS 会自动建 .fseventsd — 在 AppleScript 前后各删一次,防止出现在用户界面
             # 4. 转成压缩 UDZO 最终分发格式
             DMG_STAGING=$(mktemp -d)
@@ -305,12 +306,12 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set bounds of container window to {400, 120, 980, 480}
+    set bounds of container window to {400, 100, 1040, 500}
     set theViewOptions to icon view options of container window
     set arrangement of theViewOptions to not arranged
-    set icon size of theViewOptions to 96
-    set position of item "DeskFox.app" of container window to {170, 165}
-    set position of item "Applications" of container window to {410, 165}
+    set icon size of theViewOptions to 128
+    set position of item "DeskFox.app" of container window to {180, 200}
+    set position of item "Applications" of container window to {460, 200}
     update without registering applications
     delay 3
     close
