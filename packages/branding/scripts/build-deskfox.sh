@@ -277,6 +277,10 @@ if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "
             # 4. 转成压缩 UDZO 最终分发格式
             DMG_STAGING=$(mktemp -d)
             DMG_TMPIMG=$(mktemp /tmp/deskfox_rw_XXXXXX.dmg)
+            # BSD mktemp 只替换结尾的 X;模板带 .dmg 后缀 → 不替换 → 返回字面路径并已建 0 字节占位文件。
+            # hdiutil create 拒绝写已存在文件("File exists" → set -e 静默 abort 死在 step 5)。
+            # 删掉占位文件让 hdiutil 新建;顺带自愈前次崩溃残留的同名文件。[bug-repro: hdiutil create File exists] 2026-06-04
+            rm -f "$DMG_TMPIMG"
             cp -R "$APP_BUNDLE" "$DMG_STAGING/DeskFox.app"
             ln -s /Applications "$DMG_STAGING/Applications"
             hdiutil create -srcfolder "$DMG_STAGING" \
