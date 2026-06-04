@@ -48,3 +48,21 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | T6 | resume 模式逻辑 | review | 补公证→门禁→续 4-8 | review 通过 |
 
 > 步骤 4-8(真推送 GitHub/Gitee)不能在测试中真跑(会真发布),靠 skill 逻辑 review + 复用已实战验证的脚本(mirror-asset-to-gitee.sh / gh / Gitee API 均 user 历史实战过)。
+
+## DMG 安装窗口布局规范(固化值,2026-06-05 user 拍板)
+
+`build-deskfox.sh` step 5 recreate-dmg 的 osascript 布局,**这些是规范值,改动前必须先出预览 dmg 给 user 看**:
+
+| 项 | 值 |
+|---|---|
+| 窗口 bounds | `{400, 100, 1040, 500}`(= 640×400) |
+| 图标尺寸 icon size | **128px**(曾用 96px,user 反馈太小,2026-06-05 改 128 定稿) |
+| DeskFox.app 位置 | 左 `{180, 200}` |
+| Applications 位置 | 右 `{460, 200}` |
+| 排列 | not arranged + icon view + 无工具栏/状态栏 |
+
+调布局的快速预览法(不签名不公证,~30s):用现成 `bundle/macos/DeskFox.app` 重建 dmg 到 `/tmp` `open` 给 user 看,定稿后再改 osascript 值做最终签名+公证版。
+
+### DMG 重建两条铁律(2026-06-04 两个 bug 教训)
+1. **mktemp 占位文件**:`mktemp /tmp/...XXXXXX.dmg` 因 `.dmg` 后缀被 BSD mktemp 当字面名建 0 字节文件 → `hdiutil create` 拒绝覆盖死在 step 5。create 前必 `rm -f "$DMG_TMPIMG"`。详 [dmg-recreate-mktemp-clobber-fix]。
+2. **重建 dmg 必须补签**:`hdiutil convert` 产物未签名 → 公证后 `spctl -t open` 判 "no usable signature",下载挂载被 Gatekeeper 拦。顺序铁律:**签 dmg → 公证 → staple**(公证后再签会废 ticket)。详 [dmg-recreate-sign-fix]。
