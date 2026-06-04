@@ -2,6 +2,12 @@
 /* FORK: DeskFox theme overlay 2026-04-26 — 覆盖上游主题色 + logo 专用 var */
 @import "@opencode-ai/branding/theme.css";
 
+/* FORK: toast 弹窗宽度收窄 1/5(上游 400px → 320px),右下角提示更紧凑;
+   覆盖上游 packages/ui toast.css 的 max-width,不动上游 [fix: toast-width] 2026-06-04 */
+[data-component="toast-region"] {
+  max-width: min(320px, calc(100vw - 64px));
+}
+
 @font-face {
   font-family: "JetBrainsMono Nerd Font Mono";
   src: url("/assets/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");

@@ -59,6 +59,65 @@ describe("createOpenSessionFileTab", () => {
       "active:file://src/a.ts",
     ])
   })
+
+  // FORK: 文件树点击 toggle — 再次点击正在查看的文件收起查看面板 [fix: filetree-toggle] 2026-06-04
+  test("toggle: re-clicking the active file while viewer open closes the viewer", () => {
+    const calls: string[] = []
+    const openTab = createOpenSessionFileTab({
+      normalizeTab: (value) => `file://${value}`,
+      openTab: (tab) => calls.push(`open:${tab}`),
+      pathFromTab: (tab) => tab.slice("file://".length),
+      loadFile: (path) => calls.push(`load:${path}`),
+      openReviewPanel: () => calls.push("review"),
+      setActive: (tab) => calls.push(`active:${tab}`),
+      activeFileTab: () => "file://src/a.ts", // 当前正在查看 a.ts
+      isViewerOpen: () => true, // 查看面板已打开
+      closeViewer: () => calls.push("closeViewer"),
+    })
+
+    openTab("src/a.ts")
+
+    // 只收起面板,不重新打开/激活
+    expect(calls).toEqual(["closeViewer"])
+  })
+
+  test("toggle: clicking a different file opens it normally (no close)", () => {
+    const calls: string[] = []
+    const openTab = createOpenSessionFileTab({
+      normalizeTab: (value) => `file://${value}`,
+      openTab: (tab) => calls.push(`open:${tab}`),
+      pathFromTab: (tab) => tab.slice("file://".length),
+      loadFile: (path) => calls.push(`load:${path}`),
+      openReviewPanel: () => calls.push("review"),
+      setActive: (tab) => calls.push(`active:${tab}`),
+      activeFileTab: () => "file://src/a.ts", // 正在查看 a.ts
+      isViewerOpen: () => true,
+      closeViewer: () => calls.push("closeViewer"),
+    })
+
+    openTab("src/b.ts") // 点的是另一个文件 b.ts
+
+    expect(calls).toEqual(["open:file://src/b.ts", "load:src/b.ts", "review", "active:file://src/b.ts"])
+  })
+
+  test("toggle: clicking active file while viewer closed re-opens it (no toggle-close)", () => {
+    const calls: string[] = []
+    const openTab = createOpenSessionFileTab({
+      normalizeTab: (value) => `file://${value}`,
+      openTab: (tab) => calls.push(`open:${tab}`),
+      pathFromTab: (tab) => tab.slice("file://".length),
+      loadFile: (path) => calls.push(`load:${path}`),
+      openReviewPanel: () => calls.push("review"),
+      setActive: (tab) => calls.push(`active:${tab}`),
+      activeFileTab: () => "file://src/a.ts",
+      isViewerOpen: () => false, // 面板已收起 → 再点应重新打开
+      closeViewer: () => calls.push("closeViewer"),
+    })
+
+    openTab("src/a.ts")
+
+    expect(calls).toEqual(["open:file://src/a.ts", "load:src/a.ts", "review", "active:file://src/a.ts"])
+  })
 })
 
 describe("focusTerminalById", () => {

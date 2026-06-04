@@ -130,9 +130,24 @@ export const createOpenSessionFileTab = (input: {
   loadFile: (path: string) => void
   openReviewPanel: () => void
   setActive: (tab: string) => void
+  // FORK-BEGIN: 文件树点击 toggle — 再次点击正在查看的文件时收起查看面板 [fix: filetree-toggle] 2026-06-04
+  activeFileTab?: () => string | undefined
+  isViewerOpen?: () => boolean
+  closeViewer?: () => void
+  // FORK-END
 }) => {
   return (value: string) => {
     const next = input.normalizeTab(value)
+
+    // FORK-BEGIN: toggle 关闭 — 点击的若正是「当前激活 + 查看面板已打开」的文件,收起面板不重开
+    // (pathFromTab 放最后:无 toggle 参数时前面短路,不多调一次 pathFromTab,保持原行为/测试不变;
+    //  只对真实文件 tab 生效 — review/context 等非文件 tab 的 pathFromTab 为空)
+    if (input.closeViewer && input.isViewerOpen?.() && input.activeFileTab?.() === next && input.pathFromTab(next)) {
+      input.closeViewer()
+      return
+    }
+    // FORK-END
+
     input.openTab(next)
 
     const path = input.pathFromTab(next)
