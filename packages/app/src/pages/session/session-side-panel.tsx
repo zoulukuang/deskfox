@@ -137,15 +137,7 @@ export function SessionSidePanel(props: {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
   }
 
-  const openTab = createOpenSessionFileTab({
-    normalizeTab,
-    openTab: tabs().open,
-    pathFromTab: file.pathFromTab,
-    loadFile: file.load,
-    openReviewPanel,
-    setActive: tabs().setActive,
-  })
-
+  // FORK: tabState 上移到 openTab 之前 — openTab 的 toggle 关闭需要 activeFileTab [fix: filetree-toggle] 2026-06-04
   const tabState = createSessionTabs({
     tabs,
     pathFromTab: file.pathFromTab,
@@ -157,6 +149,19 @@ export function SessionSidePanel(props: {
   const openedTabs = tabState.openedTabs
   const activeTab = tabState.activeTab
   const activeFileTab = tabState.activeFileTab
+
+  const openTab = createOpenSessionFileTab({
+    normalizeTab,
+    openTab: tabs().open,
+    pathFromTab: file.pathFromTab,
+    loadFile: file.load,
+    openReviewPanel,
+    setActive: tabs().setActive,
+    // FORK: 再次点击正在查看的文件 → 收起整个查看面板 [fix: filetree-toggle] 2026-06-04
+    activeFileTab,
+    isViewerOpen: () => view().reviewPanel.opened(),
+    closeViewer: () => view().reviewPanel.close(),
+  })
 
   // FORK: 切 tab(包括 .md 内链跳转)→ 文件树 active 高亮 + 自动展开父目录 + 滚动入视野 2026-05-05
   // 关键:Windows 文件树用 backslash 作 path 分隔符(server 原生),而 file.pathFromTab 返回 forward slash
