@@ -12,7 +12,8 @@
     "./installer-versions.json": "./installer-versions.json"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test"
   },
   "devDependencies": {
     "@tsconfig/node22": "catalog:",

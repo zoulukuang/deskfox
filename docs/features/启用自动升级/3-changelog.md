@@ -85,6 +85,14 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 (tauri-overrides 三档的 updater 改动见上文「fork wrapper」段)
 
+### `packages/branding/__tests__/updater-config.test.ts`(新文件)+ `package.json` 加 `"test": "bun test"`
+
+- 11 个静态断言(`bun:test`,无需 build),守护本 feat 三类 bug 回归:
+  - updater 配置必须在 `tauri-overrides/*`(fork 实际加载层),pubkey == minisign.pub 且 != 上游 anomalyco
+  - prod/beta `createUpdaterArtifacts=true`;endpoint 指 updates.deskfox.ai
+  - `constants.rs UPDATER_ENABLED=true` + `cli.rs` 保留 `OPENCODE_DISABLE_AUTOUPDATE`(Layer3)
+- 对应 TC-9 / TC-10;branding 包首次引入测试基础设施
+
 ### 文档
 
 - `docs/features/启用自动升级/{1-spec,2-plan,3-changelog}.md`(新建)
@@ -144,7 +152,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] 无新增依赖
 - [x] typecheck 全过(17/17,2026-06-05 实测)
 - [x] 前序 feat 三层防御:Layer1→翻 true / Layer2→条件 spread 自动生效 / Layer3→**保留**(2026-06-05 决策,纵深防御白送)
-- [ ] **R5 测试未补**(Medium feat 应 ≥1 e2e 或 3 unit)— TC-9 pubkey / TC-8 签名 / TC-5 NSIS 产物断言待写;mac/win e2e 待真桌面
+- [x] **R5 测试(部分)** — `packages/branding/__tests__/updater-config.test.ts`(11 tests,全绿)静态守护本次三类 bug:配置落点(override 非上游 conf)/ pubkey 正确(==minisign.pub、!=上游)/ Layer3 保留 + createUpdaterArtifacts + UPDATER_ENABLED。覆盖 TC-9 + TC-10
+- [ ] **R5 测试(剩余)** — TC-8 签名验证 / TC-5 NSIS 产物断言(需 full bundle build);mac/win 真桌面 e2e(TC-1/2/3)待后端就绪 + mac 机器
 
 ## 已知遗留
 
