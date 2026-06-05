@@ -157,7 +157,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 已知遗留
 
-- **`updates.deskfox.ai` 后端**:当前只部署了 telemetry 自定义格式 JSON,Tauri updater 请求此端点时会拿到格式不匹配的响应导致 check 失败。需要部署 Tauri updater 格式的 `latest.json`(含 `version` / `notes` / `platforms` 等字段)
+- **`updates.deskfox.ai` 后端(2026-06-05 实地探测)**:
+  - 线上 **prod** `/v1/latest/desktop/latest.json` 返回**占位符** `{"version":"0.0.0","placeholder":true}` —— 缺 Tauri updater 必需的 `platforms` 字段 → updater check 失败
+  - **beta** `/v1/latest/desktop-beta/latest.json` 和 **dev** `desktop-dev/...` → **404,未建**
+  - ✅ endpoint 路径正确:`/v1/latest/desktop[-beta|-dev]/latest.json` 与 override 配置一致(注:`docs/design-telemetry-and-update.md` §6 写的 `/desktop/latest.json` 旧路径已过时,实际线上是 `/v1/latest/` 前缀)
+  - **待办**:发一次真实签名版本 → `finalize-latest-json.ts` 生成 Tauri 格式 `latest.json`(`version`/`notes`/`pub_date`/`platforms.{windows-x86_64,darwin-aarch64}.{url,signature}`)→ SCP 到东京 `52.197.46.120:/var/www/updates/desktop/v1/latest/{desktop,desktop-beta,desktop-dev}/`。**需服务器 SSH 访问 + 一次真实 ship 产物**,非本机可独立完成
 - **NSIS installer 完整产出**:DeskFox.exe raw binary 已成功构建(39MB),NSIS bundle 在非 GH Actions 环境需要 Azure Trusted Signing 配置才能产出完整安装包。本地开发环境可用 `build-deskfox.ps1` 的签名 env 注入
 - **存量 Inno 用户迁移**:NSIS 安装新路径(`DeskFox/`),两版共存不冲突,用户手动卸旧版。首次 NSIS 安装后需用户引导卸载 Inno 版本
 
