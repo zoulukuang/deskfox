@@ -50,8 +50,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ### `packages/desktop/minisign.pub`(新文件)
 
 - DeskFox minisign 公钥入仓(公钥 ID `2733888977867EB0`,明文 `RWSwfoZ3iYgzJxWzlZlKUYnZjv1ZF0Wybsx9oPMkiFo3s/2PtiqJ/8zz`)
-- 私钥 canonical 位置:`~/.deskfox-signing/config.env` 的 `TAURI_SIGNING_PRIVATE_KEY`(build-deskfox.ps1 从此读,与 Apple 签名配置同文件)。绝不入仓(`.gitignore *.key`)
-- ⚠️ **待办**:`D:\tmp\windows-temp\opencode\minisign-keys\minisign.key` 是生成时的散落副本(临时目录,有丢失风险);user 离线备份 config.env 后清掉该副本。私钥一旦丢失 = 永远无法给已装客户端推更新(公钥已编进 binary)
+- 私钥 canonical 位置:`~/.deskfox-signing/config.env` 的 `TAURI_SIGNING_PRIVATE_KEY`(build-deskfox.ps1 从此读)。绝不入仓(`.gitignore *.key`)
+- ✅ 2026-06-05 已离线备份到 `D:\隐私数据\棱界科技\Desk fox 私钥\`(含 README 密钥清单);`D:\tmp\...\minisign-keys\` 散落副本已清除。私钥现仅存 config.env(正本)+ 离线备份两处。私钥一旦全丢 = 永远无法给已装客户端推更新(公钥已编进 binary)
 
 ### `packages/branding/installer/DeskFox.iss`(删除 153 行)
 
