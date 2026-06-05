@@ -165,15 +165,19 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **NSIS installer 完整产出**:DeskFox.exe raw binary 已成功构建(39MB),NSIS bundle 在非 GH Actions 环境需要 Azure Trusted Signing 配置才能产出完整安装包。本地开发环境可用 `build-deskfox.ps1` 的签名 env 注入
 - **存量 Inno 用户迁移**:NSIS 安装新路径(`DeskFox/`),两版共存不冲突,用户手动卸旧版。首次 NSIS 安装后需用户引导卸载 Inno 版本
 
-## 🔴 阻塞:版本号 scheme 未定(2026-06-05 发现,优先级最高)
+## ✅ 版本号 scheme 已定 + 注入已修(2026-06-05 user 拍板 + 实测打通)
 
-实测刚构建的 `DeskFox.exe` ProductVersion = **`0.0.0`**;`packages/desktop/package.json` = `1.14.33`;`installer-versions.json` = `2026.6.4.1`。三套号,**updater 比较的是 exe 报告的 `0.0.0`**。后果:
+**根因**:`DeskFox.exe` 历史报 `0.0.0` —— `Cargo.toml` version 写死 `0.0.0`,tauri.conf 的 `"version":"../package.json"` 在 Tauri v2 是非法 semver 字面量 → 回落 `0.0.0`;build 链从不注入。updater 比较此值 → 失效。
 
-1. **NSIS 版本回归**:旧 Inno 用 `.iss AppVersion` 注入 `2026.6.4.1`(控制面板可见);切 NSIS 后无人注入 → 安装包内部版本退化为 `0.0.0`,`2026.6.4.1` 仅存于 pack-installer 产出的文件名。
-2. **updater 比较失效**:`2026.6.5.1` 是 4 段号、非合法 semver → Tauri semver 比较报错;`1.14.x` 又与营销号脱节。
-3. **服务端 latest.json 的 `version` 字段取决于此决策**,未定前不部署(否则白做)。
+**决策(user 拍板)**:改用 3 段 semver `YYYY.次.补`,起步 `2026.6.0`(大更新进"次"、小更新进"补");各端独立计数 + `YYYY.次` 弱协同;updater endpoint 按 `{{target}}` 分平台。完整规则落 `docs/governance/版本号与发布渠道规范.md` §三 v2.0。
 
-**待 user 拍板**:DeskFox 喂给 Tauri/updater 的版本号用哪套 + 怎么在 build 时注入(patch package.json / `--config` 传 version / 映射 2026.x→semver)。这是 updater 能否工作的前提,优先于后端部署。
+**注入修复(实测验证)**:`build-deskfox.ps1`(Win,已实测)/ `build-deskfox.sh`(Mac,镜像待 Mac 验)build 前从 `installer-versions.json` 读对应平台版本号,**patch on-disk `tauri.conf.json` version**(tauri-build `rerun-if-changed` 强制 `generate_context!` 重编),build 后 git 还原。Win dev build 实测二进制 bake `2026.6.0`(grep 确认)。
+
+> 踩坑:① `--config` 传 version 走 env,不触发 cargo 重编(无效);② PS5.1 GBK 读 .ps1 → 中文紧邻代码引号吞引号(代码行 ASCII 化);③ PS 调原生 exe 吞双引号 → 内联 --config JSON 失效(改纯 on-disk patch);④ `$root`=packages 非 branding(路径修正)。
+
+## ✅ 服务端 updates.deskfox.ai 已部署(2026-06-05)
+
+通过 SSH(`ubuntu@52.197.46.120`,密钥见 `deskfox-site/deploy/`)创建 **3 渠道 × 3 平台 = 9 个 per-platform manifest**:`/var/www/updates/v1/latest/{desktop,desktop-beta,desktop-dev}/{windows,darwin,linux}/latest.json`,内容为合法 Tauri 格式"已是最新"占位(`version:2026.6.0`,空 platforms)。**全部 HTTPS 200 实测通过**。`{{target}}` endpoint 现可正常 check(版本相等 → "已是最新",不再 404/解析错)。真实版本发布时由 `finalize-latest-json.ts` 生成真 manifest 覆盖。
 
 ## 走过的弯路 / 中途调整
 

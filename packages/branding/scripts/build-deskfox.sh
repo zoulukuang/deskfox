@@ -209,6 +209,22 @@ else
     echo "[deskfox]   run prepare-lo-bundle.sh to prepare the bundle"
 fi
 
+# === 1.6 FORK: [启用自动升级/版本号注入] 2026-06-05 — 注入真实版本号(修历史 app version=0.0.0)===
+# 镜像 build-deskfox.ps1 同名段(已在 Win 实测验证):Tauri generate_context! 编译时从 on-disk
+# tauri.conf.json 烧录 app version;上游 "version":"../package.json" 在 v2 是非法 semver → 回落 0.0.0,
+# 且 --config(走 env)不触发 cargo 重编。唯一可靠杠杆:patch on-disk tauri.conf.json(tauri-build
+# rerun-if-changed 强制重编宏)→ 版本号真进二进制(updater package_info().version)。build 后 git 还原。
+# Mac 读 installer-versions.json 的 macos 字段。版本号规则见 docs/governance/版本号与发布渠道规范.md §三。
+VERSIONS_JSON="$BRANDING_ROOT/installer-versions.json"
+APP_VERSION="$(bun -e "console.log(require('$VERSIONS_JSON').macos)")"
+if [[ -z "$APP_VERSION" || "$APP_VERSION" == "undefined" ]]; then
+    echo "[deskfox] ERROR: installer-versions.json missing 'macos' version" >&2
+    exit 1
+fi
+BASE_CONF="$REPO_ROOT/packages/desktop/src-tauri/tauri.conf.json"
+perl -0777 -i -pe 's/"version"\s*:\s*"[^"]*"/"version": "'"$APP_VERSION"'"/' "$BASE_CONF"
+echo "[deskfox] app version injected -> $APP_VERSION (tauri.conf.json on-disk patch, macos)"
+
 # === 2. tauri build ===
 BUILD_EXIT=0
 (
@@ -346,6 +362,8 @@ fi
 
 # === 3. restore(无论 build 成败都还原)===
 bash "$SCRIPT_DIR/restore-icons.sh"
+# 还原 tauri.conf.json(版本号只在 build 期间临时改,不入仓)— 同 build-deskfox.ps1
+git -C "$REPO_ROOT" checkout HEAD -- packages/desktop/src-tauri/tauri.conf.json 2>/dev/null || true
 
 if [[ "$BUILD_EXIT" -ne 0 ]]; then
     echo "[deskfox] Warning: tauri build exited with code $BUILD_EXIT" >&2
