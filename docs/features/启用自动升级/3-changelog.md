@@ -165,6 +165,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **NSIS installer 完整产出**:DeskFox.exe raw binary 已成功构建(39MB),NSIS bundle 在非 GH Actions 环境需要 Azure Trusted Signing 配置才能产出完整安装包。本地开发环境可用 `build-deskfox.ps1` 的签名 env 注入
 - **存量 Inno 用户迁移**:NSIS 安装新路径(`DeskFox/`),两版共存不冲突,用户手动卸旧版。首次 NSIS 安装后需用户引导卸载 Inno 版本
 
+## 🔴 阻塞:版本号 scheme 未定(2026-06-05 发现,优先级最高)
+
+实测刚构建的 `DeskFox.exe` ProductVersion = **`0.0.0`**;`packages/desktop/package.json` = `1.14.33`;`installer-versions.json` = `2026.6.4.1`。三套号,**updater 比较的是 exe 报告的 `0.0.0`**。后果:
+
+1. **NSIS 版本回归**:旧 Inno 用 `.iss AppVersion` 注入 `2026.6.4.1`(控制面板可见);切 NSIS 后无人注入 → 安装包内部版本退化为 `0.0.0`,`2026.6.4.1` 仅存于 pack-installer 产出的文件名。
+2. **updater 比较失效**:`2026.6.5.1` 是 4 段号、非合法 semver → Tauri semver 比较报错;`1.14.x` 又与营销号脱节。
+3. **服务端 latest.json 的 `version` 字段取决于此决策**,未定前不部署(否则白做)。
+
+**待 user 拍板**:DeskFox 喂给 Tauri/updater 的版本号用哪套 + 怎么在 build 时注入(patch package.json / `--config` 传 version / 映射 2026.x→semver)。这是 updater 能否工作的前提,优先于后端部署。
+
 ## 走过的弯路 / 中途调整
 
 (见 2-plan.md "走过的弯路 / 中途调整" 段)
