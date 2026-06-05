@@ -20,7 +20,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgMjczMzg4ODk3Nzg2N0VCMApSV1N3Zm9aM2lZZ3pKeFd6bFpsS1VZblpqdjFaRjBXeWJzeDlvUE1raUZvM3MvMlB0aXFKLzh6eg==",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENCMkNFRjJDQkE1OEM5OUYKUldTZnlWaTZMTzhzeTM2MlhxTkt0cWdmR09DYkIrbjFVN1pxQmt3UVJ6cWoxcHVYZFMrS3piL3UK",
       "endpoints": ["https://updates.deskfox.ai/v1/latest/desktop/{{target}}/latest.json"]
     }
   }

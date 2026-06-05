@@ -35,11 +35,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ### `packages/branding/tauri-overrides/{prod,beta,dev}.json`(fork wrapper — updater 配置正确落点)
 
-- 三档各加 `plugins.updater`:`pubkey`(DeskFox minisign 公钥规范 base64,key ID `2733888977867EB0`)+ `endpoints`(prod=`updates.deskfox.ai/v1/latest/desktop/latest.json` / beta=`desktop-beta/...` / dev=`desktop-dev/...`)
-- prod/beta 额外加 `bundle.createUpdaterArtifacts: true`(产 `.sig` + `.app.tar.gz` 更新产物;**此字段原也只在上游 conf 里,fork 构建拿不到 → 不补则永远不产签名产物**)。dev 是 Tier 3 本地测试,不产更新产物,不加
-- prod 另含 `bundle.windows.nsis.installerIcon`(prod icon,前序已在)
+- 三档各加 `plugins.updater`:`pubkey`(DeskFox minisign 公钥,**key ID `CB2CEF2CBA58C99F`**,2026-06-05 用 `tauri signer generate` 重新生成 — 见下「签名密钥重生成」)+ `endpoints`(按 `{{target}}` 分平台:prod=`updates.deskfox.ai/v1/latest/desktop/{{target}}/latest.json` / beta=`desktop-beta/...` / dev=`desktop-dev/...`)
+- prod/beta 额外加 `bundle.createUpdaterArtifacts: true`(产 `.sig` 更新产物;**此字段原也只在上游 conf 里,fork 构建拿不到 → 不补则永远不产签名产物**)。dev 是 Tier 3 本地测试,不产更新产物,不加
+- prod 另含 `bundle.windows.nsis.installerIcon`(prod icon)
 - Tauri `--config` 对 `plugins` 做深合并,基座 `deep-link` 保留不丢
-- pubkey 统一为 `minisign.pub` 文件的规范 base64(修初版 `867EA0` typo + CRLF → `867EB0` + LF);密钥本体一致,验签行为不变
+
+### 签名密钥重生成(2026-06-05 — 修 .sig 产不出)
+
+- **问题**:初版 minisign 密钥(`minisign -G` 生成,key ID `2733888977867EB0`)存进 `config.env` 的 `TAURI_SIGNING_PRIVATE_KEY` 是**裸二进制的 base64**(解码出 `Ed...`),而 Tauri 要的是**密钥文件文本的 base64**(解码出 `untrusted comment:...`)→ build 报 `failed to decode secret key` → **产不出 `.sig`,updater 无法升级**。
+- **修法**:`tauri signer generate` 重新生成(无密码,格式 100% 对),新 key ID **`CB2CEF2CBA58C99F`**。同步更新 `config.env`(正确格式)+ `minisign.pub` + 三档 override pubkey + 重新离线备份。updater 从未上线 → 换密钥零风险。
+- **实测**:prod 完整构建产出未签名 NSIS + `.sig`(见 R2/R8 验证)。
 
 ### `packages/desktop/src-tauri/tauri.conf.json`(+4 / -0)
 
@@ -49,7 +54,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ### `packages/desktop/minisign.pub`(新文件)
 
-- DeskFox minisign 公钥入仓(公钥 ID `2733888977867EB0`,明文 `RWSwfoZ3iYgzJxWzlZlKUYnZjv1ZF0Wybsx9oPMkiFo3s/2PtiqJ/8zz`)
+- DeskFox minisign 公钥入仓(公钥 ID `CB2CEF2CBA58C99F`,明文 `RWSfyVi6LO8sy362XqNKtqgfGOCbB+n1U7ZqBkwQRzqj1puXdS+Kzb/u`;2026-06-05 重生成,见「签名密钥重生成」)
 - 私钥 canonical 位置:`~/.deskfox-signing/config.env` 的 `TAURI_SIGNING_PRIVATE_KEY`(build-deskfox.ps1 从此读)。绝不入仓(`.gitignore *.key`)
 - ✅ 2026-06-05 已离线备份到 `D:\隐私数据\棱界科技\Desk fox 私钥\`(含 README 密钥清单);`D:\tmp\...\minisign-keys\` 散落副本已清除。私钥现仅存 config.env(正本)+ 离线备份两处。私钥一旦全丢 = 永远无法给已装客户端推更新(公钥已编进 binary)
 
