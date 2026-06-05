@@ -69,14 +69,26 @@ describe.each(["prod", "beta", "dev"] as const)("tauri-overrides/%s.json updater
     expect(keyLine).not.toBe(UPSTREAM_KEY_LINE)
   })
 
-  test("endpoint 指向 updates.deskfox.ai,不是 github.com/anomalyco", () => {
+  test("endpoint 指向 updates.deskfox.ai、含 {{target}} 按平台分发、不是 anomalyco", () => {
     const cfg = readOverride(env)
     const endpoints: string[] = cfg?.plugins?.updater?.endpoints ?? []
     expect(endpoints.length).toBeGreaterThan(0)
     for (const ep of endpoints) {
       expect(ep).toContain("updates.deskfox.ai")
       expect(ep).not.toContain("anomalyco")
+      // {{target}} → windows/darwin/linux,各端拉各自 manifest(版本号独立,见版本号规范 §3.2/3.4)
+      expect(ep).toContain("{{target}}")
     }
+  })
+})
+
+describe("installer-versions.json 版本号 scheme(YYYY.次.补 semver)", () => {
+  const versions = JSON.parse(readFileSync(join(HERE, "..", "installer-versions.json"), "utf8"))
+  // 必须 3 段纯数字 semver(updater 三端比较要求);旧 4 段日历号 2026.6.4.1 已废,见规范 §三
+  const semver3 = /^\d{4}\.\d+\.\d+$/
+  test.each(["windows", "macos"] as const)("%s 是合法 3 段 semver(非 4 段日历号)", (plat) => {
+    expect(typeof versions[plat]).toBe("string")
+    expect(versions[plat]).toMatch(semver3)
   })
 })
 

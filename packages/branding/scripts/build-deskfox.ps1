@@ -133,8 +133,26 @@ if (Test-Path $signingConfig) {
     Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY not set — updater artifacts will be unsigned (updater check will fail without valid signature)"
 }
 
+# 1.6 FORK: [启用自动升级/版本号注入] 2026-06-05 — 注入真实版本号(修历史 app version=0.0.0)
+# Tauri generate_context! 宏在【编译时】从 on-disk tauri.conf.json 烧录 app version。
+# 上游写的 version 是 "../package.json",Tauri v2 当它非法 semver 字面量 → 回落 Cargo 默认 0.0.0;
+# 且 --config(走 env)不触发 cargo 重编。实测唯一可靠杠杆:patch on-disk tauri.conf.json
+# (tauri-build 有 rerun-if-changed,强制重编宏)→ 版本号才真进二进制(updater 用 package_info().version)。
+# 版本号 scheme 见 docs/governance/版本号与发布渠道规范.md §三。build 后 git 还原 tauri.conf.json。
+# 注意:本块【代码行】必须纯 ASCII。PS5.1 按 GBK 读 .ps1 时,中文紧邻代码引号会吞掉引号 → 解析崩。
+$versionsJson = Join-Path $root "branding/installer-versions.json"
+$appVersion = (Get-Content $versionsJson -Raw -Encoding UTF8 | ConvertFrom-Json).windows
+if (-not $appVersion) { throw "[deskfox] installer-versions.json missing 'windows' version field" }
+$baseConf = Join-Path $repoRoot "packages/desktop/src-tauri/tauri.conf.json"
+$confText = [System.IO.File]::ReadAllText($baseConf)
+$confRe = [regex]'"version"\s*:\s*"[^"]*"'
+$confRepl = '"version": "' + $appVersion + '"'
+[System.IO.File]::WriteAllText($baseConf, $confRe.Replace($confText, $confRepl, 1), (New-Object System.Text.UTF8Encoding $false))
+# 只靠 on-disk patch:CLI 读 on-disk tauri.conf.json(已 patch version)+ merge override → 编译/bundle
+# 版本都拿到 2026.6.0。不用内联 --config JSON(PS 调原生 exe 会吞双引号,JSON 失效)。
+Write-Output "[deskfox] app version injected -> $appVersion (tauri.conf.json on-disk patch)"
+
 # 2. tauri build
-$bundleFlag = if ($NoBundle) { "--no-bundle" } else { "" }
 Push-Location (Join-Path $repoRoot "packages/desktop")
 try {
     if ($NoBundle) {
@@ -145,6 +163,8 @@ try {
     $buildExit = $LASTEXITCODE
 } finally {
     Pop-Location
+    # 还原 tauri.conf.json(版本号只在 build 期间临时改,不入仓)
+    & git -C $repoRoot checkout HEAD -- packages/desktop/src-tauri/tauri.conf.json 2>$null
 }
 
 # 3. restore(无论 build 成败都还原)
