@@ -1,4 +1,4 @@
-# [fork-only] DeskFox one-shot installer pipeline
+# [fork-only] DeskFox one-shot installer pipeline (NSIS)
 #
 # 发布渠道与版本号规则完整 doc:docs/governance/版本号与发布渠道规范.md
 #   - Tier 1 稳定版(prod 无后缀,GitHub Release latest)
@@ -6,19 +6,22 @@
 #   - Tier 3 本地测试版(`build-deskfox.ps1 -Env dev -NoBundle` 出 raw exe,不 ship,不走本脚本)
 #
 # Workflow:
-#   1. bump-installer-version.ps1    -> bump version (writes new .iss + 版本日志.md placeholder)
+#   1. bump-installer-version.ps1    -> bump version (writes installer-versions.json + 版本日志.md placeholder)
 #                                       — 可用 -SkipBump 跳过(CI 场景:user 本地已 bump 并 commit)
-#   2. build-deskfox.ps1 -NoBundle    -> 重 build DeskFox.exe 让 UI 版本号(读 installer-versions.json
-#                                       烧进 vite bundle)跟 bumped JSON 同步。**2026-05-11 加**:
-#                                       之前 bump 跟 build 顺序错位导致 installer 文件名跟 UI 显示
-#                                       版本号 mismatch(installer-.11.1 装出来 UI 仍显示 .10.1)。
+#   2. build-deskfox.ps1             -> tauri build 直接产出 NSIS .exe(Tauri updater 兼容格式)
 #                                       — 可用 -SkipBuild 跳过(CI 已 build / 极快速重 pack 场景)
-#   3. ISCC.exe /DAppEnv=$Env DeskFox.iss -> compile installer (三档独立 AppId,见 docs/governance/应用身份-命名规则.md)
-#   4. Print artifact path
+#   3. Print artifact path
+#
+# FORK: [启用自动升级] 2026-06-05 — 从 Inno Setup 切换到 Tauri NSIS installer
+#   - 删除了 DeskFox.iss + ChineseSimplified.isl(Inno Setup 脚本)
+#   - NSIS 由 Tauri bundler 直接产出(tauri.conf.json nsis 配置)
+#   - 三档 AppId 通过 identifier 区分(ai.deskfox.app / ai.deskfox.app.beta / ai.deskfox.app.dev)
+#   - 中英双语 + 桌面图标 + WebView2 bootstrapper 由 Tauri NSIS v2 自动处理
+#   - 飞书/media-gen plugin 资源走 tauri.conf.json bundle.resources(macOS 已这么走,Win 对齐)
 #
 # Prereq:
-#   - 默认会自动 build,不需要预跑 build-deskfox.ps1。仅 -SkipBuild 时 expects target/release/DeskFox.exe 已就绪。
-#   - ISCC.exe installed at C:\ProgramData\chocolatey\bin\ISCC.exe
+#   - 默认会自动 build,不需要预跑 build-deskfox.ps1。仅 -SkipBuild 时 expects target/release/ 已就绪。
+#   - Tauri CLI installed(bun run tauri --version)
 #
 # Usage:
 #   & .\packages\branding\scripts\pack-installer.ps1                          # 默认 prod,bump + build + pack
@@ -40,10 +43,6 @@ $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $root = Split-Path -Parent $here
 $repoRoot = Split-Path -Parent $root
-$issPath = Join-Path $root "installer/DeskFox.iss"
-$iscc = "C:\ProgramData\chocolatey\bin\ISCC.exe"
-
-if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
 
 # 1. determine version (bump 本地 / SkipBump 取已有)
 if ($SkipBump) {
@@ -51,19 +50,15 @@ if ($SkipBump) {
         $newVersion = $Version
         Write-Output "[pack] -SkipBump -Version: using $newVersion (env=$Env)"
     } else {
-        # 从 .iss 当前 AppVersion 读
-        $issContent = Get-Content $issPath -Raw -Encoding UTF8
-        if ($issContent -match '#define\s+AppVersion\s+"([^"]+)"') {
-            $newVersion = $Matches[1]
-            Write-Output "[pack] -SkipBump: read AppVersion from .iss = $newVersion (env=$Env)"
-        } else {
-            throw "[pack] -SkipBump 但 -Version 未传 且 .iss 里找不到 AppVersion"
-        }
+        # FORK: 从 installer-versions.json 读(不再有 .iss AppVersion)[启用自动升级] 2026-06-05
+        $versionsJson = Join-Path $root "installer-versions.json"
+        $versions = Get-Content $versionsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+        $newVersion = $versions.windows
+        if (-not $newVersion) { throw "[pack] -SkipBump 但 -Version 未传 且 installer-versions.json 里找不到 windows" }
+        Write-Output "[pack] -SkipBump: read version from installer-versions.json = $newVersion (env=$Env)"
     }
 } else {
-    # 本地默认走 bump
-    # FORK: 透传 Env 给 bump 脚本 — dev/beta 出带 suffix 版本号(例 2026.5.21.1-dev)
-    # [feat: installer-version-env-suffix] 2026-05-21
+    # FORK: bump 不再更新 .iss,只更新 installer-versions.json + installer-versions.md [启用自动升级] 2026-06-05
     $bumpOut = & (Join-Path $here "bump-installer-version.ps1") -Platform "Windows" -Env $Env
     $bumpOut | Write-Output
     $versionLine = $bumpOut | Where-Object { $_ -match '^VERSION=' } | Select-Object -First 1
@@ -73,14 +68,12 @@ if ($SkipBump) {
 }
 
 # 1.5 重 build DeskFox.exe 让 UI 版本号跟 bumped JSON 同步(2026-05-11 加)
-# 背景:UI 左下角"v2026.5.X.N"读 packages/branding/installer-versions.json 经 vite import
-# **烧进 bundle**(不是 runtime 读文件)。如果 bump 改 JSON 后不重 build,生成的 installer 内部
-# exe 还是上一版本号,跟 installer 文件名 mismatch — user 装完发现 UI 跟下载文件名不一致。
+# FORK: [启用自动升级] 2026-06-05 — build-deskfox.ps1 现在直接产出 NSIS .exe(不再需要单独 ISCC)
 if ($SkipBuild) {
-    Write-Output "[pack] -SkipBuild: 假设 target/release/DeskFox.exe 已是当前版本号,不重 build"
+    Write-Output "[pack] -SkipBuild: 假设 target/release/ 已就绪,不重 build"
 } else {
-    Write-Output "[pack] 重 build DeskFox.exe(让 UI 显示版本号跟 installer 文件名对齐)..."
-    & (Join-Path $here "build-deskfox.ps1") -Env $Env -NoBundle
+    Write-Output "[pack] build DeskFox(NSIS installer)..."
+    & (Join-Path $here "build-deskfox.ps1") -Env $Env
     if ($LASTEXITCODE -ne 0) { throw "[pack] build-deskfox.ps1 failed with exit $LASTEXITCODE" }
 }
 
@@ -90,35 +83,40 @@ if (Test-Path $loBundleSoffice) {
     $bundleSize = [math]::Round(
         (Get-ChildItem (Join-Path $root "libreoffice-bundle\windows") -Recurse -ErrorAction SilentlyContinue |
          Measure-Object -Property Length -Sum).Sum / 1MB)
-    Write-Output "[pack] ✓ LibreOffice bundle 已就绪 ($bundleSize MB) — 将内置进 installer"
+    Write-Output "[pack] LibreOffice bundle ready ($bundleSize MB) — will be bundled into installer"
 } else {
-    Write-Output "[pack] ⚠  LibreOffice bundle 未准备 — installer 不含内置 LO"
-    Write-Output "[pack]    用户首次开 Office 文件仍需在线下载 355MB"
-    Write-Output "[pack]    如需内置,请先(管理员权限)运行: .\packages\branding\scripts\prepare-lo-bundle.ps1"
+    Write-Output "[pack] LibreOffice bundle not prepared — installer will not contain bundled LO"
+    Write-Output "[pack]   Users will need to download LO (~355MB) on first use of Office files"
+    Write-Output "[pack]   To bundle: .\packages\branding\scripts\prepare-lo-bundle.ps1"
 }
 
-# 2. compile installer (传 AppEnv 给 .iss 选三档身份)
-& $iscc "/DAppEnv=$Env" $issPath
-if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit $LASTEXITCODE" }
-
-# 3. report path (OutputBaseFilename 三档不同前缀,见 .iss)
-# FORK: 文件名用 NumericVersion(strip env suffix),对齐 .iss OutputBaseFilename={#OutputBase}-{#NumericAppVersion}-setup
-# 例:$newVersion="2026.5.21.1-dev" → $numericVersion="2026.5.21.1" → DeskFox-Dev-2026.5.21.1-setup.exe
-# [feat: ship-scripts-naming-fix] 2026-05-21
+# 2. locate NSIS installer produced by tauri build
+# FORK: [启用自动升级] 2026-06-05 — NSIS .exe 由 Tauri bundler 产出,不再走 ISCC
+# Tauri NSIS output: target/release/bundle/nsis/<ProductName>_<Version>_x64-setup.exe
 $envSuffix = switch ($Env) {
     "prod" { "" }
-    "beta" { "-Beta" }
-    "dev"  { "-Dev" }
+    "beta" { " Beta" }
+    "dev"  { " Dev" }
 }
+$productName = "DeskFox$envSuffix"
 $numericVersion = $newVersion -replace '-(dev|beta)$', ''
-$installerPath = Join-Path $root "installer/Output/DeskFox$envSuffix-$numericVersion-setup.exe"
-if (-not (Test-Path $installerPath)) {
-    throw "expected installer not found: $installerPath"
+$nsisDir = Join-Path $repoRoot "packages\desktop\src-tauri\target\release\bundle\nsis"
+
+if (-not (Test-Path $nsisDir)) {
+    throw "NSIS output directory not found: $nsisDir — tauri build may have failed or used -NoBundle"
 }
-$size = (Get-Item $installerPath).Length
+
+# Tauri NSIS naming: <ProductName>_x64-setup.exe (version embedded in installer metadata)
+$nsisFiles = Get-ChildItem $nsisDir -Filter "*.exe" | Sort-Object LastWriteTime -Descending
+if ($nsisFiles.Count -eq 0) {
+    throw "No .exe found in $nsisDir"
+}
+$installerPath = $nsisFiles[0].FullName
+$size = $nsisFiles[0].Length
 Write-Output ""
 Write-Output "[pack] installer ready:"
 Write-Output "  $installerPath"
 Write-Output "  size: $size bytes"
+Write-Output "  version: $numericVersion (env=$Env)"
 Write-Output ""
 Write-Output "[pack] remember to fill the placeholder in docs/installer-versions.md with summary after testing"

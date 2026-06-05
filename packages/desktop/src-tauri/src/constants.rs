@@ -3,11 +3,10 @@ use tauri_plugin_window_state::StateFlags;
 pub const SETTINGS_STORE: &str = "opencode.settings.dat";
 pub const DEFAULT_SERVER_URL_KEY: &str = "defaultServerUrl";
 pub const WSL_ENABLED_KEY: &str = "wslEnabled";
-// FORK: updater backend 总开关 — 当前 false 防 DeskFox 被上游 OpenCode 整壳替换。
-// 未来 fork 自家 updater(DeskFox 自有 update 服务)上线时翻 true,index.tsx 内
-// createPlatform 把 check()/install() 换成 DeskFox API 即可,UI 层(menu/settings/
-// polling/error)无需改动,自动亮(updater-disable-adapter 2026-05-03)
-pub const UPDATER_ENABLED: bool = false;
+// FORK: updater backend 总开关 — 从 false 翻 true,启用 DeskFox 自家 updater。
+// 前序 feat 禁自动升级 硬关了所有上游通道(防 DeskFox 被整壳替换);现在密钥/endpoint/
+// latest.json 全部切换到 DeskFox 自有体系,安全底线守住。[启用自动升级] 2026-06-05
+pub const UPDATER_ENABLED: bool = true;
 
 pub fn window_state_flags() -> StateFlags {
     // FORK: 不记忆 MAXIMIZED / FULLSCREEN — 否则上次最大化或全屏状态被恢复,窗口开局铺满整屏、

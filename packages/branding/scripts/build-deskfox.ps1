@@ -114,6 +114,25 @@ if ($needBuild) {
 # 1.5 注入 VITE_DESKFOX_ENV 让前端 logo.tsx Mark 组件按 env 选 branded 样式
 $env:VITE_DESKFOX_ENV = $Env
 
+# FORK: [启用自动升级] 2026-06-05 — 注入 minisign 签名私钥(Tauri updater 需要)
+# 私钥来源:~/.deskfox-signing/config.env(跟 Apple 代码签名配置同文件)或环境变量
+# 不存在时不 block(Tauri build 会产出 unsigned updater artifacts,功能层面仍可用,只是 updater 无法验签)
+$signingConfig = Join-Path $env:USERPROFILE ".deskfox-signing\config.env"
+if (Test-Path $signingConfig) {
+    $configContent = Get-Content $signingConfig -Raw -Encoding UTF8
+    $keyMatch = [regex]::Match($configContent, "TAURI_SIGNING_PRIVATE_KEY\s*=\s*([^\r\n]+)")
+    if ($keyMatch.Success) {
+        $env:TAURI_SIGNING_PRIVATE_KEY = $keyMatch.Groups[1].Value.Trim()
+        Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY loaded from ~/.deskfox-signing/config.env"
+    } else {
+        Write-Output "[deskfox] ~/.deskfox-signing/config.env exists but no TAURI_SIGNING_PRIVATE_KEY — updater artifacts will be unsigned"
+    }
+} elseif ($env:TAURI_SIGNING_PRIVATE_KEY) {
+    Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY set from environment"
+} else {
+    Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY not set — updater artifacts will be unsigned (updater check will fail without valid signature)"
+}
+
 # 2. tauri build
 $bundleFlag = if ($NoBundle) { "--no-bundle" } else { "" }
 Push-Location (Join-Path $repoRoot "packages/desktop")

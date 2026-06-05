@@ -17,10 +17,11 @@
 # Run before iscc / dmg build to auto-increment N for today on this platform+env.
 #
 # Side effects:
-#   1. Update packages/branding/installer/DeskFox.iss line `#define AppVersion "..."` (Windows only)
-#   2. Prepend a placeholder entry to top of /docs/installer-versions.md (you fill summary after build)
-#   3. Update packages/branding/installer-versions.json (the platform's key) — front-end reads it
+#   1. Update packages/branding/installer-versions.json (the platform's key) — front-end reads it
 #      to render "DeskFox <Platform>" + version in the settings dialog footer.
+#   2. Prepend a placeholder entry to top of /docs/installer-versions.md (you fill summary after build)
+#
+# FORK: [启用自动升级] 2026-06-05 — 不再更新 .iss AppVersion(Inno Setup 已删,改用 Tauri NSIS)
 #
 # Output: prints new version to stdout (used by pack-installer.ps1)
 
@@ -40,7 +41,7 @@ $issFile = Join-Path $root "branding/installer/DeskFox.iss"
 $logFile = Join-Path $repoRoot "docs/installer-versions.md"
 $jsonFile = Join-Path $root "branding/installer-versions.json"
 
-if (-not (Test-Path $issFile)) { throw "iss not found: $issFile" }
+# FORK: [启用自动升级] 2026-06-05 — .iss 已删(Inno → NSIS),不再检查 issFile
 if (-not (Test-Path $logFile)) { throw "version log not found: $logFile" }
 if (-not (Test-Path $jsonFile)) { throw "installer-versions.json not found: $jsonFile" }
 
@@ -65,15 +66,9 @@ if ($DryRun) {
     exit 0
 }
 
-# 1. Update .iss AppVersion (Windows only; macOS uses Info.plist or build-time arg)
-if ($Platform -eq "Windows") {
-    $iss = Get-Content $issFile -Raw -Encoding UTF8
-    $iss = $iss -replace '#define AppVersion "[^"]*"', "#define AppVersion `"$newVersion`""
-    Set-Content -Path $issFile -Value $iss -Encoding UTF8 -NoNewline
-    Write-Output "[bump] updated $issFile -> AppVersion=$newVersion"
-} else {
-    Write-Output "[bump] platform=$Platform, skipping .iss update (macOS uses Info.plist or build-time arg)"
-}
+# FORK: [启用自动升级] 2026-06-05 — 不再更新 .iss(Inno Setup 已删,改用 Tauri NSIS)
+# installer-versions.json + installer-versions.md 仍是 bump 主战场,这两个不动
+Write-Output "[bump] platform=$Platform, skipping .iss update (Inno removed, NSIS uses Tauri config)"
 
 # 2. Prepend placeholder entry to version log (above first existing ## entry)
 $placeholder = @"
