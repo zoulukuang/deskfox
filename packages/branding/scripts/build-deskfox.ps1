@@ -146,8 +146,16 @@ if (-not $appVersion) { throw "[deskfox] installer-versions.json missing 'window
 $baseConf = Join-Path $repoRoot "packages/desktop/src-tauri/tauri.conf.json"
 $confText = [System.IO.File]::ReadAllText($baseConf)
 $confRe = [regex]'"version"\s*:\s*"[^"]*"'
-$confRepl = '"version": "' + $appVersion + '"'
-[System.IO.File]::WriteAllText($baseConf, $confRe.Replace($confText, $confRepl, 1), (New-Object System.Text.UTF8Encoding $false))
+$confText = $confRe.Replace($confText, ('"version": "' + $appVersion + '"'), 1)
+# FORK: 本地无 Windows 代码签名证书(非 GitHub Actions)时剥离 bundle.windows.signCommand。
+# 否则 Tauri NSIS bundler 找不到 SignTool 直接报错,连【未签名安装包】都出不来。
+# 剥离后产【未签名 NSIS + minisign .sig】:updater 用 minisign 验签照常升级(Authenticode 只影响
+# "未知发布者"警告,不是升级前提)。CI(GITHUB_ACTIONS + Azure Trusted Signing)仍保留 signCommand。
+if ($env:GITHUB_ACTIONS -ne "true") {
+    $confText = [regex]::Replace($confText, '"signCommand"\s*:\s*\{[^}]*\}\s*,', '')
+    Write-Output "[deskfox] no local Authenticode cert -> stripped signCommand, building UNSIGNED installer (updater still verified by minisign)"
+}
+[System.IO.File]::WriteAllText($baseConf, $confText, (New-Object System.Text.UTF8Encoding $false))
 # 只靠 on-disk patch:CLI 读 on-disk tauri.conf.json(已 patch version)+ merge override → 编译/bundle
 # 版本都拿到 2026.6.0。不用内联 --config JSON(PS 调原生 exe 会吞双引号,JSON 失效)。
 Write-Output "[deskfox] app version injected -> $appVersion (tauri.conf.json on-disk patch)"
