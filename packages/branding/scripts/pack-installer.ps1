@@ -36,7 +36,10 @@ param(
     [string]$Env = "prod",
     [switch]$SkipBump,
     [switch]$SkipBuild,
-    [string]$Version = ""
+    [string]$Version = "",
+    # 版本号 bump 级别(透传 bump-installer-version.ps1):patch=小更新(默认) / minor=大版本(次 +1)
+    [ValidateSet("patch", "minor")]
+    [string]$Bump = "patch"
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,7 +62,7 @@ if ($SkipBump) {
     }
 } else {
     # FORK: bump 不再更新 .iss,只更新 installer-versions.json + installer-versions.md [启用自动升级] 2026-06-05
-    $bumpOut = & (Join-Path $here "bump-installer-version.ps1") -Platform "Windows" -Env $Env
+    $bumpOut = & (Join-Path $here "bump-installer-version.ps1") -Platform "Windows" -Env $Env -Bump $Bump
     $bumpOut | Write-Output
     $versionLine = $bumpOut | Where-Object { $_ -match '^VERSION=' } | Select-Object -First 1
     if (-not $versionLine) { throw "bump script did not produce VERSION= line" }
