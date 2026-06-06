@@ -12,7 +12,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 | commit | 简述 |
 |---|---|
-| `<TBD>` | `fix(session): 残骸消息致"运行中"图标永久卡死 — 后端 idle 自愈补盖 time.completed + 前端 isWorking 只看末条 [feat: stuck-working-indicator-fix]` |
+| `c7eb95ce2` | `fix(session): 残骸消息致"运行中"图标永久卡死 — 后端 idle 自愈补盖 time.completed + 前端 isWorking 只看末条 [feat: stuck-working-indicator-fix]` |
 
 ## 改动文件
 
