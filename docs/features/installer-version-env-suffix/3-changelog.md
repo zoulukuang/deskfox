@@ -81,6 +81,33 @@ git revert <本笔 commit>
 
 回退后 bump 脚本回到只看 Platform 不看 Env 的旧逻辑,所有版本号合并到同一个 N 序列(B1 模式)。已 bump 的版本号(.iss / installer-versions.json / docs/installer-versions.md placeholder)需要单独 revert 它们各自的 commit。
 
+## Follow-up(2026-06-06):ps1 写 installer-versions.json 带 UTF-8 BOM 致 JSON.parse 崩
+
+**分支**: `fix/installer-versions-bom`
+**规模**: Tiny(去 BOM + 改 1 行写入编码)
+**tag**: `[bug-repro: installer-versions.json BOM -> JSON.parse 崩]`
+
+### 症状
+
+发布前全套测试发现 `packages/branding` 测试 1 个 unhandled error:`installer-versions.json` 被 `JSON.parse` 报 `Unrecognized token '﻿'`(U+FEFF BOM)。文件前 3 字节 `EF BB BF`。由 Win prod ship commit `c961cc1675` 引入,威胁 Mac `deploy-updater-manifest.sh` / 前端版本牌等所有 JSON.parse 读取方。
+
+### 根因
+
+`bump-installer-version.ps1:107` 用 `Set-Content -Encoding UTF8 -NoNewline` 写文件 —— **Windows PowerShell 5.1 的 `-Encoding UTF8` 会写 BOM**。Mac 侧 `bump-installer-version.sh` 用 `sed -i.bak`(line 105)不带 BOM,所以只有 Win ship 触发。这是 ps1 自诞生即埋的隐患,本次 Win ship 首次被 branding 的 updater-config 测试探测到。
+
+### 修复
+
+| 文件 | 改动 |
+|---|---|
+| `packages/branding/installer-versions.json` | 移除已存在的 3 字节 BOM(治标,让 main 立即干净) |
+| `packages/branding/scripts/bump-installer-version.ps1` | line 107 改用 `[System.IO.File]::WriteAllText(..., (New-Object System.Text.UTF8Encoding($false)))` 强制无 BOM(治本,PS5.1 无 `utf8NoBOM` 选项,.NET 写法跨版本一致) |
+
+### 验证
+
+- `branding` 测试:修复前 `11 pass + 1 error` → 修复后 **`13 pass / 0 fail`**(BOM 崩掉的 describe 恢复)
+- `installer-versions.json` 前字节 `7b`(`{`),`JSON.parse` OK
+- ⚠️ ps1 治本改动**在 Mac 无法执行验证**,待 Win 端下次 bump / ship 实测确认无 BOM 回流
+
 ## 关联
 
 - **延续**:`installer-versioning` feat(2026-04-29 立的 YYYY.M.D.N 规范)— 本笔在它上加 env 维度

@@ -104,7 +104,12 @@ $replaced = [regex]::Replace($jsonContent, $pattern, "`${1}$newVersion`${2}")
 if ($replaced -eq $jsonContent) {
     throw "installer-versions.json: key '$jsonKey' not found, file may be malformed: $jsonFile"
 }
-Set-Content -Path $jsonFile -Value $replaced -Encoding UTF8 -NoNewline
+# 用 .NET WriteAllText + UTF8Encoding($false) 写入:Windows PowerShell 5.1 的
+# `Set-Content -Encoding UTF8` 会写 UTF-8 BOM(EF BB BF),导致 installer-versions.json
+# 被 JSON.parse(branding/__tests__/updater-config.test.ts、Mac deploy-updater-manifest.sh
+# 读取方)直接 throw "Unrecognized token"。.NET UTF8Encoding($false) 强制无 BOM,跨 PS 版本一致。
+# [bug-repro: installer-versions.json BOM -> JSON.parse 崩] 2026-06-06
+[System.IO.File]::WriteAllText($jsonFile, $replaced, (New-Object System.Text.UTF8Encoding($false)))
 Write-Output "[bump] updated $jsonFile -> $jsonKey=$newVersion"
 
 # 3. 输出新版本(caller 解析)
