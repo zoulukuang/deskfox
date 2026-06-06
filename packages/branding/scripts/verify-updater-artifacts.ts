@@ -25,6 +25,7 @@ const { values } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
     env: { type: "string", default: "prod" }, // prod | beta（dev 不产更新产物）
+    target: { type: "string", default: "" }, // windows | darwin；留空按当前平台
     "bundle-dir": { type: "string", default: "" },
   },
 })
@@ -38,6 +39,15 @@ const env = values.env as string
 if (!["prod", "beta"].includes(env)) {
   throw new Error(`--env 必须是 prod 或 beta（dev 是 Tier3 本地测试，不产更新产物）；收到 ${env}`)
 }
+
+// FORK: macos-updater-adapt 2026-06-06 — 平台分支（原仅 Win NSIS .exe，加 darwin .app.tar.gz）。
+// 留空时按当前运行平台推断；验签逻辑（parseBlob/ed25519/edVerify）平台无关，仅产物路径/命名分流。
+const target = (values.target as string) || (process.platform === "darwin" ? "darwin" : "windows")
+if (!["windows", "darwin"].includes(target)) {
+  throw new Error(`--target 必须是 windows 或 darwin；收到 ${target}`)
+}
+const bundleSubdir = target === "darwin" ? "macos" : "nsis"
+const artifactGlob = target === "darwin" ? "*.app.tar.gz" : "*-setup.exe"
 
 // 上游 anomalyco minisign 公钥的密钥行（切换前的值）—— 任何产物都不该再用它
 const UPSTREAM_KEY_LINE = "RWQEoTmciZcD8CXOMBWIa9tuPXiirl+VwiOefsm714L4NYS0UoWBqNzY"
@@ -108,33 +118,36 @@ check("override pubkey != 上游 anomalyco", () => {
   assert(ovLine !== UPSTREAM_KEY_LINE, "仍是上游公钥(任何人可用上游私钥签伪造更新)")
 })
 
-// ================= TC-5：NSIS 产物 =================
-console.log("\nTC-5 NSIS 安装包产出:")
+// ================= TC-5：更新产物（Win NSIS .exe / Mac .app.tar.gz） =================
+console.log(`\nTC-5 更新产物产出 (${target}/bundle/${bundleSubdir}):`)
 const bundleDir = values["bundle-dir"]
   ? (values["bundle-dir"] as string)
-  : join(DESKTOP, "src-tauri", "target", "release", "bundle", "nsis")
+  : join(DESKTOP, "src-tauri", "target", "release", "bundle", bundleSubdir)
 
-let setupExe = ""
+let setupFile = ""
 let sigFile = ""
-check("bundle/nsis 目录存在", () => {
-  assert(existsSync(bundleDir), `不存在:${bundleDir}（先跑 build-deskfox.ps1 -Env ${env} 完整 bundle）`)
+check(`bundle/${bundleSubdir} 目录存在`, () => {
+  assert(existsSync(bundleDir), `不存在:${bundleDir}（先跑 build-deskfox.${target === "darwin" ? "sh" : "ps1"} -Env ${env} 完整 bundle）`)
 })
-check("存在 *-setup.exe（NSIS 命名,非 Inno）", () => {
-  const exes = readdirSync(bundleDir).filter((f) => /-setup\.exe$/i.test(f))
-  assert(exes.length > 0, `bundle/nsis 下无 *-setup.exe`)
-  // Tauri NSIS 命名:DeskFox_<ver>_x64-setup.exe
-  const named = exes.find((f) => /^DeskFox[_-].*x64-setup\.exe$/i.test(f)) ?? exes[0]
-  setupExe = join(bundleDir, named)
-  sigFile = setupExe + ".sig"
+check(`存在 ${artifactGlob}（${target === "darwin" ? "macOS updater bundle" : "NSIS 命名,非 Inno"}）`, () => {
+  // 产物匹配:darwin → *.app.tar.gz / windows → *-setup.exe
+  const fileRe = target === "darwin" ? /\.app\.tar\.gz$/i : /-setup\.exe$/i
+  const matches = readdirSync(bundleDir).filter((f) => fileRe.test(f))
+  assert(matches.length > 0, `bundle/${bundleSubdir} 下无 ${artifactGlob}`)
+  // 优先 DeskFox 品牌命名:darwin=DeskFox.app.tar.gz / windows=DeskFox_<ver>_x64-setup.exe
+  const namedRe = target === "darwin" ? /^DeskFox.*\.app\.tar\.gz$/i : /^DeskFox[_-].*x64-setup\.exe$/i
+  const named = matches.find((f) => namedRe.test(f)) ?? matches[0]
+  setupFile = join(bundleDir, named)
+  sigFile = setupFile + ".sig"
   console.log(`       → ${named}`)
 })
-check("存在同名 .exe.sig 签名文件", () => {
+check("存在同名 .sig 签名文件", () => {
   assert(sigFile !== "" && existsSync(sigFile), `缺 .sig:${sigFile}（createUpdaterArtifacts + TAURI_SIGNING_PRIVATE_KEY 是否生效?）`)
 })
 
 // ================= TC-8：minisign 离线验签 =================
 console.log("\nTC-8 minisign 签名验证（离线 Node crypto）:")
-if (setupExe && sigFile && existsSync(sigFile)) {
+if (setupFile && sigFile && existsSync(sigFile)) {
   // Tauri .sig 文件内容是 minisign 签名文件文本的 base64
   const sigOuter = readFileSync(sigFile, "utf8").trim()
   const sigText = Buffer.from(sigOuter, "base64").toString("utf8")
@@ -150,7 +163,7 @@ if (setupExe && sigFile && existsSync(sigFile)) {
 
   check("Ed25519 验签通过（对安装包字节）", () => {
     assert(sig.rest.length === 64, `Ed25519 签名应 64 字节,收到 ${sig.rest.length}`)
-    const fileBytes = readFileSync(setupExe)
+    const fileBytes = readFileSync(setupFile)
     // 算法字节决定预哈希:"Ed"=对原文 / "ED"=对 blake2b512(原文)
     let message: Buffer
     if (sig.algo === "ED") {
