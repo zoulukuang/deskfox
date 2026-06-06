@@ -12,8 +12,12 @@
 import { type Component, createSignal, onMount, onCleanup, Show, For } from "solid-js"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Switch } from "@opencode-ai/ui/switch"
-import { invoke } from "@tauri-apps/api/core"
 import { useLanguage } from "@/context/language"
+import {
+  getPreventSleep,
+  setPreventSleep as applyPreventSleep,
+  onPreventSleepChanged,
+} from "@/utils/prevent-sleep"
 import {
   feishuAdapterStatus,
   feishuDeleteAccount,
@@ -78,21 +82,21 @@ export const SettingsFeishu: Component = () => {
 
   // FORK: 防休眠开关初值 + 监听托盘侧切换以双向同步 [feat: prevent-sleep] 2026-06-06
   onMount(() => {
-    void invoke<boolean>("get_prevent_sleep").then(setPreventSleep).catch(() => {})
-    const unlistenP = import("@tauri-apps/api/event")
-      .then(({ listen }) =>
-        listen<boolean>("deskfox-prevent-sleep-changed", (e) => setPreventSleep(e.payload)),
-      )
-      // e2e mock / 非 Tauri 环境无 event API → 静默降级,开关本身不受影响
-      .catch(() => null)
+    void getPreventSleep().then(setPreventSleep).catch(() => {})
+    const unlistenP = onPreventSleepChanged(setPreventSleep).catch((e) => {
+      // 注册失败记日志(不再静默);e2e mock / 非 Tauri 环境无 event API 时走此降级
+      console.warn("[prevent-sleep] 变更监听注册失败:", e)
+      return null
+    })
     onCleanup(() => void unlistenP.then((un) => un?.()))
   })
 
   const togglePreventSleep = async (next: boolean) => {
     setPreventSleep(next) // 乐观更新
     try {
-      await invoke("set_prevent_sleep", { enabled: next })
+      await applyPreventSleep(next)
     } catch (err) {
+      // 含「系统未能开启防休眠」(现代待机+电池等)→ 开关弹回,隐式反馈(按 user 决定不另加文字提示)
       console.warn("[prevent-sleep] toggle failed:", err)
       setPreventSleep(!next) // 失败回滚
     }

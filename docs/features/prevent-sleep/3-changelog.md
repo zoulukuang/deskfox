@@ -62,6 +62,20 @@ commit:本笔(grep `[feat: prevent-sleep]`)
 - 现象:**关掉开关、黑屏后,飞书消息仍能回**。排查结论:S0「连接网络」待机时系统保持网络连接、周期唤醒收包,WSS 长连接可维持 → 与 DeskFox 无关(日志已证关开关后 guard 释放)。
 - 产品含义:S0 机器"不开也有时能用"是系统**碰运气**(电池/低电量/网络策略会中断,即 spec 的 Modern Standby 边界);开关价值=把"碰运气"变"稳定不待机",且对 S3 老机器是刚需。
 
+## code-review 修复(/code-review high effort,2026-06-06)
+
+多 agent 审查(7 finder + verify)后修复:
+- **#1 失败不再谎报(altitude)**:worker 改请求-回执模型,回报「guard 是否真持有」;`set_enabled` 以实际结果 `actual`(而非请求值)更新内存/托盘/前端;请求开启却没生效(OS 拒绝/硬失败)→ 返 Err,前端开关弹回。把原先「墙在 worker 线程里」的真实 guard 状态暴露出来。(注:现代待机+电池被 OS 忽略时 create 仍可能返 Ok,这层探测不了,属系统硬限制。)
+- **#2 存盘顺序**:`persist` 移到最后且失败只 warn、不回退已生效的运行态,消除「存盘失败 → worker/内存 vs 托盘/前端 多方打架」;代价仅「重启后可能不恢复」。
+- **#3 listen 失败记日志**:`onPreventSleepChanged` 注册失败 `console.warn`(不再静默 null)。
+- **#4 worker send 失败**:线程已退出时 `set_enabled` 立即 Err,不谎报。
+- **#6 前端 wrapper**:新建 `packages/app/src/utils/prevent-sleep.ts`(get/set/onChanged + 事件名常量),组件不再裸用 invoke,对齐 feishu-config.ts 惯例。
+- **#7 store helper**:新建 `packages/desktop/src-tauri/src/settings_store.rs`(read_value/write),prevent_sleep 不再手抄 store 样板;linux_display 迁移留 follow-up(不动 Linux-only 代码)。
+- **#10 静态 import**:event API 改静态 import(移入 wrapper)。
+
+验证:cargo check 0 error / typecheck 17/17 / 纯逻辑 5 单测(未变)/ 全套 e2e 16 passed+3 skip 无回归。
+未修(边际,记录在案):#5 onMount get/listen 窄竞态窗口、#8 启动重复 persist 同值、#9 单 bool 套 struct。
+
 ## 待办
 
 - **真机 QA 未专门验**:C5 重启 DeskFox 后开关持久化恢复;设置页 ↔ 托盘双入口同步(实测时已顺带看,无自动化);Mac/Linux(无环境)。

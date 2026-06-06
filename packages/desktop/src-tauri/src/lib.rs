@@ -16,6 +16,8 @@ mod logging;
 mod markdown;
 // FORK: 国内 npm 镜像决策 — sidecar 装插件走国内镜像,避免卡 npmjs [feat: npm-registry-cn-mirror] 2026-05-28
 mod npm_registry;
+// FORK: SETTINGS_STORE 读写共享 helper [feat: prevent-sleep] 2026-06-06
+mod settings_store;
 // FORK: 防止系统休眠,保障飞书远程随时可用 [feat: prevent-sleep] 2026-06-06
 mod prevent_sleep;
 mod os;
