@@ -79,10 +79,13 @@ export const SettingsFeishu: Component = () => {
   // FORK: 防休眠开关初值 + 监听托盘侧切换以双向同步 [feat: prevent-sleep] 2026-06-06
   onMount(() => {
     void invoke<boolean>("get_prevent_sleep").then(setPreventSleep).catch(() => {})
-    const unlistenP = import("@tauri-apps/api/event").then(({ listen }) =>
-      listen<boolean>("deskfox-prevent-sleep-changed", (e) => setPreventSleep(e.payload)),
-    )
-    onCleanup(() => void unlistenP.then((un) => un()))
+    const unlistenP = import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<boolean>("deskfox-prevent-sleep-changed", (e) => setPreventSleep(e.payload)),
+      )
+      // e2e mock / 非 Tauri 环境无 event API → 静默降级,开关本身不受影响
+      .catch(() => null)
+    onCleanup(() => void unlistenP.then((un) => un?.()))
   })
 
   const togglePreventSleep = async (next: boolean) => {

@@ -55,7 +55,7 @@ spec A1/A2 原写"`enable()` 后 guard 存在 / 幂等"为 Rust 单测,但 guard
 - [x] Rust 单测:test profile 编译 0 error,但运行撞 Win `0xc0000139`(tauri lib 测试 exe DLL 通病,非逻辑问题)→ 抽 `enabled_from_store_value` 纯逻辑到独立临时 crate `cargo test` **5 passed**(2026-06-06)
 - [x] cargo build --release:Finished release profile 0 error(keepawake release 编译验证)
 - [x] release build DeskFox.exe:`Built application at ...target\release\DeskFox.exe`(2026-06-06,含 media-gen 插件打包 + tauri release)
-- [ ] 前端 e2e(B1-B3):未做,需扩 Phase 1 mock 加 set/get_prevent_sleep stub → 列 follow-up
+- [x] 前端 e2e(B1/B2):Phase 1 mock 加 set/get stub + spec 2 case **passed**;全套回归 16 passed+3 skip 无回归(2026-06-06)。B3 event 同步因 mock 不 alias event 改为 .catch 降级 + 验无 error
 - [ ] 真机 QA(C1-C7):由 user 在真机验(CDP 测不了"系统真没睡")
 
 > build 踩坑:首次 build 我外层加了 `2>&1`,在 PS5.1 下把 media-gen 子脚本里 bun 的正常 stderr 输出包成 ErrorRecord,撞 `$ErrorActionPreference="Stop"` 假失败。去掉 `2>&1`(stderr 工具已自动捕获)即过。对照 CLAUDE.md PowerShell native stderr 警示。

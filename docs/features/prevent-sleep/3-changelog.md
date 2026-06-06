@@ -19,8 +19,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | `packages/desktop/src-tauri/src/system_tray.rs` | fork 模块增订 | CheckMenuItem「保持电脑不休眠」+ 事件分支(取反切换)+ `set_prevent_sleep_check` 同步函数 |
 | `packages/desktop/src-tauri/Cargo.toml` | 加依赖 | `keepawake = "0.6"`(R2 例外免 marker,加注释)|
 | `packages/desktop/src-tauri/Cargo.lock` | 自动 | keepawake + derive_builder/darling/objc2-io-kit 等传递依赖 |
-| `packages/app/src/components/settings-feishu.tsx` | fork 文件增订 | Switch 开关 + onMount 读初值 + listen `deskfox-prevent-sleep-changed` 同步 + 乐观更新/回滚 |
+| `packages/app/src/components/settings-feishu.tsx` | fork 文件增订 | Switch 开关 + onMount 读初值 + listen `deskfox-prevent-sleep-changed` 同步(`.catch` 降级)+ 乐观更新/回滚 |
 | `packages/app/src/i18n/{zh,zht,en}.ts` | fork 增订 | 各 +2 key(`settings.feishu.preventSleep.title/description`)|
+| `packages/app/e2e/prevent-sleep.spec.ts` | **新建** fork-only | Phase 1 mock e2e 2 case:开关出现+初值+点击开启 / listen 降级无 fatal error |
+| `packages/app/e2e/mocks/tauri.ts` | fork 增订 | mock dispatch 加 `get/set_prevent_sleep`(模块级状态闭环)|
 | `docs/features/prevent-sleep/{1-spec,2-plan,3-changelog}.md` | 文档 | 三文档 |
 | `docs/features/INDEX.md` | 文档 | 索引加一行 |
 
@@ -39,6 +41,7 @@ commit:本笔(grep `[feat: prevent-sleep]`)
 - 前端 typecheck:**17/17 全过**
 - Rust `cargo check`(dev)+ `cargo build --release`:**0 error**,新代码 0 warning(7-8 warning 全 pre-existing dead code)
 - Rust 单测:tauri lib `cargo test` 撞 Win `0xc0000139`(DLL 通病,非逻辑问题)→ 抽 `enabled_from_store_value` 纯逻辑到独立临时 crate `cargo test` **5 passed**
+- 前端 Phase 1 mock e2e:**prevent-sleep 2 case passed**;全套回归 **16 passed + 3 skipped(无回归)**
 - release build:产出 `DeskFox.exe`(含 media-gen 插件打包 + tauri release)
 
 ## fork 健康
@@ -61,8 +64,8 @@ commit:本笔(grep `[feat: prevent-sleep]`)
 
 ## 待办
 
-- **前端 e2e(spec B1-B3)未做**:需扩 Phase 1 mock 加 `set/get_prevent_sleep` invoke stub + listen 注入 → follow-up。
-- **真机 QA 未专门验**:C5 重启 DeskFox 后开关持久化恢复;设置页 ↔ 托盘双入口同步;Mac/Linux(无环境)。
+- **真机 QA 未专门验**:C5 重启 DeskFox 后开关持久化恢复;设置页 ↔ 托盘双入口同步(实测时已顺带看,无自动化);Mac/Linux(无环境)。
+- **B3 托盘 event 同步未自动化**:vite mock 只 alias core 不 alias event,Phase 1 测不了真 event;前端已 `.catch` 降级,e2e 第 2 case 验证了无 fatal error。
 - **native 边界(仅文档记录,不做 UI 提示)**:Win 现代待机+电池供电防休眠被系统忽略;笔记本合盖默认睡;关机/断电/断网超出能力范围。
 
 ## 回退方法
