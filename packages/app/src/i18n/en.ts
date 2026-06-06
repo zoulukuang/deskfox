@@ -1044,6 +1044,11 @@ export const dict = {
   "fileViewer.menu.input.submit": "Add to Chat",
   // FORK: cross-page selection hint [feat: office-选中加聊天] 2026-05-24
   "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.",
+  // FORK: editDisabled reasons i18n — 禁编辑提示多语言(原为硬编码中英混杂)[feat: ui-brand-deskfox] 2026-06-06
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app",
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.",
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited",
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled",
   // FORK-END
   // FORK-BEGIN: feishu-bridge Settings Tab + bind dialog 2026-05-08 [feat: feishu-bridge]
   "settings.tab.feishu": "Lark Bridge",

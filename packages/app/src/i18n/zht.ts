@@ -997,6 +997,11 @@ export const dict = {
   "fileViewer.menu.input.submit": "加入對話",
   // FORK: 跨頁選區提示 [feat: office-選中加聊天] 2026-05-24
   "fileViewer.menu.crossPageHint": "跨頁選區暫不支援,請分段選取後再加入對話",
+  // FORK: editDisabled reasons i18n [feat: ui-brand-deskfox] 2026-06-06
+  "fileViewer.editDisabled.desktopOnly": "僅桌面應用支援編輯",
+  "fileViewer.editDisabled.office": "Office 檔案暫不支援在 DeskFox 內編輯，請用本機軟體開啟",
+  "fileViewer.editDisabled.binary": "二進位檔案無法編輯",
+  "fileViewer.editDisabled.tooLarge": "檔案過大，編輯已停用",
   // FORK-END
 
   // upstream-sync drift backfill — 上游 sync 累積漏補的翻譯,2026-05-07 一次性補齊(23 key)

@@ -446,14 +446,15 @@ export function FileTabContent(props: {
     return true
   }
   const editDisabledReason = () => {
-    if (!isTauri()) return "Edit only available in desktop app"
+    // FORK: 禁编辑提示走 i18n(原为硬编码中英混杂,英文 locale 看到中文)[feat: ui-brand-deskfox] 2026-06-06
+    if (!isTauri()) return language.t("fileViewer.editDisabled.desktopOnly")
     const p = path()
     if (!p) return undefined
-    if (isOfficeDocument(p)) return "Office 文件暂不支持在 DeskFox 内编辑，请用本机软件打开" // FORK: 品牌字 OpenCode→DeskFox [feat: ui-brand-deskfox] 2026-06-06
-    if (isBinary(p)) return "Binary file cannot be edited"
+    if (isOfficeDocument(p)) return language.t("fileViewer.editDisabled.office")
+    if (isBinary(p)) return language.t("fileViewer.editDisabled.binary")
     // FORK: 大文件预览统一防护 [feat: large-file-preview-guard] 2026-05-21
-    if (state()?.tooLarge) return "文件过大,编辑已禁用"
-    if (tooLarge(contents())) return "File >10MB, editing disabled"
+    if (state()?.tooLarge) return language.t("fileViewer.editDisabled.tooLarge")
+    if (tooLarge(contents())) return language.t("fileViewer.editDisabled.tooLarge")
     return undefined
   }
   const startEdit = async () => {
