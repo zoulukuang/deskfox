@@ -45,7 +45,10 @@ param(
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $root = Split-Path -Parent $here
-$repoRoot = Split-Path -Parent $root
+# FORK: [启用自动升级] 2026-06-06 — $root=packages\branding,repo 根需再上跳一层。
+# 旧版只 split 一次得 ...\packages,与 106 行 "packages\desktop\..." 拼成双重 packages,
+# 导致 build 成功但 NSIS 路径校验 throw。修:多 split 一层得真正仓库根。
+$repoRoot = Split-Path -Parent (Split-Path -Parent $root)
 
 # 1. determine version (bump 本地 / SkipBump 取已有)
 if ($SkipBump) {
