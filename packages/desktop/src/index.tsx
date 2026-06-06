@@ -324,6 +324,9 @@ const createPlatform = (): Platform => {
               .catch(() => false)
             if (!ok) return { updateAvailable: false }
             update = next
+            // FORK: 匿名使用统计 update_downloaded(Rust 侧白名单校验 + opt-out + 静默失败)
+            // [feat: telemetry-usage-stats] 2026-06-06
+            void invoke("track_event_cmd", { name: "update_downloaded" }).catch(() => {})
             return { updateAvailable: true, version: next.version }
           },
           updateAndRestart: async () => {
@@ -334,6 +337,9 @@ const createPlatform = (): Platform => {
               .then(() => true)
               .catch(() => false)
             if (!installed) return
+            // FORK: 匿名使用统计 update_applied(install 成功、relaunch 前)
+            // [feat: telemetry-usage-stats] 2026-06-06
+            void invoke("track_event_cmd", { name: "update_applied" }).catch(() => {})
             await relaunch()
           },
         }
@@ -406,6 +412,14 @@ const createPlatform = (): Platform => {
 
     setDisplayBackend: async (backend) => {
       await commands.setDisplayBackend(backend)
+    },
+
+    // FORK: 匿名使用统计开关读写(走 invoke,bindings.ts 已陈旧)[feat: telemetry-usage-stats] 2026-06-06
+    getTelemetryEnabled: async () => {
+      return invoke<boolean>("get_telemetry_enabled").catch(() => true)
+    },
+    setTelemetryEnabled: async (enabled: boolean) => {
+      await invoke("set_telemetry_enabled", { enabled }).catch(() => {})
     },
 
     parseMarkdown: (markdown: string) => commands.parseMarkdownCommand(markdown),

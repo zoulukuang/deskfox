@@ -18,6 +18,8 @@ mod markdown;
 mod npm_registry;
 mod os;
 mod server;
+// FORK: DeskFox 匿名使用统计客户端(Rust 原生,替代已删 Node SDK)[feat: telemetry-usage-stats] 2026-06-06
+mod telemetry;
 mod text_file;
 mod window_customizer;
 mod windows;
@@ -527,6 +529,10 @@ pub fn run() {
             // [feat: media-gen-bundle] 2026-05-27
             feishu_plugin_install::ensure_media_gen_plugin_in_config(app.handle());
 
+            // FORK: 匿名使用统计 app_open(opt-out 默认开,env/config 可关;失败静默不阻塞)
+            // [feat: telemetry-usage-stats] 2026-06-06
+            telemetry::track(&app.package_info().version.to_string(), "app_open");
+
             Ok(())
         });
 
@@ -620,7 +626,11 @@ fn make_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             feishu_adapter::feishu_update_account_model,
             // FORK: per-account partial settings [feat: feishu-create-group-toggle-gui] 2026-05-24
             feishu_adapter::feishu_update_account_settings,
-            feishu_adapter::feishu_list_providers
+            feishu_adapter::feishu_list_providers,
+            // FORK: 匿名使用统计 — update_* 上报入口 + 设置开关读写 [feat: telemetry-usage-stats] 2026-06-06
+            telemetry::track_event_cmd,
+            telemetry::get_telemetry_enabled,
+            telemetry::set_telemetry_enabled
         ])
         .events(tauri_specta::collect_events![
             LoadingWindowComplete,

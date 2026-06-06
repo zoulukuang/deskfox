@@ -239,6 +239,22 @@ export const SettingsGeneral: Component = () => {
     })
   }
 
+  // FORK: 匿名使用统计开关 — 状态来自后端 config(桌面端);仅当平台暴露该能力时加载
+  // [feat: telemetry-usage-stats] 2026-06-06
+  const [telemetryEnabled, { refetch: refetchTelemetry }] = createResource(
+    () => (platform.getTelemetryEnabled ? true : false),
+    () => Promise.resolve(platform.getTelemetryEnabled?.() ?? true).catch(() => true),
+    { initialValue: true },
+  )
+
+  const onTelemetryChange = (checked: boolean) => {
+    const update = platform.setTelemetryEnabled?.(checked)
+    if (!update) return
+    void update.finally(() => {
+      void refetchTelemetry()
+    })
+  }
+
   const colorSchemeOptions = createMemo((): { value: ColorScheme; label: string }[] => [
     { value: "system", label: language.t("theme.scheme.system") },
     { value: "light", label: language.t("theme.scheme.light") },
@@ -386,6 +402,18 @@ export const SettingsGeneral: Component = () => {
             />
           </div>
         </SettingsRow>
+
+        {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
+        <Show when={platform.getTelemetryEnabled}>
+          <SettingsRow
+            title={language.t("settings.general.row.telemetry.title")}
+            description={language.t("settings.general.row.telemetry.description")}
+          >
+            <div data-action="settings-telemetry">
+              <Switch checked={telemetryEnabled()} onChange={onTelemetryChange} />
+            </div>
+          </SettingsRow>
+        </Show>
       </SettingsList>
     </div>
   )

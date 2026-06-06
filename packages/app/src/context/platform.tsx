@@ -76,6 +76,12 @@ export type Platform = {
   /** Set the preferred display backend (desktop only) */
   setDisplayBackend?(backend: DisplayBackend): Promise<void>
 
+  /** 读匿名使用统计开关(桌面端;来自 ~/.config/opencode/config.json 的 telemetry 字段)*/
+  getTelemetryEnabled?(): Promise<boolean>
+
+  /** 写匿名使用统计开关(桌面端)*/
+  setTelemetryEnabled?(enabled: boolean): Promise<void>
+
   /** Parse markdown to HTML using native parser (desktop only, returns unprocessed code blocks) */
   parseMarkdown?(markdown: string): Promise<string>
 

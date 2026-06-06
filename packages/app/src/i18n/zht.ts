@@ -661,6 +661,9 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.description": "在時間軸中預設展開 edit、write 和 patch 工具區塊",
   "settings.general.row.showSessionProgressBar.title": "顯示工作階段進度列",
   "settings.general.row.showSessionProgressBar.description": "當代理程式正在運作時，在工作階段頂部顯示動畫進度列",
+  "settings.general.row.telemetry.title": "匿名使用統計",
+  "settings.general.row.telemetry.description":
+    "傳送匿名使用統計（軟體版本、作業系統、啟動與升級情況）以協助改進 DeskFox。絕不採集任何檔案、對話內容、模型名稱或個人資訊。可隨時關閉。",
   "settings.general.row.wayland.title": "使用原生 Wayland",
   "settings.general.row.wayland.description": "在 Wayland 上停用 X11 後備模式。需要重新啟動。",
   "settings.general.row.wayland.tooltip": "在混合更新率螢幕的 Linux 系統上，原生 Wayland 可能更穩定。",
