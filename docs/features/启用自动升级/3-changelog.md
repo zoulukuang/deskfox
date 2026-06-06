@@ -280,7 +280,8 @@ NSIS 配置和 Inno 删除可保留(NSIS 是长期正确方向),回退只需恢�
 - **新 `deploy-updater-manifest.sh`**(fork-only,branding/scripts):一站式 4 步 — ① `upload-asset-to-oss.sh --asset <tarball> --name DeskFox-<ver>-darwin.app.tar.gz` 传 OSS 拿 `dl.clawtray.com` 下载 URL ② `finalize-latest-json.ts --target darwin` 生成 Tauri 格式 `latest.json` ③ `scp -i ~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 部署到 `updates.deskfox.ai:/var/www/updates/v1/latest/<channel>/darwin/latest.json`(prod=`desktop`/beta=`desktop-beta`/dev=`desktop-dev`)④ HTTPS 回读校验 version。带 `--dry-run`(只生成 manifest 不碰线上)。
 - **`ship.md` 步骤 7.5**(本机 command,gitignored):步骤 7(OSS/Gitee)后、步骤 8(合主分支)前调本脚本;OSS/SCP 失败停报告但不阻断 main 合并(升级源可事后补)。
 - **能力确认**:`upload-asset-to-oss.sh` 已支持 `--asset/--name` 传任意文件;SSH 密钥 `~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 免密连通东京服务器;服务器目录树 `{desktop,desktop-beta,desktop-dev}/{darwin,windows,linux}/` 就绪(prod darwin 当前空 platforms 占位)。
-- **验证**:dry-run(prod 2026.6.0)产物定位 + OSS URL 拼接 + `latest.json`(`darwin-aarch64`+`darwin-aarch64-app`,signature=.sig 内容,url 指 OSS)+ SCP 命令全正确。真端到端(真 OSS 上传 + SCP)留真 ship / 受控 dev channel 验证(避免污染 prod 线上)。
+- **验证**:dry-run(prod)产物定位 + OSS URL + `latest.json` 格式全正确。**dev channel 真端到端已验证通过(2026-06-06,2A00 密钥)**:OSS 上传 235MB tarball(CDN HEAD 200)+ sudo 部署 `desktop-dev/darwin/latest.json` + 线上回读 `version=2026.6.0` 匹配 + manifest 含两 platform(signature 404 非空)。整条「check endpoint → 验签 → CDN 下载 → 升级」链路打通。prod 不单独部署(留完整 `/ship` 发版)。
+- **两个脚本坑(部署时实测修)**:① `/var/www/updates` 属 `www-data`,ubuntu SCP 直写 `Permission denied` → 改 SCP 到 `/tmp` + `sudo cp/chown www-data`(ubuntu sudo 免密);② BSD `mktemp` 模板 X 必须结尾(带 `.log` 后缀报 `File exists`,同 build-deskfox.sh hdiutil 坑)。
 
 ### 密钥轮换综合(2A00 带密码,2026-06-06 第三笔)
 

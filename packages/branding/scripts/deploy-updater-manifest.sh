@@ -77,7 +77,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     echo "[updater] (dry-run) 预期 URL: $OSS_URL"
 else
     echo "[updater] 上传 .app.tar.gz 到 OSS ..."
-    OSS_LOG=$(mktemp /tmp/deskfox-updater-oss-XXXXXX.log)
+    OSS_LOG=$(mktemp /tmp/deskfox-updater-oss-XXXXXX)  # X 必须结尾(BSD mktemp 只替换结尾 X;带 .log 后缀会 File exists)
     bash "$SCRIPT_DIR/upload-asset-to-oss.sh" --asset "$TARBALL" --name "$OBJ" 2>&1 | tee "$OSS_LOG"
     OSS_URL=$(grep '^OSS_DOWNLOAD_URL=' "$OSS_LOG" | tail -1 | cut -d= -f2-)
     if [[ -z "$OSS_URL" ]]; then echo "[updater] ERROR: OSS 上传未返回 URL(见 $OSS_LOG)" >&2; exit 1; fi
@@ -109,9 +109,13 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     exit 0
 fi
 
-echo "[updater] SCP 部署到 $SERVER:$REMOTE_DIR/latest.json ..."
+echo "[updater] 部署到 $SERVER:$REMOTE_DIR/latest.json ..."
+# /var/www/updates 属 www-data,ubuntu 无直接写权限 → 先 SCP 到 /tmp,再 sudo cp + chown(ubuntu sudo 免密)
+TMP_REMOTE="/tmp/deskfox-latest-${CHANNEL}-darwin.json"
 scp -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
-    "$MANIFEST" "$SERVER:$REMOTE_DIR/latest.json"
+    "$MANIFEST" "$SERVER:$TMP_REMOTE"
+ssh -i "$SSH_KEY" -o ConnectTimeout=20 "$SERVER" \
+    "sudo cp '$TMP_REMOTE' '$REMOTE_DIR/latest.json' && sudo chown www-data:www-data '$REMOTE_DIR/latest.json' && sudo chmod 644 '$REMOTE_DIR/latest.json' && rm -f '$TMP_REMOTE'"
 
 echo "[updater] 回读校验线上 manifest ..."
 sleep 2
