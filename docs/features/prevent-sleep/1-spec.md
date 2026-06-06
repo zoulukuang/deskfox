@@ -1,6 +1,6 @@
 ---
 feat-id: prevent-sleep
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 > 审签:user 2026-06-06 拍板 ① 范围只做防休眠开关(自启动另立)② 开关默认关 ③ native 边界不做 UI 提示,仅文档内部记录。
