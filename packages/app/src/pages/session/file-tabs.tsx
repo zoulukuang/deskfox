@@ -449,7 +449,7 @@ export function FileTabContent(props: {
     if (!isTauri()) return "Edit only available in desktop app"
     const p = path()
     if (!p) return undefined
-    if (isOfficeDocument(p)) return "Office 文件暂不支持在 OpenCode 内编辑，请用本机软件打开"
+    if (isOfficeDocument(p)) return "Office 文件暂不支持在 DeskFox 内编辑，请用本机软件打开" // FORK: 品牌字 OpenCode→DeskFox [feat: ui-brand-deskfox] 2026-06-06
     if (isBinary(p)) return "Binary file cannot be edited"
     // FORK: 大文件预览统一防护 [feat: large-file-preview-guard] 2026-05-21
     if (state()?.tooLarge) return "文件过大,编辑已禁用"
