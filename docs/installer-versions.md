@@ -1,4 +1,4 @@
-﻿# DeskFox installer 版本日志
+# DeskFox installer 版本日志
 
 > 版本号规则:`YYYY.M.D.N`(年.月.日.当天第几版,N 从 1 开始)
 > **Windows 和 macOS 各自独立 N 序列**(同一天 Win 打 1 次 + Mac 打 2 次,版本号分别为 [Windows] X.1 + [macOS] X.1, [macOS] X.2,**不共享计数器**)
