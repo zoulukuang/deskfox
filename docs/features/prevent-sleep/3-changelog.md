@@ -47,10 +47,22 @@ commit:本笔(grep `[feat: prevent-sleep]`)
 - 0 R4(无黑名单文件)
 - R5:5 Rust 单测满足 Medium ≥3 unit 硬门槛
 
-## 待办 / 已知边界
+## 真机 QA(2026-06-06,user 机 Win11)
+
+**已验证通过:**
+- ✅ 开关开启 → 飞书远程沟通正常(防休眠生效)
+- ✅ 屏幕能正常关闭(display=false 符合预期)
+- ✅ 开关关闭 → guard 立即释放(日志 `[prevent-sleep] 已关闭,恢复正常休眠` 佐证,enable/disable 多轮切换精确生效)
+
+**重要发现 — 本机为 S0「连接的网络」现代待机(不支持 S3):**
+- `powercfg /a` 实测:仅 S0 低电量待机(连接网络)+ 休眠,**无 S3**。
+- 现象:**关掉开关、黑屏后,飞书消息仍能回**。排查结论:S0「连接网络」待机时系统保持网络连接、周期唤醒收包,WSS 长连接可维持 → 与 DeskFox 无关(日志已证关开关后 guard 释放)。
+- 产品含义:S0 机器"不开也有时能用"是系统**碰运气**(电池/低电量/网络策略会中断,即 spec 的 Modern Standby 边界);开关价值=把"碰运气"变"稳定不待机",且对 S3 老机器是刚需。
+
+## 待办
 
 - **前端 e2e(spec B1-B3)未做**:需扩 Phase 1 mock 加 `set/get_prevent_sleep` invoke stub + listen 注入 → follow-up。
-- **真机 QA(spec C1-C7)待 user 验**:CDP 测不了"系统真没睡",含开启后不休眠/屏幕可关/飞书端到端/关闭恢复/重启恢复/Modern Standby 电池边界/Mac·Linux。
+- **真机 QA 未专门验**:C5 重启 DeskFox 后开关持久化恢复;设置页 ↔ 托盘双入口同步;Mac/Linux(无环境)。
 - **native 边界(仅文档记录,不做 UI 提示)**:Win 现代待机+电池供电防休眠被系统忽略;笔记本合盖默认睡;关机/断电/断网超出能力范围。
 
 ## 回退方法
