@@ -6,7 +6,26 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 启用自动升级 — changelog
 
-**关联 commit**: feat/enable-updater 分支(WIP checkpoint,2026-06-05)
+## ✅ 本机自动化验收矩阵(2026-06-06)
+
+| TC | 验什么 | 手段 | 结果 |
+|---|---|---|---|
+| TC-1 | updaterEnabled 运行时为 true | CDP(updater-cdp.spec.ts) | ✅ 真二进制 `window.__OPENCODE__.updaterEnabled===true` |
+| TC-2 | updater 插件注册 + 活管线 | CDP invoke `plugin:updater|check` | ✅ 命中线上 endpoint 返「无更新」(全链路通) |
+| TC-4 | 当前版本静默无更新 | 同 TC-2(版本相等→null) | ✅ |
+| TC-5 | NSIS .exe + .sig 产出 | verify-updater-artifacts.ts | ✅ `DeskFox_2026.6.0_x64-setup.exe`(62.7MB)+ `.sig` |
+| TC-7 | 后端 latest.json 格式 | curl 三档×三平台 | ✅ 9/9 HTTP 200 + 合法 Tauri 格式 |
+| TC-8 | minisign 离线验签 | verify-updater-artifacts.ts(Node crypto) | ✅ key ID 匹配 + Ed25519 全量验签安装包字节 |
+| TC-9 | pubkey 替换(!=上游) | 单测 + verify 脚本 | ✅ |
+| TC-10 | Layer3 守卫保留 | updater-config.test.ts | ✅(spec 已反转为"保留") |
+| TC-12 | typecheck + 测试回归 | bun typecheck + bun test + e2e | ✅ 17/17 typecheck + 13 单测 + 2 e2e 全绿 |
+| TC-3 | macOS 一键升级端到端 | 真桌面 e2e | ⛔ 需 Mac + 真实发新版本 |
+| TC-6 | Windows NSIS 真安装体验 | 真桌面 e2e | ⛔ 需真机跑 installer 安装 |
+| TC-11 | 存量 Inno 共存迁移 | 半自动 | ⛔ 需双版本同机 + Inno GUI 卸载 |
+
+**结论**:本机可自动化验收的全部通过(密钥重生成后 `.sig` 首次成功产出并验签);剩 3 项硬件/真机阻塞,需 Mac 机或真实安装流程,非本分支本机可独立完成。
+
+**关联 commit**: feat/enable-updater 分支(2026-06-06 本机验收完成)
 **所在分支**: feat/enable-updater(从最新 main 535712619 起)
 **baseline tag**: 沿用线
 **触发原因**: 前序 feat `禁自动升级` 关闭了所有上游自动升级入口(三层防御),防止 DeskFox 被覆盖。现在 DeskFox 自有更新基础设施已就绪,需反向操作:启用 DeskFox 自家更新通道,让用户收到新版本通知并一键升级。同时 Windows 安装包从 Inno Setup 切换到 Tauri NSIS 以获得 updater 全自动兼容。详见 `1-spec.md` 触发原因段。
@@ -135,15 +154,15 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - ✅ Sidecar env guard **保留**(Layer 3 不删,通道 B 仍阻断,纵深防御)
 - ✅ Windows NSIS 安装包替代 Inno Setup(中英双语 + currentUser installMode)
 - ✅ minisign 公钥入仓,私钥在 `~/.deskfox-signing/config.env`
-- ⚠️ `updates.deskfox.ai` 后端需部署 Tauri updater 格式的 `latest.json`(当前只有 telemetry 自定义格式)— **未做,updater check 现会失败**
-- ⚠️ updater 端到端(TC-1/2/3)+ NSIS installer 真桌面验收未做(本机 Windows 验不了 mac;需后端就绪)
+- ✅ `updates.deskfox.ai` 后端已部署 9 个 per-platform Tauri 格式 manifest(2026-06-05);TC-7 HTTP 实测三档×三平台全 200 + 合法格式;TC-2 CDP 实测 updater 插件真 fetch 该 endpoint 返「无更新」
+- ✅ updater 运行时端到端(TC-1/2/4)本机 CDP 实测通过;NSIS .exe+.sig 产物断言(TC-5/8/9)实测通过。剩 TC-3(mac 一键安装)/ TC-6(win 真安装)/ TC-11(Inno 共存)需硬件,非本机可做
 
 ## 回归测试点
 
-- **R1 编译时硬开** — DevTools `window.__OPENCODE__?.updaterEnabled` 应返 `true` → ✅(constants.rs hard-code true)
-- **R2 设置面板 Updates 段可见且可操作** — 代码层条件 spread true 时 checkUpdate/update 存在 → UI 自动启用(待真桌面验收)
-- **R3 macOS 菜单"Check for Updates..."出现** — 条件 spread true 时菜单项渲染(本机 Windows 不验 macOS 菜单;代码层确认)
-- **R4 polling 启动** — `useUpdatePolling` guard `platform.checkUpdate` 存在 → 不短路 → polling 启动(待真桌面验收)
+- **R1 编译时硬开** — `window.__OPENCODE__.updaterEnabled` → `true` → ✅ **CDP 运行时实测**(updater-cdp.spec.ts TC-1,真二进制)
+- **R2 设置面板 Updates 段可见且可操作** — 代码层条件 spread true 时 checkUpdate/update 存在 → UI 自动启用;✅ **CDP 实测插件可调**(TC-2 invoke check 返「无更新」,证明 platform.checkUpdate 背后链路通);Windows 上无独立 settings 视觉项,真桌面视觉对齐留 TC-6
+- **R3 macOS 菜单"Check for Updates..."出现** — 条件 spread true 时菜单项渲染(本机 Windows 不验 macOS 菜单;代码层确认,TC-3 待 Mac)
+- **R4 polling 启动** — `useUpdatePolling` guard `platform.checkUpdate` 存在 → 不短路 → polling 启动;✅ 代码层确认(updaterEnabled=true → spread 生效,与 TC-2 同根)
 - **R5 错误页升级按钮** — 同 R2 逻辑
 - **R6 sidecar env 保留** — `OPENCODE_DISABLE_AUTOUPDATE=true` **不移除**(2026-06-05 决策);Tauri updater 走外壳层独立于 CLI 通道 B
 - **R7 Inno→NSIS 无回归** — NSIS 配置(languages/installMode)已验证,DeskFox.iss 删除后 Inno 路径彻底不存在
@@ -157,8 +176,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] 无新增依赖
 - [x] typecheck 全过(17/17,2026-06-05 实测)
 - [x] 前序 feat 三层防御:Layer1→翻 true / Layer2→条件 spread 自动生效 / Layer3→**保留**(2026-06-05 决策,纵深防御白送)
-- [x] **R5 测试(部分)** — `packages/branding/__tests__/updater-config.test.ts`(11 tests,全绿)静态守护本次三类 bug:配置落点(override 非上游 conf)/ pubkey 正确(==minisign.pub、!=上游)/ Layer3 保留 + createUpdaterArtifacts + UPDATER_ENABLED。覆盖 TC-9 + TC-10
-- [ ] **R5 测试(剩余)** — TC-8 签名验证 / TC-5 NSIS 产物断言(需 full bundle build);mac/win 真桌面 e2e(TC-1/2/3)待后端就绪 + mac 机器
+- [x] **R5 测试(静态单测)** — `packages/branding/__tests__/updater-config.test.ts`(13 tests,全绿)静态守护本次三类 bug:配置落点(override 非上游 conf)/ pubkey 正确(==minisign.pub、!=上游)/ Layer3 保留 + createUpdaterArtifacts + UPDATER_ENABLED。覆盖 TC-9 + TC-10
+- [x] **R5 测试(构建产物断言)** — `packages/branding/scripts/verify-updater-artifacts.ts`(8/8 通过,2026-06-06 prod full build 实测):TC-5(NSIS .exe+.sig 产出)/ TC-8(纯 Node crypto 离线验签:key ID 比对 + Ed25519 全量验签安装包字节)/ TC-9(pubkey 替换)。**密钥重生成后 .sig 首次成功产出并验签通过**
+- [x] **R5 测试(真桌面 CDP 运行时)** — `packages/app/e2e-tauri/specs/updater-cdp.spec.ts`(2/2 通过):TC-1(`window.__OPENCODE__.updaterEnabled===true` 真二进制运行时)/ TC-2(invoke `plugin:updater|check` 命中线上 endpoint 返 null「无更新」→ 插件注册+pubkey+endpoint+manifest 解析+版本比较全链路,兼覆 TC-4 静默)
+- [ ] **R5 测试(硬件阻塞,非本机可做)** — TC-3(macOS updater 一键安装端到端,需 Mac + 真实发新版本)/ TC-6(Windows NSIS installer 真安装验证)/ TC-11(存量 Inno 共存迁移,Inno uninstaller GUI 半自动)
 
 ## 已知遗留
 
@@ -167,7 +188,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   - **beta** `/v1/latest/desktop-beta/latest.json` 和 **dev** `desktop-dev/...` → **404,未建**
   - ✅ endpoint 路径正确:`/v1/latest/desktop[-beta|-dev]/latest.json` 与 override 配置一致(注:`docs/design-telemetry-and-update.md` §6 写的 `/desktop/latest.json` 旧路径已过时,实际线上是 `/v1/latest/` 前缀)
   - **待办**:发一次真实签名版本 → `finalize-latest-json.ts` 生成 Tauri 格式 `latest.json`(`version`/`notes`/`pub_date`/`platforms.{windows-x86_64,darwin-aarch64}.{url,signature}`)→ SCP 到东京 `52.197.46.120:/var/www/updates/desktop/v1/latest/{desktop,desktop-beta,desktop-dev}/`。**需服务器 SSH 访问 + 一次真实 ship 产物**,非本机可独立完成
-- **NSIS installer 完整产出**:DeskFox.exe raw binary 已成功构建(39MB),NSIS bundle 在非 GH Actions 环境需要 Azure Trusted Signing 配置才能产出完整安装包。本地开发环境可用 `build-deskfox.ps1` 的签名 env 注入
+- ~~**NSIS installer 完整产出**~~ **✅ 已解决(2026-06-06)**:非 GH Actions 本地环境靠 `build-deskfox.ps1` 在 build 期剥离 `signCommand`(commit `2939914a2`),产出**未签名 NSIS 安装包 `DeskFox_2026.6.0_x64-setup.exe`(62.7MB)+ updater `.sig`**(minisign,Authenticode 缺席只影响"未知发布者"警告,不影响 updater 验签)。`verify-updater-artifacts.ts` 8/8 实测验签通过
 - **存量 Inno 用户迁移**:NSIS 安装新路径(`DeskFox/`),两版共存不冲突,用户手动卸旧版。首次 NSIS 安装后需用户引导卸载 Inno 版本
 
 ## ✅ 版本号 scheme 已定 + 注入已修(2026-06-05 user 拍板 + 实测打通)

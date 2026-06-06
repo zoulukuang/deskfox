@@ -246,3 +246,16 @@ Medium 规格(改动跨 Rust/TS/PS1/JSON/ISS,触动上游文件 5 个,但都是 
 4. pubkey 注释 typo(`867EA0` vs `.pub` 的 `867EB0`)+ CRLF → 统一为 `minisign.pub` 文件规范 base64(密钥本体一致,验签不变)。
 
 待办(本分支内 merge 前):后端 `latest.json` 部署 + 补测试(TC-5/8/9 本机可做,TC-1/2/3 真桌面)。
+
+### 2026-06-06 本机验收收尾(开发任务完成)
+
+按 R8/R9,把本机可自动化验收的全部跑通后才提 merge。本轮完成:
+
+1. **清理上次中断 build 的工作区残留** — `tauri.conf.json`(version=2026.6.0 + 剥 signCommand)和 `icons/`(prod/dev)是被中断 build 临时改入、没跑到 `git checkout HEAD` restore 的产物(脚本 build 后无条件还原,设计上 git 永不持有这些),`git checkout HEAD` 还原。
+2. **minisign 密钥重生成 commit** — 之前散在工作区未提交,正式 commit(`d6f14896e`,key `CB2CEF2CBA58C99F`)。
+3. **prod 完整 build** — `build-deskfox.ps1 -Env prod` 产出 NSIS 62.7MB + `.sig`(密钥重生成后 `.sig` 首次成功产出)。
+   - 踩坑:首次后台 build 用 `*> $log` 重定向触发 PS5.1 经典坑——native 命令(bun)往 stderr 写 banner,在 `$ErrorActionPreference=Stop` 下被包成 NativeCommandError → 脚本 abort exit 1。**不重定向**(让 harness 自身捕获)即正常。
+4. **新增两个测试交付物**(commit `1a870420f`):
+   - `verify-updater-artifacts.ts` — 构建产物断言,纯 Node crypto(无外部 minisign 依赖):TC-5/8/9,8/8 通过。TC-8 按 minisign 签名算法字节(`Ed`纯/`ED` blake2b 预哈希)选模式做 Ed25519 全量验签,确定性、无歧义。
+   - `updater-cdp.spec.ts` — e2e-tauri CDP 真桌面运行时:TC-1(updaterEnabled)/ TC-2(invoke check 命中线上 endpoint 返 null),2/2 通过。
+5. **剩余硬件阻塞**:TC-3(mac 一键安装,需 Mac)/ TC-6(win NSIS 真安装体验)/ TC-11(Inno 共存)。merge 到 main + 真机/Mac 验收待 user 决定(三铁律:merge 需 user 同意)。
