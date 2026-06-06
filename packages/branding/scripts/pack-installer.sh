@@ -130,6 +130,20 @@ for dmg in "$DMG_DIR"/*.dmg; do
         echo "  .dmg: $dmg ($SIZE bytes)"
     fi
 done
+# FORK: macos-updater-adapt 2026-06-06 — 列 updater 产物(.app.tar.gz + .sig)。
+# prod/beta override 的 createUpdaterArtifacts:true + TAURI_SIGNING_PRIVATE_KEY 就位时 build 期产出;
+# ship 流程用这两个路径调 finalize-latest-json.ts 生成 latest.json。缺 .sig 则 updater 无法验签升级。
+for tarball in "$APP_PATH"/*.app.tar.gz; do
+    if [[ -f "$tarball" ]]; then
+        SIZE=$(stat -f%z "$tarball" 2>/dev/null || stat -c%s "$tarball" 2>/dev/null || echo "?")
+        echo "  updater bundle: $tarball ($SIZE bytes)"
+        if [[ -f "$tarball.sig" ]]; then
+            echo "  updater sig:    $tarball.sig"
+        else
+            echo "  ⚠️  updater sig 缺失:$tarball.sig — updater 无法验签升级(检查 TAURI_SIGNING_PRIVATE_KEY)"
+        fi
+    fi
+done
 
 echo ""
 if [[ -n "$NEW_VERSION" ]]; then

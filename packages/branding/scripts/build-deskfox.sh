@@ -360,6 +360,34 @@ APPLESCRIPT
     fi
 fi
 
+# === 2.6 (FORK: macos-updater-adapt 2026-06-06) updater 产物:基于最终签名 .app 重新打包 + 签名 ===
+# 为什么重新生成而非直接用 Tauri build 时产的 tarball:
+#   ① 2.5 LO 重签改了 .app → Tauri build 时刻的 .app.tar.gz 含「重签前」.app(过期,LO 子 bundle ad-hoc 签名)
+#   ② createUpdaterArtifacts 构建期签名偶发失败(对称 build-deskfox.ps1 step 3.6 实证)
+# 统一在 .app 定型(LO 重签 + Apple 签名完成)后重新 tar + tauri signer sign,保证 updater tarball == 最终 .app 且 .sig 匹配。
+# 仅 prod/beta(override createUpdaterArtifacts:true)+ 有私钥(prod source config.env)+ 出 bundle 时执行;dev 不产 updater。
+if [[ "$NO_BUNDLE" -eq 0 && "$ENV" != "dev" && -n "${TAURI_SIGNING_PRIVATE_KEY:-}" && "$BUILD_EXIT" -eq 0 ]]; then
+    MACOS_BUNDLE_DIR="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/macos"
+    UPDATER_APP=$(ls -d "$MACOS_BUNDLE_DIR"/*.app 2>/dev/null | grep -v "Dev.app" | head -1 || true)
+    [[ -z "$UPDATER_APP" ]] && UPDATER_APP=$(ls -d "$MACOS_BUNDLE_DIR"/*.app 2>/dev/null | head -1 || true)
+    if [[ -n "$UPDATER_APP" && -d "$UPDATER_APP" ]]; then
+        echo "[deskfox] === 2.6 updater 产物:重新打包 + 签名(基于最终签名 .app)==="
+        APP_BASE=$(basename "$UPDATER_APP")              # 例 DeskFox.app
+        TARBALL="$MACOS_BUNDLE_DIR/$APP_BASE.tar.gz"     # Tauri updater 命名 = <AppName>.app.tar.gz
+        rm -f "$TARBALL" "$TARBALL.sig"
+        # Tauri macOS updater tarball = gzip tar of .app(相对 bundle 目录,保留 .app 顶层 + 内部 symlink)
+        ( cd "$MACOS_BUNDLE_DIR" && tar -czf "$APP_BASE.tar.gz" "$APP_BASE" ) || echo "[deskfox]   ❌ tarball 打包失败"
+        if [[ -f "$TARBALL" ]]; then
+            T_SIZE=$(stat -f%z "$TARBALL" 2>/dev/null || echo "?")
+            echo "[deskfox]   tarball: $TARBALL ($T_SIZE bytes)"
+            # tauri signer sign 从 env 读 TAURI_SIGNING_PRIVATE_KEY(+_PASSWORD),产 <tarball>.sig
+            ( cd "$REPO_ROOT/packages/desktop" && bun run tauri signer sign "$TARBALL" >/dev/null 2>&1 ) \
+                && echo "[deskfox]   ✅ updater .sig: $TARBALL.sig" \
+                || echo "[deskfox]   ❌ updater 签名失败(检查 TAURI_SIGNING_PRIVATE_KEY / _PASSWORD)"
+        fi
+    fi
+fi
+
 # === 3. restore(无论 build 成败都还原)===
 bash "$SCRIPT_DIR/restore-icons.sh"
 # 还原 tauri.conf.json(版本号只在 build 期间临时改,不入仓)— 同 build-deskfox.ps1

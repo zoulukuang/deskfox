@@ -241,3 +241,53 @@ git revert <code commit hash>
 - pubkey/endpoint 改回上游值(或删除 updater section)
 
 NSIS 配置和 Inno 删除可保留(NSIS 是长期正确方向),回退只需恢复 Layer1+3 防御。
+
+---
+
+## macOS 适配(2026-06-06 follow-up,feat 跨平台补齐 Mac 侧)
+
+> 起因:本 feat 主体由 Win 端实施,跨平台共享基础设施(updater 配置/pubkey/endpoints、服务端 9 manifest 含 darwin、`finalize-latest-json.ts` 已支持 darwin、版本号体系、`updater-config.test.ts`)已就绪,但 spec/changelog 标注 `build-deskfox.sh`「镜像待 Mac 验」、`pack-installer.sh` 未对接、`verify-updater-artifacts.ts` 仅验 Win NSIS、TC-3 ⛔ 待 Mac。本次补齐 Mac 侧产物链(产 `.app.tar.gz`+`.sig` → 离线验签)。分支 `feat/macos-updater-adapt`。
+
+### 关键发现 / 决策
+
+- **updater 前端运行时(菜单/Settings/polling)无需 Mac 专门改** — `UPDATER_ENABLED=true` 条件 spread 跨平台自动生效。
+- **核心复杂点:LO 重签导致 Tauri tarball 过期** — macOS prod build 在 `2.5 post-build` 对 `.app` 做 LibreOffice 嵌套 bundle 重签 + 重建 DMG,而 Tauri `createUpdaterArtifacts` 时刻产的 `.app.tar.gz` 基于「重签前」`.app`(过期,LO 子 bundle ad-hoc 签名)。解法:统一在 `.app` 定型后**重新打包 tarball + 重新签 `.sig`**(`build-deskfox.sh` 新增 `2.6` 段),一并兼作「构建期签名偶发失败」兜底(对称 `.ps1` step 3.6)。
+- **私钥 CRLF 坑** — Win 端拷来的私钥 `config.env` 是 CRLF 行尾,`TAURI_SIGNING_PRIVATE_KEY` 值末尾带 `\r` → `tauri signer sign` 报 `Invalid symbol 13, offset 348`。追加进 Mac `~/.deskfox-signing/config.env` 时需 `perl -i -pe 's/\r//g'` 去 CR(初版密钥 `1B29` 实测踩到;后续轮换 `2A00` 时同样去 CR 保险)。公钥与仓库 `minisign.pub` 一致,私钥绝不入仓。**注:初版用无密码密钥 `1B29DEBA03F02DAB`,2026-06-06 Win 端轮换为带密码 `2A008F3DA4940FDE`(见末尾「密钥轮换综合」),Mac 已同步重验。**
+
+### 实际改动(全 `packages/branding/scripts/`,fork-only,非黑名单)
+
+- **`verify-updater-artifacts.ts`** — 加 `--target windows|darwin`(默认按 `process.platform`):darwin → `bundle/macos` 目录 + `*.app.tar.gz` 产物 pattern;验签逻辑(`parseBlob`/`ed25519`/`edVerify`)平台无关直接复用,`setupExe`→通用 `setupFile`。
+- **`build-deskfox.sh`** — 新增 `2.6 updater 产物`段:prod/beta + 有私钥 + 出 bundle 时,基于最终签名 `.app` 重新 `tar -czf` + `tauri signer sign` 产 `.app.tar.gz`+`.sig`(规避 LO 重签过期 + 签名兜底)。
+- **`pack-installer.sh`** — Step 3 artifacts 补列 updater 产物(`.app.tar.gz`+`.sig`)路径,缺 `.sig` 显式告警(供 ship 调 `finalize-latest-json.ts`)。
+
+### 验证(2026-06-06 本机真 build 实测)
+
+- ✅ prod 完整 build(含 LO 190MB)产出 `DeskFox.app.tar.gz`(235MB)+ `.sig`,`2.6` 段在公证段前执行成功。
+- ✅ **`verify-updater-artifacts.ts --env prod --target darwin` 8/8 通过**:TC-5 产物存在 + TC-8 Ed25519 离线验签(对 235MB tarball 字节)+ key ID 匹配 + TC-9 pubkey 替换。
+- ✅ typecheck 17/17 + 全包回归(opencode session/server + app 802 + media-gen 140 + feishu 705 + branding 13,0 regression;一例 compaction timeout 经隔离重跑 48/0 确认为资源竞争 flaky)。
+- **0 R4 / 0 上游侵入**(全 fork-only scripts + 私密配置不入仓)。
+
+### 范围边界(未做,交付清单)
+
+- **TC-3 macOS 一键升级端到端**:需真实 ship 部署 `latest.json`(`finalize-latest-json.ts` 生成 → SCP 到 `updates.deskfox.ai`)+ 真升级,非本次自动化范围。
+- **Mac updater 运行时(TC-1/2)**:macOS WKWebView 无 CDP(Win 走 `updater-cdp.spec.ts`),靠代码层确认 + 真桌面手测。
+- **beta 渠道 updater 签名**:`build-deskfox.sh` 仅 prod `source config.env`(beta 不 source → 无私钥 → beta updater 不签),与 Win 现状一致,留 follow-up。
+
+### /ship 集成(步骤 7.5 — 自动升级源发布,2026-06-06 第二笔)
+
+把「生成 + 部署 latest.json」闭环进 macOS `/ship` 工作流,**原 TC-3「端到端待 Mac + 真实发新版本」边界中"部署 latest.json"部分已自动化**(剩真升级行为验证)。
+
+- **新 `deploy-updater-manifest.sh`**(fork-only,branding/scripts):一站式 4 步 — ① `upload-asset-to-oss.sh --asset <tarball> --name DeskFox-<ver>-darwin.app.tar.gz` 传 OSS 拿 `dl.clawtray.com` 下载 URL ② `finalize-latest-json.ts --target darwin` 生成 Tauri 格式 `latest.json` ③ `scp -i ~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 部署到 `updates.deskfox.ai:/var/www/updates/v1/latest/<channel>/darwin/latest.json`(prod=`desktop`/beta=`desktop-beta`/dev=`desktop-dev`)④ HTTPS 回读校验 version。带 `--dry-run`(只生成 manifest 不碰线上)。
+- **`ship.md` 步骤 7.5**(本机 command,gitignored):步骤 7(OSS/Gitee)后、步骤 8(合主分支)前调本脚本;OSS/SCP 失败停报告但不阻断 main 合并(升级源可事后补)。
+- **能力确认**:`upload-asset-to-oss.sh` 已支持 `--asset/--name` 传任意文件;SSH 密钥 `~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 免密连通东京服务器;服务器目录树 `{desktop,desktop-beta,desktop-dev}/{darwin,windows,linux}/` 就绪(prod darwin 当前空 platforms 占位)。
+- **验证**:dry-run(prod)产物定位 + OSS URL + `latest.json` 格式全正确。**dev channel 真端到端已验证通过(2026-06-06,2A00 密钥)**:OSS 上传 235MB tarball(CDN HEAD 200)+ sudo 部署 `desktop-dev/darwin/latest.json` + 线上回读 `version=2026.6.0` 匹配 + manifest 含两 platform(signature 404 非空)。整条「check endpoint → 验签 → CDN 下载 → 升级」链路打通。prod 不单独部署(留完整 `/ship` 发版)。
+- **两个脚本坑(部署时实测修)**:① `/var/www/updates` 属 `www-data`,ubuntu SCP 直写 `Permission denied` → 改 SCP 到 `/tmp` + `sudo cp/chown www-data`(ubuntu sudo 免密);② BSD `mktemp` 模板 X 必须结尾(带 `.log` 后缀报 `File exists`,同 build-deskfox.sh hdiutil 坑)。
+
+### 密钥轮换综合(2A00 带密码,2026-06-06 第三笔)
+
+Win 端 commit `6ae1851e19` 把 minisign 密钥从无密码 `1B29` 轮换为**带 28 位密码的 `2A008F3DA4940FDE`**(根治 Windows「空密码传不进签名子进程 → build 弹 `Password:` + 偶发 Wrong password」),更新了 `minisign.pub` + 三档 override pubkey + `build-deskfox.ps1` 注释。Mac 端同步:
+
+- **rebase**:`feat/macos-updater-adapt` rebase 到含轮换的最新 main(`6ae1851e19`),**无冲突**(我的脚本改动 `build-deskfox.sh`/`verify`/`pack-installer`/`deploy` 与 Win 改的 `.ps1`/override/`minisign.pub` 不重叠;changelog 我追加末尾、Win 改中间,git 自动合并)。
+- **私钥替换**:Mac `~/.deskfox-signing/config.env` 旧 `1B29` 私钥 → 新 `2A00`(带密码,去 CR);`tauri signer sign` 自测签名成功。
+- **重新验证(新 2A00 全链路)**:prod 完整 build(新公钥 `2A00` 编入 binary + 新私钥签 `.app.tar.gz.sig`)→ `verify-updater-artifacts.ts --target darwin` **8/8**(override==minisign.pub 都 `2A00` + 签名 key ID 匹配 + Ed25519 验签 235MB tarball);构建期直接签出、无 `Password:` 提示(带密码密钥的根治效果在 Mac 同样成立)。**`2.6` 段在 Mac 仍必要**(LO 重签致 Tauri tarball 过期是独立问题,非签名问题)。
+- 私钥本机位置 `/Volumes/ExtSSD/隐私信息/1-minisign-updater签名密钥/`(key+密码+三件套),绝不入仓。

@@ -85,7 +85,7 @@
 | [加聊天-preview-fix](./加聊天-preview-fix/) | done | 文件查看器右键加聊天后选中文字未传到模型 — synthetic text 里带 preview |
 | [查看器-自动刷新](./查看器-自动刷新/) | done | 模型 Edit/Write 后查看器不更新 — client 加 file.edited 监听 + 编辑态 dirty 守卫 |
 | [禁自动升级](./禁自动升级/) | done | 关闭 opencode 官方自动升级入口和通道,防止 DeskFox 被覆盖 |
-| [启用自动升级](./启用自动升级/) | done | 反向操作:启用 DeskFox 自家更新通道(Layer1/2 翻转,Layer3 保留) + Windows Inno→NSIS 切换 + minisign 密钥二次重生成(1B29) + Win 签名密码注入 + LO bundle 注入 + .sig 兜底补签。**本机自动化验收全绿(2026-06-06)**:TC-1/2/4/5/7/8/9/10/12(CDP 运行时 + 产物验签 + 后端 manifest + typecheck/单测/e2e),含 LibreOffice 190MB 包验签 8/8。**已合 main(2026-06-06,本地)**。剩 TC-3(mac)/ TC-6(win 真安装)/ TC-11(Inno 共存)硬件阻塞,延后至真机/真实发版时验 |
+| [启用自动升级](./启用自动升级/) | done | 反向操作:启用 DeskFox 自家更新通道(Layer1/2 翻转,Layer3 保留) + Windows Inno→NSIS 切换 + minisign 密钥三次重生成(**2A00 带密码**,根治 Win 空密码传不进子进程) + Win 签名密码注入 + LO bundle 注入。**Win 本机验收全绿(2026-06-06)**:TC-1/2/4/5/7/8/9/10/12(CDP + 产物验签 + 后端 manifest + typecheck/单测/e2e),含 LO 190MB 包验签 8/8;Win 主体已合 main。**Mac 适配**(`feat/macos-updater-adapt`):`verify-updater-artifacts.ts` 加 `--target darwin` + `build-deskfox.sh` `2.6` 段(LO 重签后基于最终 `.app` 重打包 `.app.tar.gz`+`tauri signer sign`)+ `pack-installer.sh` 列产物 + `deploy-updater-manifest.sh` 接 `/ship` 步骤 7.5(OSS 上传 + finalize + SCP 部署 `updates.deskfox.ai`);prod 真 build(2A00)**verify darwin 8/8**。剩 TC-3(mac 真升级)/ TC-6(win 真安装)/ TC-11(Inno 共存)硬件阻塞,延后真机/真实发版验 |
 | [installer-打包](./installer-打包/) | done | DeskFox 打成 Windows installer(不签名)— Inno Setup 路线;顺手修 icon pipeline bug 让 exe 嵌入多分辨率狐狸 |
 | [icon-pipeline-deep-fix](./icon-pipeline-deep-fix/) | done | Tauri winres 实只读 icons/dev/icon.ico、无视 prod.json override — apply-icons 同步覆盖 dev/ + 新设计资源全量更新 |
 | [macos-打包](./macos-打包/) | done | DeskFox 打 macOS .app + .dmg(arm64,不签名)— Phase 1 scaffolding + Phase 2 user Mac 实战打通 |
