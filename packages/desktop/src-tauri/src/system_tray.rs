@@ -19,7 +19,7 @@ use tauri::{
     AppHandle, Manager, Runtime,
     image::Image,
     include_image,
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{TrayIcon, TrayIconBuilder},
 };
 
@@ -32,6 +32,8 @@ const MENU_OPEN: &str = "deskfox-menu-open";
 const MENU_STATUS: &str = "deskfox-menu-status";
 const MENU_PAUSE: &str = "deskfox-menu-pause";
 const MENU_QUIT: &str = "deskfox-menu-quit";
+// FORK: 防休眠勾选项 [feat: prevent-sleep] 2026-06-06
+const MENU_PREVENT_SLEEP: &str = "deskfox-menu-prevent-sleep";
 
 /// Tray 4 个状态(对外 enum,后续 Tauri command 接收 string discriminator)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +86,9 @@ static CURRENT_STATUS: Mutex<TrayStatus> = Mutex::new(TrayStatus::Default);
 /// 用 Mutex 防 set_tray_status 跨线程调用。
 static STATUS_MENU_ITEM: Mutex<Option<MenuItem<tauri::Wry>>> = Mutex::new(None);
 
+/// FORK: 防休眠勾选项句柄(运行时改勾选态,与设置页开关同步)[feat: prevent-sleep] 2026-06-06
+static PREVENT_SLEEP_MENU_ITEM: Mutex<Option<CheckMenuItem<tauri::Wry>>> = Mutex::new(None);
+
 /// 在 setup() 中调用一次,注册 tray icon + 菜单。
 ///
 /// 菜单 4 项:
@@ -100,6 +105,15 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         false, // disabled label
         None::<&str>,
     )?;
+    // FORK: 防休眠勾选项(初始未勾选;启动恢复若开启会 set_checked(true))[feat: prevent-sleep]
+    let item_prevent_sleep = CheckMenuItem::with_id(
+        app,
+        MENU_PREVENT_SLEEP,
+        "保持电脑不休眠",
+        true,  // enabled
+        false, // 初始未勾选
+        None::<&str>,
+    )?;
     let item_pause = MenuItem::with_id(
         app,
         MENU_PAUSE,
@@ -112,11 +126,22 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
 
     let menu = Menu::with_items(
         app,
-        &[&item_open, &item_status, &item_pause, &separator, &item_quit],
+        &[
+            &item_open,
+            &item_status,
+            &item_prevent_sleep,
+            &item_pause,
+            &separator,
+            &item_quit,
+        ],
     )?;
 
     if let Ok(mut slot) = STATUS_MENU_ITEM.lock() {
         *slot = Some(item_status);
+    }
+    // FORK: 存防休眠勾选项句柄,供 set_prevent_sleep_check 运行时更新 [feat: prevent-sleep]
+    if let Ok(mut slot) = PREVENT_SLEEP_MENU_ITEM.lock() {
+        *slot = Some(item_prevent_sleep);
     }
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
@@ -125,6 +150,14 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         .show_menu_on_left_click(false) // mac/win:左键 = 打开主窗口,右键 = 菜单
         .on_menu_event(|app, event| match event.id.as_ref() {
             MENU_OPEN => show_main_window_impl(app),
+            // FORK: 托盘切换防休眠 — 读当前态取反;set_enabled 会回写勾选 + 广播给设置页同步
+            // [feat: prevent-sleep] 2026-06-06
+            MENU_PREVENT_SLEEP => {
+                let next = !crate::prevent_sleep::is_enabled();
+                if let Err(e) = crate::prevent_sleep::set_enabled(app, next) {
+                    tracing::warn!("[prevent-sleep] 托盘切换失败: {e}");
+                }
+            }
             MENU_QUIT => {
                 request_quit();
                 app.exit(0);
@@ -178,6 +211,17 @@ pub fn set_tray_status(app: &AppHandle, status: TrayStatus) -> bool {
         *cur = status;
     }
     true
+}
+
+/// FORK: 同步托盘"保持电脑不休眠"勾选态。prevent_sleep::set_enabled 调用 →
+/// 无论从设置页开关还是启动恢复触发,托盘勾选都跟随,双入口状态一致。
+/// [feat: prevent-sleep] 2026-06-06
+pub fn set_prevent_sleep_check(checked: bool) {
+    if let Ok(slot) = PREVENT_SLEEP_MENU_ITEM.lock() {
+        if let Some(ref item) = *slot {
+            let _ = item.set_checked(checked);
+        }
+    }
 }
 
 /// 显示并聚焦主窗口(tray 菜单"打开" + 左键单击 + single-instance 二次启动共用)。

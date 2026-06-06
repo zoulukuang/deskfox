@@ -213,6 +213,17 @@ const feishuHandlers: Record<string, Handler> = {
   feishu_list_providers: () => JSON.stringify({ providers: [], default: {} }),
 }
 
+// ============== 防休眠(prevent-sleep)==============
+// [feat: prevent-sleep] 2026-06-06 — 模块级状态,get/set 闭环;每个 spec 新 page 重载即重置 false
+let preventSleepEnabled = false
+const preventSleepHandlers: Record<string, Handler> = {
+  get_prevent_sleep: () => preventSleepEnabled,
+  set_prevent_sleep: ({ enabled }) => {
+    preventSleepEnabled = Boolean(enabled)
+    return undefined
+  },
+}
+
 // ============== 总 dispatch 表 ==============
 
 const HANDLERS: Record<string, Handler> = {
@@ -220,6 +231,7 @@ const HANDLERS: Record<string, Handler> = {
   ...treeHandlers,
   ...externalHandlers,
   ...feishuHandlers,
+  ...preventSleepHandlers,
 }
 
 // ============== invoke export(被 vite alias 接管)==============

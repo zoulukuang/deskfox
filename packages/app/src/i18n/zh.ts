@@ -1037,6 +1037,8 @@ export const dict = {
   "settings.tab.feishu": "飞书桥接",
   "settings.feishu.title": "飞书桥接",
   "settings.feishu.description": "通过飞书 / Lark 跟你的 AI agent 对话。",
+  "settings.feishu.preventSleep.title": "保持电脑不休眠",
+  "settings.feishu.preventSleep.description": "开启后电脑不进入休眠(屏幕仍可正常关闭),确保飞书消息随时能响应。",
   "settings.feishu.adapter.notReady": "飞书桥接服务尚未启动。",
   "settings.feishu.adapter.notReady.hint": "Phase 2+ 会自动启动 sidecar。当前测试期请设置 FEISHU_ADAPTER_URL / USERNAME / PASSWORD 环境变量后重启 DeskFox。",
   "settings.feishu.noDefaultModel.title": "尚未配置默认 LLM model",
