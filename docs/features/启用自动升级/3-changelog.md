@@ -252,7 +252,7 @@ NSIS 配置和 Inno 删除可保留(NSIS 是长期正确方向),回退只需恢�
 
 - **updater 前端运行时(菜单/Settings/polling)无需 Mac 专门改** — `UPDATER_ENABLED=true` 条件 spread 跨平台自动生效。
 - **核心复杂点:LO 重签导致 Tauri tarball 过期** — macOS prod build 在 `2.5 post-build` 对 `.app` 做 LibreOffice 嵌套 bundle 重签 + 重建 DMG,而 Tauri `createUpdaterArtifacts` 时刻产的 `.app.tar.gz` 基于「重签前」`.app`(过期,LO 子 bundle ad-hoc 签名)。解法:统一在 `.app` 定型后**重新打包 tarball + 重新签 `.sig`**(`build-deskfox.sh` 新增 `2.6` 段),一并兼作「构建期签名偶发失败」兜底(对称 `.ps1` step 3.6)。
-- **私钥 CRLF 坑** — Win 端拷来的私钥 `config.env` 是 CRLF 行尾,`TAURI_SIGNING_PRIVATE_KEY` 值末尾带 `\r` → `tauri signer sign` 报 `Invalid symbol 13, offset 348`。追加进 Mac `~/.deskfox-signing/config.env` 时需 `perl -i -pe 's/\r//g'` 去 CR。私钥 key ID `1B29DEBA03F02DAB`,公钥与仓库 `minisign.pub` 一致。私钥绝不入仓。
+- **私钥 CRLF 坑** — Win 端拷来的私钥 `config.env` 是 CRLF 行尾,`TAURI_SIGNING_PRIVATE_KEY` 值末尾带 `\r` → `tauri signer sign` 报 `Invalid symbol 13, offset 348`。追加进 Mac `~/.deskfox-signing/config.env` 时需 `perl -i -pe 's/\r//g'` 去 CR(初版密钥 `1B29` 实测踩到;后续轮换 `2A00` 时同样去 CR 保险)。公钥与仓库 `minisign.pub` 一致,私钥绝不入仓。**注:初版用无密码密钥 `1B29DEBA03F02DAB`,2026-06-06 Win 端轮换为带密码 `2A008F3DA4940FDE`(见末尾「密钥轮换综合」),Mac 已同步重验。**
 
 ### 实际改动(全 `packages/branding/scripts/`,fork-only,非黑名单)
 
@@ -281,3 +281,12 @@ NSIS 配置和 Inno 删除可保留(NSIS 是长期正确方向),回退只需恢�
 - **`ship.md` 步骤 7.5**(本机 command,gitignored):步骤 7(OSS/Gitee)后、步骤 8(合主分支)前调本脚本;OSS/SCP 失败停报告但不阻断 main 合并(升级源可事后补)。
 - **能力确认**:`upload-asset-to-oss.sh` 已支持 `--asset/--name` 传任意文件;SSH 密钥 `~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 免密连通东京服务器;服务器目录树 `{desktop,desktop-beta,desktop-dev}/{darwin,windows,linux}/` 就绪(prod darwin 当前空 platforms 占位)。
 - **验证**:dry-run(prod 2026.6.0)产物定位 + OSS URL 拼接 + `latest.json`(`darwin-aarch64`+`darwin-aarch64-app`,signature=.sig 内容,url 指 OSS)+ SCP 命令全正确。真端到端(真 OSS 上传 + SCP)留真 ship / 受控 dev channel 验证(避免污染 prod 线上)。
+
+### 密钥轮换综合(2A00 带密码,2026-06-06 第三笔)
+
+Win 端 commit `6ae1851e19` 把 minisign 密钥从无密码 `1B29` 轮换为**带 28 位密码的 `2A008F3DA4940FDE`**(根治 Windows「空密码传不进签名子进程 → build 弹 `Password:` + 偶发 Wrong password」),更新了 `minisign.pub` + 三档 override pubkey + `build-deskfox.ps1` 注释。Mac 端同步:
+
+- **rebase**:`feat/macos-updater-adapt` rebase 到含轮换的最新 main(`6ae1851e19`),**无冲突**(我的脚本改动 `build-deskfox.sh`/`verify`/`pack-installer`/`deploy` 与 Win 改的 `.ps1`/override/`minisign.pub` 不重叠;changelog 我追加末尾、Win 改中间,git 自动合并)。
+- **私钥替换**:Mac `~/.deskfox-signing/config.env` 旧 `1B29` 私钥 → 新 `2A00`(带密码,去 CR);`tauri signer sign` 自测签名成功。
+- **重新验证(新 2A00 全链路)**:prod 完整 build(新公钥 `2A00` 编入 binary + 新私钥签 `.app.tar.gz.sig`)→ `verify-updater-artifacts.ts --target darwin` **8/8**(override==minisign.pub 都 `2A00` + 签名 key ID 匹配 + Ed25519 验签 235MB tarball);构建期直接签出、无 `Password:` 提示(带密码密钥的根治效果在 Mac 同样成立)。**`2.6` 段在 Mac 仍必要**(LO 重签致 Tauri tarball 过期是独立问题,非签名问题)。
+- 私钥本机位置 `/Volumes/ExtSSD/隐私信息/1-minisign-updater签名密钥/`(key+密码+三件套),绝不入仓。
