@@ -128,10 +128,13 @@ if (Test-Path $signingConfig) {
     } else {
         Write-Output "[deskfox] ~/.deskfox-signing/config.env exists but no TAURI_SIGNING_PRIVATE_KEY — updater artifacts will be unsigned"
     }
-    # FORK: [启用自动升级] 2026-06-06 — 私钥【有密码】,必须同步注入密码,否则 createUpdaterArtifacts
-    # 签名报 "incorrect updater private key password: Wrong password"。Mac 端 build-deskfox.sh 用
-    # `source config.env` 一次性导出全部变量(含密码)天然带上;Win 只 regex 抠了 key 漏了密码 ->
-    # 之前"撞运气"靠 ambient env,fresh shell 必失败。此处显式从同文件加载(空值也显式设,防 ambient 串台)。
+    # FORK: [启用自动升级] 2026-06-06 — 同步注入私钥密码。
+    # 【关键】私钥现在【带真实密码】(key ID 2A008F3DA4940FDE,见 ~/.deskfox-signing 备份)。
+    # 根因:Windows 上 `$env:X = ""` 等于删除变量(实测子进程 GetEnvironmentVariable 看不到),
+    # 所以"空密码"永远传不到签名子进程 -> createUpdaterArtifacts 退化为交互弹 "Password:"
+    # (终端)或偶发 "Wrong password"(无 TTY)。改用【带密码】密钥后,密码非空 -> PowerShell
+    # 正常传给子进程 -> 签名 deterministic、不弹提示。Mac 端 build-deskfox.sh 用 `source config.env`
+    # 天然带上全部变量,无此坑。下面 else 分支(空密码)仅为无密码旧密钥的兜底,正常路径走 if。
     $pwMatch = [regex]::Match($configContent, "TAURI_SIGNING_PRIVATE_KEY_PASSWORD\s*=\s*([^\r\n]*)")
     if ($pwMatch.Success) {
         $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $pwMatch.Groups[1].Value.Trim()

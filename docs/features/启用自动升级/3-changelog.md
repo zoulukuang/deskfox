@@ -23,7 +23,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | TC-6 | Windows NSIS 真安装体验 | 真桌面 e2e | ⛔ 需真机跑 installer 安装 |
 | TC-11 | 存量 Inno 共存迁移 | 半自动 | ⛔ 需双版本同机 + Inno GUI 卸载 |
 
-**结论**:本机可自动化验收的全部通过(**2026-06-06 二次重生成密钥 `1B29DEBA03F02DAB` + 显式密码注入后,prod 完整 build 重新产出 NSIS + `.sig`,`verify-updater-artifacts.ts` 8/8 重验通过** — TC-5/8/9 结论以此新密钥为准,CB2C 旧结论作废);剩 3 项硬件/真机阻塞,需 Mac 机或真实安装流程,非本分支本机可独立完成。
+**结论**:本机可自动化验收的全部通过(**2026-06-06 三次重生成密钥 `2A008F3DA4940FDE`【带密码】根治 Windows 空密码传不进子进程导致的 build 弹 `Password:` + 偶发签名失败;prod 完整 build 构建期直接签出 `.sig`、无提示,`verify-updater-artifacts.ts` 8/8 通过** — TC-5/8/9 结论以此密钥为准,前两把 CB2C/1B29 旧结论作废);剩 3 项硬件/真机阻塞,需 Mac 机或真实安装流程,非本分支本机可独立完成。
 
 **关联 commit**: feat/enable-updater 分支(2026-06-06 本机验收完成)
 **所在分支**: feat/enable-updater(从最新 main 535712619 起)
@@ -54,7 +54,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ### `packages/branding/tauri-overrides/{prod,beta,dev}.json`(fork wrapper — updater 配置正确落点)
 
-- 三档各加 `plugins.updater`:`pubkey`(DeskFox minisign 公钥,**key ID `1B29DEBA03F02DAB`**,2026-06-06 二次 `tauri signer generate` 重生成 — 见下「签名密钥重生成 → 二次重生成」)+ `endpoints`(按 `{{target}}` 分平台:prod=`updates.deskfox.ai/v1/latest/desktop/{{target}}/latest.json` / beta=`desktop-beta/...` / dev=`desktop-dev/...`)
+- 三档各加 `plugins.updater`:`pubkey`(DeskFox minisign 公钥,**key ID `2A008F3DA4940FDE`**,2026-06-06 三次 `tauri signer generate` 重生成【带密码】 — 见下「签名密钥重生成 → 三次重生成」)+ `endpoints`(按 `{{target}}` 分平台:prod=`updates.deskfox.ai/v1/latest/desktop/{{target}}/latest.json` / beta=`desktop-beta/...` / dev=`desktop-dev/...`)
 - prod/beta 额外加 `bundle.createUpdaterArtifacts: true`(产 `.sig` 更新产物;**此字段原也只在上游 conf 里,fork 构建拿不到 → 不补则永远不产签名产物**)。dev 是 Tier 3 本地测试,不产更新产物,不加
 - prod 另含 `bundle.windows.nsis.installerIcon`(prod icon)
 - Tauri `--config` 对 `plugins` 做深合并,基座 `deep-link` 保留不丢
@@ -73,6 +73,13 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   2. 再次 `tauri signer generate` 生成一把**全新无密码**密钥,key ID **`1B29DEBA03F02DAB`**,同步 `config.env` + `minisign.pub` + 三档 override pubkey + 离线备份。
 - **实测(2026-06-06)**:① `tauri signer sign` 自测——新私钥+空密码签测试文件成功;② prod 完整构建产出 NSIS 安装包 + `.sig`,新密钥首次在 fresh 流程下稳定签出;③ `verify-updater-artifacts.ts` **8/8 通过**(签名 key ID == `minisign.pub` key ID,Ed25519 对安装包字节全量验签通过)。CB2C 的旧验签结论作废,以本次新密钥结论为准。
 
+#### 三次重生成(2026-06-06 — 根治:密钥【带密码】消除 build 弹 `Password:` + 偶发失败)
+
+- **根因(终于定位)**:二次方案的"空密码"在 Windows 上**根本传不到签名子进程**。实测 PowerShell `$env:X = ""` / `.NET SetEnvironmentVariable(...,'','Process')` 在 Windows 上**等于删除变量**(子进程 `GetEnvironmentVariable` 返回 ABSENT)。于是 `createUpdaterArtifacts` 拿不到密码 →:① 交互终端**弹 `Password:` 等输入**(user 截图反馈);② 无 TTY 后台跑则**偶发 `Wrong password` / 二次签名 env 错乱**(= 二次重生成时观察到的"不确定性",真因就是这个,非玄学)。空密码这条路在 Windows 上不可行。
+- **修法(根治)**:第三次 `tauri signer generate -p <28位随机密码> --ci` 生成一把**带真实密码**的密钥,key ID **`2A008F3DA4940FDE`**。密码非空 → PowerShell `$env:...PASSWORD = <非空>` **能正常传给子进程** → 签名 deterministic、永不弹提示。`config.env` 同步 key + 密码;`minisign.pub` + 三档 override pubkey 换新;密钥三件套 + **明文密码条**离线备份到 `D:\隐私数据\...\1-minisign-updater签名密钥\`。
+- **实测(2026-06-06)**:① 非空密码 env 签测试文件成功、无提示;② **prod 完整 build(含 LibreOffice 190MB)构建期直接签出 `.sig`——日志 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD loaded from config.env` + `Finished 1 updater signature`,全程无 `Password:` 提示、无 Wrong password、无需兜底补签**;③ `verify-updater-artifacts.ts` **8/8**;④ `updater-config.test.ts` 13/13(pubkey==minisign.pub);⑤ typecheck 全过;⑥ 真桌面 CDP e2e TC-1/2 通过。1B29 验签结论作废,以 2A00 为准。
+- **遗留价值**:此根治同时让二次方案的 step 3.6「.sig 兜底补签」从"必需"降级为"纯防御"(正常路径已不触发,实测显示"无需补签"分支)。
+
 ### `packages/desktop/src-tauri/tauri.conf.json`(+4 / -0)
 
 - `nsis.languages` 加 `["English", "SimpChinese"]`(中英双语安装界面)
@@ -81,7 +88,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ### `packages/desktop/minisign.pub`(新文件)
 
-- DeskFox minisign 公钥入仓(公钥 ID `1B29DEBA03F02DAB`,明文 `RWSrLfADut4pGyQ0sINKQMVm4ZGak5Sh6tZVHPe236iZd//Uouo9EaTD`;2026-06-06 二次重生成,见「签名密钥重生成 → 二次重生成」)
+- DeskFox minisign 公钥入仓(公钥 ID `2A008F3DA4940FDE`,明文 `RWTeD5SkPY8AKka/1s8lmInaD0cvRyCwip35vP3HiLFFHNLsdNhpbuG8`;2026-06-06 三次重生成【带密码】,见「签名密钥重生成 → 三次重生成」)
 - 私钥 canonical 位置:`~/.deskfox-signing/config.env` 的 `TAURI_SIGNING_PRIVATE_KEY`(build-deskfox.ps1 从此读)。绝不入仓(`.gitignore *.key`)
 - ✅ 2026-06-05 已离线备份到 `D:\隐私数据\棱界科技\Desk fox 私钥\`(含 README 密钥清单);`D:\tmp\...\minisign-keys\` 散落副本已清除。私钥现仅存 config.env(正本)+ 离线备份两处。私钥一旦全丢 = 永远无法给已装客户端推更新(公钥已编进 binary)
 

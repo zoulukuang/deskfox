@@ -8,7 +8,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCMjlERUJBMDNGMDJEQUIKUldTckxmQUR1dDRwR3lRMHNJTktRTVZtNFpHYWs1U2g2dFpWSFBlMjM2aVpkLy9Vb3VvOUVhVEQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJBMDA4RjNEQTQ5NDBGREUKUldUZUQ1U2tQWThBS2thLzFzOGxtSW5hRDBjdlJ5Q3dpcDM1dlAzSGlMRkZITkxzZE5ocGJ1RzgK",
       "endpoints": ["https://updates.deskfox.ai/v1/latest/desktop-beta/{{target}}/latest.json"]
     }
   }
