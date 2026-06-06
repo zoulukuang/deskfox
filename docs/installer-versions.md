@@ -12,6 +12,24 @@
 
 
 
+## [Windows] 2026.6.1 - 2026-06-06 16:14
+
+**主题**:启用 DeskFox 自家自动升级通道(Tauri updater)+ Win 安装包切 NSIS + 版本号改 3 段 semver + "运行中"图标卡死修复。**本条为新版本号体系(semver)首发 + 自动升级首发。**
+
+**本次内容**:
+- **启用自动升级**(feat: 启用自动升级):打通 DeskFox 自有 updater 通道——客户端按平台拉 `updates.deskfox.ai/v1/latest/desktop/{{target}}/latest.json`,minisign 公钥验签(私钥离线备份)。**装上本版后,后续版本可静默推送升级**(本版仍需手动安装一次)。
+- **Win 安装包 Inno → Tauri NSIS**:删除 Inno Setup 脚本(`DeskFox.iss` + `ChineseSimplified.isl`,-571 行),改由 Tauri bundler 直接产 NSIS `.exe`(updater 兼容格式 + 自动产 `.sig` 签名)。
+- **版本号 4 段日历号 → 3 段 semver `YYYY.次.补`**:旧 `2026.6.4.1` 非法 semver,updater 三端无法比较;新体系起步 `2026.6.0`,本版 `2026.6.1`(补位 +1)。build 时注入真实版本号,**修复历史 app 报 `0.0.0` bug**。
+- **"运行中"旋转图标永久卡死修复**(feat: stuck-working-indicator-fix):进程被硬杀时残骸消息漏盖 `time.completed` 致图标永久转;后端 idle 自愈补盖 + 前端 `isWorking` 只看末条消息,provider 无关(飞书桥接等同样适用)。
+- 配套:updater 配置回归守护(11 静态断言)+ branding 测试基建 + per-target manifest 生成器 `finalize-latest-json.ts`。
+
+**Release**:GitHub `ship-prod-2026.6.1`(主仓 `zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN 地址)
+**installer**:`packages/desktop/src-tauri/target/release/bundle/nsis/DeskFox_2026.6.1_x64-setup.exe`(含 LibreOffice,~189 MB;NSIS 产物,未 Authenticode 签名但 updater 经 minisign 验签)
+**updater manifest**:`updates.deskfox.ai/v1/latest/desktop/windows/latest.json`
+**国内下载**:`https://dl.clawtray.com/DeskFox_2026.6.1_x64-setup.exe`
+
+---
+
 ## [macOS] 2026.6.5.1 — 2026-06-05 00:10
 
 (to be filled: commits / plugin / installer path after ship)
