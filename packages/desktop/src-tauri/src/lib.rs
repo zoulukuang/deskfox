@@ -531,7 +531,11 @@ pub fn run() {
 
             // FORK: 匿名使用统计 app_open(opt-out 默认开,env/config 可关;失败静默不阻塞)
             // [feat: telemetry-usage-stats] 2026-06-06
-            telemetry::track(&app.package_info().version.to_string(), "app_open");
+            telemetry::track(
+                &app.package_info().version.to_string(),
+                &app.config().identifier,
+                "app_open",
+            );
 
             Ok(())
         });

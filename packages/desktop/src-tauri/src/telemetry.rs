@@ -20,11 +20,20 @@ const ALLOWED_EVENTS: &[&str] = &["app_open", "update_downloaded", "update_appli
 
 /// Plausible 事件上报端点(后端在东京机)。
 const TELEMETRY_ENDPOINT: &str = "https://telemetry.deskfox.ai/api/event";
-/// Plausible site domain —— 必须与后端 Plausible 配置的 site 一致,否则数据进不去。
-/// 沿用已删 SDK 的约定 `opencode.<clientType>`;阶段 4 SSH 东京机时核对。
-const DOMAIN: &str = "opencode.desktop";
 /// 上报超时,fire-and-forget,不重试(最小实现)。
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 按 channel 选 Plausible site —— 防 dev/beta 的开发/QA 流量污染 prod 统计。
+/// channel 由 bundle identifier 推断(prod=`ai.deskfox.app` / beta=`...beta` / dev=`...dev`)。
+/// 未知 identifier 一律归 dev,绝不进 prod(fail-safe)。beta/dev 对应 site 若未建,
+/// 后端 202 接收并丢弃(不污染 prod;要看预览渠道统计时在 Plausible 建对应 site 即可)。
+fn domain_for_identifier(identifier: &str) -> &'static str {
+    match identifier {
+        "ai.deskfox.app" => "opencode.desktop",
+        "ai.deskfox.app.beta" => "opencode.desktop-beta",
+        _ => "opencode.desktop-dev",
+    }
+}
 
 // ---------------------------------------------------------------------------
 // 路径解析(支持 OPENCODE_TEST_HOME 注入以便单测)
@@ -61,7 +70,10 @@ fn get_or_create_install_id_in(dir: Option<PathBuf>) -> String {
     let path = dir.join("install_id");
     if let Ok(existing) = fs::read_to_string(&path) {
         let trimmed = existing.trim();
-        if !trimmed.is_empty() {
+        // 校验是合法 UUID;脏值(云同步/外部进程写入、含控制字符)一律丢弃重生成 —— 否则
+        // 脏值会流进 payload 和 User-Agent header(控制字符会让 reqwest 构造 header 失败,
+        // 等于该机 telemetry 永久静默失效),或污染后端按设备去重的 DAU。
+        if uuid::Uuid::parse_str(trimmed).is_ok() {
             return trimmed.to_string();
         }
     }
@@ -69,7 +81,20 @@ fn get_or_create_install_id_in(dir: Option<PathBuf>) -> String {
     // 写入尽力而为:失败也返回本次生成的 id(不 panic,不阻塞)。
     let _ = fs::create_dir_all(&dir);
     let _ = fs::write(&path, &id);
+    // 收紧权限到 0600:匿名设备 ID 跨会话稳定,多用户机器上不应被其他本地用户读到。
+    restrict_to_owner(&path);
     id
+}
+
+/// 把文件权限收紧到仅属主可读写(0600)。非 Unix 平台 no-op(Windows 用户目录默认即私有)。
+fn restrict_to_owner(path: &PathBuf) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 
 /// install_id 短码(8 位),用于 User-Agent;不暴露完整 id。
@@ -133,7 +158,7 @@ fn arch_class() -> &'static str {
 ///   - `app_open` → `pageview`(url `app://launch`):Plausible 主面板的 DAU / 唯一访客 /
 ///     访问次数都以 pageview 为中心统计,故启动事件必须以 pageview 形态注册访客。
 ///   - `update_*` → 自定义事件(原名,url `app://event`):进 Goals / 自定义事件统计。
-fn build_event_body(event: &str, version: &str, install_id: &str) -> String {
+fn build_event_body(event: &str, domain: &str, version: &str, install_id: &str) -> String {
     let (name, url) = if event == "app_open" {
         ("pageview", "app://launch")
     } else {
@@ -142,7 +167,7 @@ fn build_event_body(event: &str, version: &str, install_id: &str) -> String {
     let body = serde_json::json!({
         "name": name,
         "url": url,
-        "domain": DOMAIN,
+        "domain": domain,
         "props": {
             "version": version,
             "install_id": install_id,
@@ -167,14 +192,15 @@ fn user_agent(version: &str, install_id: &str) -> String {
 // 上报(fire-and-forget,静默失败)
 // ---------------------------------------------------------------------------
 
-/// 上报一个事件。opt-out 时为 no-op;否则后台异步 POST,不等结果、不阻塞调用方。
-///
-/// `version` 一般取 `app.package_info().version.to_string()`。
 fn is_allowed_event(name: &str) -> bool {
     ALLOWED_EVENTS.contains(&name)
 }
 
-pub fn track(version: &str, name: &str) {
+/// 上报一个事件。opt-out 时为 no-op;否则后台异步 POST,不等结果、不阻塞调用方。
+///
+/// - `version`:一般取 `app.package_info().version.to_string()`。
+/// - `identifier`:bundle identifier(`app.config().identifier`),用于按 channel 选 Plausible site。
+pub fn track(version: &str, identifier: &str, name: &str) {
     if !is_allowed_event(name) {
         return;
     }
@@ -182,7 +208,8 @@ pub fn track(version: &str, name: &str) {
         return;
     }
     let install_id = get_or_create_install_id();
-    let body = build_event_body(name, version, &install_id);
+    let domain = domain_for_identifier(identifier);
+    let body = build_event_body(name, domain, version, &install_id);
     let ua = user_agent(version, &install_id);
     // 后台发送:任何网络/构造失败都吞掉,绝不影响主程序(A9)。
     tauri::async_runtime::spawn(async move {
@@ -218,7 +245,16 @@ fn write_telemetry_config_in(path: Option<PathBuf>, enabled: bool) -> std::io::R
         let _ = fs::create_dir_all(parent);
     }
     let body = serde_json::to_string_pretty(&json).unwrap_or_else(|_| "{}".to_string());
-    fs::write(&path, body + "\n")
+    // 原子写:先写同目录临时文件,再 rename 覆盖 —— 避免并发写(CLI/sidecar 同写)或写到一半
+    // 进程被杀,把共用的 opencode config.json 截断成半截 JSON(opencode 合并加载会失败)。
+    // rename 同文件系统内是原子操作;临时名带 pid 防多进程撞同一临时文件。
+    let tmp = path.with_file_name(format!(
+        "{}.tmp{}",
+        path.file_name().and_then(|s| s.to_str()).unwrap_or("config.json"),
+        std::process::id()
+    ));
+    fs::write(&tmp, body + "\n")?;
+    fs::rename(&tmp, &path)
 }
 
 /// Tauri command:读当前统计开关(UI 初始化用)。
@@ -240,7 +276,11 @@ pub fn set_telemetry_enabled(enabled: bool) {
 #[tauri::command]
 #[specta::specta]
 pub fn track_event_cmd(app: tauri::AppHandle, name: String) {
-    track(&app.package_info().version.to_string(), &name);
+    track(
+        &app.package_info().version.to_string(),
+        &app.config().identifier,
+        &name,
+    );
 }
 
 async fn send_event(body: String, user_agent: String) {
@@ -295,6 +335,46 @@ mod tests {
         assert_eq!(get_or_create_install_id_in(None), "unknown");
     }
 
+    // T1c — install_id 文件被写入脏值(非 UUID)时丢弃重生成
+    #[test]
+    fn t1c_install_id_regenerates_on_corrupt() {
+        let home = temp_home("t1c");
+        let dir = home.join(".cache").join("opencode");
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join("install_id");
+        // 脏值:含换行/控制字符,非 UUID
+        fs::write(&path, "garbage\n\x01injected").unwrap();
+        let id = get_or_create_install_id_in(Some(dir));
+        assert!(uuid::Uuid::parse_str(&id).is_ok(), "脏值应被重生成为合法 UUID");
+        assert_ne!(id, "garbage");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    // T8 — channel → Plausible site 映射:dev/beta 不进 prod
+    #[test]
+    fn t8_domain_per_channel() {
+        assert_eq!(domain_for_identifier("ai.deskfox.app"), "opencode.desktop");
+        assert_eq!(domain_for_identifier("ai.deskfox.app.beta"), "opencode.desktop-beta");
+        assert_eq!(domain_for_identifier("ai.deskfox.app.dev"), "opencode.desktop-dev");
+        // 未知 identifier 一律归 dev,绝不进 prod
+        assert_eq!(domain_for_identifier("com.unknown.app"), "opencode.desktop-dev");
+        assert_eq!(domain_for_identifier(""), "opencode.desktop-dev");
+    }
+
+    // T1d — install_id 文件落盘后权限收紧到 0600(仅 Unix)
+    #[cfg(unix)]
+    #[test]
+    fn t1d_install_id_perms_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = temp_home("t1d");
+        let dir = Some(home.join(".cache").join("opencode"));
+        let _ = get_or_create_install_id_in(dir);
+        let path = home.join(".cache").join("opencode").join("install_id");
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "install_id 应为 0600,实际 {:o}", mode);
+        let _ = fs::remove_dir_all(&home);
+    }
+
     // T2 — env=0 强制禁用(无视 config)
     #[test]
     fn t2_env_forces_disable() {
@@ -329,11 +409,11 @@ mod tests {
     #[test]
     fn t4_payload_field_whitelist() {
         // app_open → pageview(注册访客)
-        let body = build_event_body("app_open", "2026.6.0", "abc-123");
+        let body = build_event_body("app_open", "opencode.desktop", "2026.6.0", "abc-123");
         let v: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["name"], "pageview", "app_open 必须映射为 pageview 才计入 DAU");
         assert_eq!(v["url"], "app://launch");
-        assert_eq!(v["domain"], DOMAIN);
+        assert_eq!(v["domain"], "opencode.desktop");
         let props = v["props"].as_object().unwrap();
         let mut keys: Vec<&String> = props.keys().collect();
         keys.sort();
@@ -345,7 +425,7 @@ mod tests {
             assert!(!props.contains_key(forbidden), "props 不应含 {}", forbidden);
         }
         // update_* → 自定义事件(原名 + app://event)
-        let up = build_event_body("update_downloaded", "2026.6.0", "abc-123");
+        let up = build_event_body("update_downloaded", "opencode.desktop", "2026.6.0", "abc-123");
         let uv: serde_json::Value = serde_json::from_str(&up).unwrap();
         assert_eq!(uv["name"], "update_downloaded");
         assert_eq!(uv["url"], "app://event");
@@ -373,7 +453,7 @@ mod tests {
             std::env::set_var("OPENCODE_TELEMETRY", "0");
         }
         // 不 panic 即通过(disabled 分支在 spawn 之前返回)
-        track("2026.6.0", "app_open");
+        track("2026.6.0", "ai.deskfox.app", "app_open");
         unsafe {
             std::env::remove_var("OPENCODE_TELEMETRY");
         }

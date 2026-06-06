@@ -50,6 +50,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - `bun run typecheck` 16/16 全绿(删 telemetry 包后从 17→16)
 - cargo check 0 error
 
+## Follow-up:code-review 加固(2026-06-07)
+
+`/code-review high` 后修掉 4 项(均在 `telemetry.rs` + `lib.rs`,新增 3 单测 → telemetry 共 16 全绿):
+- **#1 config 原子写**:`write_telemetry_config_in` 改为「写同目录临时文件(带 pid)→ rename 覆盖」,避免并发写 / 写到一半被杀把共用的 `config.json` 截断成半截 JSON(opencode 合并加载会失败)。
+- **#3 channel 隔离**:删 `const DOMAIN`,改 `domain_for_identifier(identifier)` 按 bundle identifier 选 Plausible site(prod=`opencode.desktop` / beta=`-beta` / dev 及未知=`-dev`),防 dev/beta 的开发/QA 流量污染 prod 统计;`track` 加 `identifier` 参数,两调用点传 `app.config().identifier`。(beta/dev site 未建时后端 202 丢弃,不污染 prod;要看预览渠道统计时再建 site。)
+- **#6 install_id 0600**:落盘后 `restrict_to_owner` 收紧到 0600(Unix),匿名设备 ID 不被同机其他用户读到。
+- **#8 install_id UUID 校验**:读到非 UUID 脏值(云同步/外部进程写入、含控制字符)丢弃重生成,防脏值进 payload / UA header(控制字符会让 reqwest 构造 header 失败 → 该机 telemetry 永久静默失效)。
+- 新增单测:T1c(脏值重生成)/ T1d(0600 权限,Unix)/ T8(channel→site 映射)。
+- **未在本批修**(已记下供择时处理):#2 update_applied 紧接 relaunch 易丢、#4/#5 UI 开关忽略 env / 不读 opencode.jsonc、#7 opt-out 写失败静默无提示、#9 事件名前后端无共享常量、#10 setup 主线程同步文件 IO。
+
 ## 已知遗留 / 跟进
 
 - **隐私协议 3.2「更新检查」段**:描述的是已删的旧 SDK update_check(手动检查 + `OPENCODE_UPDATE_CHECK` 开关),当前实际走 Tauri 原生 auto-updater。本 feat 仅订正了其中 telemetry 事件引用(去 update_seen);**完整更新机制描述应由「启用自动升级」feat 负责对齐**(follow-up)。
