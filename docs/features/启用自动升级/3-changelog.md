@@ -108,8 +108,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 - 加 `TAURI_SIGNING_PRIVATE_KEY` env 注入逻辑(从 `~/.deskfox-signing/config.env` 读取)
 - Tauri build 用此 env 签 updater .sig 文件(配合 override 里的 `createUpdaterArtifacts: true`)
+- **(2026-06-06,后续 +33 行)** 见下三条:密码注入 / LO bundle / .sig 兜底补签
 - **(2026-06-06)签名密码同步注入** — 显式从同一 `config.env` 读 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`(无此字段则显式设 `=""`),修 fresh shell `incorrect updater private key password` 签名失败 + 杜绝 ambient 旧密码串台(见「签名密钥重生成 → 二次重生成」)
 - **(2026-06-06)Windows LibreOffice bundle 注入(step 1.9)** — 对称 `build-deskfox.sh`:Inno→NSIS 切换时 `.iss [Files]` 段删除导致 LO 注入丢失,NSIS 包不再含 LibreOffice。改用第二个 `--config` 动态注入 `bundle.resources`(`branding/libreoffice-bundle/windows` → 安装目录 `libreoffice/`,对齐 `office-installer.ts` Win 分支期望路径)。PS 调原生 exe 吞内联 JSON 双引号 → 写临时 JSON 文件传路径规避;build 后清理临时文件。LO bundle 不存在时跳过(用户首用时下载)
+  - **实测(2026-06-06)**:`libreoffice-bundle/windows`(647MB,git-ignored)就位时,prod 包从 62MB → **190MB**,`target/release/libreoffice/program/soffice.exe` 随构建 staging,verify 8/8 通过。该 bundle 目录曾被改名 `_windows_hidden` 临时禁用(测试期加速 build),启用 = 改回 `windows`
+- **(2026-06-06)updater `.sig` 兜底补签(step 3.6)** — 实证 `createUpdaterArtifacts` **构建期签名偶发失败**:含 LO 的 ~190MB 包某次报 `incorrect updater private key password: Wrong password`(同 key/空密码,日志先 `Deriving...done` 再报错,疑构建器内部二次签名 env 错乱),**同配置同 build 再跑一次又成功** → 确认是**不确定性**(非 LO 相关、非密码错)。手动 `tauri signer sign` 从 env 读私钥 100% 可靠。兜底逻辑:build 后(即便 buildExit≠0、.exe 已产出)检测 NSIS 安装包,`.sig` 缺失或旧于 .exe 则自动补签,保证 `/ship` 步骤 7.5a 永远拿得到匹配签名。构建期签成功则跳过(实测正确跳过)
 
 ### `packages/branding/scripts/finalize-latest-json.ts`(新文件)
 
@@ -148,7 +151,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | `ChineseSimplified.isl` | 删 -418 |
 | `pack-installer.ps1` | 重写 ~98 |
 | `bump-installer-version.ps1` | +21 / -6 |
-| `build-deskfox.ps1` | +19,后再 +41 / -2(密码注入 + Win LO bundle) |
+| `build-deskfox.ps1` | +19,后再 +41 / -2(密码注入 + Win LO bundle),再 +33(.sig 兜底补签) |
 | `finalize-latest-json.ts` | 新 +~120 |
 | **代码** | 净删约 570 行(主要 Inno 删除),功能新增约 100 行(fork-only:overrides + scripts + finalize) |
 | 文档(新文件,不计阈值)| ~400 行 |

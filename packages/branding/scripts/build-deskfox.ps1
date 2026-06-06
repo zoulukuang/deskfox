@@ -221,6 +221,39 @@ if ($buildExit -ne 0) {
     Write-Warning "tauri build exited with code $buildExit (NSIS SignTool missing 是已知挂账,exe 仍 build 出来了)"
 }
 
+# 3.6 FORK: [启用自动升级] 2026-06-06 — updater .sig 兜底补签
+# 实证:tauri build 的 createUpdaterArtifacts 构建期签名在含 LibreOffice 资源(~190MB 包)时偶发
+# "incorrect updater private key password: Wrong password"(同一 key/空密码,手动 tauri signer sign
+# 100% 成功;日志先 "Deriving...done" 再报错,疑似构建器内部二次签名时 env 错乱),且此时 buildExit=1
+# 但 .exe 已产出。手动 tauri signer sign 从 env 读 TAURI_SIGNING_PRIVATE_KEY,deterministic 可靠。
+# 此处检测 NSIS 安装包:若缺 .sig 或 .sig 旧于安装包,自动补签,保证 /ship 步骤 7.5a 永远拿得到
+# 与安装包匹配的签名,不受构建期签名抽风影响。仅出 bundle 且 env 有签名私钥时执行。
+if (-not $NoBundle -and $env:TAURI_SIGNING_PRIVATE_KEY) {
+    $nsisDir = Join-Path $repoRoot "packages/desktop/src-tauri/target/release/bundle/nsis"
+    if (Test-Path $nsisDir) {
+        $setupExe = Get-ChildItem -Path $nsisDir -Filter "*-setup.exe" -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($setupExe) {
+            $sigPath = "$($setupExe.FullName).sig"
+            $needSign = (-not (Test-Path $sigPath)) -or ((Get-Item $sigPath).LastWriteTime -lt $setupExe.LastWriteTime)
+            if ($needSign) {
+                Write-Output "[deskfox] updater .sig 缺失/旧于安装包 -> 手动补签 $($setupExe.Name)"
+                Push-Location (Join-Path $repoRoot "packages/desktop")
+                try {
+                    bun run tauri signer sign $setupExe.FullName
+                    if ($LASTEXITCODE -eq 0 -and (Test-Path $sigPath) -and ((Get-Item $sigPath).LastWriteTime -ge $setupExe.LastWriteTime)) {
+                        Write-Output "[deskfox] OK updater .sig 补签成功 -> $sigPath"
+                    } else {
+                        Write-Warning "[deskfox] updater .sig 补签失败(exit=$LASTEXITCODE)— /ship 发版前需手动 tauri signer sign"
+                    }
+                } finally { Pop-Location }
+            } else {
+                Write-Output "[deskfox] updater .sig 已存在且新于安装包,无需补签"
+            }
+        }
+    }
+}
+
 # 3.5 开发机 jsonc 清理(防多档累积 → multi-instance 双推 message)
 # 决策同 Mac 端 build-deskfox.sh — 产品 inject 逻辑不做"同 plugin 多物理路径"清理,开发机 build 后顺手清,
 # 下次 DeskFox 启动 setup hook 自动 inject 当前 .exe 路径(单 entry 正常状态)。
