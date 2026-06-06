@@ -258,14 +258,20 @@ if [[ -n "$LO_EXTRA_CONFIG" && "$SIGN_ENABLED" -eq 1 && "$BUILD_EXIT" -eq 0 && "
         #   - Contents/MacOS/ 下的可执行文件(soffice 等)
         #   - LO inner bundle 本体 seal
         # --deep 按正确顺序处理所有嵌套层级,--force 覆盖现有 ad-hoc 签名
+        # FORK: 必带 --entitlements,否则 LO 内 soffice 等可执行文件在 hardened runtime
+        # (--options runtime) 下缺 com.apple.security.cs.allow-jit → UNO 桥建 vtable 时
+        # JIT 被内核拒 → SIGABRT,签名版 Office 预览(Word/Excel/PPT)全崩。外层 step 4
+        # re-seal 带 entitlements 但不带 --deep,碰不到 LO 内层 executable,必须在此处刷入。
+        # [bug-repro: signed LO soffice missing allow-jit -> SIGABRT on Office preview] 2026-06-06 REQ-050
         echo "[deskfox] steps 1-3: signing LO nested bundle with --deep..."
         codesign --sign "$APPLE_SIGNING_IDENTITY" \
                  --options runtime \
                  --timestamp \
                  --force \
                  --deep \
+                 --entitlements "$ENTITLEMENTS" \
                  "$LO_IN_APP" 2>&1 | tail -3 || true
-        echo "[deskfox]   LO deep-signed (dylibs + .appex + .mdimporter + .jnilib + executables)"
+        echo "[deskfox]   LO deep-signed with entitlements (allow-jit) — soffice JIT enabled"
 
         # 4. 重签 DeskFox.app 外层 seal(不带 --deep,只更新 outer seal 覆盖新 LO seal)
         echo "[deskfox] step 4: re-sealing DeskFox.app outer bundle..."

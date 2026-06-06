@@ -38,3 +38,35 @@ related: ./1-spec.md ./3-changelog.md
 
 - typecheck 17/17 通过
 - E1/E2/E3/E4 自动/脚本验证通过;E5 用户真桌面 QA 通过 2026-06-03
+
+## Follow-up 1: LO 签名缺 allow-jit entitlement 修复(REQ-050,2026-06-06)
+
+**commit**: (待填)
+**分支**: `fix/macos-lo-jit-entitlement`
+**规模**: Tiny(+1 flag / 1 文件)
+**tag**: `[bug-repro: signed LO soffice missing allow-jit -> SIGABRT on Office preview]`
+
+### 症状
+
+签名版 Mac 上整个 Office 预览(Word/Excel/PPT)全崩。根因:LO 内 `soffice` 跑在 hardened runtime(`--options runtime`)下却**缺 `com.apple.security.cs.allow-jit`** → UNO 桥建 vtable 时 JIT 被内核拒 → SIGABRT。
+
+### 根因
+
+Commit 1 的"签名策略"假设(`prepare 脚本清除签名 → Tauri 统一重签整个 .app`)不成立 —— Tauri 只签 `Contents/MacOS/`,不覆盖 `Resources/` 子树。后续在 `build-deskfox.sh` §2.5 补了 post-build LO 签名段,但 **steps 1-3 的 LO 内层签名(`--deep`)漏传 `--entitlements`**;step 4 外层 re-seal 虽带 entitlements 却不带 `--deep`,碰不到 LO 内层 executable。结果 soffice 永远拿不到 allow-jit。
+
+### 修复
+
+`build-deskfox.sh` steps 1-3 的 LO `codesign` 加 `--entitlements "$ENTITLEMENTS"`,让 `--deep` 把 allow-jit 刷进 LO 所有嵌套可执行文件。复用既有 `entitlements.plist`(已含 allow-jit)。
+
+| 文件 | 类型 | 改动 |
+|---|---|---|
+| `packages/branding/scripts/build-deskfox.sh` | fork-only | steps 1-3 LO 签名加 `--entitlements`(+1 flag + FORK marker 注释) |
+
+### 验证(复现测试)
+
+实测断言(不重 build,直接对现有 `target/release/.../DeskFox.app` 的 LO 跑修复后命令):
+
+- 修复前:`codesign -d --entitlements - soffice` → **空**;`flags=0x10000(runtime)` → 崩溃条件成立
+- 修复后:soffice entitlements 含 `com.apple.security.cs.allow-jit`;CodeDirectory size 322→450、hashes 3+3→3+7(entitlements 已写入);runtime flag 保留
+- 外层 re-seal 后 `codesign --verify --deep --strict DeskFox.app` ✅ 签名链完整;soffice allow-jit 保留(外层不带 --deep 不覆盖内层,正确)
+- 待补:用户真桌面 QA — 双击 .app 开 Office 预览不崩(Mac 运行时无 CDP,靠手测)
