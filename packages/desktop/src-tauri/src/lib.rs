@@ -16,6 +16,8 @@ mod logging;
 mod markdown;
 // FORK: 国内 npm 镜像决策 — sidecar 装插件走国内镜像,避免卡 npmjs [feat: npm-registry-cn-mirror] 2026-05-28
 mod npm_registry;
+// FORK: 防止系统休眠,保障飞书远程随时可用 [feat: prevent-sleep] 2026-06-06
+mod prevent_sleep;
 mod os;
 mod server;
 mod text_file;
@@ -516,6 +518,14 @@ pub fn run() {
                 tracing::warn!("failed to build system tray: {err}");
             }
 
+            // FORK: 防休眠 — 启动恢复上次开关状态(开着则立即重新生效 + 同步托盘勾选)
+            // [feat: prevent-sleep] 2026-06-06
+            if prevent_sleep::read_persisted(app.handle()) {
+                if let Err(e) = prevent_sleep::set_enabled(app.handle(), true) {
+                    tracing::warn!("[prevent-sleep] 启动恢复失败: {e}");
+                }
+            }
+
             // FORK: 飞书 adapter 状态初始化(C1.3,Phase 2+ 真 spawn)[feat: feishu-bridge]
             feishu_adapter::init(app.handle());
 
@@ -608,6 +618,9 @@ fn make_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             system_tray::set_tray_status_cmd,
             system_tray::show_main_window_cmd,
             system_tray::quit_app_cmd,
+            // FORK: 防休眠开关(设置页 + 托盘双入口)[feat: prevent-sleep] 2026-06-06
+            prevent_sleep::set_prevent_sleep,
+            prevent_sleep::get_prevent_sleep,
             // FORK: 飞书 adapter OAuth 接入 [feat: feishu-bridge] 2026-05-08
             feishu_adapter::feishu_oauth_start,
             feishu_adapter::feishu_oauth_poll,

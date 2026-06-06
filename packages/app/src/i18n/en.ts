@@ -1054,6 +1054,8 @@ export const dict = {
   "settings.tab.feishu": "Lark Bridge",
   "settings.feishu.title": "Lark Bridge",
   "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.",
+  "settings.feishu.preventSleep.title": "Keep computer awake",
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.",
   "settings.feishu.adapter.notReady": "Lark adapter is not running.",
   "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.",
   "settings.feishu.noDefaultModel.title": "No default LLM model configured",

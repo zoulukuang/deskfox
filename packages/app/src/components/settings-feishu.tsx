@@ -9,8 +9,10 @@
 //
 // 后续(Phase 3+):群组配置子 Tab / 健康检查子 Tab
 
-import { type Component, createSignal, onMount, Show, For } from "solid-js"
+import { type Component, createSignal, onMount, onCleanup, Show, For } from "solid-js"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { Switch } from "@opencode-ai/ui/switch"
+import { invoke } from "@tauri-apps/api/core"
 import { useLanguage } from "@/context/language"
 import {
   feishuAdapterStatus,
@@ -37,6 +39,8 @@ export const SettingsFeishu: Component = () => {
   // opencode /providers 响应 default 字段是 Record<provider_id, model_id>(实测 2026-05-10:
   // key 是 provider id 如 "minimax-cn-coding-plan" / "opencode" / "claude-code",不是 agent name)
   const [hasDefaultModel, setHasDefaultModel] = createSignal<boolean | null>(null)
+  // FORK: 防休眠开关状态(真相源在 Rust;托盘侧切换会经 event 同步回来)[feat: prevent-sleep]
+  const [preventSleep, setPreventSleep] = createSignal(false)
 
   const refetch = async () => {
     try {
@@ -71,6 +75,25 @@ export const SettingsFeishu: Component = () => {
       setAdapterReady(false)
     }
   })
+
+  // FORK: 防休眠开关初值 + 监听托盘侧切换以双向同步 [feat: prevent-sleep] 2026-06-06
+  onMount(() => {
+    void invoke<boolean>("get_prevent_sleep").then(setPreventSleep).catch(() => {})
+    const unlistenP = import("@tauri-apps/api/event").then(({ listen }) =>
+      listen<boolean>("deskfox-prevent-sleep-changed", (e) => setPreventSleep(e.payload)),
+    )
+    onCleanup(() => void unlistenP.then((un) => un()))
+  })
+
+  const togglePreventSleep = async (next: boolean) => {
+    setPreventSleep(next) // 乐观更新
+    try {
+      await invoke("set_prevent_sleep", { enabled: next })
+    } catch (err) {
+      console.warn("[prevent-sleep] toggle failed:", err)
+      setPreventSleep(!next) // 失败回滚
+    }
+  }
 
   // 关闭子 dialog(bind / edit)后 re-show settings,回到飞书桥接 tab
   // useDialog 当前不支持 dialog stack(show 时把上一个 dispose),只能这样补救
@@ -120,6 +143,19 @@ export const SettingsFeishu: Component = () => {
         <p class="text-13-regular text-text-weak">
           {language.t("settings.feishu.description")}
         </p>
+      </div>
+
+      {/* FORK: 防休眠开关 — 保障飞书远程随时可用 [feat: prevent-sleep] 2026-06-06 */}
+      <div class="flex items-center justify-between gap-3 bg-surface-base rounded-md p-3">
+        <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+          <span class="text-13-medium">
+            {language.t("settings.feishu.preventSleep.title")}
+          </span>
+          <span class="text-12-regular text-text-weak">
+            {language.t("settings.feishu.preventSleep.description")}
+          </span>
+        </div>
+        <Switch checked={preventSleep()} onChange={(v) => void togglePreventSleep(v)} />
       </div>
 
       {/* adapter 未就绪提示 */}

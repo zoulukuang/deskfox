@@ -56,6 +56,8 @@ chrono = "0.4"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 process-wrap = { version = "9.0.3", features = ["tokio1"] }
 trash = "5"
+# FORK: 跨平台防休眠(Win/Mac/Linux 一次覆盖,系统不睡+屏幕可关)[feat: prevent-sleep] 2026-06-06
+keepawake = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Threading", "Win32_System_Registry"] }
