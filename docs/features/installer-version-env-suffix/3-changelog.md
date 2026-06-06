@@ -100,13 +100,24 @@ git revert <本笔 commit>
 | 文件 | 改动 |
 |---|---|
 | `packages/branding/installer-versions.json` | 移除已存在的 3 字节 BOM(治标,让 main 立即干净) |
-| `packages/branding/scripts/bump-installer-version.ps1` | line 107 改用 `[System.IO.File]::WriteAllText(..., (New-Object System.Text.UTF8Encoding($false)))` 强制无 BOM(治本,PS5.1 无 `utf8NoBOM` 选项,.NET 写法跨版本一致) |
+| `packages/branding/scripts/bump-installer-version.ps1` | line 107(JSON)改用 `[System.IO.File]::WriteAllText(..., (New-Object System.Text.UTF8Encoding($false)))` 强制无 BOM(治本,PS5.1 无 `utf8NoBOM` 选项,.NET 写法跨版本一致) |
+
+#### code-review 追加(同根因一并治理)
+
+high-effort code-review 发现同一个 ps1 写 `docs/installer-versions.md` 台账(line 96 的 `Set-Content -Encoding UTF8`)也是同根 BOM 源 —— 实测该 .md 文件头当时就是 `EF BB BF`。虽是 Markdown 不被 JSON.parse 不会崩,但属同根半修(git diff 噪声 + 跨端格式不一致 + 防维护者 copy 错误写法)。一并修:
+
+| 文件 | 改动 |
+|---|---|
+| `packages/branding/scripts/bump-installer-version.ps1` | line 96(台账 merge 分支)同改 `WriteAllText + UTF8Encoding($false)`;line 91 append 分支经分析对非空台账不产 BOM(BOM 只在新建文件首写产生),保留 + 加注释 |
+| `docs/installer-versions.md` | 移除已存在的 3 字节 BOM |
+
+code-review 另排除一项最严重的潜在缺陷:实测 LO `Contents/MacOS/` 下全部 8 个可执行文件(soffice/uno/unopkg/…)经 `--deep --entitlements` 都拿到了 allow-jit,REQ-050 修复路径完整(`--deep` 在当前 macOS 上确实把 entitlements 刷进所有嵌套可执行,非"仅主体")。两项 altitude backlog(LO 复用主 entitlements 过度授权 / `--deep` 分发签名不推荐)记入 OPENCODE-PLAN 需求池。
 
 ### 验证
 
 - `branding` 测试:修复前 `11 pass + 1 error` → 修复后 **`13 pass / 0 fail`**(BOM 崩掉的 describe 恢复)
-- `installer-versions.json` 前字节 `7b`(`{`),`JSON.parse` OK
-- ⚠️ ps1 治本改动**在 Mac 无法执行验证**,待 Win 端下次 bump / ship 实测确认无 BOM 回流
+- `installer-versions.json` 前字节 `7b`(`{`)/ `docs/installer-versions.md` 前字节 `23`(`#`),均无 BOM
+- ⚠️ ps1 治本改动(line 96/107)**在 Mac 无法执行验证**,待 Win 端下次 bump / ship 实测确认无 BOM 回流
 
 ## 关联
 

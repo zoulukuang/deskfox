@@ -88,12 +88,17 @@ $placeholder = @"
 "@
 $firstHeaderIdx = $logContent.IndexOf("`n## ")
 if ($firstHeaderIdx -lt 0) {
+    # 边缘分支:台账无任何 `## ` header。append 到已存在的非空文件,PS5.1 Add-Content 不写 BOM
+    # (BOM 只在新建文件首次写时产生;line 40 已保证 $logFile 存在)。故此分支无 BOM 风险,保留。
     Add-Content -Path $logFile -Value $placeholder -Encoding UTF8
 } else {
     $before = $logContent.Substring(0, $firstHeaderIdx)
     $after  = $logContent.Substring($firstHeaderIdx)
     $merged = $before + $placeholder + "`n" + $after
-    Set-Content -Path $logFile -Value $merged -Encoding UTF8 -NoNewline
+    # 同 installer-versions.json 根因:Set-Content -Encoding UTF8 在 PS5.1 写 BOM(覆盖整文件),
+    # 改用 .NET WriteAllText + UTF8Encoding($false) 保证台账无 BOM,跨 PS 版本一致。
+    # [bug-repro: installer-versions.json BOM -> JSON.parse 崩] 2026-06-06(台账同根一并治理)
+    [System.IO.File]::WriteAllText($logFile, $merged, (New-Object System.Text.UTF8Encoding($false)))
 }
 Write-Output "[bump] prepended placeholder to $logFile"
 
