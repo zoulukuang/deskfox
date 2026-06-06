@@ -272,3 +272,12 @@ NSIS 配置和 Inno 删除可保留(NSIS 是长期正确方向),回退只需恢�
 - **TC-3 macOS 一键升级端到端**:需真实 ship 部署 `latest.json`(`finalize-latest-json.ts` 生成 → SCP 到 `updates.deskfox.ai`)+ 真升级,非本次自动化范围。
 - **Mac updater 运行时(TC-1/2)**:macOS WKWebView 无 CDP(Win 走 `updater-cdp.spec.ts`),靠代码层确认 + 真桌面手测。
 - **beta 渠道 updater 签名**:`build-deskfox.sh` 仅 prod `source config.env`(beta 不 source → 无私钥 → beta updater 不签),与 Win 现状一致,留 follow-up。
+
+### /ship 集成(步骤 7.5 — 自动升级源发布,2026-06-06 第二笔)
+
+把「生成 + 部署 latest.json」闭环进 macOS `/ship` 工作流,**原 TC-3「端到端待 Mac + 真实发新版本」边界中"部署 latest.json"部分已自动化**(剩真升级行为验证)。
+
+- **新 `deploy-updater-manifest.sh`**(fork-only,branding/scripts):一站式 4 步 — ① `upload-asset-to-oss.sh --asset <tarball> --name DeskFox-<ver>-darwin.app.tar.gz` 传 OSS 拿 `dl.clawtray.com` 下载 URL ② `finalize-latest-json.ts --target darwin` 生成 Tauri 格式 `latest.json` ③ `scp -i ~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 部署到 `updates.deskfox.ai:/var/www/updates/v1/latest/<channel>/darwin/latest.json`(prod=`desktop`/beta=`desktop-beta`/dev=`desktop-dev`)④ HTTPS 回读校验 version。带 `--dry-run`(只生成 manifest 不碰线上)。
+- **`ship.md` 步骤 7.5**(本机 command,gitignored):步骤 7(OSS/Gitee)后、步骤 8(合主分支)前调本脚本;OSS/SCP 失败停报告但不阻断 main 合并(升级源可事后补)。
+- **能力确认**:`upload-asset-to-oss.sh` 已支持 `--asset/--name` 传任意文件;SSH 密钥 `~/.ssh/lightsail-tokyo-ap-northeast-1.pem` 免密连通东京服务器;服务器目录树 `{desktop,desktop-beta,desktop-dev}/{darwin,windows,linux}/` 就绪(prod darwin 当前空 platforms 占位)。
+- **验证**:dry-run(prod 2026.6.0)产物定位 + OSS URL 拼接 + `latest.json`(`darwin-aarch64`+`darwin-aarch64-app`,signature=.sig 内容,url 指 OSS)+ SCP 命令全正确。真端到端(真 OSS 上传 + SCP)留真 ship / 受控 dev channel 验证(避免污染 prod 线上)。
