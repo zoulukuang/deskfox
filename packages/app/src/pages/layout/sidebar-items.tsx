@@ -18,6 +18,8 @@ import { messageAgentColor } from "@/utils/agent"
 import { sessionTitle } from "@/utils/session-title"
 import { sessionPermissionRequest } from "../session/composer/session-request-tree"
 import { childSessionOnPath, hasProjectPermissions } from "./helpers"
+// FORK: stuck-working-indicator-fix [feat: stuck-working-indicator-fix] 2026-06-06
+import { deriveSessionWorking } from "./session-working"
 
 const OPENCODE_PROJECT_ID = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
 
@@ -156,21 +158,15 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       return !permission.autoResponds(item, props.session.directory)
     })
   })
-  const isWorking = createMemo(() => {
-    if (hasPermissions()) return false
-    const pending = (sessionStore.message[props.session.id] ?? []).findLast(
-      (message) =>
-        message.role === "assistant" &&
-        typeof (message as { time?: { completed?: unknown } }).time?.completed !== "number",
-    )
-    const status = sessionStore.session_status[props.session.id]
-    return (
-      pending !== undefined ||
-      status?.type === "busy" ||
-      status?.type === "retry" ||
-      (status !== undefined && status.type !== "idle")
-    )
-  })
+  // FORK: stuck-working-indicator-fix — 判定逻辑抽到 deriveSessionWorking 纯函数(只看最后一条消息,
+  // 不再被埋在历史里的残骸消息卡住图标)。[feat: stuck-working-indicator-fix] 2026-06-06
+  const isWorking = createMemo(() =>
+    deriveSessionWorking({
+      hasPermissions: hasPermissions(),
+      messages: sessionStore.message[props.session.id],
+      status: sessionStore.session_status[props.session.id],
+    }),
+  )
 
   const tint = createMemo(() => messageAgentColor(sessionStore.message[props.session.id], sessionStore.agent))
   const tooltip = createMemo(() => props.showTooltip ?? (props.mobile || !props.sidebarExpanded()))

@@ -13,6 +13,8 @@ import { SessionPrompt } from "@/session/prompt"
 import { SessionRevert } from "@/session/revert"
 import { SessionRunState } from "@/session/run-state"
 import { SessionStatus } from "@/session/status"
+// FORK: stuck-working-indicator-fix — 残骸消息自愈 [feat: stuck-working-indicator-fix] 2026-06-06
+import { HealInterrupted } from "@/session/heal-interrupted"
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "@/session/todo"
 import { MessageID, PartID, SessionID } from "@/session/schema"
@@ -113,7 +115,10 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
           }
           if (ctx.query.limit === undefined || ctx.query.limit === 0) {
             yield* session.get(ctx.params.sessionID)
-            return yield* session.messages({ sessionID: ctx.params.sessionID })
+            const msgs = yield* session.messages({ sessionID: ctx.params.sessionID })
+            // FORK: stuck-working-indicator-fix — 硬杀漏盖 time.completed 的残骸消息在 idle 时自愈,
+            // 清除前端永久"运行中"图标 [feat: stuck-working-indicator-fix] 2026-06-06
+            return yield* HealInterrupted.healInterrupted({ sessionID: ctx.params.sessionID, messages: msgs })
           }
 
           yield* session.get(ctx.params.sessionID)
