@@ -5,7 +5,7 @@
   "identifier": "ai.deskfox.app.dev",
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENCMkNFRjJDQkE1OEM5OUYKUldTZnlWaTZMTzhzeTM2MlhxTkt0cWdmR09DYkIrbjFVN1pxQmt3UVJ6cWoxcHVYZFMrS3piL3UK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCMjlERUJBMDNGMDJEQUIKUldTckxmQUR1dDRwR3lRMHNJTktRTVZtNFpHYWs1U2g2dFpWSFBlMjM2aVpkLy9Vb3VvOUVhVEQK",
       "endpoints": ["https://updates.deskfox.ai/v1/latest/desktop-dev/{{target}}/latest.json"]
     }
   }

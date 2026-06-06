@@ -120,12 +120,25 @@ $env:VITE_DESKFOX_ENV = $Env
 $signingConfig = Join-Path $env:USERPROFILE ".deskfox-signing\config.env"
 if (Test-Path $signingConfig) {
     $configContent = Get-Content $signingConfig -Raw -Encoding UTF8
+    # 注:正则要求 TAURI_SIGNING_PRIVATE_KEY 紧跟 = ，不会误匹配 _PASSWORD 行(后者跟的是 _ 不是 =)
     $keyMatch = [regex]::Match($configContent, "TAURI_SIGNING_PRIVATE_KEY\s*=\s*([^\r\n]+)")
     if ($keyMatch.Success) {
         $env:TAURI_SIGNING_PRIVATE_KEY = $keyMatch.Groups[1].Value.Trim()
         Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY loaded from ~/.deskfox-signing/config.env"
     } else {
         Write-Output "[deskfox] ~/.deskfox-signing/config.env exists but no TAURI_SIGNING_PRIVATE_KEY — updater artifacts will be unsigned"
+    }
+    # FORK: [启用自动升级] 2026-06-06 — 私钥【有密码】,必须同步注入密码,否则 createUpdaterArtifacts
+    # 签名报 "incorrect updater private key password: Wrong password"。Mac 端 build-deskfox.sh 用
+    # `source config.env` 一次性导出全部变量(含密码)天然带上;Win 只 regex 抠了 key 漏了密码 ->
+    # 之前"撞运气"靠 ambient env,fresh shell 必失败。此处显式从同文件加载(空值也显式设,防 ambient 串台)。
+    $pwMatch = [regex]::Match($configContent, "TAURI_SIGNING_PRIVATE_KEY_PASSWORD\s*=\s*([^\r\n]*)")
+    if ($pwMatch.Success) {
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $pwMatch.Groups[1].Value.Trim()
+        Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY_PASSWORD loaded from config.env"
+    } else {
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+        Write-Output "[deskfox] no TAURI_SIGNING_PRIVATE_KEY_PASSWORD field -> using empty password"
     }
 } elseif ($env:TAURI_SIGNING_PRIVATE_KEY) {
     Write-Output "[deskfox] TAURI_SIGNING_PRIVATE_KEY set from environment"
@@ -160,19 +173,45 @@ if ($env:GITHUB_ACTIONS -ne "true") {
 # 版本都拿到 2026.6.0。不用内联 --config JSON(PS 调原生 exe 会吞双引号,JSON 失效)。
 Write-Output "[deskfox] app version injected -> $appVersion (tauri.conf.json on-disk patch)"
 
+# 1.9 FORK: [启用自动升级] 2026-06-06 — Windows LO bundle 注入(对称 build-deskfox.sh step 1.9)
+# 历史:Windows 的精简 LibreOffice 打包原靠 DeskFox.iss [Files] 段;Inno->NSIS 切换时 .iss 删了,
+# LO 注入随之丢失 -> NSIS 安装包不含 LibreOffice。改用 Tauri --config 动态注入 bundle.resources,
+# 把 branding/libreoffice-bundle/windows -> 安装目录 libreoffice/(office-installer.ts bundledSofficePath
+# Win 分支期望 {exe dir}\libreoffice\program\soffice.exe;路径相对 packages/desktop/src-tauri/,同 Mac)。
+# 注:PS 调原生 exe 会吞内联 --config JSON 的双引号(见 1.6 段踩坑)-> 写临时 JSON 文件,传文件路径规避。
+# 本块【代码行】必须纯 ASCII(PS5.1 GBK 读 .ps1,中文紧邻引号会吞引号)。
+$loBundleDir = Join-Path $root "branding/libreoffice-bundle/windows"
+$loSoffice = Join-Path $loBundleDir "program/soffice.exe"
+$loConfigFile = $null
+if (Test-Path $loSoffice) {
+    $loSizeMB = [math]::Round(((Get-ChildItem -Recurse -File $loBundleDir | Measure-Object -Property Length -Sum).Sum / 1MB))
+    Write-Output "[deskfox] LO bundle found: $loBundleDir (${loSizeMB}MB) -> injecting as Tauri resource 'libreoffice'"
+    $loJson = '{"bundle":{"resources":{"../../branding/libreoffice-bundle/windows":"libreoffice"}}}'
+    $loConfigFile = Join-Path $env:TEMP "deskfox-lo-resources.json"
+    [System.IO.File]::WriteAllText($loConfigFile, $loJson, (New-Object System.Text.UTF8Encoding $false))
+} else {
+    Write-Output "[deskfox] LO bundle not found: $loSoffice"
+    Write-Output "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"
+    Write-Output "[deskfox]   run prepare-lo-bundle.ps1 to prepare the bundle"
+}
+
 # 2. tauri build
 Push-Location (Join-Path $repoRoot "packages/desktop")
 try {
+    $configArgs = @("--config", $override)
+    if ($loConfigFile) { $configArgs += @("--config", $loConfigFile) }  # 第二个 --config deep-merge LO resources
     if ($NoBundle) {
-        bun run tauri build --no-bundle --config $override
+        bun run tauri build --no-bundle @configArgs
     } else {
-        bun run tauri build --config $override
+        bun run tauri build @configArgs
     }
     $buildExit = $LASTEXITCODE
 } finally {
     Pop-Location
     # 还原 tauri.conf.json(版本号只在 build 期间临时改,不入仓)
     & git -C $repoRoot checkout HEAD -- packages/desktop/src-tauri/tauri.conf.json 2>$null
+    # 清理临时 LO config 文件
+    if ($loConfigFile -and (Test-Path $loConfigFile)) { Remove-Item -Force $loConfigFile -ErrorAction SilentlyContinue }
 }
 
 # 3. restore(无论 build 成败都还原)
