@@ -1038,6 +1038,8 @@ export const dict = {
   "settings.tab.feishu": "Lark 橋接",
   "settings.feishu.title": "Lark 橋接",
   "settings.feishu.description": "透過 Lark / 飛書 與你的 AI agent 對話。",
+  "settings.feishu.preventSleep.title": "保持電腦不休眠",
+  "settings.feishu.preventSleep.description": "開啟後電腦不進入休眠(螢幕仍可正常關閉),確保飛書訊息隨時能回應。",
   "settings.feishu.adapter.notReady": "Lark 橋接服務尚未啟動。",
   "settings.feishu.adapter.notReady.hint": "Phase 2+ 會自動啟動 sidecar。目前測試期請設定 FEISHU_ADAPTER_URL / USERNAME / PASSWORD 環境變數後重啟 DeskFox。",
   "settings.feishu.noDefaultModel.title": "尚未設定預設 LLM model",
