@@ -12,6 +12,24 @@
 
 
 
+## [Windows] 2026.7.0 - 2026-06-07 15:56
+
+**主题**:飞书桥接两大能力(账号级 workspace + LLM 卡死防护)+ 防休眠开关 + 匿名使用统计 + UI 品牌字收尾。新功能波次,版本号进"次"位(2026.6.1 → 2026.7.0)。
+
+**本次内容**(自 `ship-prod-2026.6.1` 起):
+- **飞书账号级 workspace**(feat: feishu-account-workspace):每个飞书账号可绑一个**专用真实项目目录**作为 agent 工作目录,让飞书 Agent 远程参与该项目开发;收到的文件/图片落 `<workspace>/_deskfox/feishu/{files,images}`(下划线前缀可见约定 + `.gitignore` 自动维护,未来多 IM 共用此根);改 workspace = 换新家从零开始(hot 生效无需重启);GUI 文件夹选择器(Rust `feishu_pick_workspace_dir`)+ 安全/对话记忆提示。
+- **飞书 LLM 卡死防护**(fix: feishu-llm-stall-fastfail):provider 卡在可重试错误(如 503)不发任何输出时,dispatcher 原本干等 30min 硬超时致同 chat 串行队列堵死、整个聊天失联直到重启;新增「首字节活动」快速失败 —— 240s 内毫无输出即判 provider 无响应,提前失败 + 给飞书友好提示 + 释放队列(正常长任务有输出不误杀)。
+- **防止电脑休眠开关**(feat: prevent-sleep):飞书桥接设置页新增防休眠开关,保障"飞书远程随时可用"(人不在电脑前时不被系统休眠中断);Rust 真相源 + 托盘/前端双向同步。
+- **匿名使用统计**(feat: telemetry-usage-stats):Tauri 主力端接入匿名使用统计(Rust 原生客户端替代 Node SDK),config 原子写 + channel 隔离 + install_id 0600/UUID 校验;**默认可在设置/jsonc/env 关闭**(opt-out)。
+- **UI 品牌字收尾**(feat: ui-brand-deskfox):UI 残留 "OpenCode" 品牌字统一改 "DeskFox"(走 i18n 替换层,保留 OpenCode Zen);修文件禁编辑提示硬编码中英混杂。
+
+**Release**:GitHub `ship-prod-2026.7.0`(主仓 `zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN 地址)
+**installer**:`packages/desktop/src-tauri/target/release/bundle/nsis/DeskFox_2026.7.0_x64-setup.exe`(含 LibreOffice,~198 MB;NSIS 产物,未 Authenticode 签名但 updater 经 minisign 验签)
+**updater manifest**:`updates.deskfox.ai/v1/latest/desktop/windows/latest.json`
+**国内下载**:`https://dl.clawtray.com/DeskFox_2026.7.0_x64-setup.exe`
+
+---
+
 ## [Windows] 2026.6.1 - 2026-06-06 16:14
 
 **主题**:启用 DeskFox 自家自动升级通道(Tauri updater)+ Win 安装包切 NSIS + 版本号改 3 段 semver + "运行中"图标卡死修复。**本条为新版本号体系(semver)首发 + 自动升级首发。**
