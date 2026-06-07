@@ -139,6 +139,10 @@ echo "[lo-bundle-mac] unmounted"
 RESOURCES="$DEST_APP/Contents/Resources"
 echo "[lo-bundle-mac] stripping unnecessary files..."
 
+# 注意:presets 不在此列表 —— 它是 LO 首次为新用户创建 profile 时的初始模板源
+# (autotext/basic/config/database/gallery,仅 ~200KB)。整删会导致 user installation
+# 初始化失败:Fatal Error - User installation could not be completed(2026-06-07 Mac 实测复现 +
+# 加回 presets 后转换恢复正常;同 extensions 留骨架,是 profile bootstrap 的硬依赖)。
 STRIP_DIRS=(
     "help"
     "gallery"
@@ -148,7 +152,6 @@ STRIP_DIRS=(
     "wordbook"
     "basic"
     "xslt"
-    "presets"
     "wizards"
 )
 
