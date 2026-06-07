@@ -137,12 +137,14 @@ $stripFolders = @(
     "share\wordbook",        # 拼写词典(可能最大,>100MB)
     "share\basic",           # Basic IDE(不需要 headless 宏)
     "share\xslt",            # XSLT 转换(非二进制格式互转不需要)
-    "presets",               # UI 预设配置
     "readmes",               # 说明文档
     "share\wizards"          # 文档向导(headless 不需要)
 )
-# 注意: share\extensions 不在此列表 —— 整个删除目录会导致 soffice 首次创建 user profile
+# 注意1: share\extensions 不在此列表 —— 整个删除目录会导致 soffice 首次创建 user profile
 # 失败(Fatal Error: User installation could not be completed)。改为下方"删内容留骨架"。
+# 注意2: presets 不在此列表(2026-06-07 移出) —— 它是 LO 首次为新用户创建 profile 的初始模板源
+# (autotext/basic/config/database/gallery,~200KB)。整删同样致 "User installation could not be
+# completed":这正是 extensions 修复后 2026.7.0 仍复现该错的残留真因(Mac 端实测:加回 presets 即恢复)。
 
 $totalStripped = 0L
 foreach ($folder in $stripFolders) {
