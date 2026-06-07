@@ -76,6 +76,13 @@ export type Platform = {
   /** Set the preferred display backend (desktop only) */
   setDisplayBackend?(backend: DisplayBackend): Promise<void>
 
+  /** 读匿名使用统计开关状态(桌面端):enabled=有效值(env>config>默认);
+   *  locked=有效值被 env/其他配置文件锁定(UI 写 config 改不动 → 开关应禁用 + 提示)*/
+  getTelemetryEnabled?(): Promise<{ enabled: boolean; locked: boolean }>
+
+  /** 写匿名使用统计开关(桌面端)*/
+  setTelemetryEnabled?(enabled: boolean): Promise<void>
+
   /** Parse markdown to HTML using native parser (desktop only, returns unprocessed code blocks) */
   parseMarkdown?(markdown: string): Promise<string>
 

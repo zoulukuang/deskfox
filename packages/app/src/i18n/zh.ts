@@ -665,6 +665,11 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.description": "默认在时间线中展开 edit、write 和 patch 工具部分",
   "settings.general.row.showSessionProgressBar.title": "显示会话进度条",
   "settings.general.row.showSessionProgressBar.description": "当智能体正在工作时，在会话顶部显示动画进度条",
+  "settings.general.row.telemetry.title": "匿名使用统计",
+  "settings.general.row.telemetry.description":
+    "发送匿名使用统计（软件版本、操作系统、启动与升级情况）以帮助改进 DeskFox。绝不采集任何文件、对话内容、模型名称或个人信息。可随时关闭。",
+  "settings.general.row.telemetry.saveFailed": "保存使用统计设置失败",
+  "settings.general.row.telemetry.locked": "(当前由 OPENCODE_TELEMETRY 环境变量或其他配置文件控制,此开关已禁用。)",
   "settings.general.row.wayland.title": "使用原生 Wayland",
   "settings.general.row.wayland.description": "在 Wayland 上禁用 X11 回退。需要重启。",
   "settings.general.row.wayland.tooltip": "在混合刷新率显示器的 Linux 系统上，原生 Wayland 可能更稳定。",
