@@ -119,27 +119,29 @@ pub fn is_enabled() -> bool {
     resolve_enabled(env_val.as_deref(), read_config_telemetry())
 }
 
-/// 纯函数:给定 env 值与 config 值,按优先级判定是否启用。可单测。
-fn resolve_enabled(env_val: Option<&str>, config_val: Option<bool>) -> bool {
-    if let Some(raw) = env_val {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "0" | "false" | "no" | "off" => return false,
-            "1" | "true" | "yes" | "on" => return true,
-            _ => {}
-        }
+/// 纯函数:解析 env `OPENCODE_TELEMETRY` 的值,无法识别返回 None。
+/// `resolve_enabled`(取值)与 `is_telemetry_locked`(判锁)共用,避免可识别值集合两处漂移。
+fn parse_env_telemetry(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "0" | "false" | "no" | "off" => Some(false),
+        "1" | "true" | "yes" | "on" => Some(true),
+        _ => None,
     }
-    if let Some(c) = config_val {
-        return c;
-    }
-    true
 }
 
-/// 纯函数:从一份(可能含 jsonc 注释的)配置文本里取顶层 `telemetry` 布尔字段。
-/// 先复用 `feishu_plugin_install::strip_comments` 去注释再 serde_json 解析 —— 否则用户在带注释的
-/// `opencode.jsonc` 里写 `telemetry:false` 会因严格 JSON 解析失败被静默忽略(opt-out 失灵)。
+/// 纯函数:给定 env 值与 config 值,按优先级判定是否启用。可单测。
+fn resolve_enabled(env_val: Option<&str>, config_val: Option<bool>) -> bool {
+    if let Some(b) = env_val.and_then(parse_env_telemetry) {
+        return b;
+    }
+    config_val.unwrap_or(true)
+}
+
+/// 纯函数:从一份配置文本里取顶层 `telemetry` 布尔字段。用 **json5** 解析以 robust 兼容
+/// jsonc/json5 的注释、尾逗号、单引号等常见写法 —— 否则用户在 `opencode.jsonc` 里写
+/// `telemetry:false`(尤其带注释或尾逗号)会因严格 JSON 解析失败被静默忽略(opt-out 失灵)。
 fn parse_telemetry_field(raw: &str) -> Option<bool> {
-    let stripped = crate::feishu_plugin_install::strip_comments(raw);
-    let json: serde_json::Value = serde_json::from_str(&stripped).ok()?;
+    let json: serde_json::Value = json5::from_str(raw).ok()?;
     json.get("telemetry").and_then(|v| v.as_bool())
 }
 
@@ -162,11 +164,10 @@ fn read_config_telemetry() -> Option<bool> {
 /// 有效值是否被 `config.json` 之外的来源(env / opencode.json / opencode.jsonc)决定。
 /// 若是,UI 写 `config.json` 改不动有效值 —— 开关应禁用 + 提示,而非让用户点了"弹回"。
 fn is_telemetry_locked() -> bool {
-    // env 设了可识别值 → 锁(优先级最高的逃生舱)
+    // env 设了可识别值 → 锁(优先级最高的逃生舱)。复用 parse_env_telemetry 保证与 resolve_enabled 同集合。
     if let Ok(raw) = std::env::var("OPENCODE_TELEMETRY") {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "0" | "false" | "no" | "off" | "1" | "true" | "yes" | "on" => return true,
-            _ => {}
+        if parse_env_telemetry(&raw).is_some() {
+            return true;
         }
     }
     // 比 config.json 优先级更高的文件设了 telemetry → 锁
@@ -449,9 +450,20 @@ mod tests {
         // 行注释 + 块注释 + 字段
         let jsonc = "{\n  // 关闭匿名统计\n  \"telemetry\": false, /* 注释 */\n  \"theme\": \"dark\"\n}";
         assert_eq!(parse_telemetry_field(jsonc), Some(false), "带注释的 jsonc 必须能读出 telemetry");
+        // 尾逗号(jsonc/json5 高频写法)—— json5 能解析,旧的 strip_comments+serde_json 不能
+        assert_eq!(parse_telemetry_field(r#"{"telemetry": false,}"#), Some(false));
+        assert_eq!(
+            parse_telemetry_field("{\n  \"telemetry\": false, // 注释\n}"),
+            Some(false)
+        );
+        // 中文 value 共存不影响提取(json5 正确处理 UTF-8)
+        assert_eq!(
+            parse_telemetry_field(r#"{ "theme": "暗色", "telemetry": false }"#),
+            Some(false)
+        );
         // 无该字段 → None
         assert_eq!(parse_telemetry_field(r#"{"theme":"dark"}"#), None);
-        // 注释里出现 telemetry 字样不应误判(字符串/注释感知)
+        // 注释里出现 telemetry 字样不应误判
         assert_eq!(parse_telemetry_field("{ // telemetry true\n \"theme\":\"x\" }"), None);
     }
 

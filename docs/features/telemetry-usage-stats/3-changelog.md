@@ -59,6 +59,15 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **#8 install_id UUID 校验**:读到非 UUID 脏值(云同步/外部进程写入、含控制字符)丢弃重生成,防脏值进 payload / UA header(控制字符会让 reqwest 构造 header 失败 → 该机 telemetry 永久静默失效)。
 - 新增单测:T1c(脏值重生成)/ T1d(0600 权限,Unix)/ T8(channel→site 映射)。
 
+### 第四批(2026-06-07,第三轮 `/code-review high` —— jsonc 解析根治)
+
+第三轮 review 指出"手搓 jsonc 解析必然漏 case":上批只去注释,**仍漏尾逗号**(`{"telemetry":false,}` serde_json 严格模式失败 → opt-out 静默失灵),且 `strip_comments` 逐字节 `c as char` 对多字节 UTF-8 有 latent 破坏。根治:
+- **改用 json5 crate**(`json5 = "0.4"`,Cargo.toml 加依赖免 marker):`parse_telemetry_field` 用 `json5::from_str` robust 兼容注释/尾逗号/单引号/UTF-8,不再手搓。
+- **还原 `feishu_plugin_install::strip_comments` 为私有**(telemetry 不再依赖它,撤回上批的 pub(crate))。
+- **抽 `parse_env_telemetry`**:`resolve_enabled` 取值 + `is_telemetry_locked` 判锁共用同一 env 值集合,杜绝两处字面量漂移致 locked≠enabled。
+- T9 扩测:尾逗号 / 尾逗号+注释 / 中文 value 共存,均正确读出 telemetry(telemetry 17 单测全绿)。
+- 改动:`Cargo.toml` + `telemetry.rs` + `feishu_plugin_install.rs`。前端无改动。
+
 ### 第三批(2026-06-07,第二轮 `/code-review high` 发现的问题,全处理)
 
 telemetry 17 单测 + typecheck 16/16 + app 808 全绿:

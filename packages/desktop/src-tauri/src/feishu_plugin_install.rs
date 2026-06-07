@@ -383,8 +383,7 @@ fn path_still_valid(raw: &str) -> bool {
 }
 
 /// 简单去 jsonc 注释(line `//` + block `/* */`)— 不严格(够 user 写的 .jsonc 用)。
-/// pub(crate):telemetry.rs 读 opencode.jsonc 的 opt-out 字段时复用,避免重复实现。
-pub(crate) fn strip_comments(input: &str) -> String {
+fn strip_comments(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let bytes = input.as_bytes();
     let mut i = 0;
