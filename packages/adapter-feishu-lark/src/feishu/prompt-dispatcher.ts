@@ -21,7 +21,19 @@ interface Waiter {
   resolve: (result: DispatchResult) => void
   reject: (err: Error) => void
   timeoutHandle: ReturnType<typeof setTimeout>
+  /**
+   * [fix: feishu-llm-stall-fastfail 2026-06-07]
+   * "首字节活动"快速失败定时器 — provider 卡在可重试错误(如 getbot 503)时**不发任何 part、
+   * 也不报 session.error**,原本只能干等到 timeoutMs(默认 30min),期间同 chat 串行队列被堵死。
+   * 此定时器在首个活动(任意 message.part)到达时清除;若在 firstActivity 窗口内毫无活动 →
+   * 判定 provider 无响应,提前 reject 释放队列。收到首活动后即清除,不误伤正常长任务。
+   */
+  firstActivityHandle: ReturnType<typeof setTimeout> | undefined
 }
+
+/** 默认"首字节活动"超时(ms)— provider 完全无输出多久判定卡死。
+ *  120s 给慢启动 provider / 大上下文 留足余量,仍比 30min 硬超时快 15×。 */
+export const DEFAULT_FIRST_ACTIVITY_TIMEOUT_MS = 120_000
 
 /** opencode plugin event 形状(对齐 Bus event payload)*/
 export interface OpencodeEventLike {
@@ -51,7 +63,11 @@ export class PromptDispatcher {
    * @returns Promise<DispatchResult> — session.idle 时 resolve(reply + source);
    *          session.error / abortAll / superseded / timeout 且无 partial 时 reject。
    */
-  register(sessionID: string, timeoutMs: number): Promise<DispatchResult> {
+  register(
+    sessionID: string,
+    timeoutMs: number,
+    firstActivityTimeoutMs: number = DEFAULT_FIRST_ACTIVITY_TIMEOUT_MS,
+  ): Promise<DispatchResult> {
     return new Promise<DispatchResult>((resolve, reject) => {
       const existing = this.waiters.get(sessionID)
       if (existing) {
@@ -60,6 +76,7 @@ export class PromptDispatcher {
         // 拿不到 waiter 早 return,旧 promise 永不 reject(内存泄漏 + 调用方 hang)。
         // 改:不主动 delete,让 existing.reject 内部的 finalize 自然完成 delete + reject。
         clearTimeout(existing.timeoutHandle)
+        if (existing.firstActivityHandle) clearTimeout(existing.firstActivityHandle)
         existing.reject(new Error("superseded by new prompt on same session"))
       }
 
@@ -70,10 +87,27 @@ export class PromptDispatcher {
         const w = this.waiters.get(sessionID)
         if (!w) return
         clearTimeout(w.timeoutHandle)
+        if (w.firstActivityHandle) clearTimeout(w.firstActivityHandle)
         this.waiters.delete(sessionID)
         if (kind === "resolve") resolve(value as DispatchResult)
         else reject(value as Error)
       }
+
+      // [fix: feishu-llm-stall-fastfail 2026-06-07]
+      // 首字节活动快速失败:firstActivity 窗口内毫无 part → provider 卡死,提前 reject 释放队列。
+      // 上限不超过 timeoutMs(测试传小 timeout 时不被 firstActivity 反超)。message 含"超时"+
+      // "无任何输出"→ 命中 friendlyErrorReply 的 timeout pattern,飞书侧给"模型繁忙/换 model"提示。
+      const faMs = Math.min(firstActivityTimeoutMs, timeoutMs)
+      const firstActivityHandle = setTimeout(() => {
+        const w = this.waiters.get(sessionID)
+        if (!w) return
+        finalize(
+          "reject",
+          new Error(
+            `opencode prompt 首字节超时 (${faMs}ms) — LLM 无任何输出(provider 可能繁忙/无响应,如 503 重试)`,
+          ),
+        )
+      }, faMs)
 
       const timeoutHandle = setTimeout(() => {
         const w = this.waiters.get(sessionID)
@@ -103,6 +137,7 @@ export class PromptDispatcher {
         resolve: (result) => finalize("resolve", result),
         reject: (err) => finalize("reject", err),
         timeoutHandle,
+        firstActivityHandle,
       })
     })
   }
@@ -120,6 +155,13 @@ export class PromptDispatcher {
       if (!sid) return
       const w = this.waiters.get(sid)
       if (!w) return
+      // [fix: feishu-llm-stall-fastfail 2026-06-07]
+      // 任意 part(text / tool / 其它)到达 = provider 已开始响应 → 清首字节快速失败定时器。
+      // 放在 text-type 过滤之前:工具调用先于 text part 时也算"有活动",不误杀。
+      if (w.firstActivityHandle) {
+        clearTimeout(w.firstActivityHandle)
+        w.firstActivityHandle = undefined
+      }
       if (part.type !== "text") return
       const partID = part.id
       if (!partID) return
@@ -163,6 +205,7 @@ export class PromptDispatcher {
   abortAll(): void {
     for (const [, w] of this.waiters) {
       clearTimeout(w.timeoutHandle)
+      if (w.firstActivityHandle) clearTimeout(w.firstActivityHandle)
       w.reject(new Error("dispatcher aborted"))
     }
     this.waiters.clear()

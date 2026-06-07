@@ -56,6 +56,15 @@ describe("friendlyErrorReply — 把 opencode 技术错误翻译成 user 可操�
     expect(out).toContain("1800000ms")
   })
 
+  // [fix: feishu-llm-stall-fastfail 2026-06-07] 首字节快速失败的 error 也要命中 timeout 友好提示
+  test("'opencode prompt 首字节超时 (120000ms) — LLM 无任何输出' → 模型超时友好提示", () => {
+    const out = friendlyErrorReply(
+      new Error("opencode prompt 首字节超时 (120000ms) — LLM 无任何输出(provider 可能繁忙/无响应,如 503 重试)"),
+    )
+    expect(out).toContain("LLM 模型回复超时")
+    expect(out).toContain("120000ms")
+  })
+
   test("HTTP 429 / rate limit → provider 限速提示", () => {
     const out1 = friendlyErrorReply(new Error("Request failed: 429 Too Many Requests"))
     expect(out1).toContain("LLM provider 限速")
