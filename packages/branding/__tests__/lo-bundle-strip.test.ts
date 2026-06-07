@@ -1,5 +1,7 @@
 // [bug-repro: bundled LibreOffice 删 presets/ 致新用户首启 "User installation could not be completed"]
-// 2026-06-07 — LO bundle 剥皮防回归守护(静态读脚本断言,无需 build / 无需 soffice,CI 可跑)
+// 2026-06-07 — LO bundle 剥皮防回归守护(静态读脚本断言,无需 build / 无需 soffice)
+// CI 接入:branding package.json 加 test:ci 脚本 + turbo.json 注册 @opencode-ai/branding#test:ci,
+// 故 `bun turbo test:ci`(CI test.yml)会真跑本测试;否则它只在手动 `bun test` 时运行,守护形同虚设。
 //
 // 背景:打包内置的 LibreOffice 经 prepare-lo-bundle.{sh,ps1} 剥皮瘦身。其中 presets/ 与
 // share/extensions/ 是 LO 首次为新用户创建 user profile(UserInstallation)时的初始模板/骨架来源。
