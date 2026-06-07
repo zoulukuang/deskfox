@@ -10,6 +10,7 @@ import {
   deskfoxFeishuFilesDir,
   deskfoxFeishuImagesDir,
   ensureDeskfoxDir,
+  normalizeWorkspace,
 } from "../deskfox-dir"
 
 function tmpWs(): string {
@@ -25,6 +26,21 @@ describe("deskfox-dir 路径 helper", () => {
     expect(deskfoxFeishuFilesDir(ws)).toBe(join(ws, "_deskfox", "feishu", "files"))
     expect(deskfoxFeishuImagesDir(ws)).toBe(join(ws, "_deskfox", "feishu", "images"))
     expect(DESKFOX_DIR_NAME).toBe("_deskfox")
+  })
+})
+
+// [fix: feishu-review-followup 2026-06-07]
+describe("normalizeWorkspace", () => {
+  test("非空 → trim 后值", () => {
+    expect(normalizeWorkspace("  D:/proj/foo  ")).toBe("D:/proj/foo")
+    expect(normalizeWorkspace("D:/proj/foo")).toBe("D:/proj/foo")
+  })
+  test("空 / 纯空白 / undefined / null → undefined", () => {
+    expect(normalizeWorkspace("")).toBeUndefined()
+    expect(normalizeWorkspace("   ")).toBeUndefined()
+    expect(normalizeWorkspace("  \n\t ")).toBeUndefined()
+    expect(normalizeWorkspace(undefined)).toBeUndefined()
+    expect(normalizeWorkspace(null)).toBeUndefined()
   })
 })
 

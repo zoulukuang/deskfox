@@ -13,6 +13,16 @@ import { join } from "node:path"
 /** `_deskfox/` 根目录名(项目级通用约定) */
 export const DESKFOX_DIR_NAME = "_deskfox"
 
+/**
+ * 规整 account.workspace 字符串:trim 后空 → undefined(=回退默认),非空 → trim 后的值。
+ * [fix: feishu-review-followup 2026-06-07] 单一真相源 —— account-store 存盘前 / pipeline 读取时
+ * 都走它,避免「判空用 trim 但存/返原值」导致带首尾空格的路径被当目录用(三处逻辑收一处)。
+ */
+export function normalizeWorkspace(ws: string | undefined | null): string | undefined {
+  const t = (ws ?? "").trim()
+  return t.length > 0 ? t : undefined
+}
+
 /** 飞书收件文件目录:`<workspace>/_deskfox/feishu/files` */
 export function deskfoxFeishuFilesDir(workspace: string): string {
   return join(workspace, DESKFOX_DIR_NAME, "feishu", "files")

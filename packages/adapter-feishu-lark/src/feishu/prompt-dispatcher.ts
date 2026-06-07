@@ -32,8 +32,9 @@ interface Waiter {
 }
 
 /** 默认"首字节活动"超时(ms)— provider 完全无输出多久判定卡死。
- *  120s 给慢启动 provider / 大上下文 留足余量,仍比 30min 硬超时快 15×。 */
-export const DEFAULT_FIRST_ACTIVITY_TIMEOUT_MS = 120_000
+ *  [fix: feishu-review-followup 2026-06-07] 120s → 240s:留足推理模型(如 deepseek-r1)
+ *  长思考+非增量流式场景的首字节余量,降低误杀正常慢响应;仍比 30min 硬超时快 7.5×。 */
+export const DEFAULT_FIRST_ACTIVITY_TIMEOUT_MS = 240_000
 
 /** opencode plugin event 形状(对齐 Bus event payload)*/
 export interface OpencodeEventLike {

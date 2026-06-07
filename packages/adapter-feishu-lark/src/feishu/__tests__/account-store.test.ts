@@ -387,6 +387,14 @@ describe("updateAccountSettings", () => {
     expect(after.requireMention).toEqual(before.requireMention)
   })
 
+  // [fix: feishu-review-followup 2026-06-07]
+  test("T8b: workspace 带首尾空格 → 存 trim 后值(不带空格)", () => {
+    seedAccount("accWsTrim")
+    const r = updateAccountSettings("accWsTrim", { workspace: "  D:/proj/baz  " }, configPath())
+    expect(r).toBe(true)
+    expect(loadConfig(configPath()).accounts["accWsTrim"].workspace).toBe("D:/proj/baz")
+  })
+
   test("T9: workspace 空串/纯空白 → 清除(回退默认)", () => {
     seedAccount("accWsClr")
     updateAccountSettings("accWsClr", { workspace: "D:/proj/bar" }, configPath())

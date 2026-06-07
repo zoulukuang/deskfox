@@ -46,6 +46,7 @@ import {
   deskfoxFeishuFilesDir,
   deskfoxFeishuImagesDir,
   ensureDeskfoxDir,
+  normalizeWorkspace,
 } from "./deskfox-dir"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
@@ -515,8 +516,8 @@ export class MessagePipeline {
    * [feat: feishu-account-workspace] 2026-06-07
    */
   private workspaceDir(): string {
-    const ws = this.opts.account.workspace
-    return ws && ws.trim().length > 0 ? ws : IMBOT_WORKSPACE
+    // [fix: feishu-review-followup 2026-06-07] 走 normalizeWorkspace,返 trim 后值(防带空格路径)
+    return normalizeWorkspace(this.opts.account.workspace) ?? IMBOT_WORKSPACE
   }
 
   /**
