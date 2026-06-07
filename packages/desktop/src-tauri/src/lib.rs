@@ -635,6 +635,8 @@ fn make_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             feishu_adapter::feishu_update_account_model,
             // FORK: per-account partial settings [feat: feishu-create-group-toggle-gui] 2026-05-24
             feishu_adapter::feishu_update_account_settings,
+            // FORK: per-account workspace 文件夹选择器 [feat: feishu-account-workspace] 2026-06-07
+            feishu_adapter::feishu_pick_workspace_dir,
             feishu_adapter::feishu_list_providers
         ])
         .events(tauri_specta::collect_events![

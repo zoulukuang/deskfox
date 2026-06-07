@@ -134,6 +134,8 @@ export const SettingsFeishu: Component = () => {
             currentModel={acc.model ?? null}
             // [feat: feishu-group-mention-policy] 2026-05-24
             currentRequireMention={acc.require_mention ?? true}
+            // [feat: feishu-account-workspace] 2026-06-07
+            currentWorkspace={acc.workspace ?? null}
             onSaved={() => refetch()}
           />
         ),

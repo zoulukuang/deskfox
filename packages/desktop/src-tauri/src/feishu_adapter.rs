@@ -338,6 +338,9 @@ pub struct AccountSummary {
     /// [feat: feishu-group-mention-policy] 2026-05-24 — 当前 requireMention
     #[serde(default)]
     pub require_mention: Option<bool>,
+    /// [feat: feishu-account-workspace] 2026-06-07 — 当前 workspace(未设 = None,走全局默认)
+    #[serde(default)]
+    pub workspace: Option<String>,
 }
 
 /// adapter wire request 转 camelCase
@@ -394,6 +397,8 @@ pub async fn feishu_save_account(
         bot_name: r.bot_name,
         // [feat: feishu-group-mention-policy] 2026-05-24 — 新绑账号默认 requireMention=true
         require_mention: Some(true),
+        // [feat: feishu-account-workspace] 2026-06-07 — 新绑账号无 workspace(走全局默认)
+        workspace: None,
     })
 }
 
@@ -466,6 +471,9 @@ pub struct UpdateAccountSettingsRequest {
     /// [feat: feishu-group-mention-policy] 2026-05-24 — Some(true/false) = 改 flag;None = 不动
     #[serde(default)]
     pub require_mention: Option<bool>,
+    /// [feat: feishu-account-workspace] 2026-06-07 — Some(path)=设;Some("")=清走默认;None=不动
+    #[serde(default)]
+    pub workspace: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -477,6 +485,9 @@ struct UpdateAccountSettingsWire<'a> {
     model: Option<Option<ModelRefWire<'a>>>,
     #[serde(rename = "requireMention", skip_serializing_if = "Option::is_none")]
     require_mention: Option<bool>,
+    /// [feat: feishu-account-workspace] 省略 = 不动;"" = 清走默认;非空 = 设
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -500,10 +511,28 @@ pub async fn feishu_update_account_settings(
             })
         }),
         require_mention: request.require_mention,
+        workspace: request.workspace.as_deref(),
     };
     let r: UpdateAccountSettingsWireResponse =
         post_json(&ready, "/accounts/update-settings", &wire).await?;
     Ok(r.updated)
+}
+
+/// [feat: feishu-account-workspace] 2026-06-07
+/// 弹原生文件夹选择器,返回所选目录绝对路径(用户取消 = None)。
+/// JS 侧未装 @tauri-apps/plugin-dialog,picker 逻辑收口在 Rust(dialog 插件已就绪)。
+/// 同步命令(Tauri 在 worker 线程跑,非 main)→ 用 blocking_pick_folder 阻塞安全,
+/// 省去 tokio::sync::oneshot(tokio 未启 sync feature)。
+#[tauri::command]
+#[specta::specta]
+pub fn feishu_pick_workspace_dir(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("选择该飞书账号的工作目录(项目文件夹)")
+        .blocking_pick_folder();
+    Ok(picked.and_then(|fp| fp.into_path().ok().map(|p| p.to_string_lossy().into_owned())))
 }
 
 /// 列 opencode 已配 providers + models(给 GUI 选 per-account model)
@@ -545,6 +574,9 @@ struct ListAccountWireItem {
     /// [feat: feishu-group-mention-policy] 2026-05-24
     #[serde(rename = "requireMention", default)]
     require_mention: Option<bool>,
+    /// [feat: feishu-account-workspace] 2026-06-07
+    #[serde(default)]
+    workspace: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -600,6 +632,7 @@ pub async fn feishu_list_accounts(
             }),
             bot_name: w.bot_name,
             require_mention: w.require_mention,
+            workspace: w.workspace,
         })
         .collect())
 }

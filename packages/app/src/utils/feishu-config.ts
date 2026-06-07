@@ -79,6 +79,8 @@ export interface AccountSummary {
   // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 — 删 enable_auto_group_create 字段
   /** [feat: feishu-group-mention-policy] 2026-05-24 当前 requireMention flag */
   require_mention?: boolean | null
+  /** [feat: feishu-account-workspace] 2026-06-07 当前 workspace(null/缺省 = 走全局默认) */
+  workspace?: string | null
 }
 
 /** opencode `/config/providers` 响应形状(Rust JSON value 直传) */
@@ -146,6 +148,8 @@ export interface UpdateAccountSettingsPatch {
   model?: ModelRef | null
   /** [feat: feishu-group-mention-policy] 2026-05-24 — undefined 不动 / true|false 改 */
   requireMention?: boolean
+  /** [feat: feishu-account-workspace] 2026-06-07 — undefined 不动 / "" 清走默认 / 非空设 */
+  workspace?: string
 }
 
 export async function feishuUpdateAccountSettings(
@@ -163,7 +167,20 @@ export async function feishuUpdateAccountSettings(
   if (patch.requireMention !== undefined) {
     request.require_mention = patch.requireMention
   }
+  // [feat: feishu-account-workspace] undefined 不传(不动);"" 传空串(Rust 转发,server 清走默认);非空设
+  if (patch.workspace !== undefined) {
+    request.workspace = patch.workspace
+  }
   return await invoke<boolean>("feishu_update_account_settings", { request })
+}
+
+/**
+ * [feat: feishu-account-workspace] 2026-06-07
+ * 弹原生文件夹选择器,返回所选目录绝对路径;用户取消返 null。
+ * picker 逻辑在 Rust(feishu_pick_workspace_dir),JS 侧不引 plugin-dialog 依赖。
+ */
+export async function feishuPickWorkspaceDir(): Promise<string | null> {
+  return await invoke<string | null>("feishu_pick_workspace_dir")
 }
 
 /** 拉 opencode 已配的 providers + models 列表(选 model 用) */
