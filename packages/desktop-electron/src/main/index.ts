@@ -49,7 +49,6 @@ import {
   setBackgroundColor,
   setDockIcon,
 } from "./windows"
-import { flushTelemetry, setupTelemetry, trackEvent } from "./telemetry"
 import { drizzle } from "drizzle-orm/node-sqlite/driver"
 import type { Server } from "virtual:opencode-server"
 
@@ -98,9 +97,6 @@ function setupApp() {
 
   app.on("before-quit", () => {
     killSidecar()
-    // Flush any buffered telemetry events. Capped at 2s internally so we
-    // never block app quit longer than that.
-    void flushTelemetry()
   })
 
   app.on("will-quit", () => {
@@ -119,9 +115,6 @@ function setupApp() {
     registerRendererProtocol()
     setDockIcon()
     setupAutoUpdater()
-    // Telemetry + update strategy. Awaited so the first-run notice runs
-    // before the main window appears. Internal failures never throw.
-    await setupTelemetry({ logger, autoUpdater })
     await initialize()
   })
 }
@@ -227,9 +220,6 @@ function wireMenu() {
   if (!mainWindow) return
   createMenu({
     trigger: (id) => {
-      // Track project_open whenever the user triggers the menu action.
-      // Only the menu id is observed — no project name, path, or content.
-      if (id === "project.open") trackEvent("desktop.project_open")
       if (mainWindow) sendMenuCommand(mainWindow, id)
     },
     checkForUpdates: () => {
@@ -276,7 +266,6 @@ registerIpcHandlers({
   checkUpdate: async () => checkUpdate(),
   installUpdate: async () => installUpdate(),
   setBackgroundColor: (color) => setBackgroundColor(color),
-  trackTelemetryEvent: (name) => trackEvent(name),
 })
 
 function killSidecar() {

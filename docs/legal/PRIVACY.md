@@ -52,7 +52,7 @@ Your computer
 │                │   │  ※ Direct to provider; no DeskFox backend in the path
 │  local files   │   │
 │  chat history  │   ├─→ DeskFox usage statistics endpoint (live since v2026.4.29.2)
-│  API keys      │   │  Sent: anonymous install_id + software version + OS + arch + country
+│  API keys      │   │  Sent: anonymous install_id + software version + OS + arch + geo (province/city)
 │  config        │   │  ※ Contains NO chat / file / API key content
 │                │   │  ※ Three ways to disable (see Section 3)
 │                │   │
@@ -128,41 +128,41 @@ DeskFox communicates with DeskFox's server **only for the following two purposes
 
 ### 3.1 Usage Statistics
 
-**Purpose**: Understand the overall scale, regional distribution, and version distribution of users, to inform maintenance and localization priorities.
+**Purpose**: Understand the overall scale, regional distribution, version distribution, and update adoption of users, to inform maintenance and localization priorities.
 
 **Endpoint**: `https://telemetry.deskfox.ai/api/event` (backed by self-hosted Plausible Analytics).
 
 #### Fields Collected (Complete payload per event)
 
-| Data point | Example | Purpose |
+| Data point | Example | Purpose / why it's safe |
 |---|---|---|
-| Anonymous install ID (`install_id`) | `b4c7e2a1-...` (random UUID generated locally on first launch, stored locally) | Counts unique devices; **cannot be linked to your real identity** (we hold no mapping table) |
-| Software version (`version`) | `2026.4.29.2` | Version distribution |
-| OS platform (`os`) | `win32` / `darwin` / `linux` (Node.js `process.platform`) | OS distribution |
-| CPU architecture (`arch`) | `x64` / `arm64` | Architecture distribution |
-| Country (`country`) | `CN` / `US` etc. **at country level** (no province/state) | Derived by Plausible server-side from request IP; **the IP itself is immediately discarded** |
+| Anonymous install ID (`install_id`) | `b4c7e2a1-...` (random UUID generated locally on first launch, stored at `~/.cache/opencode/install_id`) | Counts unique devices (for DAU); **cannot be linked to your real identity** (we hold no mapping table) |
+| Software version (`version`) | `2026.6.0` | Version distribution |
+| OS class (`os`) | `macos` / `windows` / `linux` (Rust `std::env::consts::OS`; **class only, no OS version number**) | OS distribution |
+| CPU architecture class (`arch`) | `aarch64` / `x86_64` (**instruction-set class only; no CPU model / core count / serial**) | Architecture distribution |
+| Geolocation (province / city level) | e.g. `Guangdong / Shenzhen` | Derived by Plausible server-side from request IP, after which **the IP is immediately discarded and never stored**; only the geo label is kept |
+
+> Each request also carries a **User-Agent**: `opencode-desktop/<version> (<os>; <arch>; install=<first 8 chars of install_id>)` — a repeat of the version/os/arch/short-install_id above; no additional information.
 
 #### Event Whitelist (Hardcoded Strong Commitment)
 
-The Software's source code **strictly limits** which events can be reported. Any event name not on this list is silently dropped at the client (defense-in-depth, see the `ALLOWED_EVENTS` constant in `packages/desktop-electron/src/main/telemetry-strategy.ts`).
+The Software's source code **strictly limits** which events can be reported. Any event name not on this list is silently dropped at the client (defense-in-depth, see the `ALLOWED_EVENTS` constant in `packages/desktop/src-tauri/src/telemetry.rs`).
 
 | Event | Trigger | Payload |
 |---|---|---|
-| `pageview` (heartbeat) | Software launch | Only the 5 fields above; no extra info |
-| `desktop.app_open` | Software launch | Same as above |
-| `desktop.project_open` | You open a project | Same; **no project name / path** |
-| `desktop.ai_request` | You issue a model request | Same; **no prompt / file content / model name** |
-| `desktop.update_seen` | You see the update prompt | Same |
-| `desktop.update_downloaded` | A new version finishes downloading | Same |
-| `desktop.update_applied` | You restart to apply update | Same |
+| `app_open` (reported as a pageview) | Every software launch | Only the fields above; used for DAU / launch counts |
+| `update_downloaded` | A new version finishes downloading | Same |
+| `update_applied` | Update installed and app restarted | Same |
+
+> **Explicitly no longer collected** (designed in older versions, now removed): project-open (`project_open`), model-request (`ai_request`), update-seen (`update_seen`) and other behavioral events. **Session duration is NOT tracked** (no heartbeat).
 
 #### Frequency
-On each launch: one heartbeat (`pageview`) + one `desktop.app_open` event; other whitelisted events fire as their triggers occur. The client buffers (5 minutes / 20 events) and retries 3 times on failure.
+One `app_open` per launch; one event each when an update is downloaded / applied. **Fire-and-forget — failures are silently ignored** and never block or affect the Software.
 
-#### Default State
-**On by default, with a native first-run dialog** (three buttons: `Allow` / `Disable telemetry` / `Privacy policy`). You can disable directly in the dialog, or later via **any one** of the three methods below (any one suffices, all behave identically):
+#### Default State (opt-out, on by default)
+Anonymous statistics are on by default (disclosed in this policy). You can disable it anytime via **any one** of the following (any one suffices, all behave identically):
 
-1. In-app `Settings → Privacy → Usage Statistics` (writes to `config.json` below)
+1. In-app `Settings → General → Anonymous usage statistics` (writes to `config.json` below)
 2. Environment variable `OPENCODE_TELEMETRY=0` (highest priority; overrides config)
 3. Edit `~/.config/opencode/config.json`, set `"telemetry": false`
 
@@ -172,11 +172,11 @@ Disabling **takes effect immediately**; the client sends nothing further to the 
 
 | Data form | Retention | Location |
 |---|---|---|
-| Raw event records | Destroyed after 30 days | **Servers within mainland China** |
-| Aggregated statistics (version / country / DAU / MAU breakdown) | 12 months | Same |
+| Raw event records | Destroyed after 30 days | **Overseas servers** (anonymous aggregate data only) |
+| Aggregated statistics (version / geo / DAU / MAU breakdown) | 12 months | Same |
 | Final aggregated trends / charts | Permanent | Same |
 
-**Cross-border transfer**: The Software's statistics data is stored **only within mainland China**, with **no cross-border transfer**. Should the storage location change (e.g., to overseas nodes), we will re-obtain your consent under PIPL Chapter III, with a prominent notice in this policy.
+**On data storage and cross-border transfer**: DeskFox is a global project; statistics data is stored on **overseas servers**, and nodes may in the future be deployed both domestically and internationally. Because everything collected is **anonymous aggregate data containing no personal information** (see the "never collected" list in Section 2.3), it does not fall within the scope of "personal information" cross-border transfer as defined by PIPL. We commit to collecting only anonymous data and never identifying information; should the scope ever change, we will re-obtain your consent with a prominent notice in this policy.
 
 ### 3.2 Update Check
 
@@ -198,7 +198,7 @@ Disabling **takes effect immediately**; the client sends nothing further to the 
 - ✅ If a new version exists, a notification or menu item appears; **you must click** to navigate to download
 - ❌ **No silent download** of new versions
 - ❌ **No silent install** / no forced upgrade / no replacing files without your knowledge
-- ❌ **No tracking of your update behavior** (we don't know whether you accepted the prompt — unless you have usage statistics enabled, in which case `desktop.update_seen` / `update_downloaded` / `update_applied` events fire per Section 3.1's whitelist)
+- ❌ **No tracking of the update behavior itself**; only if you have usage statistics enabled, downloading / applying an update reports the two anonymous events `update_downloaded` / `update_applied` (per Section 3.1's whitelist), carrying nothing beyond the version
 
 #### Frequency
 Once on launch, then every 24 hours. Locally cached; failures silently ignored.
@@ -283,7 +283,7 @@ This is a **privacy advantage** of this Software relative to typical SaaS tools,
 ### 6.2 What You Can Verify
 
 Because the code is fully public, you (or any technical person) can:
-- **Audit** what we collect and what we don't (just `grep` the source; the event whitelist is in `packages/desktop-electron/src/main/telemetry-strategy.ts`)
+- **Audit** what we collect and what we don't (just `grep` the source; the event whitelist is the `ALLOWED_EVENTS` constant in `packages/desktop/src-tauri/src/telemetry.rs`)
 - **Build from source** to verify the shipped binaries behave consistently (reproducibility; see [`docs/governance/UPSTREAM-MERGE-GUIDE.md`](../governance/UPSTREAM-MERGE-GUIDE.md) for the build flow)
 - **Fork** your own version (MIT permits) and fully bypass DeskFox's statistics and update channels
 

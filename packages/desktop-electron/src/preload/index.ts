@@ -66,7 +66,6 @@ const api: ElectronAPI = {
   checkUpdate: () => ipcRenderer.invoke("check-update"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   setBackgroundColor: (color: string) => ipcRenderer.invoke("set-background-color", color),
-  trackTelemetryEvent: (name: string) => ipcRenderer.send("track-telemetry-event", name),
 }
 
 contextBridge.exposeInMainWorld("api", api)
