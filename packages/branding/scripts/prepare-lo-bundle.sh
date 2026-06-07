@@ -140,8 +140,9 @@ RESOURCES="$DEST_APP/Contents/Resources"
 echo "[lo-bundle-mac] stripping unnecessary files..."
 
 # [fix: libreoffice-user-install-fail-win 2026-06-07] presets/ 不可整删 ——
-# LibreOffice 首次为新用户建 profile 时从 presets/ 拷初始模板(~200KB),删光 → 干净机器
-# 100% 报 "User installation could not be completed"。两端同因(同 extensions);保留即修复。
+# LibreOffice 首次为新用户建 profile 时从 presets/ 拷初始模板(autotext/basic/config/database/
+# gallery,~200KB),删光 → 干净机器 100% 报 "User installation could not be completed"
+# (extensions 修复后 2026.7.0 仍复现的残留真因)。Win C 实验 + Mac A/B/C 锁定就是它;保留即修复。
 STRIP_DIRS=(
     "help"
     "gallery"

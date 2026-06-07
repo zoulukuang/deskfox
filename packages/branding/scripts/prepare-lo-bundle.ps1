@@ -146,8 +146,8 @@ $stripFolders = @(
 #   - presets —— [fix: libreoffice-user-install-fail-win 2026-06-07] **必须保留**。
 #       LibreOffice 首次建 profile 时从 presets/ 拷初始模板(autotext/basic/config/database/
 #       gallery,仅 ~200KB)。2026-06-03 第二轮剥皮把它列进删除清单整删 → Win/Mac 两端
-#       干净机器上 100% 必报此 fatal error。Mac 端 A/B/C 对照实验单变量锁定就是 presets;
-#       代价 ~200KB 可忽略,保留即修复。
+#       干净机器上 100% 必报此 fatal error,正是 extensions 修复后 2026.7.0 仍复现的残留真因。
+#       Win 端 C 实验 + Mac 端 A/B/C 对照单变量锁定就是 presets;代价 ~200KB 可忽略,保留即修复。
 
 $totalStripped = 0L
 foreach ($folder in $stripFolders) {

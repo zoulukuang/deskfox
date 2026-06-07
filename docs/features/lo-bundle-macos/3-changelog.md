@@ -70,3 +70,58 @@ Commit 1 的"签名策略"假设(`prepare 脚本清除签名 → Tauri 统一重
 - 修复后:soffice entitlements 含 `com.apple.security.cs.allow-jit`;CodeDirectory size 322→450、hashes 3+3→3+7(entitlements 已写入);runtime flag 保留
 - 外层 re-seal 后 `codesign --verify --deep --strict DeskFox.app` ✅ 签名链完整;soffice allow-jit 保留(外层不带 --deep 不覆盖内层,正确)
 - 待补:用户真桌面 QA — 双击 .app 开 Office 预览不崩(Mac 运行时无 CDP,靠手测)
+
+## Follow-up(bug-repro):剥皮删 presets 致新用户首启 "User installation could not be completed"
+
+**分支**: `research/lo-user-installation-macos`
+**commit**: (待填)
+**规模**: Tiny — 2 脚本各去 1 行删除项 + 1 新增测试文件
+**起源**: Windows 2026.7.0 发版后用户截图报 `LibreOffice 25.8 - Fatal Error: The application cannot be started. User installation could not be completed.`。顺线排查 macOS 是否同病。
+
+### 根因
+
+`prepare-lo-bundle.{sh,ps1}` 把 `presets/` 列进剥皮删除清单**整删**。但 `presets/`(autotext/basic/config/database/gallery,~200KB)是 LibreOffice **首次为新用户创建 user profile(UserInstallation)的初始模板源**,整删 → bootstrap 阶段初始化失败 → 该 fatal error(`--headless` 下仍弹窗,因失败早于 headless 生效)。
+
+与 2026-06-03 已修的 `extensions` 同类(profile bootstrap 硬依赖)。**extensions 修复只解决一半**:`presets` 是残留真因,这解释了为何 Win 2026.7.0 在 extensions 修复后仍复现。**两端同病同因**(两脚本删除清单都含 presets)。
+
+### 复现 + 锁定(macOS 实测,三组对照)
+
+直接调打包 bundle 的 `soffice`,完全照搬产品命令行参数(`libreoffice.ts`)+ 全新隔离 `-env:UserInstallation` profile:
+
+| 实验 | 配置 | 结果 |
+|---|---|---|
+| B 复现 | 剥皮 bundle + 全新 profile | ❌ `User installation could not be completed`,exit 77 |
+| A 对照 | 原始完整 LO(挂缓存 DMG)+ 同参数 + 全新 profile | ✅ exit 0,产出 PDF |
+| C 锁定 | 剥皮 bundle **+ 加回 presets** + 全新 profile | ✅ exit 0,产出 PDF |
+
+A 排除参数/环境因素,C 单一变量锁定 `presets`。修复后重跑 `prepare-lo-bundle.sh`(presets 保留)+ ad-hoc 签名(模拟 build-deskfox 签名;arm64 未签名二进制内核 SIGKILL,与 profile 错误无关)+ 全新 profile → exit 0,产出 PDF。
+
+### 改动文件
+
+| 文件 | 类型 | 改动 |
+|---|---|---|
+| `packages/branding/scripts/prepare-lo-bundle.sh` | fork-only | STRIP_DIRS 去掉 `presets` + 说明注释 |
+| `packages/branding/scripts/prepare-lo-bundle.ps1` | fork-only | `$stripFolders` 去掉 `presets` + 说明注释(BOM 保留) |
+| `packages/branding/__tests__/lo-bundle-strip.test.ts` | fork-only 新增 | 静态防回归:断言两脚本删除清单不含 presets/extensions、extensions 走留骨架(8 测,无需 soffice) |
+
+### 回归测试
+
+`bun test --cwd packages/branding` → 21 pass(含新增 8 测)+ typecheck 干净。
+
+### 落地链路(待办)
+
+- **Mac 端**:改完脚本须重跑 `prepare-lo-bundle.sh` 重做 bundle(已做,presets 保留 ✅)→ 下次 build / 发版即带修复。
+- **Win 端**:同事须同样重跑 `prepare-lo-bundle.ps1` 重做 bundle(本机无法验证,fix-by-symmetry,同根因同 presets 内容)→ 重新打包发版。
+- **回退**:把 `presets` 加回各自删除清单即恢复(纯增删行,可单独 revert)。
+
+### Follow-up(code-review):防回归测试接入 CI
+
+code-review(high)指出:新增的 `lo-bundle-strip.test.ts` 当时**未接入任何自动闸** —— CI(`test.yml` 跑 `bun turbo test:ci`)只含 `opencode` + `app`,pre-push 只跑 media-gen/adapter-feishu-lark/app,branding 包无 `test:ci` 脚本 → 守护形同虚设(注释却自称"CI 可跑"),正是本 bug「extensions 修一半又复发」的同款陷阱(防护没真生效)。修:
+
+| 文件 | 改动 |
+|---|---|
+| `packages/branding/package.json` | 加 `"test:ci": "bun test"` 脚本 |
+| `turbo.json` | 注册 `@opencode-ai/branding#test:ci`(无 `^build` 依赖,纯静态读文件) |
+| `lo-bundle-strip.test.ts` | 注释订正:说明已接入 turbo test:ci |
+
+验证:`bun turbo test:ci --filter=@opencode-ai/branding` 真跑到本测试(21 pass)。
