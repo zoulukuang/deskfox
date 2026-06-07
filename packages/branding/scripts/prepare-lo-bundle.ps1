@@ -137,12 +137,17 @@ $stripFolders = @(
     "share\wordbook",        # 拼写词典(可能最大,>100MB)
     "share\basic",           # Basic IDE(不需要 headless 宏)
     "share\xslt",            # XSLT 转换(非二进制格式互转不需要)
-    "presets",               # UI 预设配置
     "readmes",               # 说明文档
     "share\wizards"          # 文档向导(headless 不需要)
 )
-# 注意: share\extensions 不在此列表 —— 整个删除目录会导致 soffice 首次创建 user profile
-# 失败(Fatal Error: User installation could not be completed)。改为下方"删内容留骨架"。
+# 注意: 以下目录**不可整删**,否则 soffice 首次为新用户创建配置目录失败
+# (Fatal Error: User installation could not be completed):
+#   - share\extensions —— 改为下方"删内容留骨架"。
+#   - presets —— [fix: libreoffice-user-install-fail-win 2026-06-07] **必须保留**。
+#       LibreOffice 首次建 profile 时从 presets/ 拷初始模板(autotext/basic/config/database/
+#       gallery,仅 ~200KB)。2026-06-03 第二轮剥皮把它列进删除清单整删 → Win/Mac 两端
+#       干净机器上 100% 必报此 fatal error。Mac 端 A/B/C 对照实验单变量锁定就是 presets;
+#       代价 ~200KB 可忽略,保留即修复。
 
 $totalStripped = 0L
 foreach ($folder in $stripFolders) {
