@@ -1,5 +1,5 @@
 feat-id: feishu-account-workspace
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 飞书账号级 Workspace —— 需求 + 验收标准 + 架构选型
@@ -86,20 +86,20 @@ opencode 原生约束就是"session 跟着 directory 走"（创建强制绑 `dir
 
 > 层级：U=单元测试 / E=mock e2e / N=运行时·native 真桌面 QA（CDP 自测 ≠ 真桌面）
 
-### Logic 清单（单元）
-- [ ] **T1 (U)** `config-schema`：account 带 `workspace` 字段能 parse；不带时 `workspace === undefined`（默认走全局）
-- [ ] **T2 (U)** `config-schema`：`workspace` 非 string（如 number）→ safeParse 返 error
-- [ ] **T3 (U)** `workspaceDir()` helper：`account.workspace` 设了返该值；未设返 `IMBOT_WORKSPACE`
-- [ ] **T4 (U)** `downloadFeishuImage(imagesRoot=tmpDir)`：图片落盘到 `tmpDir/<chatId>/...`，不污染全局
-- [ ] **T5 (U)** `downloadFeishuImage` 越界保护：传 imagesRoot 后，`chatId` 含 `../` 仍被挡在 imagesRoot 子树内（用新 root 重算）
-- [ ] **T6 (U)** `ensureDeskfoxDir`：空项目 → 建 `_deskfox/` + `.gitignore` 含 `_deskfox/`；已有 `.gitignore` 不含 → 追加一行；已含 → 幂等不重复追加
-- [ ] **T7 (U)** `ensureDeskfoxDir`：已有 `.gitignore` 末尾无换行 → 追加前补换行，不破坏原有内容
-- [ ] **T8 (U)** `updateAccountSettings({workspace})`：写入 config 后 `account.workspace` === 传入值；白名单拒绝未知字段不变
-- [ ] **T9 (U)** `updateAccountSettings`：workspace 为空字符串 `""` 的处理（视为清除 → 回退全局 / 或拒绝，spec 定为**清除走默认**）
-- [ ] **T10 (U)** server `/accounts/update-settings`：带 `workspace` 进 allowed set，非 string 返 `invalid_field`；只传 workspace 不算 empty_patch
-- [ ] **T11 (U)** list-accounts wire：account 设了 workspace → 响应含该字段；未设 → 缺省/undefined
+### Logic 清单（单元）—— ✅ 全过（adapter bun test 723 pass / 0 fail）
+- [x] **T1 (U)** `config-schema`：account 带 `workspace` 字段能 parse；不带时 `workspace === undefined`（默认走全局）
+- [x] **T2 (U)** `config-schema`：`workspace` 非 string（如 number）→ safeParse 返 error
+- [x] **T3 (U)** `workspaceDir()` helper：`account.workspace` 设了返该值；未设返 `IMBOT_WORKSPACE`（用 session.create directory 捕获验证）
+- [x] **T4 (U)** `downloadFeishuImage(imagesRoot=tmpDir)`：图片落盘到 `tmpDir/<chatId>/...`，不污染全局
+- [x] **T5 (U)** `downloadFeishuImage` 越界保护：传 imagesRoot 后，`chatId` 含 `../` 仍被挡在 imagesRoot 子树内（用新 root 重算）
+- [x] **T6 (U)** `ensureDeskfoxDir`：空项目 → 建 `_deskfox/` + `.gitignore` 含 `_deskfox/`；已有 `.gitignore` 不含 → 追加一行；已含 → 幂等不重复追加
+- [x] **T7 (U)** `ensureDeskfoxDir`：已有 `.gitignore` 末尾无换行 → 追加前补换行，不破坏原有内容
+- [x] **T8 (U)** `updateAccountSettings({workspace})`：写入 config 后 `account.workspace` === 传入值；白名单拒绝未知字段不变
+- [x] **T9 (U)** `updateAccountSettings`：workspace 为空字符串 `""` → 清除走默认
+- [x] **T10 (U)** server `/accounts/update-settings`：带 `workspace` 进 allowed set，非 string 返 `invalid_field`；只传 workspace 不算 empty_patch
+- [~] **T11 (U→N)** list-accounts wire 回 `workspace`：server 无 configPath 注入难纯单测，降级真机 QA（T14/T15 端到端覆盖）+ 代码一行映射
 
-### View 清单（mock e2e / 真桌面）
+### View 清单（mock e2e / 真桌面）—— ⏳ 待 user 真机 QA
 - [ ] **T12 (E/N)** GUI 弹窗显示 workspace 区块：当前值正确回显（设过显路径，没设显"默认 home base"）
 - [ ] **T13 (N)** 点"选择文件夹"→ 弹原生目录选择器 → 选中后路径回填（native，必真桌面验）
 - [ ] **T14 (N)** 保存后 hot 生效：飞书该账号下条消息的 session 落在新 workspace（真机：发消息 → 看 sidecar log `session.create directory=<新路径>` + `_deskfox/feishu/` 出现在新项目）
@@ -107,10 +107,10 @@ opencode 原生约束就是"session 跟着 directory 走"（创建强制绑 `dir
 - [ ] **T16 (N)** ATTACH 发回：agent 在新 workspace 产出的文件能成功 ATTACH 回飞书（白名单根跟着走）
 - [ ] **T17 (E/N)** P4 提示文案 + A1 安全提示在弹窗可见
 
-### 回归
-- [ ] **T18 (U)** 旧 `downloadFeishuImage`（不传 imagesRoot）行为不变（向后兼容，落全局）—— 既有 image-downloader.test.ts 全绿
-- [ ] **T19 (U)** 既有 message-pipeline / account-store / server / config-schema 测试全绿
-- [ ] **T20 (U)** Rust：`cargo test` feishu_adapter 相关全绿（如有）
+### 回归 —— ✅
+- [x] **T18 (U)** 旧 `downloadFeishuImage`（不传 imagesRoot）行为不变（向后兼容，落全局）—— 既有 image-downloader.test.ts 全绿
+- [x] **T19 (U)** 既有 message-pipeline / account-store / server / config-schema 测试全绿（723 pass）
+- [x] **T20 (build)** Rust：`cargo check` 通过 0 新增 warning + release exe build 成功（无 feishu_adapter 单测，靠编译 + 集成 build 验证）
 
 ---
 
