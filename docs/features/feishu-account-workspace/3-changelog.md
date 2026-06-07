@@ -53,7 +53,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - typecheck：**17/17**（含 app + desktop）。
 - Rust `cargo check`：**通过，0 新增 warning**。
 - release build 集成验证：**成功**（`DeskFox.exe` 41MB，release profile 2m18s，Rust 命令注册 + 前端 bundle + exe 产出全过）。
-- **真桌面 QA（T13-T16，未验）**:原生文件夹选择器 / hot 生效 / `_deskfox/` 落点 + gitignore / ATTACH 发回 —— 均需 user 真机验（CDP 覆盖不了 native + 真 sidecar + 真飞书）。
+- **真 exe + sidecar CDP e2e（新增 `e2e-tauri/specs/feishu-workspace-cdp.spec.ts`，2 用例全过）**:① 全链路往返 —— 真 DeskFox.exe 上 `feishu_list_accounts`(2 账号)→ `feishu_update_account_settings({workspace})` → 读回一致 → 空串清除 → 回 null，打通 GUI invoke→Rust→wire→插件 server→account-store 写盘→读回；② `workspace=123` 在 Rust 边界被拒（type 校验）。覆盖 T8/T9/T10/T11 真机面 + **T14 配置侧**（update-settings 成功触发 onAccountsChanged→pipeline 重建，配置已持久化）。测试结束自动还原账号 workspace，user 真实 config 0 污染。
+- **仍需 user 真桌面 QA（CDP 覆盖不了）**:**T13** 原生文件夹选择器（OS native dialog）/ **T14 消息侧**+**T15**+**T16**（真飞书发消息 → session 落新 workspace + `_deskfox/feishu/` 落点 + ATTACH 发回）。
 
 ## 六、回退方法
 

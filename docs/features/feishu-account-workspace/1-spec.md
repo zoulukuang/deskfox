@@ -97,7 +97,7 @@ opencode 原生约束就是"session 跟着 directory 走"（创建强制绑 `dir
 - [x] **T8 (U)** `updateAccountSettings({workspace})`：写入 config 后 `account.workspace` === 传入值；白名单拒绝未知字段不变
 - [x] **T9 (U)** `updateAccountSettings`：workspace 为空字符串 `""` → 清除走默认
 - [x] **T10 (U)** server `/accounts/update-settings`：带 `workspace` 进 allowed set，非 string 返 `invalid_field`；只传 workspace 不算 empty_patch
-- [~] **T11 (U→N)** list-accounts wire 回 `workspace`：server 无 configPath 注入难纯单测，降级真机 QA（T14/T15 端到端覆盖）+ 代码一行映射
+- [x] **T11 (E2E)** list-accounts wire 回 `workspace`：经 `feishu-workspace-cdp.spec.ts` 真 exe e2e 验证（set 后 `feishu_list_accounts` 读回 workspace === 设值，clear 后回 null）
 
 ### View 清单（mock e2e / 真桌面）—— ⏳ 待 user 真机 QA
 - [ ] **T12 (E/N)** GUI 弹窗显示 workspace 区块：当前值正确回显（设过显路径，没设显"默认 home base"）
