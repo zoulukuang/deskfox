@@ -18,6 +18,7 @@ import {
   type FeishuAdapterConfig,
   type FeishuDomain,
 } from "../core/config-schema"
+import { normalizeWorkspace } from "./deskfox-dir"
 import {
   defaultMode,
   defaultFilePath,
@@ -237,10 +238,12 @@ export function updateAccountSettings(
   if (patch.requireMention !== undefined) {
     account.requireMention = patch.requireMention
   }
-  // [feat: feishu-account-workspace] 空串/纯空白 = 清除(回退默认);非空 = 设
+  // [feat: feishu-account-workspace] 空串/纯空白 = 清除(回退默认);非空 = 设(存 trim 后值)
+  // [fix: feishu-review-followup 2026-06-07] 走 normalizeWorkspace,存 trim 后值(防带空格路径)
   if (patch.workspace !== undefined) {
-    if (patch.workspace.trim().length > 0) {
-      account.workspace = patch.workspace
+    const norm = normalizeWorkspace(patch.workspace)
+    if (norm) {
+      account.workspace = norm
     } else {
       delete account.workspace
     }
