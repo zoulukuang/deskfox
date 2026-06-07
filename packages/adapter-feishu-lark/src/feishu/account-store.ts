@@ -215,6 +215,11 @@ export function updateAccountSettings(
     model?: { providerID: string; modelID: string } | null
     /** [feat: feishu-group-mention-policy] 2026-05-24 */
     requireMention?: boolean
+    /**
+     * [feat: feishu-account-workspace] 2026-06-07
+     * undefined = 不动;空串 = 清除(回退全局默认);非空 = 设为该真实项目目录。
+     */
+    workspace?: string
   },
   configPath: string = defaultConfigPath(),
 ): boolean {
@@ -231,6 +236,14 @@ export function updateAccountSettings(
   }
   if (patch.requireMention !== undefined) {
     account.requireMention = patch.requireMention
+  }
+  // [feat: feishu-account-workspace] 空串/纯空白 = 清除(回退默认);非空 = 设
+  if (patch.workspace !== undefined) {
+    if (patch.workspace.trim().length > 0) {
+      account.workspace = patch.workspace
+    } else {
+      delete account.workspace
+    }
   }
   saveConfig(config, configPath)
   return true

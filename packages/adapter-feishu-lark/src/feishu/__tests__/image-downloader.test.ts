@@ -66,6 +66,55 @@ describe("downloadFeishuImage (iter image-recognition)", () => {
     rmSync(r.absolutePath)
   })
 
+  // [feat: feishu-account-workspace] 2026-06-07
+  test("T4: 传 imagesRoot → 落盘到该 root 子目录,不污染全局", async () => {
+    const fakeBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9])
+    globalThis.fetch = mock(
+      async () =>
+        new Response(fakeBytes.buffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+    ) as unknown as typeof fetch
+
+    const customRoot = join(TMP_WS, "_deskfox", "feishu", "images")
+    const r = await downloadFeishuImage(
+      "img_acct_ws",
+      "om_msg_test",
+      "oc_chat_acct",
+      "tk_fake",
+      "https://open.feishu.cn",
+      customRoot,
+    )
+    expect(r.absolutePath.startsWith(customRoot)).toBe(true)
+    expect(r.absolutePath).toContain("oc_chat_acct")
+    expect(r.absolutePath).not.toContain("imbot-workspace")
+    expect(existsSync(r.absolutePath)).toBe(true)
+  })
+
+  test("T5: 传 imagesRoot 后 chatId 含 ../ 仍被挡在该 root 子树内", async () => {
+    const fakeBytes = new Uint8Array([1, 2])
+    globalThis.fetch = mock(
+      async () =>
+        new Response(fakeBytes.buffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+    ) as unknown as typeof fetch
+
+    const customRoot = join(TMP_WS, "_deskfox", "feishu", "images")
+    const r = await downloadFeishuImage(
+      "img_trav",
+      "om_msg_test",
+      "../../../etc/evil",
+      "tk_fake",
+      "https://open.feishu.cn",
+      customRoot,
+    )
+    // sanitize 把 ../ 变 _,落盘仍在 customRoot 子树内
+    expect(r.absolutePath.startsWith(customRoot)).toBe(true)
+  })
+
   test("I2: mock fetch 404 → throw 含 status + image_key", async () => {
     globalThis.fetch = mock(
       async () =>

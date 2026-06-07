@@ -127,6 +127,13 @@ export const FeishuAccountSchema = z.object({
       modelID: z.string().min(1),
     })
     .optional(),
+  /**
+   * per-account workspace —— agent 工作目录（默认未设 → 走全局 IMBOT_WORKSPACE home base）。
+   * 设了 → 该账号所有 session 在此真实项目目录创建，飞书收的文件/图片落 `<ws>/_deskfox/feishu/`。
+   * 改此字段 = 该账号换新家从零开始（旧 session 原地保留不迁）。
+   * [feat: feishu-account-workspace] 2026-06-07
+   */
+  workspace: z.string().optional(),
   /** 系统 prompt(账号级,默认 empty 用 opencode default) */
   systemPrompt: z.string().optional(),
   /** 工具白名单(账号级)*/
