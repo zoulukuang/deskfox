@@ -1091,5 +1091,13 @@ export const dict = {
   "settings.feishu.edit.save": "儲存",
   "settings.feishu.edit.cancel": "取消",
   "settings.feishu.edit.loadFailed": "拉取提供商列表失敗:{{msg}}",
+  "settings.feishu.edit.workspaceSectionTitle": "工作目錄",
+  "settings.feishu.edit.workspace.default": "預設(全域 home base)",
+  "settings.feishu.edit.workspace.pick": "選擇資料夾",
+  "settings.feishu.edit.workspace.clear": "恢復預設",
+  "settings.feishu.edit.workspace.hintFollow":
+    "對話記憶跟著工作目錄走——換目錄會開啟全新對話,舊對話留在原目錄。",
+  "settings.feishu.edit.workspace.security":
+    "⚠️ 此帳號的 AI 將能讀寫所選專案的真實檔案並執行命令(用於遠端開發)。涉及敏感讀取或不可逆操作時,會發飛書卡片等你確認。",
   // FORK-END
 } satisfies Partial<Record<Keys, string>>

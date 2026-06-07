@@ -372,6 +372,43 @@ describe("onReady callback", () => {
 
 
 // ============================================================
+// [feat: feishu-account-workspace] 2026-06-07 — /accounts/update-settings workspace 校验
+// 只测 account 查找之前返回的纯校验路径(不碰真实 config)
+// ============================================================
+
+describe("POST /accounts/update-settings — workspace 字段校验 (T10)", () => {
+  async function post(body: unknown) {
+    return await fetch(`${h.url}/accounts/update-settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify(body),
+    })
+  }
+
+  test("workspace 非 string(number)→ 400 invalid_field", async () => {
+    const r = await post({ accountId: "acc1", workspace: 123 })
+    expect(r.status).toBe(400)
+    const j = (await r.json()) as { error: string; field?: string }
+    expect(j.error).toBe("invalid_field")
+    expect(j.field).toBe("workspace")
+  })
+
+  test("未知字段仍被拒(workspace 在白名单不影响其它)→ 400 unknown_fields", async () => {
+    const r = await post({ accountId: "acc1", workspace: "D:/x", bogus: 1 })
+    expect(r.status).toBe(400)
+    const j = (await r.json()) as { error: string }
+    expect(j.error).toBe("unknown_fields")
+  })
+
+  test("只传 accountId(无 workspace/model/requireMention)→ 400 empty_patch", async () => {
+    const r = await post({ accountId: "acc1" })
+    expect(r.status).toBe(400)
+    const j = (await r.json()) as { error: string }
+    expect(j.error).toBe("empty_patch")
+  })
+})
+
+// ============================================================
 // 随机端口 + 默认随机 password
 // ============================================================
 

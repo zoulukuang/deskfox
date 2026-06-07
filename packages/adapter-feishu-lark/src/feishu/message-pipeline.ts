@@ -42,6 +42,11 @@ import {
   uploadImage,
 } from "./file-uploader"
 import { downloadFeishuImage } from "./image-downloader"
+import {
+  deskfoxFeishuFilesDir,
+  deskfoxFeishuImagesDir,
+  ensureDeskfoxDir,
+} from "./deskfox-dir"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
   flattenMergeForward,
@@ -495,11 +500,23 @@ export class MessagePipeline {
     this.permissionController = new PermissionCardController({
       opencodeClient: opts.opencodeClient,
       larkClient: this.larkClient,
-      workspaceDir: IMBOT_WORKSPACE,
+      workspaceDir: this.workspaceDir(),
     })
     this.confirmController = new ConfirmCardController({
       larkClient: this.larkClient,
     })
+  }
+
+  /**
+   * 本账号的 agent 工作目录。
+   * - 设了 `account.workspace`(GUI 选的真实项目)→ 用它
+   * - 没设 → 回退全局 IMBOT_WORKSPACE home base
+   * 空串视为未设(回退默认),跟 account-store 清除语义一致。
+   * [feat: feishu-account-workspace] 2026-06-07
+   */
+  private workspaceDir(): string {
+    const ws = this.opts.account.workspace
+    return ws && ws.trim().length > 0 ? ws : IMBOT_WORKSPACE
   }
 
   /**
@@ -639,12 +656,15 @@ export class MessagePipeline {
 
       try {
         const auth = await getClientAuthContext(this.larkClient)
+        // [feat: feishu-account-workspace] 落 <workspace>/_deskfox/feishu/images;首次确保目录 + gitignore
+        ensureDeskfoxDir(this.workspaceDir())
         const dl = await downloadFeishuImage(
           imageKey,
           event.messageId,
           event.chatId,
           auth.token,
           auth.domain,
+          deskfoxFeishuImagesDir(this.workspaceDir()),
         )
         imagePart = { mime: dl.mime, filename: dl.filename, absolutePath: dl.absolutePath }
         console.log(
@@ -829,7 +849,7 @@ export class MessagePipeline {
     if (!sessionID) {
       try {
         const res = await this.opts.opencodeClient.session.create({
-          query: { directory: IMBOT_WORKSPACE },
+          query: { directory: this.workspaceDir() },
           body: {
             title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}`,
           },
@@ -1016,7 +1036,7 @@ export class MessagePipeline {
     if (!sessionID) {
       try {
         const res = await this.opts.opencodeClient.session.create({
-          query: { directory: IMBOT_WORKSPACE },
+          query: { directory: this.workspaceDir() },
           body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
         })
         const id = (res as { data?: { id?: string } }).data?.id
@@ -1271,7 +1291,7 @@ export class MessagePipeline {
     if (!sessionID) {
       try {
         const res = await this.opts.opencodeClient.session.create({
-          query: { directory: IMBOT_WORKSPACE },
+          query: { directory: this.workspaceDir() },
           body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
         })
         const id = (res as { data?: { id?: string } }).data?.id
@@ -1391,7 +1411,9 @@ export class MessagePipeline {
 
     // 保存到磁盘: {feishuFilesRoot}/{safeChatId}/{YYYYMMDDTHHmmss}-{safeFileName}
     // HHmmss 防止同日同名文件覆盖(如用户上午/下午分别发了两份 report.xlsx)
-    const filesRoot = this.opts.feishuFilesRoot ?? join(IMBOT_WORKSPACE, "feishu-files")
+    // [feat: feishu-account-workspace] 默认落 <workspace>/_deskfox/feishu/files;首次确保目录 + gitignore
+    const filesRoot = this.opts.feishuFilesRoot ?? deskfoxFeishuFilesDir(this.workspaceDir())
+    if (!this.opts.feishuFilesRoot) ensureDeskfoxDir(this.workspaceDir())
     const safeChatId = chatId.replace(/[/\\:*?"<>|]/g, "_").slice(0, 64)
     const safeFileName = fileName.replace(/[/\\:*?"<>|]/g, "_")
     const d = new Date()
@@ -1523,7 +1545,7 @@ export class MessagePipeline {
     if (!sessionID) {
       try {
         const res = await this.opts.opencodeClient.session.create({
-          query: { directory: IMBOT_WORKSPACE },
+          query: { directory: this.workspaceDir() },
           body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
         })
         const id = (res as { data?: { id?: string } }).data?.id
@@ -1573,7 +1595,7 @@ export class MessagePipeline {
   /**
    * [feat: feishu-bridge-light] 解析 reply 里的 [ATTACH:path] marker、上传文件、strip marker。
    *
-   * 安全约束:路径必须在 ~/.opencode/imbot-workspace/ 子树内(classifyAttachment 判)。
+   * 安全约束:路径必须在该账号 workspace 子树内(默认全局 imbot-workspace,per-account 时为其项目目录;classifyAttachment 判)。
    * 单个 ATTACH 失败不影响其它;失败原因追加到最终文本 warnings 段尾,user 可见。
    *
    * 返回最终要发到飞书的文本(可能为空 — 全是附件无文字时)。
@@ -1589,7 +1611,9 @@ export class MessagePipeline {
     )
     const warnings: string[] = []
     for (const p of paths) {
-      const cls = classifyAttachment(p, this.opts.attachWorkspaceRoot)
+      // [feat: feishu-account-workspace] ATTACH 白名单根跟随 workspace(默认 = 该账号工作目录),
+      // 否则 agent 在自定义项目里产出的文件路径不在全局 imbot-workspace 子树内 → 发不回飞书。
+      const cls = classifyAttachment(p, this.opts.attachWorkspaceRoot ?? this.workspaceDir())
       if (cls.kind === "reject") {
         warnings.push(`⚠️ 拒绝发送 \`${p}\`:${cls.reason}`)
         console.warn(
@@ -1692,7 +1716,7 @@ export class MessagePipeline {
 
     try {
       const res = await this.opts.opencodeClient.config.providers({
-        query: { directory: IMBOT_WORKSPACE },
+        query: { directory: this.workspaceDir() },
       })
       const supportsImage = extractVisionSupport(
         (res as { data?: unknown }).data,
@@ -1747,7 +1771,7 @@ export class MessagePipeline {
     void this.opts.opencodeClient.session
       .promptAsync({
         path: { id: sessionID },
-        query: { directory: IMBOT_WORKSPACE },
+        query: { directory: this.workspaceDir() },
         body: {
           agent,
           system: this.getSystemPrompt(),
@@ -1819,7 +1843,7 @@ export class MessagePipeline {
     // 直接拉 messages 取 last assistant text(role 准确,不会 echo user prompt)
     const msgsRes = await this.opts.opencodeClient.session.messages({
       path: { id: sessionID },
-      query: { directory: IMBOT_WORKSPACE },
+      query: { directory: this.workspaceDir() },
     })
     const wrap = msgsRes as {
       data?: Array<{
@@ -1922,7 +1946,7 @@ export class MessagePipeline {
   async debugFetchMessages(sessionID: string): Promise<unknown> {
     const r = await this.opts.opencodeClient.session.messages({
       path: { id: sessionID },
-      query: { directory: IMBOT_WORKSPACE },
+      query: { directory: this.workspaceDir() },
     })
     const wrap = r as {
       data?: unknown
@@ -1957,7 +1981,7 @@ export class MessagePipeline {
     await (rawClient as { patch: (req: unknown) => Promise<unknown> }).patch({
       url: "/session/{id}",
       path: { id: sessionID },
-      query: { directory: IMBOT_WORKSPACE },
+      query: { directory: this.workspaceDir() },
       body: {
         time: { archived: Date.now() },
       },

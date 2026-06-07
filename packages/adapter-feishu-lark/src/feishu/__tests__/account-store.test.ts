@@ -372,6 +372,31 @@ describe("updateAccountSettings", () => {
     expect(after.requireMention).toBe(false)
   })
 
+  // [feat: feishu-account-workspace] 2026-06-07
+  test("T8: 只 patch workspace → workspace 更新,其他字段不动", () => {
+    seedAccount("accWs")
+    const before = loadConfig(configPath()).accounts["accWs"]
+    expect(before.workspace).toBeUndefined()
+
+    const r = updateAccountSettings("accWs", { workspace: "D:/proj/foo" }, configPath())
+    expect(r).toBe(true)
+
+    const after = loadConfig(configPath()).accounts["accWs"]
+    expect(after.workspace).toBe("D:/proj/foo")
+    expect(after.appSecret).toEqual(before.appSecret)
+    expect(after.requireMention).toEqual(before.requireMention)
+  })
+
+  test("T9: workspace 空串/纯空白 → 清除(回退默认)", () => {
+    seedAccount("accWsClr")
+    updateAccountSettings("accWsClr", { workspace: "D:/proj/bar" }, configPath())
+    expect(loadConfig(configPath()).accounts["accWsClr"].workspace).toBe("D:/proj/bar")
+
+    const r = updateAccountSettings("accWsClr", { workspace: "   " }, configPath())
+    expect(r).toBe(true)
+    expect(loadConfig(configPath()).accounts["accWsClr"].workspace).toBeUndefined()
+  })
+
   test("model: null → 清除 model 字段(走 user default)", () => {
     seedAccount("acc4")
     updateAccountSettings(

@@ -18,9 +18,9 @@ import { join, resolve, sep } from "node:path"
 // (plugin → message-pipeline → image-downloader → plugin)
 // 自己重算同样的路径(plugin.ts:55 也是 join(homedir(), ".opencode", "imbot-workspace"))
 const IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
+// 全局默认收件图片根(per-account workspace 未设时的 fallback)。
+// 越界保护已改为函数内按传入 imagesRoot 现算(用 path.sep 做子树前缀,Windows 反斜杠安全)。
 export const FEISHU_IMAGES_DIR = join(IMBOT_WORKSPACE, "feishu-images")
-// 用 path.sep(而非写死 "/")做子树前缀,否则 Windows 上 resolve 返反斜杠路径、硬加 "/" 致 startsWith 永假 → 误报越界
-const FEISHU_IMAGES_DIR_RESOLVED = resolve(FEISHU_IMAGES_DIR) + sep
 
 // [feat: feishu-image-recognition] S1 大小硬限 — LLM API 限制(Claude 5MB / OpenAI 20MB),
 // 取 20MB 上限既兼容 OpenAI,Claude 失败时 LLM 自己报错复述给 user
@@ -66,6 +66,8 @@ export interface DownloadedImage {
  *   - chatId:聊天 ID,用作子目录分类
  *   - tenantAccessToken:飞书 tenant_access_token
  *   - domain:飞书 API domain(可选,默认国际版 open.feishu.cn)
+ *   - imagesRoot:落盘根目录(可选,默认全局 FEISHU_IMAGES_DIR;per-account workspace 传
+ *     `<ws>/_deskfox/feishu/images`)。越界保护对此 root 现算。[feat: feishu-account-workspace]
  */
 export async function downloadFeishuImage(
   imageKey: string,
@@ -73,6 +75,7 @@ export async function downloadFeishuImage(
   chatId: string,
   tenantAccessToken: string,
   domain = "https://open.feishu.cn",
+  imagesRoot: string = FEISHU_IMAGES_DIR,
 ): Promise<DownloadedImage> {
   const url = `${domain}/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(imageKey)}?type=image`
 
@@ -140,13 +143,15 @@ export async function downloadFeishuImage(
 
   // chatId 可能含特殊字符(`oc_xxx` 安全;但 `om_xxx:test` 或路径分隔符要 sanitize 防目录遍历)
   const safeChatId = chatId.replace(/[^a-zA-Z0-9_-]/g, "_")
-  const dir = join(FEISHU_IMAGES_DIR, safeChatId)
+  const dir = join(imagesRoot, safeChatId)
 
-  // S4 路径越界 assert — 即使 sanitize 漏改了,resolve 后必须在 FEISHU_IMAGES_DIR 子树内
+  // S4 路径越界 assert — 即使 sanitize 漏改了,resolve 后必须在 imagesRoot 子树内
+  // [feat: feishu-account-workspace] root 改为按传入 imagesRoot 现算(支持 per-account workspace)
+  const imagesRootResolved = resolve(imagesRoot) + sep
   const resolvedDir = resolve(dir) + sep
-  if (!resolvedDir.startsWith(FEISHU_IMAGES_DIR_RESOLVED)) {
+  if (!resolvedDir.startsWith(imagesRootResolved)) {
     throw new Error(
-      `飞书图片落盘路径越界 (resolved=${resolvedDir}, root=${FEISHU_IMAGES_DIR_RESOLVED}) for image_key=${imageKey}`,
+      `飞书图片落盘路径越界 (resolved=${resolvedDir}, root=${imagesRootResolved}) for image_key=${imageKey}`,
     )
   }
 

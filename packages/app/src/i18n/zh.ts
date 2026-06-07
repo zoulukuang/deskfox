@@ -1094,6 +1094,14 @@ export const dict = {
   "settings.feishu.edit.noProviders": "尚未配置任何 LLM 提供商,请先在 DeskFox 设置提供商。",
   "settings.feishu.edit.save": "保存",
   "settings.feishu.edit.cancel": "取消",
+  "settings.feishu.edit.workspaceSectionTitle": "工作目录",
+  "settings.feishu.edit.workspace.default": "默认(全局 home base)",
+  "settings.feishu.edit.workspace.pick": "选择文件夹",
+  "settings.feishu.edit.workspace.clear": "恢复默认",
+  "settings.feishu.edit.workspace.hintFollow":
+    "对话记忆跟着工作目录走——换目录会开启全新对话,旧对话留在原目录。",
+  "settings.feishu.edit.workspace.security":
+    "⚠️ 此账号的 AI 将能读写所选项目的真实文件并执行命令(用于远程开发)。涉及敏感读取或不可逆操作时,会发飞书卡片等你确认。",
   "settings.feishu.edit.loadFailed": "拉取提供商列表失败:{{msg}}",
   // FORK-END
 } satisfies Partial<Record<Keys, string>>

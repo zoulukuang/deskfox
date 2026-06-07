@@ -1112,5 +1112,13 @@ export const dict = {
   "settings.feishu.edit.save": "Save",
   "settings.feishu.edit.cancel": "Cancel",
   "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}",
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace",
+  "settings.feishu.edit.workspace.default": "Default (global home base)",
+  "settings.feishu.edit.workspace.pick": "Choose folder",
+  "settings.feishu.edit.workspace.clear": "Reset to default",
+  "settings.feishu.edit.workspace.hintFollow":
+    "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.",
+  "settings.feishu.edit.workspace.security":
+    "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.",
   // FORK-END
 }

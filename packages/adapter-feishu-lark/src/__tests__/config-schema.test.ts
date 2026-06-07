@@ -65,6 +65,20 @@ describe("FeishuAccountSchema", () => {
     expect(() => FeishuAccountSchema.parse({ ...validAccount, appId: "" })).toThrow()
   })
 
+  // [feat: feishu-account-workspace] 2026-06-07
+  test("T1: 带 workspace 字段能 parse;不带时 undefined", () => {
+    const withWs = FeishuAccountSchema.parse({ ...validAccount, workspace: "D:/proj/foo" })
+    expect(withWs.workspace).toBe("D:/proj/foo")
+    const withoutWs = FeishuAccountSchema.parse(validAccount)
+    expect(withoutWs.workspace).toBeUndefined()
+  })
+
+  test("T2: workspace 非 string(number)→ 拒绝", () => {
+    expect(() =>
+      FeishuAccountSchema.parse({ ...validAccount, workspace: 123 as never }),
+    ).toThrow()
+  })
+
   test("openId 不可空", () => {
     expect(() => FeishuAccountSchema.parse({ ...validAccount, openId: "" })).toThrow()
   })

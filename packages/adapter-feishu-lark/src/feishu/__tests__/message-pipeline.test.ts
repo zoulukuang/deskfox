@@ -1967,3 +1967,92 @@ function makeMinimalXlsxForTest(): Uint8Array {
   const sheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row></sheetData></worksheet>`
   return zipSync({ "xl/sharedStrings.xml": enc(ss), "xl/worksheets/sheet1.xml": enc(sheet) })
 }
+
+// ============================================================
+// [feat: feishu-account-workspace] 2026-06-07 — workspaceDir() 行为 (T3)
+// 用 session.create 捕获 directory 后立即抛错的轻量 seam,避免进 prompt 等待
+// ============================================================
+
+import { homedir } from "node:os"
+
+describe("workspaceDir() session.create directory 跟随 account.workspace (T3)", () => {
+  function buildFakes() {
+    const larkClient = {
+      im: {
+        v1: {
+          message: { create: async () => ({ data: { message_id: "om_fake" } }) },
+          messageReaction: { create: async () => ({ data: {} }) },
+        },
+      },
+    } as any
+    let capturedDir: string | undefined
+    const opencodeClient = {
+      session: {
+        create: async (args: any) => {
+          capturedDir = args?.query?.directory
+          // 捕获后立即抛错 → pipeline catch 走 friendlyError 早退,不进 prompt 等待
+          throw new Error("stop-after-capture")
+        },
+        messages: async () => ({ data: [] }),
+        promptAsync: async () => ({ data: {} }),
+      },
+    } as any
+    return { larkClient, opencodeClient, getDir: () => capturedDir }
+  }
+
+  function run(account: Partial<FeishuAccount>) {
+    const tmpDir = mkdtempSync(join(tmpdir(), "ws-dir-test-"))
+    const store = new ChatSessionStore(join(tmpDir, "sessions.json"))
+    const fakes = buildFakes()
+    const pipeline = new MessagePipeline({
+      account: {
+        appId: "a",
+        appSecret: { type: "plaintext", value: "s" },
+        domain: "feishu",
+        agent: "build",
+        requireMention: true,
+        ...account,
+      } as FeishuAccount,
+      accountId: "acc1",
+      opencodeClient: fakes.opencodeClient,
+      dispatcher: new PromptDispatcher(),
+      chatSessionStore: store,
+      larkClient: fakes.larkClient,
+    })
+    return { pipeline, fakes, tmpDir }
+  }
+
+  test("account.workspace 设了 → directory = 该值", async () => {
+    const { pipeline, fakes, tmpDir } = run({ workspace: "D:/proj/foo" })
+    await pipeline.testHandle({
+      accountId: "acc1",
+      messageId: "om_1",
+      chatId: "oc_x",
+      chatType: "p2p",
+      messageType: "text",
+      content: JSON.stringify({ text: "hello" }),
+      senderOpenId: "ou_s",
+      ts: String(1),
+      mentions: [],
+    } as ImMessageEvent)
+    expect(fakes.getDir()).toBe("D:/proj/foo")
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  test("account.workspace 未设 → directory = 全局 IMBOT_WORKSPACE", async () => {
+    const { pipeline, fakes, tmpDir } = run({})
+    await pipeline.testHandle({
+      accountId: "acc1",
+      messageId: "om_2",
+      chatId: "oc_y",
+      chatType: "p2p",
+      messageType: "text",
+      content: JSON.stringify({ text: "hello" }),
+      senderOpenId: "ou_s",
+      ts: String(1),
+      mentions: [],
+    } as ImMessageEvent)
+    expect(fakes.getDir()).toBe(join(homedir(), ".opencode", "imbot-workspace"))
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+})

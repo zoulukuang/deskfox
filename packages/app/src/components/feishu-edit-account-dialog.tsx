@@ -10,6 +10,7 @@ import "./feishu-edit-account-dialog.css"
 import { useLanguage } from "@/context/language"
 import {
   feishuListProviders,
+  feishuPickWorkspaceDir,
   feishuUpdateAccountSettings,
   type ModelRef,
   type ProvidersResponse,
@@ -21,6 +22,8 @@ export const FeishuEditAccountDialog: Component<{
   // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 — 删 currentEnableAutoGroupCreate prop
   /** [feat: feishu-group-mention-policy] 2026-05-24 */
   currentRequireMention?: boolean
+  /** [feat: feishu-account-workspace] 2026-06-07 当前 workspace(null = 走全局默认) */
+  currentWorkspace?: string | null
   onSaved?: () => void
 }> = (props) => {
   const dialog = useDialog()
@@ -35,8 +38,20 @@ export const FeishuEditAccountDialog: Component<{
   const [requireMention, setRequireMention] = createSignal(
     props.currentRequireMention ?? true,
   )
+  // [feat: feishu-account-workspace] 2026-06-07 — workspace state(空串 = 走全局默认)
+  const [workspace, setWorkspace] = createSignal(props.currentWorkspace ?? "")
+  const initialWorkspace = props.currentWorkspace ?? ""
   const [saving, setSaving] = createSignal(false)
   const [saveError, setSaveError] = createSignal<string | null>(null)
+
+  const handlePickWorkspace = async () => {
+    try {
+      const picked = await feishuPickWorkspaceDir()
+      if (picked) setWorkspace(picked)
+    } catch (err) {
+      setSaveError((err as Error).message ?? String(err))
+    }
+  }
 
   // ⚠️ 用 createSignal + 手动 fetch(避开 createResource 触发外层 Suspense fallback 导致整屏闪)
   // 同 file-tabs.tsx:1179 / settings-feishu.tsx 处理方式
@@ -103,10 +118,13 @@ export const FeishuEditAccountDialog: Component<{
       const modelPayload: ModelRef | null = useDefault()
         ? null
         : { provider_id: providerID(), model_id: modelID() }
+      // [feat: feishu-account-workspace] 2026-06-07 — 仅当 workspace 变化时才发(空串 = 清走默认)
+      const workspaceChanged = workspace().trim() !== initialWorkspace.trim()
       await feishuUpdateAccountSettings(props.accountId, {
         model: modelPayload,
         // [feat: feishu-group-mention-policy] 2026-05-24
         requireMention: requireMention(),
+        ...(workspaceChanged ? { workspace: workspace().trim() } : {}),
       })
       props.onSaved?.()
       dialog.close()
@@ -276,6 +294,60 @@ export const FeishuEditAccountDialog: Component<{
                 <p class="text-13-regular text-text-weak pl-6">
                   {language.t("settings.feishu.edit.allowReadAll.hint")}
                 </p>
+              </div>
+
+              {/* 工作目录 分隔块 [feat: feishu-account-workspace] 2026-06-07 */}
+              <div class="flex items-center gap-2 self-stretch">
+                <span class="text-13-medium text-text-weak">
+                  {language.t("settings.feishu.edit.workspaceSectionTitle")}
+                </span>
+                <div class="flex-1 h-px bg-border-weak" />
+              </div>
+
+              <div class="flex flex-col gap-2 self-stretch">
+                {/* 当前值 + 选择/恢复默认 */}
+                <div class="flex items-center gap-2">
+                  <span
+                    class="text-13-regular flex-1 truncate"
+                    classList={{
+                      "text-text-weak": !!workspace().trim(),
+                      "text-text-weaker": !workspace().trim(),
+                    }}
+                    title={workspace().trim() || undefined}
+                  >
+                    {workspace().trim() || language.t("settings.feishu.edit.workspace.default")}
+                  </span>
+                  <Button
+                    class="w-auto shrink-0"
+                    type="button"
+                    size="small"
+                    variant="secondary"
+                    onClick={() => void handlePickWorkspace()}
+                  >
+                    {language.t("settings.feishu.edit.workspace.pick")}
+                  </Button>
+                  <Show when={!!workspace().trim()}>
+                    <Button
+                      class="w-auto shrink-0"
+                      type="button"
+                      size="small"
+                      variant="secondary"
+                      onClick={() => setWorkspace("")}
+                    >
+                      {language.t("settings.feishu.edit.workspace.clear")}
+                    </Button>
+                  </Show>
+                </div>
+                {/* P4 提示:对话记忆跟着目录走 */}
+                <p class="text-13-regular text-text-weak">
+                  {language.t("settings.feishu.edit.workspace.hintFollow")}
+                </p>
+                {/* A1 安全提示:仅当设了真实项目目录时显示 */}
+                <Show when={!!workspace().trim()}>
+                  <p class="text-13-regular text-text-warning">
+                    {language.t("settings.feishu.edit.workspace.security")}
+                  </p>
+                </Show>
               </div>
 
               {/* error */}

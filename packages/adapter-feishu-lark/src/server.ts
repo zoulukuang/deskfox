@@ -297,6 +297,8 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
           botName: account.botName ?? "",
           // [feat: feishu-group-mention-policy] 2026-05-24 暴露 requireMention 给 GUI
           requireMention: account.requireMention,
+          // [feat: feishu-account-workspace] 2026-06-07 回显当前 workspace(未设 → null)
+          workspace: account.workspace ?? null,
         }))
         return jsonResponse({ accounts: list }, 200)
       } catch (err) {
@@ -350,6 +352,8 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
         accountId?: string
         model?: { providerID?: string; modelID?: string } | null
         requireMention?: boolean
+        // [feat: feishu-account-workspace] 2026-06-07
+        workspace?: string
       } & Record<string, unknown>
       try {
         body = (await req.json()) as typeof body
@@ -360,7 +364,7 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
         return jsonResponse({ error: "missing_account_id" }, 400)
       }
       // 白名单字段校验 — 拒绝未知字段防 schema injection
-      const allowed = new Set(["accountId", "model", "requireMention"])
+      const allowed = new Set(["accountId", "model", "requireMention", "workspace"])
       const unknown = Object.keys(body).filter((k) => !allowed.has(k))
       if (unknown.length > 0) {
         return jsonResponse(
@@ -371,11 +375,12 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
       // partial:必须至少一项 settings(单 accountId 不算改动)
       const hasModel = "model" in body
       const hasReqMention = "requireMention" in body
-      if (!hasModel && !hasReqMention) {
+      const hasWorkspace = "workspace" in body
+      if (!hasModel && !hasReqMention && !hasWorkspace) {
         return jsonResponse(
           {
             error: "empty_patch",
-            message: "至少需要 model / requireMention 之一",
+            message: "至少需要 model / requireMention / workspace 之一",
           },
           400,
         )
@@ -384,6 +389,13 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
       if (hasReqMention && typeof body.requireMention !== "boolean") {
         return jsonResponse(
           { error: "invalid_field", field: "requireMention", expected: "boolean" },
+          400,
+        )
+      }
+      // [feat: feishu-account-workspace] workspace 必须 string(空串 = 清除走默认)
+      if (hasWorkspace && typeof body.workspace !== "string") {
+        return jsonResponse(
+          { error: "invalid_field", field: "workspace", expected: "string" },
           400,
         )
       }
@@ -397,6 +409,9 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
       }
       if (hasReqMention) {
         patch.requireMention = body.requireMention!
+      }
+      if (hasWorkspace) {
+        patch.workspace = body.workspace!
       }
       const r = updateAccountSettings(body.accountId, patch)
       if (!r) {
