@@ -59,6 +59,17 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **#8 install_id UUID 校验**:读到非 UUID 脏值(云同步/外部进程写入、含控制字符)丢弃重生成,防脏值进 payload / UA header(控制字符会让 reqwest 构造 header 失败 → 该机 telemetry 永久静默失效)。
 - 新增单测:T1c(脏值重生成)/ T1d(0600 权限,Unix)/ T8(channel→site 映射)。
 
+### 第三批(2026-06-07,第二轮 `/code-review high` 发现的问题,全处理)
+
+telemetry 17 单测 + typecheck 16/16 + app 808 全绿:
+- **jsonc 注释致 opt-out 静默失灵(补完上批 #5)**:上批用严格 `serde_json` 读 `opencode.jsonc`,含注释会解析失败被跳过 → 用户在带注释的 jsonc 写 `telemetry:false` 不生效。改为**复用 `feishu_plugin_install::strip_comments`**(改 `pub(crate)`)先去注释再解析,新增纯函数 `parse_telemetry_field` + 单测 T9(含注释/注释里假字样均正确)。
+- **env/配置覆盖时 UI 开关"点了弹回"无提示**:`get_telemetry_enabled` 改返回 `TelemetryStatus { enabled, locked }`;`locked` = 有效值被 env 或 opencode.json/jsonc(优先级高于 config.json)决定。前端 platform 接口同步;设置页开关 `disabled={locked}` + description 追加锁定说明(新增 i18n `...telemetry.locked` en/zh/zht)。不再让用户点了写 config 却被覆盖、开关弹回无解释。
+- **原子写失败临时文件泄漏**:`write_telemetry_config_in` 的 `rename` 失败时 `remove_file(tmp)` 清理,避免 `config.json.tmp<pid>` 孤儿残留。
+- **合并双 command(简化)**:`track_event_cmd` + `track_event_blocking_cmd` 合成单 `track_event_cmd(name, blocking: Option<bool>)`,少一个 command + 一条 lib.rs 注册;前端 `update_downloaded` 传 `blocking:false`、`update_applied` 传 `blocking:true`。
+- **track 廉价短路**:非白名单事件在 spawn 前直接 return(白名单判定无 IO),不必空跑一个 task。
+- 改动文件:`telemetry.rs` / `feishu_plugin_install.rs`(strip_comments→pub(crate))/ `lib.rs` / `index.tsx` / `platform.tsx` / `settings-general.tsx` / i18n×3。
+- **未做(明确取舍)**:telemetry 与 feishu 的「opencode 配置目录解析 / 原子写」仍各一份(抽公用 helper 需动 feishu 工作代码,风险>收益,留 backlog);Windows install_id 未做 ACL 收紧(`.cache` 继承 `%USERPROFILE%`,无 winapi 依赖不强做,注释已诚实标注 Unix-only)。
+
 ### 第二批(2026-06-07,把上批"未修"的剩余项也修掉)
 
 telemetry 16 单测 + typecheck 16/16 + app 808 全绿:

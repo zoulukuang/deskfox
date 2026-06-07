@@ -134,24 +134,52 @@ fn resolve_enabled(env_val: Option<&str>, config_val: Option<bool>) -> bool {
     true
 }
 
+/// 纯函数:从一份(可能含 jsonc 注释的)配置文本里取顶层 `telemetry` 布尔字段。
+/// 先复用 `feishu_plugin_install::strip_comments` 去注释再 serde_json 解析 —— 否则用户在带注释的
+/// `opencode.jsonc` 里写 `telemetry:false` 会因严格 JSON 解析失败被静默忽略(opt-out 失灵)。
+fn parse_telemetry_field(raw: &str) -> Option<bool> {
+    let stripped = crate::feishu_plugin_install::strip_comments(raw);
+    let json: serde_json::Value = serde_json::from_str(&stripped).ok()?;
+    json.get("telemetry").and_then(|v| v.as_bool())
+}
+
 /// 读 telemetry opt-out 值。按 opencode 的合并优先级逐文件读
 /// (`config.json` < `opencode.json` < `opencode.jsonc`,后者覆盖前者),返回最后命中的值;
 /// 缺失/解析失败的文件跳过,全无则 None(降级,不 panic)。
-/// 注:opencode.jsonc 若含注释,serde_json 严格解析会失败而跳过(本仓无 json5 依赖);
-/// 多数 opt-out 写在 config.json(UI 也写这里),env `OPENCODE_TELEMETRY` 是兜底逃生舱。
 fn read_config_telemetry() -> Option<bool> {
     let dir = config_dir()?;
     let mut value = None;
     for file in ["config.json", "opencode.json", "opencode.jsonc"] {
         if let Ok(raw) = fs::read_to_string(dir.join(file)) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) {
-                if let Some(b) = json.get("telemetry").and_then(|v| v.as_bool()) {
-                    value = Some(b);
-                }
+            if let Some(b) = parse_telemetry_field(&raw) {
+                value = Some(b);
             }
         }
     }
     value
+}
+
+/// 有效值是否被 `config.json` 之外的来源(env / opencode.json / opencode.jsonc)决定。
+/// 若是,UI 写 `config.json` 改不动有效值 —— 开关应禁用 + 提示,而非让用户点了"弹回"。
+fn is_telemetry_locked() -> bool {
+    // env 设了可识别值 → 锁(优先级最高的逃生舱)
+    if let Ok(raw) = std::env::var("OPENCODE_TELEMETRY") {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "0" | "false" | "no" | "off" | "1" | "true" | "yes" | "on" => return true,
+            _ => {}
+        }
+    }
+    // 比 config.json 优先级更高的文件设了 telemetry → 锁
+    if let Some(dir) = config_dir() {
+        for file in ["opencode.json", "opencode.jsonc"] {
+            if let Ok(raw) = fs::read_to_string(dir.join(file)) {
+                if parse_telemetry_field(&raw).is_some() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +264,10 @@ fn prepare_event(version: &str, identifier: &str, name: &str) -> Option<(String,
 /// - `version`:一般取 `app.package_info().version.to_string()`。
 /// - `identifier`:bundle identifier(`app.config().identifier`),用于按 channel 选 Plausible site。
 pub fn track(version: &str, identifier: &str, name: &str) {
+    // 廉价短路:非白名单事件直接返回,不必 spawn(白名单判定无 IO)。opt-out 判定含文件 IO,留在 spawn 内。
+    if !is_allowed_event(name) {
+        return;
+    }
     let (version, identifier, name) = (version.to_string(), identifier.to_string(), name.to_string());
     tauri::async_runtime::spawn(async move {
         if let Some((body, ua)) = prepare_event(&version, &identifier, &name) {
@@ -282,16 +314,31 @@ fn write_telemetry_config_in(path: Option<PathBuf>, enabled: bool) -> std::io::R
         std::process::id()
     ));
     fs::write(&tmp, body + "\n")?;
-    fs::rename(&tmp, &path)
+    if let Err(e) = fs::rename(&tmp, &path) {
+        // rename 失败清理临时文件,避免 config.json.tmp<pid> 孤儿残留累积
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
 }
 
-/// Tauri command:读当前统计**有效**开关(UI 初始化用)。返回 is_enabled() 的有效值
-/// (env > config > 默认),而非仅 config —— 否则 env `OPENCODE_TELEMETRY` 覆盖时 UI 显示会与
-/// 实际上报行为脱节(显示"开"实则被 env 关掉,反之亦然)。
+/// 统计开关状态(给 UI):`enabled` = 有效值(env > config > 默认);`locked` = 有效值被
+/// config.json 之外来源(env / opencode.json / opencode.jsonc)决定 —— UI 写 config 改不动它,
+/// 此时开关应禁用 + 提示,而不是让用户点了"弹回"无解释。
+#[derive(serde::Serialize, specta::Type)]
+pub struct TelemetryStatus {
+    pub enabled: bool,
+    pub locked: bool,
+}
+
+/// Tauri command:读统计开关状态(UI 初始化用)。返回有效值 + 是否被锁。
 #[tauri::command]
 #[specta::specta]
-pub fn get_telemetry_enabled() -> bool {
-    is_enabled()
+pub fn get_telemetry_enabled() -> TelemetryStatus {
+    TelemetryStatus {
+        enabled: is_enabled(),
+        locked: is_telemetry_locked(),
+    }
 }
 
 /// Tauri command:写统计开关(UI 切换时调)。失败返回 Err 让前端可提示,不再静默吞。
@@ -301,29 +348,19 @@ pub fn set_telemetry_enabled(enabled: bool) -> Result<(), String> {
     write_telemetry_config_in(config_path(), enabled).map_err(|e| e.to_string())
 }
 
-/// Tauri command —— 前端(updater 流程)上报事件入口(fire-and-forget)。
-/// name 受 ALLOWED_EVENTS 白名单约束:非白名单名静默丢弃,前端无法借此发任意事件。
+/// Tauri command —— 前端上报事件入口。name 受 ALLOWED_EVENTS 白名单约束(非白名单静默丢弃)。
+/// `blocking=true` 时等发送完成再返回(给 relaunch 前的 `update_applied` 用,防进程重启杀掉请求);
+/// 否则 fire-and-forget 立即返回。
 #[tauri::command]
 #[specta::specta]
-pub fn track_event_cmd(app: tauri::AppHandle, name: String) {
-    track(
-        &app.package_info().version.to_string(),
-        &app.config().identifier,
-        &name,
-    );
-}
-
-/// Tauri command —— 同 track_event_cmd 但**等发送完成再返回**。给 relaunch 前的 `update_applied` 用,
-/// 前端 `await` 它后再 relaunch,确保事件发出去(否则进程重启会把后台请求杀掉)。
-#[tauri::command]
-#[specta::specta]
-pub async fn track_event_blocking_cmd(app: tauri::AppHandle, name: String) {
-    track_blocking(
-        &app.package_info().version.to_string(),
-        &app.config().identifier,
-        &name,
-    )
-    .await;
+pub async fn track_event_cmd(app: tauri::AppHandle, name: String, blocking: Option<bool>) {
+    let version = app.package_info().version.to_string();
+    let identifier = app.config().identifier.clone();
+    if blocking.unwrap_or(false) {
+        track_blocking(&version, &identifier, &name).await;
+    } else {
+        track(&version, &identifier, &name);
+    }
 }
 
 async fn send_event(body: String, user_agent: String) {
@@ -402,6 +439,20 @@ mod tests {
         // 未知 identifier 一律归 dev,绝不进 prod
         assert_eq!(domain_for_identifier("com.unknown.app"), "opencode.desktop-dev");
         assert_eq!(domain_for_identifier(""), "opencode.desktop-dev");
+    }
+
+    // T9 — parse_telemetry_field 能读带 jsonc 注释的配置(#1 opt-out 失灵修复核心)
+    #[test]
+    fn t9_parse_telemetry_field_handles_jsonc() {
+        // 纯 JSON
+        assert_eq!(parse_telemetry_field(r#"{"telemetry": false}"#), Some(false));
+        // 行注释 + 块注释 + 字段
+        let jsonc = "{\n  // 关闭匿名统计\n  \"telemetry\": false, /* 注释 */\n  \"theme\": \"dark\"\n}";
+        assert_eq!(parse_telemetry_field(jsonc), Some(false), "带注释的 jsonc 必须能读出 telemetry");
+        // 无该字段 → None
+        assert_eq!(parse_telemetry_field(r#"{"theme":"dark"}"#), None);
+        // 注释里出现 telemetry 字样不应误判(字符串/注释感知)
+        assert_eq!(parse_telemetry_field("{ // telemetry true\n \"theme\":\"x\" }"), None);
     }
 
     // T1d — install_id 文件落盘后权限收紧到 0600(仅 Unix)

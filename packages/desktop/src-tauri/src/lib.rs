@@ -633,7 +633,6 @@ fn make_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             feishu_adapter::feishu_list_providers,
             // FORK: 匿名使用统计 — update_* 上报入口 + 设置开关读写 [feat: telemetry-usage-stats] 2026-06-06
             telemetry::track_event_cmd,
-            telemetry::track_event_blocking_cmd,
             telemetry::get_telemetry_enabled,
             telemetry::set_telemetry_enabled
         ])

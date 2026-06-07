@@ -334,7 +334,7 @@ const createPlatform = (): Platform => {
             update = next
             // FORK: 匿名使用统计 update_downloaded(fire-and-forget;Rust 侧白名单校验 + opt-out)
             // [feat: telemetry-usage-stats] 2026-06-06
-            void invoke("track_event_cmd", { name: TELEMETRY_EVENT.UPDATE_DOWNLOADED }).catch(() => {})
+            void invoke("track_event_cmd", { name: TELEMETRY_EVENT.UPDATE_DOWNLOADED, blocking: false }).catch(() => {})
             return { updateAvailable: true, version: next.version }
           },
           updateAndRestart: async () => {
@@ -347,7 +347,7 @@ const createPlatform = (): Platform => {
             if (!installed) return
             // FORK: 匿名使用统计 update_applied —— 用**阻塞**上报 + await,确保 relaunch 前发出;
             // fire-and-forget 会被紧接着的进程重启杀掉,事件几乎必丢。[feat: telemetry-usage-stats]
-            await invoke("track_event_blocking_cmd", { name: TELEMETRY_EVENT.UPDATE_APPLIED }).catch(() => {})
+            await invoke("track_event_cmd", { name: TELEMETRY_EVENT.UPDATE_APPLIED, blocking: true }).catch(() => {})
             await relaunch()
           },
         }
@@ -424,7 +424,10 @@ const createPlatform = (): Platform => {
 
     // FORK: 匿名使用统计开关读写(走 invoke,bindings.ts 已陈旧)[feat: telemetry-usage-stats] 2026-06-06
     getTelemetryEnabled: async () => {
-      return invoke<boolean>("get_telemetry_enabled").catch(() => true)
+      return invoke<{ enabled: boolean; locked: boolean }>("get_telemetry_enabled").catch(() => ({
+        enabled: true,
+        locked: false,
+      }))
     },
     setTelemetryEnabled: async (enabled: boolean) => {
       // 不吞错:写失败(只读/磁盘满)抛出去,让设置页 toast 提示,不再静默(隐私开关失败需可见)

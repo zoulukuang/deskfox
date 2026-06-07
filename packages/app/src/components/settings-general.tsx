@@ -241,10 +241,14 @@ export const SettingsGeneral: Component = () => {
 
   // FORK: 匿名使用统计开关 — 状态来自后端 config(桌面端);仅当平台暴露该能力时加载
   // [feat: telemetry-usage-stats] 2026-06-06
-  const [telemetryEnabled, { refetch: refetchTelemetry }] = createResource(
+  const [telemetryStatus, { refetch: refetchTelemetry }] = createResource(
     () => (platform.getTelemetryEnabled ? true : false),
-    () => Promise.resolve(platform.getTelemetryEnabled?.() ?? true).catch(() => true),
-    { initialValue: true },
+    () =>
+      Promise.resolve(platform.getTelemetryEnabled?.() ?? { enabled: true, locked: false }).catch(() => ({
+        enabled: true,
+        locked: false,
+      })),
+    { initialValue: { enabled: true, locked: false } },
   )
 
   const onTelemetryChange = async (checked: boolean) => {
@@ -416,10 +420,19 @@ export const SettingsGeneral: Component = () => {
         <Show when={platform.getTelemetryEnabled}>
           <SettingsRow
             title={language.t("settings.general.row.telemetry.title")}
-            description={language.t("settings.general.row.telemetry.description")}
+            description={
+              language.t("settings.general.row.telemetry.description") +
+              (telemetryStatus().locked ? " " + language.t("settings.general.row.telemetry.locked") : "")
+            }
           >
             <div data-action="settings-telemetry">
-              <Switch checked={telemetryEnabled()} onChange={onTelemetryChange} />
+              {/* locked(env / 其他配置文件覆盖了 config.json)时禁用开关 + 上面 description 追加说明,
+                  避免用户点了"弹回"却无解释 */}
+              <Switch
+                checked={telemetryStatus().enabled}
+                disabled={telemetryStatus().locked}
+                onChange={onTelemetryChange}
+              />
             </div>
           </SettingsRow>
         </Show>
