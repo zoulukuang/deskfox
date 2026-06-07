@@ -185,4 +185,83 @@ describe("PromptDispatcher — opencode plugin event ↔ waiter 桥梁", () => {
     const result = await p
     expect(result.reply).toBe("real reply")
   })
+
+  // ── [fix: feishu-llm-stall-fastfail 2026-06-07] 首字节活动快速失败 ──
+  //
+  // [bug-repro: provider 卡在可重试错误(getbot 503)不发任何 part 也不报 error,
+  //  dispatcher 干等 30min 硬超时,期间同 chat 串行队列被堵死 → 整个飞书聊天失联直到重启]
+
+  test("[bug-repro] 首字节窗口内毫无 part → 提前 reject(不等满 timeoutMs)", async () => {
+    const d = new PromptDispatcher()
+    // 主超时 10s(模拟生产 30min 那种长),首字节窗口 60ms
+    const t0 = Date.now()
+    const p = d.register("ses_stall", 10_000, 60)
+    // 一个 dispatch 都不发(模拟 provider 卡死无输出)
+
+    await expect(p).rejects.toThrow(/首字节超时|无任何输出/)
+    const elapsed = Date.now() - t0
+    // 关键:必须在首字节窗口附近 reject,远早于主超时 10s(证明队列被及时释放)
+    expect(elapsed).toBeLessThan(2000)
+  })
+
+  test("[bug-repro] 首字节 reject 文案含「超时」+「无任何输出」→ 命中 friendlyErrorReply timeout pattern", async () => {
+    const d = new PromptDispatcher()
+    const p = d.register("ses_stall_msg", 10_000, 30)
+    let msg = ""
+    try {
+      await p
+    } catch (e) {
+      msg = (e as Error).message
+    }
+    expect(msg).toContain("超时")
+    expect(msg).toContain("无任何输出")
+  })
+
+  test("首字节窗口内有 part 活动 → 取消快速失败,继续按主超时走(不误杀长任务)", async () => {
+    const d = new PromptDispatcher()
+    // 首字节窗口 50ms,主超时 250ms;在窗口内发一个 part → 应清掉快速失败
+    const p = d.register("ses_active", 250, 50)
+    d.dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "p1", sessionID: "ses_active", type: "text", text: "正在干活" },
+      },
+    })
+    // 不发 idle → 走主超时 250ms 的 timeout-partial(证明没被首字节快速失败干掉)
+    const result = await p
+    expect(result.reply).toBe("正在干活")
+    expect(result.source).toBe("timeout-partial")
+  })
+
+  test("首字节窗口内即便是 reasoning/tool part 也算活动 → 取消快速失败", async () => {
+    const d = new PromptDispatcher()
+    const p = d.register("ses_active_tool", 250, 50)
+    // 先来 reasoning part(非 text),也应清掉首字节定时器
+    d.dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "r1", sessionID: "ses_active_tool", type: "reasoning", text: "思考中" },
+      },
+    })
+    d.dispatch({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "t1", sessionID: "ses_active_tool", type: "text", text: "答案" },
+      },
+    })
+    d.dispatch({ type: "session.idle", properties: { sessionID: "ses_active_tool" } })
+    const result = await p
+    // 正常 resolve(没被首字节 reject),reply = text part
+    expect(result.reply).toBe("答案")
+    expect(result.source).toBe("session.idle")
+  })
+
+  test("firstActivityTimeoutMs 默认 120s + 上限不超过 timeoutMs(小 timeout 不被反超)", async () => {
+    const d = new PromptDispatcher()
+    // timeout=40ms,默认 firstActivity=120s → 取 min=40ms,无 part 时 40ms 左右 reject
+    const t0 = Date.now()
+    const p = d.register("ses_cap", 40)
+    await expect(p).rejects.toThrow()
+    expect(Date.now() - t0).toBeLessThan(1500)
+  })
 })
