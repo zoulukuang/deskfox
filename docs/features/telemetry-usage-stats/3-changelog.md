@@ -58,7 +58,18 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **#6 install_id 0600**:落盘后 `restrict_to_owner` 收紧到 0600(Unix),匿名设备 ID 不被同机其他用户读到。
 - **#8 install_id UUID 校验**:读到非 UUID 脏值(云同步/外部进程写入、含控制字符)丢弃重生成,防脏值进 payload / UA header(控制字符会让 reqwest 构造 header 失败 → 该机 telemetry 永久静默失效)。
 - 新增单测:T1c(脏值重生成)/ T1d(0600 权限,Unix)/ T8(channel→site 映射)。
-- **未在本批修**(已记下供择时处理):#2 update_applied 紧接 relaunch 易丢、#4/#5 UI 开关忽略 env / 不读 opencode.jsonc、#7 opt-out 写失败静默无提示、#9 事件名前后端无共享常量、#10 setup 主线程同步文件 IO。
+
+### 第二批(2026-06-07,把上批"未修"的剩余项也修掉)
+
+telemetry 16 单测 + typecheck 16/16 + app 808 全绿:
+- **#2 update_applied relaunch 前丢失**:新增 `track_blocking` + `track_event_blocking_cmd`(async,等发送完成再返回);前端 `update_applied` 改为 `await invoke("track_event_blocking_cmd")` 再 `relaunch()`,确保事件发出。`update_downloaded` 保持 fire-and-forget。
+- **#10 setup 主线程同步文件 IO**:`track` 重构为先 `prepare_event`(opt-out 判定 + 文件 IO)整个丢进后台 spawn,启动线程不再做任何文件 IO。
+- **#4 UI 开关忽略 env**:`get_telemetry_enabled` 改返回 `is_enabled()` 有效值(env>config>默认),UI 显示与实际上报一致(env 覆盖时不再显示假状态)。
+- **#5 不读 opencode.jsonc**:`read_config_telemetry` 改按 opencode 合并优先级读 `config.json`<`opencode.json`<`opencode.jsonc`(后者覆盖),用户在任一文件写 `telemetry:false` 都生效(jsonc 含注释时严格解析跳过,本仓无 json5 依赖;env 兜底)。顺带抽 `home_base()`/`config_dir()` 去重路径解析。
+- **#7 opt-out 写失败静默**:`set_telemetry_enabled` 改返回 `Result<(),String>`;前端 `setTelemetryEnabled` 不再吞错,设置页 `onTelemetryChange` 改 async + try/catch → 失败 `showToast` 提示 + refetch 回正(新增 i18n `...telemetry.saveFailed` en/zh/zht)。
+- **#9 事件名无共享常量**:前端新增 `TELEMETRY_EVENT` 常量集中事件名(注释指向 Rust `ALLOWED_EVENTS` 为准),消除 call site 散落字符串拼错风险。
+- 改动文件:`telemetry.rs` / `lib.rs` / `index.tsx` / `settings-general.tsx` / `platform.tsx`(签名不变)/ i18n×3。
+- **全部 code-review 项已清**(#1-#10);剩 `docs/legal` 隐私协议 3.2 更新检查段完整化仍归"启用自动升级"feat follow-up。
 
 ## 已知遗留 / 跟进
 

@@ -47,6 +47,14 @@ void initI18n()
 
 let update: Update | null = null
 
+// FORK: 匿名使用统计事件名 —— 必须与 Rust `ALLOWED_EVENTS`(telemetry.rs)逐字一致;
+// 集中此处避免各 call site 散落字符串字面量拼错(拼错会被 Rust 白名单静默丢弃,无报错)。
+// [feat: telemetry-usage-stats]
+const TELEMETRY_EVENT = {
+  UPDATE_DOWNLOADED: "update_downloaded",
+  UPDATE_APPLIED: "update_applied",
+} as const
+
 const deepLinkEvent = "opencode:deep-link"
 
 const emitDeepLinks = (urls: string[]) => {
@@ -324,9 +332,9 @@ const createPlatform = (): Platform => {
               .catch(() => false)
             if (!ok) return { updateAvailable: false }
             update = next
-            // FORK: 匿名使用统计 update_downloaded(Rust 侧白名单校验 + opt-out + 静默失败)
+            // FORK: 匿名使用统计 update_downloaded(fire-and-forget;Rust 侧白名单校验 + opt-out)
             // [feat: telemetry-usage-stats] 2026-06-06
-            void invoke("track_event_cmd", { name: "update_downloaded" }).catch(() => {})
+            void invoke("track_event_cmd", { name: TELEMETRY_EVENT.UPDATE_DOWNLOADED }).catch(() => {})
             return { updateAvailable: true, version: next.version }
           },
           updateAndRestart: async () => {
@@ -337,9 +345,9 @@ const createPlatform = (): Platform => {
               .then(() => true)
               .catch(() => false)
             if (!installed) return
-            // FORK: 匿名使用统计 update_applied(install 成功、relaunch 前)
-            // [feat: telemetry-usage-stats] 2026-06-06
-            void invoke("track_event_cmd", { name: "update_applied" }).catch(() => {})
+            // FORK: 匿名使用统计 update_applied —— 用**阻塞**上报 + await,确保 relaunch 前发出;
+            // fire-and-forget 会被紧接着的进程重启杀掉,事件几乎必丢。[feat: telemetry-usage-stats]
+            await invoke("track_event_blocking_cmd", { name: TELEMETRY_EVENT.UPDATE_APPLIED }).catch(() => {})
             await relaunch()
           },
         }
@@ -419,7 +427,8 @@ const createPlatform = (): Platform => {
       return invoke<boolean>("get_telemetry_enabled").catch(() => true)
     },
     setTelemetryEnabled: async (enabled: boolean) => {
-      await invoke("set_telemetry_enabled", { enabled }).catch(() => {})
+      // 不吞错:写失败(只读/磁盘满)抛出去,让设置页 toast 提示,不再静默(隐私开关失败需可见)
+      await invoke("set_telemetry_enabled", { enabled })
     },
 
     parseMarkdown: (markdown: string) => commands.parseMarkdownCommand(markdown),

@@ -247,12 +247,21 @@ export const SettingsGeneral: Component = () => {
     { initialValue: true },
   )
 
-  const onTelemetryChange = (checked: boolean) => {
-    const update = platform.setTelemetryEnabled?.(checked)
-    if (!update) return
-    void update.finally(() => {
+  const onTelemetryChange = async (checked: boolean) => {
+    if (!platform.setTelemetryEnabled) return
+    try {
+      await platform.setTelemetryEnabled(checked)
+    } catch (e) {
+      // 写失败(只读/磁盘满)不再静默:提示用户,否则隐私开关"没关上"用户却以为关了
+      showToast({
+        variant: "error",
+        title: language.t("settings.general.row.telemetry.saveFailed"),
+        description: String(e),
+      })
+    } finally {
+      // 无论成败都 refetch:回读真实有效值,UI 不会停在用户点击的错误态
       void refetchTelemetry()
-    })
+    }
   }
 
   const colorSchemeOptions = createMemo((): { value: ColorScheme; label: string }[] => [

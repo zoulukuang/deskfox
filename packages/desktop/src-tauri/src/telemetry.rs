@@ -43,16 +43,24 @@ fn test_home() -> Option<PathBuf> {
     std::env::var("OPENCODE_TEST_HOME").ok().map(PathBuf::from)
 }
 
-/// install_id 缓存目录:`~/.cache/opencode/`(复用已删 SDK 的既定路径)。
-fn cache_dir() -> Option<PathBuf> {
-    let base = test_home().or_else(dirs::home_dir)?;
-    Some(base.join(".cache").join("opencode"))
+/// home 根(测试可经 OPENCODE_TEST_HOME 注入)—— cache_dir / config_dir 共用,避免重复解析。
+fn home_base() -> Option<PathBuf> {
+    test_home().or_else(dirs::home_dir)
 }
 
-/// opencode config 文件:`~/.config/opencode/config.json`(SDK 与 CLI 共用的 opt-out 来源)。
+/// install_id 缓存目录:`~/.cache/opencode/`(复用已删 SDK 的既定路径)。
+fn cache_dir() -> Option<PathBuf> {
+    Some(home_base()?.join(".cache").join("opencode"))
+}
+
+/// opencode 配置目录:`~/.config/opencode/`。
+fn config_dir() -> Option<PathBuf> {
+    Some(home_base()?.join(".config").join("opencode"))
+}
+
+/// UI 开关写入的 config 文件(`config.json`,opencode 合并加载的文件之一,隐私协议指明的 opt-out 文件)。
 fn config_path() -> Option<PathBuf> {
-    let base = test_home().or_else(dirs::home_dir)?;
-    Some(base.join(".config").join("opencode").join("config.json"))
+    Some(config_dir()?.join("config.json"))
 }
 
 // ---------------------------------------------------------------------------
@@ -126,12 +134,24 @@ fn resolve_enabled(env_val: Option<&str>, config_val: Option<bool>) -> bool {
     true
 }
 
-/// 读 config.json 的顶层 `telemetry` 布尔字段;缺失/异常返回 None(降级,不 panic)。
+/// 读 telemetry opt-out 值。按 opencode 的合并优先级逐文件读
+/// (`config.json` < `opencode.json` < `opencode.jsonc`,后者覆盖前者),返回最后命中的值;
+/// 缺失/解析失败的文件跳过,全无则 None(降级,不 panic)。
+/// 注:opencode.jsonc 若含注释,serde_json 严格解析会失败而跳过(本仓无 json5 依赖);
+/// 多数 opt-out 写在 config.json(UI 也写这里),env `OPENCODE_TELEMETRY` 是兜底逃生舱。
 fn read_config_telemetry() -> Option<bool> {
-    let path = config_path()?;
-    let raw = fs::read_to_string(&path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    json.get("telemetry").and_then(|v| v.as_bool())
+    let dir = config_dir()?;
+    let mut value = None;
+    for file in ["config.json", "opencode.json", "opencode.jsonc"] {
+        if let Ok(raw) = fs::read_to_string(dir.join(file)) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) {
+                if let Some(b) = json.get("telemetry").and_then(|v| v.as_bool()) {
+                    value = Some(b);
+                }
+            }
+        }
+    }
+    value
 }
 
 // ---------------------------------------------------------------------------
@@ -196,37 +216,45 @@ fn is_allowed_event(name: &str) -> bool {
     ALLOWED_EVENTS.contains(&name)
 }
 
-/// 上报一个事件。opt-out 时为 no-op;否则后台异步 POST,不等结果、不阻塞调用方。
+/// 决定是否上报并构造 (body, ua);白名单不通过 / opt-out 关闭都返回 None。**含文件 IO**
+/// (读 config + 读/写 install_id),故应在后台异步上下文调用,不要放主线程 / 启动线程。
+fn prepare_event(version: &str, identifier: &str, name: &str) -> Option<(String, String)> {
+    if !is_allowed_event(name) || !is_enabled() {
+        return None;
+    }
+    let install_id = get_or_create_install_id();
+    let domain = domain_for_identifier(identifier);
+    Some((
+        build_event_body(name, domain, version, &install_id),
+        user_agent(version, &install_id),
+    ))
+}
+
+/// fire-and-forget:**全部工作**(opt-out 判定 + 文件 IO + HTTP)都丢后台,绝不阻塞调用方 /
+/// 启动线程(防 setup 钩子里的 app_open 在慢盘/网络盘上拖慢启动)。
 ///
 /// - `version`:一般取 `app.package_info().version.to_string()`。
 /// - `identifier`:bundle identifier(`app.config().identifier`),用于按 channel 选 Plausible site。
 pub fn track(version: &str, identifier: &str, name: &str) {
-    if !is_allowed_event(name) {
-        return;
-    }
-    if !is_enabled() {
-        return;
-    }
-    let install_id = get_or_create_install_id();
-    let domain = domain_for_identifier(identifier);
-    let body = build_event_body(name, domain, version, &install_id);
-    let ua = user_agent(version, &install_id);
-    // 后台发送:任何网络/构造失败都吞掉,绝不影响主程序(A9)。
+    let (version, identifier, name) = (version.to_string(), identifier.to_string(), name.to_string());
     tauri::async_runtime::spawn(async move {
-        send_event(body, ua).await;
+        if let Some((body, ua)) = prepare_event(&version, &identifier, &name) {
+            send_event(body, ua).await;
+        }
     });
+}
+
+/// 阻塞版:等发送完成(受 5s 超时上限)再返回 —— 给 relaunch 前的 `update_applied` 用。
+/// 否则 fire-and-forget 的后台请求会被紧接着的进程重启杀掉,事件长期统计性丢失。
+pub async fn track_blocking(version: &str, identifier: &str, name: &str) {
+    if let Some((body, ua)) = prepare_event(version, identifier, name) {
+        send_event(body, ua).await;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // 设置开关读写(config.json telemetry 字段,UI「设置→通用」绑定)
 // ---------------------------------------------------------------------------
-
-/// config 中 telemetry 字段的当前值;缺失视为默认开(true)。
-/// 注意:这反映用户在 UI 可控的 config 值;env `OPENCODE_TELEMETRY` 是更高优先级的逃生舱,
-/// 不经 UI(见 is_enabled 优先级)。
-fn read_telemetry_config_value() -> bool {
-    read_config_telemetry().unwrap_or(true)
-}
 
 /// 写 config.json 的 telemetry 字段,保留其余字段。失败返回 Err(调用方静默)。
 fn write_telemetry_config_in(path: Option<PathBuf>, enabled: bool) -> std::io::Result<()> {
@@ -257,21 +285,23 @@ fn write_telemetry_config_in(path: Option<PathBuf>, enabled: bool) -> std::io::R
     fs::rename(&tmp, &path)
 }
 
-/// Tauri command:读当前统计开关(UI 初始化用)。
+/// Tauri command:读当前统计**有效**开关(UI 初始化用)。返回 is_enabled() 的有效值
+/// (env > config > 默认),而非仅 config —— 否则 env `OPENCODE_TELEMETRY` 覆盖时 UI 显示会与
+/// 实际上报行为脱节(显示"开"实则被 env 关掉,反之亦然)。
 #[tauri::command]
 #[specta::specta]
 pub fn get_telemetry_enabled() -> bool {
-    read_telemetry_config_value()
+    is_enabled()
 }
 
-/// Tauri command:写统计开关(UI 切换时调)。失败静默。
+/// Tauri command:写统计开关(UI 切换时调)。失败返回 Err 让前端可提示,不再静默吞。
 #[tauri::command]
 #[specta::specta]
-pub fn set_telemetry_enabled(enabled: bool) {
-    let _ = write_telemetry_config_in(config_path(), enabled);
+pub fn set_telemetry_enabled(enabled: bool) -> Result<(), String> {
+    write_telemetry_config_in(config_path(), enabled).map_err(|e| e.to_string())
 }
 
-/// Tauri command —— 前端(updater 流程)上报事件入口。
+/// Tauri command —— 前端(updater 流程)上报事件入口(fire-and-forget)。
 /// name 受 ALLOWED_EVENTS 白名单约束:非白名单名静默丢弃,前端无法借此发任意事件。
 #[tauri::command]
 #[specta::specta]
@@ -281,6 +311,19 @@ pub fn track_event_cmd(app: tauri::AppHandle, name: String) {
         &app.config().identifier,
         &name,
     );
+}
+
+/// Tauri command —— 同 track_event_cmd 但**等发送完成再返回**。给 relaunch 前的 `update_applied` 用,
+/// 前端 `await` 它后再 relaunch,确保事件发出去(否则进程重启会把后台请求杀掉)。
+#[tauri::command]
+#[specta::specta]
+pub async fn track_event_blocking_cmd(app: tauri::AppHandle, name: String) {
+    track_blocking(
+        &app.package_info().version.to_string(),
+        &app.config().identifier,
+        &name,
+    )
+    .await;
 }
 
 async fn send_event(body: String, user_agent: String) {
@@ -444,19 +487,20 @@ mod tests {
         assert!(!arch.contains(' '));
     }
 
-    // T6 — opt-out 时 track 为 no-op(静默守卫,不触网)
+    // T6 — opt-out 时 prepare_event 返回 None(不构造、不发送)
     #[test]
-    fn t6_track_noop_when_disabled() {
-        // 用 env 强制关闭,track 应直接返回不 spawn(不依赖 Tauri runtime)
-        // SAFETY: 测试进程内临时设置 env。
+    fn t6_prepare_none_when_disabled() {
+        // SAFETY: 测试进程内临时设置 env(本测试是唯一动 OPENCODE_TELEMETRY 的)。
         unsafe {
             std::env::set_var("OPENCODE_TELEMETRY", "0");
         }
-        // 不 panic 即通过(disabled 分支在 spawn 之前返回)
-        track("2026.6.0", "ai.deskfox.app", "app_open");
+        // env=0 → is_enabled false → prepare 返回 None(白名单事件也不发)
+        assert!(prepare_event("2026.6.0", "ai.deskfox.app", "app_open").is_none());
         unsafe {
             std::env::remove_var("OPENCODE_TELEMETRY");
         }
+        // 非白名单事件无论开关都 None
+        assert!(prepare_event("2026.6.0", "ai.deskfox.app", "ai_request").is_none());
     }
 
     // T4b — 事件白名单:仅 3 个事件放行,其余丢弃

@@ -793,6 +793,7 @@ export const dict = {
   "settings.general.row.telemetry.title": "Anonymous usage statistics",
   "settings.general.row.telemetry.description":
     "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.",
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting",
 
   "settings.general.row.wayland.title": "Use native Wayland",
   "settings.general.row.wayland.description": "Disable X11 fallback on Wayland. Requires restart.",
