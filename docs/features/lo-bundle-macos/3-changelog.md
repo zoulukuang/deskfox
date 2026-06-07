@@ -102,7 +102,7 @@ A 排除参数/环境因素,C 单一变量锁定 `presets`。修复后重跑 `pr
 |---|---|---|
 | `packages/branding/scripts/prepare-lo-bundle.sh` | fork-only | STRIP_DIRS 去掉 `presets` + 说明注释 |
 | `packages/branding/scripts/prepare-lo-bundle.ps1` | fork-only | `$stripFolders` 去掉 `presets` + 说明注释(BOM 保留) |
-| `packages/branding/__tests__/lo-bundle-strip.test.ts` | fork-only 新增 | 静态防回归:断言两脚本删除清单不含 presets/extensions、extensions 走留骨架(8 测,CI 可跑无需 soffice) |
+| `packages/branding/__tests__/lo-bundle-strip.test.ts` | fork-only 新增 | 静态防回归:断言两脚本删除清单不含 presets/extensions、extensions 走留骨架(8 测,无需 soffice) |
 
 ### 回归测试
 
@@ -113,3 +113,15 @@ A 排除参数/环境因素,C 单一变量锁定 `presets`。修复后重跑 `pr
 - **Mac 端**:改完脚本须重跑 `prepare-lo-bundle.sh` 重做 bundle(已做,presets 保留 ✅)→ 下次 build / 发版即带修复。
 - **Win 端**:同事须同样重跑 `prepare-lo-bundle.ps1` 重做 bundle(本机无法验证,fix-by-symmetry,同根因同 presets 内容)→ 重新打包发版。
 - **回退**:把 `presets` 加回各自删除清单即恢复(纯增删行,可单独 revert)。
+
+### Follow-up(code-review):防回归测试接入 CI
+
+code-review(high)指出:新增的 `lo-bundle-strip.test.ts` 当时**未接入任何自动闸** —— CI(`test.yml` 跑 `bun turbo test:ci`)只含 `opencode` + `app`,pre-push 只跑 media-gen/adapter-feishu-lark/app,branding 包无 `test:ci` 脚本 → 守护形同虚设(注释却自称"CI 可跑"),正是本 bug「extensions 修一半又复发」的同款陷阱(防护没真生效)。修:
+
+| 文件 | 改动 |
+|---|---|
+| `packages/branding/package.json` | 加 `"test:ci": "bun test"` 脚本 |
+| `turbo.json` | 注册 `@opencode-ai/branding#test:ci`(无 `^build` 依赖,纯静态读文件) |
+| `lo-bundle-strip.test.ts` | 注释订正:说明已接入 turbo test:ci |
+
+验证:`bun turbo test:ci --filter=@opencode-ai/branding` 真跑到本测试(21 pass)。

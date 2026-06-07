@@ -26,6 +26,9 @@
       "dependsOn": ["^build"],
       "outputs": [".artifacts/unit/junit.xml"],
       "passThroughEnv": ["*"]
+    },
+    "@opencode-ai/branding#test:ci": {
+      "outputs": []
     }
   }
 }
