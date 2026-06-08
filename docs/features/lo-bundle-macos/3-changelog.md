@@ -125,3 +125,63 @@ code-review(high)指出:新增的 `lo-bundle-strip.test.ts` 当时**未接入任
 | `lo-bundle-strip.test.ts` | 注释订正:说明已接入 turbo test:ci |
 
 验证:`bun turbo test:ci --filter=@opencode-ai/branding` 真跑到本测试(21 pass)。
+
+### Follow-up(机制化:冷启动 smoke gate)— feat-id `lo-bundle-coldstart-smoke-gate`(2026-06-08)
+
+**复盘结论**:presets/extensions 这类 profile bootstrap 硬依赖被剥皮删掉,**根本机制问题**是「剥皮后没人验证冷启动还能不能起」——打包机有热 profile(`~/Library/Application Support/LibreOffice` / `%APPDATA%\LibreOffice\4` 已存在)测不出,干净用户机才暴露。原防回归测试是**黑名单**(只认 presets/extensions 两个名字),换个目录名同样的坑会再踩。本次从机制上根治,设三道闸:
+
+| 闸 | 文件 | 机制 |
+|---|---|---|
+| **打包闸(核心)** | `prepare-lo-bundle.sh` / `.ps1` | 剥皮后**强制冷启动 smoke test**:用全新空 `-env:UserInstallation` 真跑一次 `--convert-to pdf`,产不出 PDF 即 `exit 1` / `throw`,残缺 bundle 根本产不出。**不认目录名、只认行为** → presets/extensions/未来任意必需目录,任何破坏冷启动的过度剥皮当场暴露。 |
+| **打包闸(build 侧)** | `build-deskfox.sh` / `.ps1` | LO 注入前校验 bundle 含 `presets/` + `extensions/`,缺任一即中止 → 挡"fix 前的过期/过度剥皮 bundle"流入打包。 |
+| **测试闸(CI)** | `lo-bundle-strip.test.ts` | 扩展:除原黑名单断言外,再断言两 prepare 脚本含 smoke gate(`-env:UserInstallation`+`--convert-to`+失败中止)、两 build 脚本含完整性校验 → 防有人删闸。 |
+
+**macOS 实测**(2026-06-08):
+- 正向:`prepare-lo-bundle.sh` 重跑 → `smoke OK`,exit 0,bundle 规范态(presets 保留 + 签名移除)。
+- 负向:故意删 presets → 冷启动无 PDF → 确认 gate 会 `exit 1` 拦截(双向验证)。
+- `bun test --cwd packages/branding` 25 pass(+4 新)+ bash -n 语法 OK + build 完整性校验正向通过 + typecheck 干净。
+
+**macOS smoke 实现要点**:arm64 未签名/改签二进制被内核 SIGKILL → smoke 前 `codesign --force --deep --sign -` ad-hoc 签名让其可启动,随后既有"签名移除"步骤清掉(恢复 Tauri 重签的规范态);profile 用全新空目录 + `file://` 绝对路径。
+
+**Win 端待同事验证**(本机无 pwsh,ps1 未跑过):`.ps1` smoke 用 `soffice.com`(控制台变体阻塞)+ `Start-Process` `WaitForExit(120s)` 超时 kill 防失败时模态 fatal-error 框挂死;`build-deskfox.ps1` 完整性校验对称。需在 Windows 上跑 `prepare-lo-bundle.ps1` 确认正/负路径。
+
+**回退**:三道闸都是独立追加块,可单独 revert,不影响 presets 主修复。
+
+### Follow-up(code-review 加固 + 全链路出货稳健性)— 2026-06-08
+
+第二轮 code-review(high)+ user 强调"打包和发布稳健性、绝不静默掩盖"后的加固:
+
+**A. smoke 闸自身加固(prepare-lo-bundle)**:
+- **`.sh` 加 `SAL_USE_VCLPLUGIN=svp`**:冷启动失败时 soffice 错误走 stderr 而非弹模态 Cocoa fatal-error 框(否则模态框阻塞脚本 + 在开发者屏幕弹窗)。**不是掩盖** —— smoke 照样判失败(无 PDF → exit 1)、照样回显 soffice 真实报错到日志,只是不弹阻塞框。
+- **`.sh` 超时改主进程轮询**(`kill -0` + `sleep 1`,120s 兜底强杀):macOS 无 GNU timeout;原 `( sleep 120; kill ) &` 看门狗子 shell 继承脚本 stdout、孤儿 sleep 占管道 fd 致下游等满 120s + 残留进程 → 改主进程轮询根治。
+- **`.sh`/`.ps1` soffice 输出存盘 + 失败回显**:定位真实错因,不再只给通用消息。
+- **`.ps1` 修 Start-Process 数组参数空格拆裂**:PS5.1 `-ArgumentList @(...)` 不给含空格元素加引号,`$env:TEMP` 含空格(`C:\Users\My Name\...`)会拆裂路径参数 → 改手动给含空白参数包引号拼单条命令行。
+
+**B. 全链路出货稳健性(对应 3-tier:Tier1 prod / Tier2 dev preview = 发布物;Tier3 `--no-bundle` raw exe = 本机自测)**:
+- **闸 1 出货硬失败**(`build-deskfox.{sh,ps1}`):原 LO bundle 缺失走 else **只 warning 后继续出"不含 LO"的包** = 静默降级(用户 office 退回首次下载、常失败)。改为:**出真包(非 `--no-bundle`)缺 LO → 硬失败 `exit 1`/`throw`**;仅 `--no-bundle`(Tier3 raw exe 自测)允许跳过。
+- **闸 2 打包后验证**(`build-deskfox.sh`,mac):build 成功后验证最终 `DeskFox.app/Contents/Resources/libreoffice/Contents/MacOS/soffice` 存在且可执行,挡"输入 bundle 健康但 Tauri 没把 LO 注入最终包"。缺则 exit 1。
+
+**验证**(mac 实测):smoke 正向 OK 秒退(svp 无弹框)+ 负向(删 presets)失败回显 soffice 日志 + exit 1 不挂;gate1 挪走 bundle 跑 `-Env prod` → 1.9 段 exit 1 不进 tauri build;branding 28 测全过(+3 闸守护)+ bash -n OK。
+
+**Win 端待同事验证**:`.ps1` 的 svp 不适用(Windows 非 svp 后端,靠 WaitForExit 超时兜底);**闸 2 Windows 打包后验证留同事 follow-up**(本机无 pwsh + 拿不准 Tauri 在 Windows 的 resource 输出路径,不本机猜路径硬塞以免给同事 build 引入误失败)。
+
+### Follow-up(发布闸:pack-installer 权威把关)— 2026-06-08
+
+**起因**:核对调用链发现 build-deskfox 的 `--no-bundle` 判据**在 Windows 不可靠** —— Windows 发布流程本身就用 `-NoBundle`(Tauri 不自己打包,交 pack-installer 做 NSIS;见 `release-deskfox.yml`),所以 build-deskfox 自己分不清"发布的 -NoBundle"和"Tier3 本地测试的 -NoBundle",那条路 LO 缺失会漏过 build-deskfox 的闸。
+
+**真判据**:走没走 **`pack-installer`** —— 它是 Tier1/2 发布唯一入口(脚本头明确"Tier3 不走本脚本"),与 `-NoBundle` 无关。故把权威发布闸放这里:
+
+| 闸 | 文件 | 机制 |
+|---|---|---|
+| **发布闸(权威)** | `pack-installer.{sh,ps1}` | 脚本最前(bump 版本号前)校验 LO bundle 源存在 + 含 presets/extensions,缺则 `exit 1`/`throw` → 绝不出不含 LO 的发布包,也不浪费版本号。两平台一致、不受 `-NoBundle` 影响。 |
+
+build-deskfox 的闸(按 --no-bundle)保留做**纵深防御**(Mac 发布走 pack-installer→build-deskfox 无 --no-bundle,闸正确触发;Win 即使 build-deskfox -NoBundle 漏过,pack-installer 兜底)。
+
+**3-tier 对照(最终)**:Tier1 prod / Tier2 dev preview = 走 pack-installer = **LO 必须**(发布闸硬把关);Tier3 `--no-bundle` raw exe = 不走 pack-installer = **LO 可选**(本机自测)。**完全符合 user 要求:稳定版+预览版同样检测必须含 LO,本地测试版不需要。**
+
+**验证**(mac 实测):挪走 bundle 跑 `pack-installer.sh --no-bump` → bump 前 `exit 1`;bundle 在位 → 放行。branding 31 测全过(+3 发布闸守护)。Win 端 `pack-installer.ps1` 待同事验证。
+
+**Win 端 follow-up 清单(交接同事,本机无 pwsh 未跑)**:
+1. 在 Windows 跑 `prepare-lo-bundle.ps1` 验证 smoke 正/负路径(svp 在 Win 不适用,靠 `WaitForExit(120s)` 超时兜底;Start-Process 数组参数空格拆裂修复待验)。
+2. 验证 `build-deskfox.ps1` / `pack-installer.ps1` 出货闸 + 发布闸的硬失败路径。
+3. **补 Windows 闸2(打包后产物验证)**:code-review(2026-06-08)发现 **`pack-installer.ps1 -SkipBuild` 会跳过 build-deskfox.ps1 连带其输出验证**,而发布闸只查 LO bundle 源、不查最终构建产物 → `-SkipBuild` 路径无人验证最终 NSIS 包真含 LO(Mac 无此口子,pack-installer.sh 总走 build-deskfox.sh 的 2.4 输出验证)。需在 Windows 侧补:无论走不走 build-deskfox,发布前验证最终产物(target/release 或 NSIS 内)真含 `libreoffice/program/soffice.exe`,确认 Tauri 在 Windows 的 resource 输出路径后落地。

@@ -189,13 +189,27 @@ $loConfigFile = $null
 if (Test-Path $loSoffice) {
     $loSizeMB = [math]::Round(((Get-ChildItem -Recurse -File $loBundleDir | Measure-Object -Property Length -Sum).Sum / 1MB))
     Write-Output "[deskfox] LO bundle found: $loBundleDir (${loSizeMB}MB) -> injecting as Tauri resource 'libreoffice'"
+    # [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] bundle 完整性校验 — 挡"fix 前的过期 bundle"(对称 build-deskfox.sh)。
+    # presets/ + share/extensions/ 是 LO 冷启动建 user profile 的硬依赖(prepare-lo-bundle.ps1 已保留 + smoke 验证);
+    # 缺任一 = 此 bundle 由过度剥皮的旧脚本产出 → 打包必致干净机器 "User installation could not be completed"。
+    foreach ($req in @("presets", "share/extensions")) {
+        if (-not (Test-Path (Join-Path $loBundleDir $req))) {
+            throw "[deskfox] LO bundle 缺 $req — 过期/过度剥皮的 bundle,打包必致干净机器 LO fatal error。请重跑 prepare-lo-bundle.ps1 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。"
+        }
+    }
     $loJson = '{"bundle":{"resources":{"../../branding/libreoffice-bundle/windows":"libreoffice"}}}'
     $loConfigFile = Join-Path $env:TEMP "deskfox-lo-resources.json"
     [System.IO.File]::WriteAllText($loConfigFile, $loJson, (New-Object System.Text.UTF8Encoding $false))
-} else {
+} elseif ($NoBundle) {
+    # Tier 3 本地测试版(-NoBundle raw exe,不发布)— 允许无 LO,仅本机自测 office 功能不可用
     Write-Output "[deskfox] LO bundle not found: $loSoffice"
-    Write-Output "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"
-    Write-Output "[deskfox]   run prepare-lo-bundle.ps1 to prepare the bundle"
+    Write-Output "[deskfox]   -NoBundle(Tier 3 raw exe 自测)→ 允许无 LO 继续;本机 office 功能不可用"
+    Write-Output "[deskfox]   需要 LO 时先跑 prepare-lo-bundle.ps1"
+} else {
+    # [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] 出货硬失败 — 绝不静默出"不含 LO"的发布包。
+    # 出真包(Tier 1 prod / Tier 2 dev preview,无 -NoBundle)= 发布物,LO 必须有;缺了直接 throw,
+    # 不再 warning 后继续(那等于静默降级:用户 office 功能退回首次下载、常失败,正是 lo-bundle 要消灭的)。
+    throw "[deskfox] 发布物构建(Tier 1/2,出 .exe/installer)但 LO bundle 不存在: $loSoffice。绝不静默出不含 LibreOffice 的发布包。先跑 prepare-lo-bundle.ps1 做出健康 bundle(内置冷启动 smoke 闸)再构建发布物。(仅本机 raw exe 自测可加 -NoBundle 跳过 LO)"
 }
 
 # 2. tauri build

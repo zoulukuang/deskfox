@@ -199,14 +199,35 @@ LO_EXTRA_CONFIG=""
 if [[ -d "$LO_BUNDLE_APP" ]]; then
     LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
     echo "[deskfox] LO bundle found: $LO_BUNDLE_APP (${LO_SIZE}MB) — injecting into Tauri resources"
+    # [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] bundle 完整性校验 — 挡"fix 前的过期 bundle"。
+    # presets/ + extensions/ 是 LO 冷启动建 user profile 的硬依赖(prepare-lo-bundle.sh 已保留 + smoke 验证);
+    # 缺任一 = 此 bundle 由过度剥皮的旧脚本产出 → 打包必致干净机器 "User installation could not be completed"。
+    LO_RES="$LO_BUNDLE_APP/Contents/Resources"
+    for _req in presets extensions; do
+        if [[ ! -d "$LO_RES/$_req" ]]; then
+            echo "[deskfox] ERROR: LO bundle 缺 Contents/Resources/$_req — 过期/过度剥皮的 bundle,打包必致干净机器 LO fatal error。" >&2
+            echo "[deskfox]   重跑 prepare-lo-bundle.sh 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。" >&2
+            exit 1
+        fi
+    done
     # 路径相对于 packages/desktop/src-tauri/(同 tauri.conf.json resources 约定)
     LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
 
     # 无预签名 — 嵌套 bundle 签名必须在 Tauri 构建后按顺序做(见步骤 2.5)
-else
+elif [[ "$NO_BUNDLE" -eq 1 ]]; then
+    # Tier 3 本地测试版(--no-bundle raw exe,不发布)— 允许无 LO,仅本机自测 office 功能不可用
     echo "[deskfox] LO bundle not found: $LO_BUNDLE_APP"
-    echo "[deskfox]   building WITHOUT pre-bundled LibreOffice (users will download on first use)"
-    echo "[deskfox]   run prepare-lo-bundle.sh to prepare the bundle"
+    echo "[deskfox]   --no-bundle(Tier 3 raw exe 自测)→ 允许无 LO 继续;本机 office 功能不可用"
+    echo "[deskfox]   需要 LO 时先跑 prepare-lo-bundle.sh"
+else
+    # [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] 出货硬失败 — 绝不静默出"不含 LO"的发布包。
+    # 出真包(Tier 1 prod / Tier 2 dev preview,无 --no-bundle)= 发布物,LO 必须有;缺了直接 exit 1,
+    # 不再 warning 后继续(那等于静默降级:用户 office 功能退回首次下载、常失败,正是 lo-bundle 要消灭的)。
+    echo "[deskfox] ERROR: 发布物构建(Tier 1/2,出 .app/.dmg)但 LO bundle 不存在: $LO_BUNDLE_APP" >&2
+    echo "[deskfox]   绝不静默出不含 LibreOffice 的发布包。先跑 prepare-lo-bundle.sh 做出健康 bundle" >&2
+    echo "[deskfox]   (内置冷启动 smoke 闸,保证产出健康 bundle)再构建发布物。" >&2
+    echo "[deskfox]   (仅本机 raw exe 自测可加 --no-bundle 跳过 LO)" >&2
+    exit 1
 fi
 
 # === 1.6 FORK: [启用自动升级/版本号注入] 2026-06-05 — 注入真实版本号(修历史 app version=0.0.0)===
@@ -239,6 +260,22 @@ BUILD_EXIT=0
         bun run tauri build "${TAURI_CONFIGS[@]}"
     fi
 ) || BUILD_EXIT=$?
+
+# === 2.4 post-build 验证:最终 .app 真含可执行 soffice(挡"LO 没打进包")===
+# [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] 闸 2:即使输入 bundle 健康(闸 1 + prepare smoke 已保证),
+# 也可能因 Tauri resources 配置/打包意外没把 LO 注入最终 .app。出货构建在测试阶段拦住:
+# 出真包(LO_EXTRA_CONFIG 已设 + 非 --no-bundle)且 build 成功 → 验证 .app 内 soffice 存在且可执行,缺则 exit 1。
+# (此处 soffice 尚未 Developer ID 签名,2.5 才签,故只做结构性存在检查;冷启动行为由 prepare smoke 已验证。)
+if [[ -n "$LO_EXTRA_CONFIG" && "$NO_BUNDLE" -eq 0 && "$BUILD_EXIT" -eq 0 ]]; then
+    VERIFY_SOFFICE="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/macos/DeskFox.app/Contents/Resources/libreoffice/Contents/MacOS/soffice"
+    if [[ ! -x "$VERIFY_SOFFICE" ]]; then
+        echo "[deskfox] ERROR: 打包后最终 .app 内未找到可执行 soffice: $VERIFY_SOFFICE" >&2
+        echo "[deskfox]   输入 bundle 健康但没注入最终包(疑 Tauri resources 配置/打包问题)。" >&2
+        echo "[deskfox]   绝不发布不含 LibreOffice 的包;排查 LO_EXTRA_CONFIG 注入与 tauri build resources。" >&2
+        exit 1
+    fi
+    echo "[deskfox] post-build verify: 最终 .app 含可执行 soffice ✓"
+fi
 
 # === 2.5 post-build: 对 .app 里的 LO 嵌套 bundle 做正确顺序的 Developer ID 签名 + 重建 DMG ===
 # Apple 嵌套 bundle 签名规则:先签叶节点(dylib),再签 executable,再签 inner bundle,最后签 outer bundle。

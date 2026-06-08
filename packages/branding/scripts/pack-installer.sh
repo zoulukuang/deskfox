@@ -45,6 +45,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRANDING_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$BRANDING_ROOT/../.." && pwd)"
 
+# === 发布闸:Tier1/2 发布物必须含 LibreOffice(权威把关)===
+# [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] pack-installer 是发布唯一入口(Tier3 本地测试
+# 走 build-deskfox --no-bundle,不走本脚本),故在此权威把关 —— 与 build-deskfox 的 --no-bundle 判据
+# 无关(Windows 发布也用 -NoBundle,那个判据在 Win 不可靠;走没走 pack-installer 才是"是否发布"的真判据)。
+# LO bundle 源缺失/不完整 → 在 bump 版本号前就硬失败,绝不出不含 LO 的发布包,也不浪费版本号。
+LO_BUNDLE_APP="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
+if [[ ! -d "$LO_BUNDLE_APP" ]]; then
+    echo "[pack] ERROR: 发布(Tier1/2)必须含 LibreOffice,但 bundle 不存在: $LO_BUNDLE_APP" >&2
+    echo "[pack]   先跑 prepare-lo-bundle.sh 做出健康 bundle(内置冷启动 smoke 闸)再发布。" >&2
+    echo "[pack]   (仅本机 raw exe 自测用 build-deskfox.sh --no-bundle,不走本脚本)" >&2
+    exit 1
+fi
+for _req in presets extensions; do
+    if [[ ! -d "$LO_BUNDLE_APP/Contents/Resources/$_req" ]]; then
+        echo "[pack] ERROR: LO bundle 缺 Contents/Resources/$_req(过期/过度剥皮)— 重跑 prepare-lo-bundle.sh 重做" >&2
+        exit 1
+    fi
+done
+echo "[pack] 发布闸: LO bundle 就位(含 presets + extensions)✓"
+
 # 1. Bump version
 NEW_VERSION=""
 if [[ "$NO_BUMP" -eq 0 ]]; then
