@@ -16,6 +16,22 @@ export type ProviderModelNotFoundError = {
   }
 }
 
+// FORK: 后端不可达(连接级)瞬时错识别 [feat: coldstart-toast-race] 2026-06-08
+// sidecar 假死 / 被看门狗(REQ-049 Layer③)重启的窗口里,所有请求都以连接级错误失败:
+//   - Tauri/reqwest 路径:`error sending request for url (...)`(实测截图里就是这条)
+//   - web fetch 路径:`Failed to fetch` / `NetworkError` 等
+// 这类"后端暂时不可达"由看门狗统一出"后台引擎重启中 / 后台已恢复"提示并自动同 port 重启恢复,
+// 各请求站点不应再各弹一条红 toast(冗余噪音)。识别后在 toast 站点 suppress(仍 console 记录)。
+// 仅 match 连接级不可达 —— 不含 HTTP 4xx/5xx(那是后端在、业务/服务故障,应正常 surface)。
+const BACKEND_UNREACHABLE_RE =
+  /error sending request|failed to fetch|networkerror|connection refused|econnrefused|tcp connect error|connection closed before message completed/i
+
+export function isBackendUnreachableError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  if (!msg) return false
+  return BACKEND_UNREACHABLE_RE.test(msg)
+}
+
 type Translator = (key: string, vars?: Record<string, string | number>) => string
 
 function tr(translator: Translator | undefined, key: string, text: string, vars?: Record<string, string | number>) {
