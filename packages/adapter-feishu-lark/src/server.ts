@@ -29,6 +29,8 @@ import {
   type SaveAccountInput,
 } from "./feishu/account-store"
 import { fetchBotName } from "./feishu/bot-info"
+// [feat: feishu-edit-dialog-ux 2026-06-08] 回显账号实际生效的 workspace 绝对路径(GUI 列表显示用)
+import { resolveWorkspace } from "./feishu/deskfox-dir"
 
 // ============================================================
 // 类型
@@ -297,8 +299,11 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
           botName: account.botName ?? "",
           // [feat: feishu-group-mention-policy] 2026-05-24 暴露 requireMention 给 GUI
           requireMention: account.requireMention,
-          // [feat: feishu-account-workspace] 2026-06-07 回显当前 workspace(未设 → null)
+          // [feat: feishu-account-workspace] 2026-06-07 回显当前 workspace 覆盖值(未设 → null)
           workspace: account.workspace ?? null,
+          // [feat: feishu-edit-dialog-ux 2026-06-08] 实际生效的绝对路径(未设 → 全局默认展开,
+          // GUI 列表直接显示真实目录,前端无需知道 home dir)
+          workspaceEffective: resolveWorkspace(account.workspace),
         }))
         return jsonResponse({ accounts: list }, 200)
       } catch (err) {

@@ -8,10 +8,19 @@
 // 首次写入自动往项目 `.gitignore` 追加 `_deskfox/`,不污染用户真实仓库的 git status。
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
 
 /** `_deskfox/` 根目录名(项目级通用约定) */
 export const DESKFOX_DIR_NAME = "_deskfox"
+
+/**
+ * 全局默认 workspace(home base)—— 账号未单独设 workspace 时的回退目录。
+ * [feat: feishu-edit-dialog-ux 2026-06-08] 单一真相源:原先 message-pipeline.ts 局部定义
+ * 一份 IMBOT_WORKSPACE,server.ts 解析 workspaceEffective 也要用,故上提到此处统一导出,
+ * 消除两份定义漂移。
+ */
+export const DEFAULT_IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
 
 /**
  * 规整 account.workspace 字符串:trim 后空 → undefined(=回退默认),非空 → trim 后的值。
@@ -21,6 +30,14 @@ export const DESKFOX_DIR_NAME = "_deskfox"
 export function normalizeWorkspace(ws: string | undefined | null): string | undefined {
   const t = (ws ?? "").trim()
   return t.length > 0 ? t : undefined
+}
+
+/**
+ * 解析账号实际生效的 workspace 绝对路径:设了真实目录 → 用它;未设 → 全局默认 home base。
+ * [feat: feishu-edit-dialog-ux 2026-06-08] pipeline 跑 / GUI 回显(workspaceEffective)共用一处逻辑。
+ */
+export function resolveWorkspace(ws: string | undefined | null): string {
+  return normalizeWorkspace(ws) ?? DEFAULT_IMBOT_WORKSPACE
 }
 
 /** 飞书收件文件目录:`<workspace>/_deskfox/feishu/files` */

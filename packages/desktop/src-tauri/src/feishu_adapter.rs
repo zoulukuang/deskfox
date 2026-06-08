@@ -338,9 +338,12 @@ pub struct AccountSummary {
     /// [feat: feishu-group-mention-policy] 2026-05-24 — 当前 requireMention
     #[serde(default)]
     pub require_mention: Option<bool>,
-    /// [feat: feishu-account-workspace] 2026-06-07 — 当前 workspace(未设 = None,走全局默认)
+    /// [feat: feishu-account-workspace] 2026-06-07 — 当前 workspace 覆盖值(未设 = None,走全局默认)
     #[serde(default)]
     pub workspace: Option<String>,
+    /// [feat: feishu-edit-dialog-ux 2026-06-08] — 实际生效的 workspace 绝对路径(未设时为全局默认展开值)
+    #[serde(rename = "workspaceEffective", default)]
+    pub workspace_effective: Option<String>,
 }
 
 /// adapter wire request 转 camelCase
@@ -399,6 +402,8 @@ pub async fn feishu_save_account(
         require_mention: Some(true),
         // [feat: feishu-account-workspace] 2026-06-07 — 新绑账号无 workspace(走全局默认)
         workspace: None,
+        // [feat: feishu-edit-dialog-ux 2026-06-08] save 返回不计算生效路径(GUI 随后 refetch 列表拿真值)
+        workspace_effective: None,
     })
 }
 
@@ -577,6 +582,9 @@ struct ListAccountWireItem {
     /// [feat: feishu-account-workspace] 2026-06-07
     #[serde(default)]
     workspace: Option<String>,
+    /// [feat: feishu-edit-dialog-ux 2026-06-08] adapter 解析后的生效绝对路径
+    #[serde(rename = "workspaceEffective", default)]
+    workspace_effective: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -633,6 +641,7 @@ pub async fn feishu_list_accounts(
             bot_name: w.bot_name,
             require_mention: w.require_mention,
             workspace: w.workspace,
+            workspace_effective: w.workspace_effective,
         })
         .collect())
 }
