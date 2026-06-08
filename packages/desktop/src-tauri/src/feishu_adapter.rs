@@ -17,6 +17,7 @@
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use crate::windows::MainWindow;
 
 // ============================================================
 // 类型 — 跟 adapter server.ts ServerReadyData 严格对齐
@@ -518,20 +519,41 @@ pub async fn feishu_update_account_settings(
     Ok(r.updated)
 }
 
-/// [feat: feishu-account-workspace] 2026-06-07
+/// [feat: feishu-account-workspace] 2026-06-07 / fix [feat: feishu-workspace-picker-hang] 2026-06-08
 /// 弹原生文件夹选择器,返回所选目录绝对路径(用户取消 = None)。
 /// JS 侧未装 @tauri-apps/plugin-dialog,picker 逻辑收口在 Rust(dialog 插件已就绪)。
-/// 同步命令(Tauri 在 worker 线程跑,非 main)→ 用 blocking_pick_folder 阻塞安全,
-/// 省去 tokio::sync::oneshot(tokio 未启 sync feature)。
+///
+/// FORK fix(feishu-workspace-picker-hang):原写法是 `#[tauri::command]` 同步 fn 直接调
+/// `blocking_pick_folder`,并注释假设"Tauri 同步命令跑在 worker 线程,非 main"。实测飞书
+/// 绑定页"编辑 → 选工作目录"第一步即卡死:panel 弹出但全程点不动(Cancel/Open 都失效)。
+/// 三处加固:
+///   ① 命令改 `async`(Tauri 在 async runtime 跑)+ `spawn_blocking` 显式离开 main 线程 ——
+///      `blocking_pick_folder` 文档明确要求禁在 main 线程调,不再依赖"同步命令线程"的脆弱假设。
+///   ② `set_parent(主窗口)` → document-modal sheet,挂在主窗口上由其模态会话统一处理事件,
+///      取代原"自由浮动 app-modal panel"(macOS 上易丢事件 / 模态异常)。
+///   ③ `set_directory(home)` 默认开到用户主目录,避开 panel 记忆的上次目录(如塞满大图的
+///      Downloads → NSOpenPanel 图标视图触发缩略图服务卡顿,正是"第一步就卡死"的高发诱因)。
 #[tauri::command]
 #[specta::specta]
-pub fn feishu_pick_workspace_dir(app: AppHandle) -> Result<Option<String>, String> {
+pub async fn feishu_pick_workspace_dir(app: AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let picked = app
-        .dialog()
-        .file()
-        .set_title("选择该飞书账号的工作目录(项目文件夹)")
-        .blocking_pick_folder();
+    let parent = app.get_webview_window(MainWindow::LABEL);
+    let home = app.path().home_dir().ok();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        let mut builder = app
+            .dialog()
+            .file()
+            .set_title("选择该飞书账号的工作目录(项目文件夹)");
+        if let Some(h) = home.as_ref() {
+            builder = builder.set_directory(h);
+        }
+        if let Some(w) = parent.as_ref() {
+            builder = builder.set_parent(w);
+        }
+        builder.blocking_pick_folder()
+    })
+    .await
+    .map_err(|e| format!("pick workspace dir task join: {e}"))?;
     Ok(picked.and_then(|fp| fp.into_path().ok().map(|p| p.to_string_lossy().into_owned())))
 }
 
