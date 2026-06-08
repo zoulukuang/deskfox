@@ -25,6 +25,8 @@ import {
   feishuListProviders,
   type AccountSummary,
 } from "@/utils/feishu-config"
+// [feat: feishu-edit-dialog-ux] 2026-06-08 — 列表里把"自动免费"哨兵显示成友好文案而非裸 id
+import { isAutoFree } from "./feishu-edit-account-model"
 
 /** open_id 脱敏:头 8 字符 + ⋯ + 尾 4 字符,中间用星号代替(避免泄露完整身份标识)*/
 function maskOpenId(id: string): string {
@@ -239,7 +241,9 @@ export const SettingsFeishu: Component = () => {
                       <span>
                         {language.t("settings.feishu.account.modelLabel")}:{" "}
                         {acc.model
-                          ? `${acc.model.provider_id}/${acc.model.model_id}`
+                          ? isAutoFree(acc.model.provider_id, acc.model.model_id)
+                            ? language.t("settings.feishu.edit.autoFreeModel")
+                            : `${acc.model.provider_id}/${acc.model.model_id}`
                           : language.t("settings.feishu.account.modelDefault")}
                       </span>
                     </div>

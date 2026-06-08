@@ -342,7 +342,9 @@ pub struct AccountSummary {
     #[serde(default)]
     pub workspace: Option<String>,
     /// [feat: feishu-edit-dialog-ux 2026-06-08] — 实际生效的 workspace 绝对路径(未设时为全局默认展开值)
-    #[serde(rename = "workspaceEffective", default)]
+    /// 注:本结构体序列化给前端用 snake_case(同 account_id/bot_name),**不能 rename 成 camelCase**,
+    /// 否则前端 `acc.workspace_effective` 读不到 → workspace 行不显示。
+    #[serde(default)]
     pub workspace_effective: Option<String>,
 }
 
