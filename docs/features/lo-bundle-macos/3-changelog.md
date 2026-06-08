@@ -146,3 +146,21 @@ code-review(high)指出:新增的 `lo-bundle-strip.test.ts` 当时**未接入任
 **Win 端待同事验证**(本机无 pwsh,ps1 未跑过):`.ps1` smoke 用 `soffice.com`(控制台变体阻塞)+ `Start-Process` `WaitForExit(120s)` 超时 kill 防失败时模态 fatal-error 框挂死;`build-deskfox.ps1` 完整性校验对称。需在 Windows 上跑 `prepare-lo-bundle.ps1` 确认正/负路径。
 
 **回退**:三道闸都是独立追加块,可单独 revert,不影响 presets 主修复。
+
+### Follow-up(code-review 加固 + 全链路出货稳健性)— 2026-06-08
+
+第二轮 code-review(high)+ user 强调"打包和发布稳健性、绝不静默掩盖"后的加固:
+
+**A. smoke 闸自身加固(prepare-lo-bundle)**:
+- **`.sh` 加 `SAL_USE_VCLPLUGIN=svp`**:冷启动失败时 soffice 错误走 stderr 而非弹模态 Cocoa fatal-error 框(否则模态框阻塞脚本 + 在开发者屏幕弹窗)。**不是掩盖** —— smoke 照样判失败(无 PDF → exit 1)、照样回显 soffice 真实报错到日志,只是不弹阻塞框。
+- **`.sh` 超时改主进程轮询**(`kill -0` + `sleep 1`,120s 兜底强杀):macOS 无 GNU timeout;原 `( sleep 120; kill ) &` 看门狗子 shell 继承脚本 stdout、孤儿 sleep 占管道 fd 致下游等满 120s + 残留进程 → 改主进程轮询根治。
+- **`.sh`/`.ps1` soffice 输出存盘 + 失败回显**:定位真实错因,不再只给通用消息。
+- **`.ps1` 修 Start-Process 数组参数空格拆裂**:PS5.1 `-ArgumentList @(...)` 不给含空格元素加引号,`$env:TEMP` 含空格(`C:\Users\My Name\...`)会拆裂路径参数 → 改手动给含空白参数包引号拼单条命令行。
+
+**B. 全链路出货稳健性(对应 3-tier:Tier1 prod / Tier2 dev preview = 发布物;Tier3 `--no-bundle` raw exe = 本机自测)**:
+- **闸 1 出货硬失败**(`build-deskfox.{sh,ps1}`):原 LO bundle 缺失走 else **只 warning 后继续出"不含 LO"的包** = 静默降级(用户 office 退回首次下载、常失败)。改为:**出真包(非 `--no-bundle`)缺 LO → 硬失败 `exit 1`/`throw`**;仅 `--no-bundle`(Tier3 raw exe 自测)允许跳过。
+- **闸 2 打包后验证**(`build-deskfox.sh`,mac):build 成功后验证最终 `DeskFox.app/Contents/Resources/libreoffice/Contents/MacOS/soffice` 存在且可执行,挡"输入 bundle 健康但 Tauri 没把 LO 注入最终包"。缺则 exit 1。
+
+**验证**(mac 实测):smoke 正向 OK 秒退(svp 无弹框)+ 负向(删 presets)失败回显 soffice 日志 + exit 1 不挂;gate1 挪走 bundle 跑 `-Env prod` → 1.9 段 exit 1 不进 tauri build;branding 28 测全过(+3 闸守护)+ bash -n OK。
+
+**Win 端待同事验证**:`.ps1` 的 svp 不适用(Windows 非 svp 后端,靠 WaitForExit 超时兜底);**闸 2 Windows 打包后验证留同事 follow-up**(本机无 pwsh + 拿不准 Tauri 在 Windows 的 resource 输出路径,不本机猜路径硬塞以免给同事 build 引入误失败)。

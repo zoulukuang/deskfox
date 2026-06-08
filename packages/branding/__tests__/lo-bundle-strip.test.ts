@@ -106,3 +106,25 @@ describe("build-deskfox bundle 完整性校验存在(防过期 bundle 流入打�
     expect(BUILD_PS1).toMatch(/share\/extensions/)
   })
 })
+
+// 守护"出货必须含 LO":缺 LO 时出货构建硬失败(不静默降级)+ 打包后验证最终包真含 soffice。
+// 对应 3-tier:Tier1/2(发布物,出真包)缺 LO → 硬失败;Tier3(--no-bundle raw exe 自测)允许跳过。
+describe("出货必须含 LibreOffice(缺 LO 不静默出货 + 打包后验证)", () => {
+  const BUILD_SH = readFileSync(join(SCRIPTS, "build-deskfox.sh"), "utf8")
+  const BUILD_PS1 = readFileSync(join(SCRIPTS, "build-deskfox.ps1"), "utf8")
+
+  test("build-deskfox.sh:出货构建缺 LO 硬失败(--no-bundle 才放行,否则 exit 1)", () => {
+    expect(BUILD_SH).toMatch(/elif\s+\[\[\s+"\$NO_BUNDLE"\s+-eq\s+1/) // Tier3 放行分支
+    expect(BUILD_SH).toMatch(/发布物构建[\s\S]*?exit 1/) // 出货缺 LO → 硬失败
+  })
+
+  test("build-deskfox.ps1:出货构建缺 LO 硬失败(-NoBundle 才放行,否则 throw)", () => {
+    expect(BUILD_PS1).toMatch(/elseif\s*\(\$NoBundle\)/) // Tier3 放行分支
+    expect(BUILD_PS1).toMatch(/throw[\s\S]*?发布物构建/) // 出货缺 LO → throw
+  })
+
+  test("build-deskfox.sh:打包后验证最终 .app 内 soffice 存在(挡 LO 没注入)", () => {
+    expect(BUILD_SH).toMatch(/VERIFY_SOFFICE/)
+    expect(BUILD_SH).toMatch(/libreoffice\/Contents\/MacOS\/soffice/)
+  })
+})

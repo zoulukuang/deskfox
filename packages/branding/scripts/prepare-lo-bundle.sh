@@ -238,14 +238,31 @@ fi
 # 任何破坏冷启动的过度剥皮(presets/extensions/未来任意必需目录)当场暴露,残缺 bundle 产不出。
 # 注:① arm64 未签名/改签二进制会被内核 SIGKILL,故先 ad-hoc 签名让其可启动(下方正式签名移除会清掉)
 #    ② profile 必须是全新空目录,-env:UserInstallation 用三斜杠绝对路径(file://<绝对路径>)
+#    ③ SAL_USE_VCLPLUGIN=svp 强制 headless VCL 后端 —— 失败时错误走 stderr 而非弹模态 Cocoa
+#       fatal-error 框(否则模态框阻塞脚本 + 在开发者屏幕弹窗)
+#    ④ soffice 输出存盘,失败分支回显定位真实错因;成功仍静默
+#    ⑤ 主进程轮询超时(macOS 无 GNU timeout):svp 下失败应秒退,120s 兜底防万一卡住;
+#       轮询跑主进程 + 每次 sleep 1 即时回收 → 无孤儿子进程、不占下游管道 fd(成功秒退)
 echo "[lo-bundle-mac] cold-start smoke test (fresh empty profile)..."
 codesign --force --deep --sign - "$DEST_APP" >/dev/null 2>&1 || true
 SMOKE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/deskfox-lo-smoke.XXXXXX")"
 mkdir -p "$SMOKE_TMP/out"
 printf 'DeskFox LO cold-start smoke test\n' > "$SMOKE_TMP/smoke.txt"
-"$DEST_APP/Contents/MacOS/soffice" --headless --norestore --nologo --nofirststartwizard \
+SAL_USE_VCLPLUGIN=svp "$DEST_APP/Contents/MacOS/soffice" --headless --norestore --nologo --nofirststartwizard \
     -env:UserInstallation="file://$SMOKE_TMP/profile" \
-    --convert-to pdf --outdir "$SMOKE_TMP/out" "$SMOKE_TMP/smoke.txt" >/dev/null 2>&1 || true
+    --convert-to pdf --outdir "$SMOKE_TMP/out" "$SMOKE_TMP/smoke.txt" >"$SMOKE_TMP/soffice.log" 2>&1 &
+SMOKE_PID=$!
+SMOKE_SECS=0
+while kill -0 "$SMOKE_PID" 2>/dev/null; do
+    sleep 1
+    SMOKE_SECS=$((SMOKE_SECS + 1))
+    if [[ "$SMOKE_SECS" -ge 120 ]]; then
+        echo "[lo-bundle-mac]   smoke 超时 120s,强杀 soffice" >&2
+        kill -9 "$SMOKE_PID" 2>/dev/null || true
+        break
+    fi
+done
+wait "$SMOKE_PID" 2>/dev/null || true
 if [[ -f "$SMOKE_TMP/out/smoke.pdf" ]]; then
     echo "[lo-bundle-mac]   smoke OK — 剥皮后 bundle 能冷启动建 profile + 转换"
     rm -rf "$SMOKE_TMP"
@@ -253,6 +270,8 @@ else
     echo "[lo-bundle-mac] ERROR: 冷启动 smoke test 失败 — 剥皮删了 profile bootstrap 必需目录!" >&2
     echo "[lo-bundle-mac]   全新 profile 下 soffice 起不来(典型:'User installation could not be completed')。" >&2
     echo "[lo-bundle-mac]   核对上面 STRIP_DIRS 是否误删 presets/extensions 等必需项;此 bundle 已废弃,不可打包。" >&2
+    echo "[lo-bundle-mac]   --- soffice 输出(定位真实错因)---" >&2
+    sed 's/^/[lo-bundle-mac]   | /' "$SMOKE_TMP/soffice.log" >&2 2>/dev/null || true
     rm -rf "$SMOKE_TMP" "$DEST_APP"
     exit 1
 fi
