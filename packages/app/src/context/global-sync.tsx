@@ -30,7 +30,7 @@ import { estimateRootSessionTotal, loadRootSessionsWithFallback } from "./global
 import { trimSessions } from "./global-sync/session-trim"
 import type { ProjectMeta } from "./global-sync/types"
 import { SESSION_RECENT_LIMIT } from "./global-sync/types"
-import { formatServerError } from "@/utils/server-errors"
+import { formatServerError, isBackendUnreachableError } from "@/utils/server-errors"
 import { queryOptions, skipToken, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/solid-query"
 import { createRefreshQueue } from "./global-sync/queue"
 import { directoryKey } from "./global-sync/utils"
@@ -267,6 +267,9 @@ function createGlobalSync() {
             })
             .catch((err) => {
               console.error("Failed to load sessions", err)
+              // FORK: 后端不可达(sidecar 假死/看门狗重启窗口)不弹 toast — 看门狗统管恢复 UX,
+              // 恢复后健康轮询 + bootstrap.refetch 自愈 [feat: coldstart-toast-race] 2026-06-08
+              if (isBackendUnreachableError(err)) return
               const project = getFilename(directory)
               showToast({
                 variant: "error",

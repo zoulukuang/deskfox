@@ -39,6 +39,7 @@ import {
 // FORK: 大文件预览统一防护 — L1 size pre-check [feat: large-file-preview-guard] 2026-05-21
 import { invoke } from "@tauri-apps/api/core"
 import { categoryOf, SIZE_LIMITS } from "@/utils/file-size-guard"
+import { isBackendUnreachableError } from "@/utils/server-errors"
 
 export type { FileSelection, SelectedLineRange, FileViewState, FileState }
 export { selectionFromLines }
@@ -84,6 +85,8 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       normalizeDir: path.normalizeDir,
       list: (dir) => sdk.client.file.list({ path: dir }).then((x) => x.data ?? []),
       onError: (message) => {
+        // FORK: 后端不可达不弹 toast — 看门狗统管恢复 UX [feat: coldstart-toast-race] 2026-06-08
+        if (isBackendUnreachableError(message)) return
         showToast({
           variant: "error",
           title: language.t("toast.file.listFailed.title"),
@@ -166,6 +169,9 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
           draft.error = message
         }),
       )
+      // FORK: 后端不可达(sidecar 假死/看门狗重启窗口)不弹 toast — 看门狗统管恢复 UX
+      // [feat: coldstart-toast-race] 2026-06-08
+      if (isBackendUnreachableError(message)) return
       showToast({
         variant: "error",
         title: language.t("toast.file.loadFailed.title"),
