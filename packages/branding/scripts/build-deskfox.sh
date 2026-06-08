@@ -155,6 +155,39 @@ else
     echo "[deskfox] sidecar up-to-date: $SIDECAR_PATH"
 fi
 
+# FORK-BEGIN: sidecar minos 回贴 — 让 Bun sidecar 能在 macOS 12 Monterey 运行 [feat: macos-monterey-no-launch] 2026-06-08
+# 现象:Monterey 12 用户装完点 DeskFox "没反应"。根因:Bun 1.3.x runtime 二进制被标成
+# minos 13.0(LC_BUILD_VERSION),dyld 在 macOS 12 上直接拒绝加载 sidecar → 后端进程起不来。
+# 主程序(Tauri/Rust minos 11.0)+ .app 本身能在 12 启动,唯一卡点就是这个 13.0 标记。
+# 据 Bun issue #15873,该标记是编译配置问题,实际代码可在 macOS 12 运行。把 sidecar minos
+# 降回 12.0(与下方 minimumSystemVersion=12.0 floor 对齐),Tauri build 随后用 Developer ID 重签
+# (prod)/ 此处的 ad-hoc 签名(dev)。必须在 Tauri 签名前 patch,否则改 load command 会废掉签名。
+# 仅 darwin 执行;vtool / codesign 来自 Xcode CLT。
+# ⚠️ 这是赌 Bun 实际不依赖 macOS 13 独有符号(issue 实测的是 1.1.40,我们用 1.3.14)。
+#    打包后必须在真 macOS 12 机器上启动验证,确认 sidecar 真能跑、不是 dyld symbol-not-found。
+if [[ "$(uname)" == "Darwin" && -f "$SIDECAR_PATH" ]]; then
+    SIDECAR_MINOS="$(vtool -show-build "$SIDECAR_PATH" 2>/dev/null | awk '/minos/{print $2; exit}')"
+    if [[ "$SIDECAR_MINOS" == "12.0" ]]; then
+        echo "[deskfox] sidecar minos already 12.0 ✓"
+    else
+        SIDECAR_SDK="$(vtool -show-build "$SIDECAR_PATH" 2>/dev/null | awk '/sdk/{print $2; exit}')"
+        [[ -z "$SIDECAR_SDK" || "$SIDECAR_SDK" == "n/a" ]] && SIDECAR_SDK="13.0"
+        echo "[deskfox] sidecar minos $SIDECAR_MINOS -> 12.0 (Monterey 兼容, Bun issue #15873)"
+        vtool -set-build-version macos 12.0 "$SIDECAR_SDK" -replace \
+              -output "$SIDECAR_PATH" "$SIDECAR_PATH"
+        # vtool 改了 load command → 原签名失效;先 ad-hoc 重签(arm64 必须有效签名才能 exec)。
+        # prod 构建后 Tauri 会用 Developer ID 覆盖此签名(签名不改 minos,12.0 保留);dev 留 ad-hoc 即可运行。
+        codesign --force --sign - "$SIDECAR_PATH" 2>/dev/null || true
+        SIDECAR_MINOS_NEW="$(vtool -show-build "$SIDECAR_PATH" 2>/dev/null | awk '/minos/{print $2; exit}')"
+        if [[ "$SIDECAR_MINOS_NEW" != "12.0" ]]; then
+            echo "[deskfox] ERROR: sidecar minos patch 失败(仍为 $SIDECAR_MINOS_NEW),Monterey 用户仍会卡死。" >&2
+            exit 1
+        fi
+        echo "[deskfox] sidecar minos patched -> 12.0 + ad-hoc 重签 ✓"
+    fi
+fi
+# FORK-END
+
 # === 0.5. 打飞书桥接 plugin(进 installer 资源)===
 # 让 installer 装完即可用 — runtime 由 lib.rs setup hook 把 plugin 路径注入 user opencode 配置
 bash "$SCRIPT_DIR/build-feishu-plugin.sh"
@@ -254,6 +287,11 @@ BUILD_EXIT=0
     if [[ -n "$LO_EXTRA_CONFIG" ]]; then
         TAURI_CONFIGS+=("--config" "$LO_EXTRA_CONFIG")
     fi
+    # FORK: 显式钉 macOS floor=12.0(与上方 sidecar minos patch 对齐)[feat: macos-monterey-no-launch] 2026-06-08
+    # 经 --config 注入不动 base tauri.conf.json(merge-safe)。同时设主二进制 minos + Info.plist
+    # LSMinimumSystemVersion=12.0:① 与 sidecar 12.0 一致,声明真实支持下限 ② 低于 12 的用户在
+    # 安装/启动时收到明确"需要 macOS 12"弹窗,而不是把"死图标"bug 平移到 Big Sur 11 用户。
+    TAURI_CONFIGS+=("--config" '{"bundle":{"macOS":{"minimumSystemVersion":"12.0"}}}')
     if [[ "$NO_BUNDLE" -eq 1 ]]; then
         bun run tauri build --no-bundle "${TAURI_CONFIGS[@]}"
     else
