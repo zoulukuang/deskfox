@@ -131,11 +131,15 @@ export const SettingsFeishu: Component = () => {
         () => (
           <x.FeishuEditAccountDialog
             accountId={acc.account_id}
+            // [feat: feishu-edit-dialog-ux] 2026-06-08 — 标题带 bot 名便于辨认
+            botName={acc.bot_name ?? null}
             currentModel={acc.model ?? null}
             // [feat: feishu-group-mention-policy] 2026-05-24
             currentRequireMention={acc.require_mention ?? true}
             // [feat: feishu-account-workspace] 2026-06-07
             currentWorkspace={acc.workspace ?? null}
+            // [feat: feishu-edit-dialog-ux] 2026-06-08 — 空态显示真实默认目录
+            currentWorkspaceEffective={acc.workspace_effective ?? null}
             onSaved={() => refetch()}
           />
         ),
@@ -239,6 +243,16 @@ export const SettingsFeishu: Component = () => {
                           : language.t("settings.feishu.account.modelDefault")}
                       </span>
                     </div>
+                    {/* [feat: feishu-edit-dialog-ux] 2026-06-08 — 该账号实际生效的 workspace 目录
+                      * (未设 = 全局默认绝对路径,便于 user 直接定位文件夹)*/}
+                    <Show when={acc.workspace_effective?.trim()}>
+                      <div
+                        class="text-11-regular text-text-weak truncate"
+                        title={acc.workspace_effective ?? undefined}
+                      >
+                        workspace: {acc.workspace_effective}
+                      </div>
+                    </Show>
                   </div>
                   <div class="flex items-center gap-1">
                     <button

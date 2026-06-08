@@ -79,8 +79,10 @@ export interface AccountSummary {
   // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 — 删 enable_auto_group_create 字段
   /** [feat: feishu-group-mention-policy] 2026-05-24 当前 requireMention flag */
   require_mention?: boolean | null
-  /** [feat: feishu-account-workspace] 2026-06-07 当前 workspace(null/缺省 = 走全局默认) */
+  /** [feat: feishu-account-workspace] 2026-06-07 当前 workspace 覆盖值(null/缺省 = 走全局默认) */
   workspace?: string | null
+  /** [feat: feishu-edit-dialog-ux] 2026-06-08 实际生效的 workspace 绝对路径(未设时为全局默认展开值) */
+  workspace_effective?: string | null
 }
 
 /** opencode `/config/providers` 响应形状(Rust JSON value 直传) */
