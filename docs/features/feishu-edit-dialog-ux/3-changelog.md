@@ -65,4 +65,6 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## commit
 
-(待填 hash)
+- `fe9fc34d9` 后端:pipeline 自动免费模型解析 + workspace 路径单一真相源
+- `7481d9551` 前端:编辑弹窗去跟随勾选+默认自动免费 / 标题带 bot 名 / 列表显 workspace
+- `84642f6e0` docs:三文档
