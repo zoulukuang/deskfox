@@ -128,3 +128,27 @@ describe("出货必须含 LibreOffice(缺 LO 不静默出货 + 打包后验证)"
     expect(BUILD_SH).toMatch(/libreoffice\/Contents\/MacOS\/soffice/)
   })
 })
+
+// 守护"发布闸"(权威):pack-installer 是 Tier1/2 发布唯一入口,缺 LO bundle 在 bump 前硬失败。
+// 这是比 build-deskfox 的 --no-bundle 判据更可靠的"是否发布"判据(Windows 发布也用 -NoBundle,
+// 那个判据在 Win 不可靠;走没走 pack-installer 才是真判据)。
+describe("发布闸:pack-installer 缺 LO 硬失败(Tier1/2 发布物必须含 LibreOffice)", () => {
+  const PACK_SH = readFileSync(join(SCRIPTS, "pack-installer.sh"), "utf8")
+  const PACK_PS1 = readFileSync(join(SCRIPTS, "pack-installer.ps1"), "utf8")
+
+  test("pack-installer.sh 缺 LO bundle → exit 1(且在 bump 前)", () => {
+    expect(PACK_SH).toMatch(/必须含 LibreOffice/)
+    expect(PACK_SH).toMatch(/LO_BUNDLE_APP[\s\S]*?exit 1/)
+  })
+
+  test("pack-installer.ps1 缺 LO bundle → throw", () => {
+    expect(PACK_PS1).toMatch(/必须含 LibreOffice/)
+    expect(PACK_PS1).toMatch(/loBundleWin/)
+  })
+
+  test("两端发布闸都校验 presets + extensions 完整", () => {
+    expect(PACK_SH).toMatch(/for\s+_req\s+in\s+presets\s+extensions/)
+    expect(PACK_PS1).toMatch(/presets["\s,]/)
+    expect(PACK_PS1).toMatch(/share\/extensions/)
+  })
+})

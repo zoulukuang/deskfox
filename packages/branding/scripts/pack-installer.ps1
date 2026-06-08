@@ -50,6 +50,22 @@ $root = Split-Path -Parent $here
 # 导致 build 成功但 NSIS 路径校验 throw。修:多 split 一层得真正仓库根。
 $repoRoot = Split-Path -Parent (Split-Path -Parent $root)
 
+# === 发布闸:Tier1/2 发布物必须含 LibreOffice(权威把关)===
+# [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] pack-installer 是发布唯一入口(Tier3 本地测试
+# 走 build-deskfox.ps1 -NoBundle,不走本脚本)。Windows 发布流程本身也用 -NoBundle,故 build-deskfox
+# 的 -NoBundle 判据在 Win 不可靠;走没走 pack-installer 才是"是否发布"的真判据 → 在此权威把关。
+# LO bundle 源缺失/不完整 → bump 版本号前就硬失败,绝不出不含 LO 的发布包,也不浪费版本号。
+$loBundleWin = Join-Path $root "libreoffice-bundle/windows"
+if (-not (Test-Path (Join-Path $loBundleWin "program/soffice.exe"))) {
+    throw "[pack] 发布(Tier1/2)必须含 LibreOffice,但 bundle 不存在: $loBundleWin。先跑 prepare-lo-bundle.ps1 做出健康 bundle(内置冷启动 smoke 闸)再发布。(仅本机 raw exe 自测用 build-deskfox.ps1 -NoBundle,不走本脚本)"
+}
+foreach ($req in @("presets", "share/extensions")) {
+    if (-not (Test-Path (Join-Path $loBundleWin $req))) {
+        throw "[pack] LO bundle 缺 $req(过期/过度剥皮)— 重跑 prepare-lo-bundle.ps1 重做"
+    }
+}
+Write-Output "[pack] 发布闸: LO bundle 就位(含 presets + share/extensions)✓"
+
 # 1. determine version (bump 本地 / SkipBump 取已有)
 if ($SkipBump) {
     if ($Version) {

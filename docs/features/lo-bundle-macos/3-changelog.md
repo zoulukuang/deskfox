@@ -164,3 +164,19 @@ code-review(high)指出:新增的 `lo-bundle-strip.test.ts` 当时**未接入任
 **验证**(mac 实测):smoke 正向 OK 秒退(svp 无弹框)+ 负向(删 presets)失败回显 soffice 日志 + exit 1 不挂;gate1 挪走 bundle 跑 `-Env prod` → 1.9 段 exit 1 不进 tauri build;branding 28 测全过(+3 闸守护)+ bash -n OK。
 
 **Win 端待同事验证**:`.ps1` 的 svp 不适用(Windows 非 svp 后端,靠 WaitForExit 超时兜底);**闸 2 Windows 打包后验证留同事 follow-up**(本机无 pwsh + 拿不准 Tauri 在 Windows 的 resource 输出路径,不本机猜路径硬塞以免给同事 build 引入误失败)。
+
+### Follow-up(发布闸:pack-installer 权威把关)— 2026-06-08
+
+**起因**:核对调用链发现 build-deskfox 的 `--no-bundle` 判据**在 Windows 不可靠** —— Windows 发布流程本身就用 `-NoBundle`(Tauri 不自己打包,交 pack-installer 做 NSIS;见 `release-deskfox.yml`),所以 build-deskfox 自己分不清"发布的 -NoBundle"和"Tier3 本地测试的 -NoBundle",那条路 LO 缺失会漏过 build-deskfox 的闸。
+
+**真判据**:走没走 **`pack-installer`** —— 它是 Tier1/2 发布唯一入口(脚本头明确"Tier3 不走本脚本"),与 `-NoBundle` 无关。故把权威发布闸放这里:
+
+| 闸 | 文件 | 机制 |
+|---|---|---|
+| **发布闸(权威)** | `pack-installer.{sh,ps1}` | 脚本最前(bump 版本号前)校验 LO bundle 源存在 + 含 presets/extensions,缺则 `exit 1`/`throw` → 绝不出不含 LO 的发布包,也不浪费版本号。两平台一致、不受 `-NoBundle` 影响。 |
+
+build-deskfox 的闸(按 --no-bundle)保留做**纵深防御**(Mac 发布走 pack-installer→build-deskfox 无 --no-bundle,闸正确触发;Win 即使 build-deskfox -NoBundle 漏过,pack-installer 兜底)。
+
+**3-tier 对照(最终)**:Tier1 prod / Tier2 dev preview = 走 pack-installer = **LO 必须**(发布闸硬把关);Tier3 `--no-bundle` raw exe = 不走 pack-installer = **LO 可选**(本机自测)。**完全符合 user 要求:稳定版+预览版同样检测必须含 LO,本地测试版不需要。**
+
+**验证**(mac 实测):挪走 bundle 跑 `pack-installer.sh --no-bump` → bump 前 `exit 1`;bundle 在位 → 放行。branding 31 测全过(+3 发布闸守护)。Win 端 `pack-installer.ps1` 待同事验证。
