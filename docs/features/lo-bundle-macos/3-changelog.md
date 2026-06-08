@@ -180,3 +180,8 @@ build-deskfox 的闸(按 --no-bundle)保留做**纵深防御**(Mac 发布走 pac
 **3-tier 对照(最终)**:Tier1 prod / Tier2 dev preview = 走 pack-installer = **LO 必须**(发布闸硬把关);Tier3 `--no-bundle` raw exe = 不走 pack-installer = **LO 可选**(本机自测)。**完全符合 user 要求:稳定版+预览版同样检测必须含 LO,本地测试版不需要。**
 
 **验证**(mac 实测):挪走 bundle 跑 `pack-installer.sh --no-bump` → bump 前 `exit 1`;bundle 在位 → 放行。branding 31 测全过(+3 发布闸守护)。Win 端 `pack-installer.ps1` 待同事验证。
+
+**Win 端 follow-up 清单(交接同事,本机无 pwsh 未跑)**:
+1. 在 Windows 跑 `prepare-lo-bundle.ps1` 验证 smoke 正/负路径(svp 在 Win 不适用,靠 `WaitForExit(120s)` 超时兜底;Start-Process 数组参数空格拆裂修复待验)。
+2. 验证 `build-deskfox.ps1` / `pack-installer.ps1` 出货闸 + 发布闸的硬失败路径。
+3. **补 Windows 闸2(打包后产物验证)**:code-review(2026-06-08)发现 **`pack-installer.ps1 -SkipBuild` 会跳过 build-deskfox.ps1 连带其输出验证**,而发布闸只查 LO bundle 源、不查最终构建产物 → `-SkipBuild` 路径无人验证最终 NSIS 包真含 LO(Mac 无此口子,pack-installer.sh 总走 build-deskfox.sh 的 2.4 输出验证)。需在 Windows 侧补:无论走不走 build-deskfox,发布前验证最终产物(target/release 或 NSIS 内)真含 `libreoffice/program/soffice.exe`,确认 Tauri 在 Windows 的 resource 输出路径后落地。
