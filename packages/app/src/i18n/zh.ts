@@ -1090,10 +1090,9 @@ export const dict = {
   "settings.feishu.edit.saving": "保存中...",
   "settings.feishu.edit.providerLabel": "提供商",
   "settings.feishu.edit.modelLabel": "模型",
-  "settings.feishu.edit.useDefault": "跟随 DeskFox 默认(推荐)",
-  "settings.feishu.edit.useDefault.hintFollow": "当前默认:{{model}}",
-  "settings.feishu.edit.useDefault.hintCustom": "为此账号单独选择,覆盖全局默认。",
-  "settings.feishu.edit.defaultUnset": "未设置",
+  "settings.feishu.edit.autoFreeModel": "自动(始终用免费模型)",
+  "settings.feishu.edit.autoFreeModel.hint":
+    "始终使用 OpenCode Zen 当下第一个免费模型 —— 即使以后模型更换也能继续用,无需配置或登录。",
   "settings.feishu.edit.providerPlaceholder": "请选择提供商",
   "settings.feishu.edit.modelPlaceholder": "请选择模型",
   "settings.feishu.edit.noProviders": "尚未配置任何 LLM 提供商,请先在 DeskFox 设置提供商。",
@@ -1101,6 +1100,7 @@ export const dict = {
   "settings.feishu.edit.cancel": "取消",
   "settings.feishu.edit.workspaceSectionTitle": "工作目录",
   "settings.feishu.edit.workspace.default": "默认(全局 home base)",
+  "settings.feishu.edit.workspace.defaultPath": "默认目录:{{path}}",
   "settings.feishu.edit.workspace.pick": "选择文件夹",
   "settings.feishu.edit.workspace.clear": "恢复默认",
   "settings.feishu.edit.workspace.hintFollow":

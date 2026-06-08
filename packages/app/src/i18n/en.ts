@@ -1108,10 +1108,9 @@ export const dict = {
   "settings.feishu.edit.saving": "Saving...",
   "settings.feishu.edit.providerLabel": "Provider",
   "settings.feishu.edit.modelLabel": "Model",
-  "settings.feishu.edit.useDefault": "Use DeskFox default (recommended)",
-  "settings.feishu.edit.useDefault.hintFollow": "Current default: {{model}}",
-  "settings.feishu.edit.useDefault.hintCustom": "Pick provider and model for this account, overriding the global default.",
-  "settings.feishu.edit.defaultUnset": "Not set",
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)",
+  "settings.feishu.edit.autoFreeModel.hint":
+    "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.",
   "settings.feishu.edit.providerPlaceholder": "Select provider",
   "settings.feishu.edit.modelPlaceholder": "Select model",
   "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.",
@@ -1120,6 +1119,7 @@ export const dict = {
   "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}",
   "settings.feishu.edit.workspaceSectionTitle": "Workspace",
   "settings.feishu.edit.workspace.default": "Default (global home base)",
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}",
   "settings.feishu.edit.workspace.pick": "Choose folder",
   "settings.feishu.edit.workspace.clear": "Reset to default",
   "settings.feishu.edit.workspace.hintFollow":

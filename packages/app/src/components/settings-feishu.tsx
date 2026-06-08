@@ -25,6 +25,8 @@ import {
   feishuListProviders,
   type AccountSummary,
 } from "@/utils/feishu-config"
+// [feat: feishu-edit-dialog-ux] 2026-06-08 — 列表里把"自动免费"哨兵显示成友好文案而非裸 id
+import { isAutoFree } from "./feishu-edit-account-model"
 
 /** open_id 脱敏:头 8 字符 + ⋯ + 尾 4 字符,中间用星号代替(避免泄露完整身份标识)*/
 function maskOpenId(id: string): string {
@@ -131,11 +133,15 @@ export const SettingsFeishu: Component = () => {
         () => (
           <x.FeishuEditAccountDialog
             accountId={acc.account_id}
+            // [feat: feishu-edit-dialog-ux] 2026-06-08 — 标题带 bot 名便于辨认
+            botName={acc.bot_name ?? null}
             currentModel={acc.model ?? null}
             // [feat: feishu-group-mention-policy] 2026-05-24
             currentRequireMention={acc.require_mention ?? true}
             // [feat: feishu-account-workspace] 2026-06-07
             currentWorkspace={acc.workspace ?? null}
+            // [feat: feishu-edit-dialog-ux] 2026-06-08 — 空态显示真实默认目录
+            currentWorkspaceEffective={acc.workspace_effective ?? null}
             onSaved={() => refetch()}
           />
         ),
@@ -235,10 +241,22 @@ export const SettingsFeishu: Component = () => {
                       <span>
                         {language.t("settings.feishu.account.modelLabel")}:{" "}
                         {acc.model
-                          ? `${acc.model.provider_id}/${acc.model.model_id}`
+                          ? isAutoFree(acc.model.provider_id, acc.model.model_id)
+                            ? language.t("settings.feishu.edit.autoFreeModel")
+                            : `${acc.model.provider_id}/${acc.model.model_id}`
                           : language.t("settings.feishu.account.modelDefault")}
                       </span>
                     </div>
+                    {/* [feat: feishu-edit-dialog-ux] 2026-06-08 — 该账号实际生效的 workspace 目录
+                      * (未设 = 全局默认绝对路径,便于 user 直接定位文件夹)*/}
+                    <Show when={acc.workspace_effective?.trim()}>
+                      <div
+                        class="text-11-regular text-text-weak truncate"
+                        title={acc.workspace_effective ?? undefined}
+                      >
+                        workspace: {acc.workspace_effective}
+                      </div>
+                    </Show>
                   </div>
                   <div class="flex items-center gap-1">
                     <button

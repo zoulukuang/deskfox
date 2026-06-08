@@ -17,7 +17,6 @@
 
 import { existsSync, mkdirSync, statSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
-import { homedir } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { Client } from "@larksuiteoapi/node-sdk"
 import type { createOpencodeClient } from "@opencode-ai/sdk"
@@ -46,7 +45,7 @@ import {
   deskfoxFeishuFilesDir,
   deskfoxFeishuImagesDir,
   ensureDeskfoxDir,
-  normalizeWorkspace,
+  resolveWorkspace,
 } from "./deskfox-dir"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
@@ -256,16 +255,46 @@ export async function fetchParentMessageText(
 }
 // FORK-END
 
-/**
- * 飞书桥接专用 workspace directory — 所有 plugin 创建的 session 都在这个
- * 目录下,跟 user 主窗口的项目隔离。GUI sidebar 不会显示(因为 archive),
- * 也不污染 user 实际项目环境。
- */
-const IMBOT_WORKSPACE = join(homedir(), ".opencode", "imbot-workspace")
+// 飞书桥接专用 workspace directory(全局默认 home base)= DEFAULT_IMBOT_WORKSPACE,
+// 现收口到 deskfox-dir.ts 单一真相源(原本地常量已删,server.ts 解析 workspaceEffective 共用)。
+// [feat: feishu-edit-dialog-ux 2026-06-08]
 
 const FEISHU_OPEN_API_DOMAIN: Record<"feishu" | "lark", string> = {
   feishu: "https://open.feishu.cn",
   lark: "https://open.larksuite.com",
+}
+
+// [feat: feishu-edit-dialog-ux 2026-06-08] "自动免费模型"哨兵
+// account.model 存 { providerID:"opencode", modelID:"__auto_free__" } 表示:
+// 「永远用 OpenCode Zen 当下第一个免费模型」。前端编辑弹窗写入(feishu-edit-account-model.ts
+// 的 AUTO_FREE_MODEL_ID 必须同值);pipeline 发请求前 effectiveModel() 实时解析成具体 model,
+// 故 opencode 明天换了免费模型也自动跟上、不会失效。
+const AUTO_FREE_PROVIDER = "opencode"
+const AUTO_FREE_MODEL_ID = "__auto_free__"
+
+/**
+ * 从 /config/providers 数据里挑 OpenCode Zen 第一个免费模型(`!cost || cost.input === 0`,
+ * 与前端 dialog-select-model.tsx 判据一致)。无 opencode provider / 无免费模型 → null
+ * (调用方回退全局默认)。纯函数,可单测。[feat: feishu-edit-dialog-ux 2026-06-08]
+ */
+export function pickFirstFreeModel(
+  providersData: unknown,
+): { providerID: string; modelID: string } | null {
+  const providers = (
+    providersData as {
+      providers?: Array<{
+        id: string
+        models?: Record<string, { id: string; cost?: { input?: number } }>
+      }>
+    }
+  )?.providers
+  if (!Array.isArray(providers)) return null
+  const oc = providers.find((p) => p.id === AUTO_FREE_PROVIDER)
+  if (!oc?.models) return null
+  for (const m of Object.values(oc.models)) {
+    if (!m.cost || m.cost.input === 0) return { providerID: AUTO_FREE_PROVIDER, modelID: m.id }
+  }
+  return null
 }
 
 /**
@@ -477,6 +506,11 @@ export class MessagePipeline {
     string,
     { supportsImage: boolean; checkedAt: number }
   >()
+  /** [feat: feishu-edit-dialog-ux 2026-06-08] "自动免费模型"解析缓存(TTL 10min,免费列表很少变)*/
+  private autoFreeCache: {
+    model: { providerID: string; modelID: string } | null
+    checkedAt: number
+  } | null = null
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
   /** 飞书 CardKit 权限卡片控制器(LLM 调工具触发权限时弹卡片让 user 在飞书选)*/
@@ -516,8 +550,9 @@ export class MessagePipeline {
    * [feat: feishu-account-workspace] 2026-06-07
    */
   private workspaceDir(): string {
-    // [fix: feishu-review-followup 2026-06-07] 走 normalizeWorkspace,返 trim 后值(防带空格路径)
-    return normalizeWorkspace(this.opts.account.workspace) ?? IMBOT_WORKSPACE
+    // [fix: feishu-review-followup 2026-06-07] 走 normalizeWorkspace(trim 防带空格路径),
+    // 未设回退全局默认 —— 两步合进 resolveWorkspace 单一真相源 [feat: feishu-edit-dialog-ux 2026-06-08]
+    return resolveWorkspace(this.opts.account.workspace)
   }
 
   /**
@@ -635,9 +670,7 @@ export class MessagePipeline {
     if (imageKey) {
       const visionOk = await this.checkModelVisionSupport().catch(() => true) // 查失败默认放行
       if (!visionOk) {
-        const modelHint = this.opts.account.model
-          ? `${this.opts.account.model.providerID}/${this.opts.account.model.modelID}`
-          : "当前默认 model"
+        const modelHint = this.modelHintLabel()
         await this.sendFeishuText(
           event.chatId,
           `⚠️ ${modelHint} 不支持图片识别。请到 DeskFox 设置 → 飞书桥接 → 选当前账号 → 编辑 → Model,换成支持视觉的模型(如 claude-code/sonnet、Claude/GPT-4o/Gemini 等)。`,
@@ -1495,9 +1528,7 @@ export class MessagePipeline {
     // vision 预检(同 handle() 路径)
     const visionOk = await this.checkModelVisionSupport().catch(() => true)
     if (!visionOk) {
-      const modelHint = this.opts.account.model
-        ? `${this.opts.account.model.providerID}/${this.opts.account.model.modelID}`
-        : "当前默认 model"
+      const modelHint = this.modelHintLabel()
       await this.sendFeishuText(
         event.chatId,
         `⚠️ ${modelHint} 不支持图片识别。请到 DeskFox 设置 → 飞书桥接 → 选当前账号 → 编辑 → Model，换成支持视觉的模型(如 Claude/GPT-4o/Gemini 等)。`,
@@ -1694,15 +1725,62 @@ export class MessagePipeline {
    *    留 followup,先保证有 reply(echo)优于 empty reply。
    */
   /**
+   * [feat: feishu-edit-dialog-ux 2026-06-08] 解析本账号实际发给 promptAsync 的 model:
+   *  - 未设(null) → null(走 opencode 全局默认,promptAsync 不带 model)
+   *  - "自动免费"哨兵 → 实时解析第一个免费模型(解析不到/离线 → null 回退全局默认)
+   *  - 具体 model → 原样
+   * 缓存 10min。⚠️ vision 预检必须先经此解析,否则哨兵 `__auto_free__` 当真 modelID
+   * 去查 providers 必查不到 → 误判不支持 vision 卡住图片(spec T14)。
+   */
+  private async effectiveModel(): Promise<{ providerID: string; modelID: string } | null> {
+    const m = this.opts.account.model
+    if (!m) return null
+    if (m.providerID !== AUTO_FREE_PROVIDER || m.modelID !== AUTO_FREE_MODEL_ID) return m
+    // 哨兵 → 解析第一个免费模型(缓存 10min)
+    if (this.autoFreeCache && isVisionCacheFresh(this.autoFreeCache)) {
+      return this.autoFreeCache.model
+    }
+    let picked: { providerID: string; modelID: string } | null = null
+    try {
+      const res = await this.opts.opencodeClient.config.providers({
+        query: { directory: this.workspaceDir() },
+      })
+      picked = pickFirstFreeModel((res as { data?: unknown }).data)
+    } catch (err) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] 解析自动免费模型失败,回退全局默认:`,
+        err,
+      )
+      picked = null
+    }
+    this.autoFreeCache = { model: picked, checkedAt: Date.now() }
+    console.log(
+      `[pipeline ${this.opts.accountId}] auto-free → ${
+        picked ? `${picked.providerID}/${picked.modelID}` : "全局默认(暂无免费模型)"
+      }`,
+    )
+    return picked
+  }
+
+  /** 用户可见的 model 提示文案(vision 不支持等场景)。哨兵显示"自动免费模型"而非裸 id。*/
+  private modelHintLabel(): string {
+    const m = this.opts.account.model
+    if (!m) return "当前默认 model"
+    if (m.providerID === AUTO_FREE_PROVIDER && m.modelID === AUTO_FREE_MODEL_ID) return "自动免费模型"
+    return `${m.providerID}/${m.modelID}`
+  }
+
+  /**
    * [feat: feishu-image-recognition] 2026-05-26
    * 预检 account 配的 model 是否支持 image input(vision)。
    * 用 opencodeClient.config.providers() 查 model.capabilities.input.image。
    *
    * 缓存 10 min,key = providerID/modelID(或 __default__)。
    * 查询失败默认返 true(放行 — 假设支持,后续 LLM 收 ERROR text 会自己回 user 不支持)。
+   * [feat: feishu-edit-dialog-ux 2026-06-08] 先经 effectiveModel() 把哨兵解析成真 model。
    */
   private async checkModelVisionSupport(): Promise<boolean> {
-    const model = this.opts.account.model
+    const model = await this.effectiveModel()
     const cacheKey = model ? `${model.providerID}/${model.modelID}` : "__default__"
     const cached = this.visionCapCache.get(cacheKey)
     if (isVisionCacheFresh(cached)) {
@@ -1768,7 +1846,9 @@ export class MessagePipeline {
     // 的 friendlyErrorReply,确保用户一定能收到一条 reply(消除"bot 死了"黑洞)。
     const dispatchPromise = this.opts.dispatcher.register(sessionID, timeoutMs)
 
-    const accountModel = this.opts.account.model
+    // [feat: feishu-edit-dialog-ux 2026-06-08] effectiveModel 把"自动免费"哨兵实时解析成具体
+    // model;未设/解析不到 → null → promptAsync 不带 model 走 opencode 全局默认。
+    const accountModel = await this.effectiveModel()
     void this.opts.opencodeClient.session
       .promptAsync({
         path: { id: sessionID },

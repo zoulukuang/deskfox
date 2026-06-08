@@ -15,22 +15,38 @@ import {
   type ModelRef,
   type ProvidersResponse,
 } from "@/utils/feishu-config"
+// [feat: feishu-edit-dialog-ux] 2026-06-08 — model 选择纯逻辑(去"跟随默认"勾选,默认自动免费)
+import {
+  buildModelOptions,
+  defaultModelForProvider,
+  initialModelSelection,
+  isAutoFree,
+  toModelPayload,
+} from "./feishu-edit-account-model"
 
 export const FeishuEditAccountDialog: Component<{
   accountId: string
+  /** [feat: feishu-edit-dialog-ux] 2026-06-08 飞书账号名(标题显示用,便于辨认) */
+  botName?: string | null
   currentModel: ModelRef | null | undefined
   // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 — 删 currentEnableAutoGroupCreate prop
   /** [feat: feishu-group-mention-policy] 2026-05-24 */
   currentRequireMention?: boolean
-  /** [feat: feishu-account-workspace] 2026-06-07 当前 workspace(null = 走全局默认) */
+  /** [feat: feishu-account-workspace] 2026-06-07 当前 workspace 覆盖值(null = 走全局默认) */
   currentWorkspace?: string | null
+  /** [feat: feishu-edit-dialog-ux] 2026-06-08 实际生效的 workspace 绝对路径(空态显示用) */
+  currentWorkspaceEffective?: string | null
   onSaved?: () => void
 }> = (props) => {
   const dialog = useDialog()
   const language = useLanguage()
-  const [useDefault, setUseDefault] = createSignal(!props.currentModel)
-  const [providerID, setProviderID] = createSignal(props.currentModel?.provider_id ?? "")
-  const [modelID, setModelID] = createSignal(props.currentModel?.model_id ?? "")
+  // [feat: feishu-edit-dialog-ux] 2026-06-08 — 去掉"跟随默认"勾选;首次默认 OpenCode Zen + 自动免费模型
+  const init = initialModelSelection(props.currentModel)
+  const [providerID, setProviderID] = createSignal(init.providerID)
+  const [modelID, setModelID] = createSignal(init.modelID)
+  // 标题用的账号标识:有 bot 名则"<名>(id)",否则纯 id
+  const accountLabel = () =>
+    props.botName?.trim() ? `${props.botName.trim()}(${props.accountId})` : props.accountId
   // [feat: feishu-group-mention-policy] 2026-05-24 默认 true(保守 — 大群只 @ 才响应)
   // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25
   // GUI 显示语义反转("允许免@ 读取所有信息"),后端 requireMention 字段不变。
@@ -80,32 +96,22 @@ export const FeishuEditAccountDialog: Component<{
   const providerOptions = createMemo(() =>
     providers().map((p) => ({ value: p.id, label: p.name || p.id })),
   )
+  // [feat: feishu-edit-dialog-ux] 2026-06-08 — OpenCode Zen 置顶"自动免费"选项,其他 provider 不含
   const modelOptions = createMemo(() =>
-    currentProviderModels().map((m) => ({ value: m.id, label: m.name || m.id })),
+    buildModelOptions(
+      providerID(),
+      currentProviderModels(),
+      language.t("settings.feishu.edit.autoFreeModel"),
+    ),
   )
-
-  // 全局默认 model — opencode config providers 返 { default: { <providerID>: <modelID> } }
-  // 飞书桥接 v3 起绑账号默认 agent = "imbot"(setup hook 注入,同 build 能力但收紧危险工具)
-  // 注:data.default?.build latent bug — default key 是 provider id 不是 agent name,本字段值实际永远是 undefined
-  //     此组件目前不依赖该结果阻塞功能,留 FUTURE 顺手修(同 settings-feishu.tsx 修法)
-  const defaultModelLabel = () => {
-    const data = providersData()
-    if (!data) return ""
-    const buildDefault = data.default?.build
-    if (!buildDefault) return language.t("settings.feishu.edit.defaultUnset")
-    return buildDefault
-  }
+  // 当前选中是否"自动免费模型"(用于下方 hint)
+  const autoFreeSelected = () => isAutoFree(providerID(), modelID())
 
   const handleProviderChange = (newId: string) => {
     setProviderID(newId)
-    // 选 provider 后默认选第一个 model
+    // 选 provider 后默认 model:OpenCode Zen → 自动免费;其他 → 第一个真实 model
     const p = providers().find((pp) => pp.id === newId)
-    if (p) {
-      const firstModel = Object.values(p.models)[0]
-      setModelID(firstModel?.id ?? "")
-    } else {
-      setModelID("")
-    }
+    setModelID(defaultModelForProvider(newId, p ? Object.values(p.models) : []))
   }
 
   const handleSave = async () => {
@@ -114,10 +120,9 @@ export const FeishuEditAccountDialog: Component<{
     try {
       // [feat: feishu-create-group-toggle-gui] 2026-05-24
       // [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 — 删 enableAutoGroupCreate
-      // 一次 partial update 提交 model + requireMention(只发生变化的字段)
-      const modelPayload: ModelRef | null = useDefault()
-        ? null
-        : { provider_id: providerID(), model_id: modelID() }
+      // [feat: feishu-edit-dialog-ux] 2026-06-08 — 始终存下拉里的选择(哨兵 __auto_free__ 也是普通
+      // {provider_id, model_id},后端识别;不再有"跟随默认"=null 这条 GUI 路径)
+      const modelPayload: ModelRef | null = toModelPayload(providerID(), modelID())
       // [feat: feishu-account-workspace] 2026-06-07 — 仅当 workspace 变化时才发(空串 = 清走默认)
       const workspaceChanged = workspace().trim() !== initialWorkspace.trim()
       await feishuUpdateAccountSettings(props.accountId, {
@@ -135,12 +140,12 @@ export const FeishuEditAccountDialog: Component<{
     }
   }
 
-  const canSave = () => !saving() && (useDefault() || (!!providerID() && !!modelID()))
+  const canSave = () => !saving() && !!providerID() && !!modelID()
 
   return (
     <Dialog
       title={language.t("settings.feishu.edit.title")}
-      description={language.t("settings.feishu.edit.description", { account: props.accountId })}
+      description={language.t("settings.feishu.edit.description", { account: accountLabel() })}
     >
       {/* [feat: feishu-group-mention-policy] 2026-05-24 hot fix
         * 限制最大高度 + 内容溢出滚动,避免高级能力 hint 文案多 dialog 撑超屏 user
@@ -183,40 +188,12 @@ export const FeishuEditAccountDialog: Component<{
                 <div class="flex-1 h-px bg-border-weak" />
               </div>
 
-              {/* 模式选择 — checkbox + 动态 hint */}
-              <div class="flex flex-col gap-1 self-stretch">
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={useDefault()}
-                    onChange={(e) => setUseDefault(e.currentTarget.checked)}
-                  />
-                  <span class="text-14-medium">
-                    {language.t("settings.feishu.edit.useDefault")}
-                  </span>
-                </label>
-                <p class="text-13-regular text-text-weak pl-6">
-                  <Show
-                    when={useDefault()}
-                    fallback={language.t("settings.feishu.edit.useDefault.hintCustom")}
-                  >
-                    {language.t("settings.feishu.edit.useDefault.hintFollow", {
-                      model: defaultModelLabel(),
-                    })}
-                  </Show>
-                </p>
-              </div>
-
-              {/* provider + model — 始终显示,disabled 时由 Select 自身处理(scoped CSS 保留 bg+border,字灰) */}
+              {/* [feat: feishu-edit-dialog-ux] 2026-06-08 — 去掉"跟随默认"勾选;首次默认 OpenCode Zen
+                * + 自动免费模型,用户直接在下拉里看到默认值,可改可不改 */}
+              {/* provider + model — 始终可用 */}
               <div class="flex flex-col gap-3 self-stretch">
                 <div class="flex flex-col gap-1.5">
-                  <span
-                    class="text-13-regular"
-                    classList={{
-                      "text-text-weak": !useDefault(),
-                      "text-text-weaker": useDefault(),
-                    }}
-                  >
+                  <span class="text-13-regular text-text-weak">
                     {language.t("settings.feishu.edit.providerLabel")}
                   </span>
                   <Select
@@ -231,7 +208,6 @@ export const FeishuEditAccountDialog: Component<{
                     size="small"
                     triggerVariant="settings"
                     triggerStyle={{ width: "100%" }}
-                    disabled={useDefault()}
                   />
                 </div>
 
@@ -239,8 +215,8 @@ export const FeishuEditAccountDialog: Component<{
                   <span
                     class="text-13-regular"
                     classList={{
-                      "text-text-weak": !useDefault() && !!providerID(),
-                      "text-text-weaker": useDefault() || !providerID(),
+                      "text-text-weak": !!providerID(),
+                      "text-text-weaker": !providerID(),
                     }}
                   >
                     {language.t("settings.feishu.edit.modelLabel")}
@@ -257,8 +233,14 @@ export const FeishuEditAccountDialog: Component<{
                     size="small"
                     triggerVariant="settings"
                     triggerStyle={{ width: "100%" }}
-                    disabled={useDefault() || !providerID()}
+                    disabled={!providerID()}
                   />
+                  {/* 自动免费模型说明 — 仅选中时显示一行,非技术用户也懂 */}
+                  <Show when={autoFreeSelected()}>
+                    <p class="text-12-regular text-text-weak">
+                      {language.t("settings.feishu.edit.autoFreeModel.hint")}
+                    </p>
+                  </Show>
                 </div>
               </div>
 
@@ -313,9 +295,15 @@ export const FeishuEditAccountDialog: Component<{
                       "text-text-weak": !!workspace().trim(),
                       "text-text-weaker": !workspace().trim(),
                     }}
-                    title={workspace().trim() || undefined}
+                    title={workspace().trim() || props.currentWorkspaceEffective || undefined}
                   >
-                    {workspace().trim() || language.t("settings.feishu.edit.workspace.default")}
+                    {/* [feat: feishu-edit-dialog-ux] 2026-06-08 — 空态显示真实默认绝对路径而非抽象字样 */}
+                    {workspace().trim() ||
+                      (props.currentWorkspaceEffective
+                        ? language.t("settings.feishu.edit.workspace.defaultPath", {
+                            path: props.currentWorkspaceEffective,
+                          })
+                        : language.t("settings.feishu.edit.workspace.default"))}
                   </span>
                   <Button
                     class="w-auto shrink-0"

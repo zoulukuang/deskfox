@@ -6,11 +6,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
+  DEFAULT_IMBOT_WORKSPACE,
   DESKFOX_DIR_NAME,
   deskfoxFeishuFilesDir,
   deskfoxFeishuImagesDir,
   ensureDeskfoxDir,
   normalizeWorkspace,
+  resolveWorkspace,
 } from "../deskfox-dir"
 
 function tmpWs(): string {
@@ -26,6 +28,24 @@ describe("deskfox-dir 路径 helper", () => {
     expect(deskfoxFeishuFilesDir(ws)).toBe(join(ws, "_deskfox", "feishu", "files"))
     expect(deskfoxFeishuImagesDir(ws)).toBe(join(ws, "_deskfox", "feishu", "images"))
     expect(DESKFOX_DIR_NAME).toBe("_deskfox")
+  })
+})
+
+// [feat: feishu-edit-dialog-ux] 2026-06-08 — resolveWorkspace 单测(spec T8)
+describe("resolveWorkspace", () => {
+  test("未设(undefined/null/空白)→ 全局默认 home base", () => {
+    expect(resolveWorkspace(undefined)).toBe(DEFAULT_IMBOT_WORKSPACE)
+    expect(resolveWorkspace(null)).toBe(DEFAULT_IMBOT_WORKSPACE)
+    expect(resolveWorkspace("   ")).toBe(DEFAULT_IMBOT_WORKSPACE)
+  })
+
+  test("设了真实目录 → trim 后返回该目录", () => {
+    expect(resolveWorkspace(" /proj/a ")).toBe("/proj/a")
+    expect(resolveWorkspace("/proj/b")).toBe("/proj/b")
+  })
+
+  test("DEFAULT_IMBOT_WORKSPACE 是 ~/.opencode/imbot-workspace 绝对路径", () => {
+    expect(DEFAULT_IMBOT_WORKSPACE).toContain(join(".opencode", "imbot-workspace"))
   })
 })
 
