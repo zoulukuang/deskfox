@@ -199,6 +199,17 @@ LO_EXTRA_CONFIG=""
 if [[ -d "$LO_BUNDLE_APP" ]]; then
     LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
     echo "[deskfox] LO bundle found: $LO_BUNDLE_APP (${LO_SIZE}MB) — injecting into Tauri resources"
+    # [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] bundle 完整性校验 — 挡"fix 前的过期 bundle"。
+    # presets/ + extensions/ 是 LO 冷启动建 user profile 的硬依赖(prepare-lo-bundle.sh 已保留 + smoke 验证);
+    # 缺任一 = 此 bundle 由过度剥皮的旧脚本产出 → 打包必致干净机器 "User installation could not be completed"。
+    LO_RES="$LO_BUNDLE_APP/Contents/Resources"
+    for _req in presets extensions; do
+        if [[ ! -d "$LO_RES/$_req" ]]; then
+            echo "[deskfox] ERROR: LO bundle 缺 Contents/Resources/$_req — 过期/过度剥皮的 bundle,打包必致干净机器 LO fatal error。" >&2
+            echo "[deskfox]   重跑 prepare-lo-bundle.sh 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。" >&2
+            exit 1
+        fi
+    done
     # 路径相对于 packages/desktop/src-tauri/(同 tauri.conf.json resources 约定)
     LO_EXTRA_CONFIG='{"bundle":{"resources":{"../../branding/libreoffice-bundle/macos/LibreOffice.app":"libreoffice"}}}'
 

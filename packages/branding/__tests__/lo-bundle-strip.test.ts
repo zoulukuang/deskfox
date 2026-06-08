@@ -72,3 +72,37 @@ describe("prepare-lo-bundle.ps1 (Windows) 剥皮清单", () => {
     expect(PS1).toMatch(/\$extDir\s*=\s*Join-Path\s+\$loBaseDir\s+"share\\extensions"/)
   })
 })
+
+// 守护"冷启动 smoke gate"本身不被删 —— 这是比黑名单更根本的机制:剥皮后用全新空 profile 真跑一次
+// 转换,任何破坏冷启动的过度剥皮(presets/extensions/未来任意必需目录)当场暴露、bundle 产不出。
+// 若有人删了这道闸,过度剥皮就又能悄悄溜过去,故在 CI 层钉死闸的存在。
+describe("冷启动 smoke gate 存在(防被删)", () => {
+  test("prepare-lo-bundle.sh 含冷启动 smoke test(全新 profile 转换 + 失败 exit 1)", () => {
+    expect(SH).toMatch(/-env:UserInstallation=/)
+    expect(SH).toMatch(/--convert-to\s+pdf/)
+    expect(SH).toMatch(/smoke\.pdf/)
+    expect(SH).toMatch(/exit 1/) // 失败必须中止,不能产出残缺 bundle
+  })
+
+  test("prepare-lo-bundle.ps1 含冷启动 smoke test(全新 profile 转换 + 失败 throw)", () => {
+    expect(PS1).toMatch(/-env:UserInstallation=/)
+    expect(PS1).toMatch(/--convert-to.*pdf|"pdf"/)
+    expect(PS1).toMatch(/smoke\.pdf|smoke\\\.pdf|out\\smoke/)
+    expect(PS1).toMatch(/throw/) // 失败必须中止
+  })
+})
+
+// 守护 build 侧完整性校验:注入前确认 bundle 含 presets + extensions(挡 fix 前的过期/过度剥皮 bundle)
+describe("build-deskfox bundle 完整性校验存在(防过期 bundle 流入打包)", () => {
+  const BUILD_SH = readFileSync(join(SCRIPTS, "build-deskfox.sh"), "utf8")
+  const BUILD_PS1 = readFileSync(join(SCRIPTS, "build-deskfox.ps1"), "utf8")
+
+  test("build-deskfox.sh 注入前校验 presets/extensions 存在", () => {
+    expect(BUILD_SH).toMatch(/for\s+_req\s+in\s+presets\s+extensions/)
+  })
+
+  test("build-deskfox.ps1 注入前校验 presets/extensions 存在", () => {
+    expect(BUILD_PS1).toMatch(/presets["\s,]/)
+    expect(BUILD_PS1).toMatch(/share\/extensions/)
+  })
+})

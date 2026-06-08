@@ -189,6 +189,14 @@ $loConfigFile = $null
 if (Test-Path $loSoffice) {
     $loSizeMB = [math]::Round(((Get-ChildItem -Recurse -File $loBundleDir | Measure-Object -Property Length -Sum).Sum / 1MB))
     Write-Output "[deskfox] LO bundle found: $loBundleDir (${loSizeMB}MB) -> injecting as Tauri resource 'libreoffice'"
+    # [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] bundle 完整性校验 — 挡"fix 前的过期 bundle"(对称 build-deskfox.sh)。
+    # presets/ + share/extensions/ 是 LO 冷启动建 user profile 的硬依赖(prepare-lo-bundle.ps1 已保留 + smoke 验证);
+    # 缺任一 = 此 bundle 由过度剥皮的旧脚本产出 → 打包必致干净机器 "User installation could not be completed"。
+    foreach ($req in @("presets", "share/extensions")) {
+        if (-not (Test-Path (Join-Path $loBundleDir $req))) {
+            throw "[deskfox] LO bundle 缺 $req — 过期/过度剥皮的 bundle,打包必致干净机器 LO fatal error。请重跑 prepare-lo-bundle.ps1 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。"
+        }
+    }
     $loJson = '{"bundle":{"resources":{"../../branding/libreoffice-bundle/windows":"libreoffice"}}}'
     $loConfigFile = Join-Path $env:TEMP "deskfox-lo-resources.json"
     [System.IO.File]::WriteAllText($loConfigFile, $loJson, (New-Object System.Text.UTF8Encoding $false))

@@ -230,6 +230,33 @@ if [[ "$FINAL_SIZE_MB" -gt 600 ]]; then
     echo "                Check: du -sh $APP/Contents/Resources/* $APP/Contents/Frameworks/*"
 fi
 
+# --- 冷启动 smoke test:验证剥皮后 bundle 能在"全新空 profile"下起来 ---
+# [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] 机制化防"过度剥皮"再发生。
+# 起源:presets/extensions 这类 profile bootstrap 硬依赖被剥皮删掉 → 干净机器(冷 profile)
+# 100% 报 "User installation could not be completed",但打包机有热 profile 测不出 → 直达线上。
+# 本闸不认目录名、只认行为:用全新空 -env:UserInstallation 真跑一次转换,失败即 exit 1,
+# 任何破坏冷启动的过度剥皮(presets/extensions/未来任意必需目录)当场暴露,残缺 bundle 产不出。
+# 注:① arm64 未签名/改签二进制会被内核 SIGKILL,故先 ad-hoc 签名让其可启动(下方正式签名移除会清掉)
+#    ② profile 必须是全新空目录,-env:UserInstallation 用三斜杠绝对路径(file://<绝对路径>)
+echo "[lo-bundle-mac] cold-start smoke test (fresh empty profile)..."
+codesign --force --deep --sign - "$DEST_APP" >/dev/null 2>&1 || true
+SMOKE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/deskfox-lo-smoke.XXXXXX")"
+mkdir -p "$SMOKE_TMP/out"
+printf 'DeskFox LO cold-start smoke test\n' > "$SMOKE_TMP/smoke.txt"
+"$DEST_APP/Contents/MacOS/soffice" --headless --norestore --nologo --nofirststartwizard \
+    -env:UserInstallation="file://$SMOKE_TMP/profile" \
+    --convert-to pdf --outdir "$SMOKE_TMP/out" "$SMOKE_TMP/smoke.txt" >/dev/null 2>&1 || true
+if [[ -f "$SMOKE_TMP/out/smoke.pdf" ]]; then
+    echo "[lo-bundle-mac]   smoke OK — 剥皮后 bundle 能冷启动建 profile + 转换"
+    rm -rf "$SMOKE_TMP"
+else
+    echo "[lo-bundle-mac] ERROR: 冷启动 smoke test 失败 — 剥皮删了 profile bootstrap 必需目录!" >&2
+    echo "[lo-bundle-mac]   全新 profile 下 soffice 起不来(典型:'User installation could not be completed')。" >&2
+    echo "[lo-bundle-mac]   核对上面 STRIP_DIRS 是否误删 presets/extensions 等必需项;此 bundle 已废弃,不可打包。" >&2
+    rm -rf "$SMOKE_TMP" "$DEST_APP"
+    exit 1
+fi
+
 # --- 移除 LibreOffice 原有代码签名 ---
 # 让 DeskFox Tauri build 在打包时统一对整个 .app 重签
 # (保留 LO 原签名会导致 codesign 对 .app 整体签名失败 — 不允许嵌套签名主体)

@@ -192,6 +192,37 @@ if ($cfgImages) {
 # administrative install 在提取根留的 MSI 副本 + 顶层多余文件(约 -19MB)
 Get-ChildItem $loBaseDir -Filter "*.msi" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
+# -- Step 3.5: 冷启动 smoke test --------------------------------------------
+# [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] 机制化防"过度剥皮"再发生(对称 macOS prepare-lo-bundle.sh)。
+# 起源:presets/extensions 这类 profile bootstrap 硬依赖被剥皮删掉 → 干净机器(冷 profile)100% 报
+# "User installation could not be completed",但打包机有热 profile(%APPDATA%\LibreOffice\4 已存在)测不出 → 直达线上。
+# 本闸不认目录名、只认行为:用全新空 -env:UserInstallation 真跑一次转换,失败即 throw,残缺 bundle 产不出。
+# 注:① 用 .com 控制台变体(.exe 会立即返回);② 用 Start-Process + WaitForExit(超时)防失败时模态
+#    fatal-error 对话框把脚本挂死;③ profile 用全新空目录,file:/// + 正斜杠绝对路径。
+Write-Host "[3.5/4] 冷启动 smoke test(全新空 profile)..."
+$smokeTmp = Join-Path $env:TEMP "deskfox-lo-smoke-$PID"
+Remove-Item $smokeTmp -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path (Join-Path $smokeTmp "out") -Force | Out-Null
+"DeskFox LO cold-start smoke test" | Out-File -FilePath (Join-Path $smokeTmp "smoke.txt") -Encoding utf8
+$sofficeCom = Join-Path $loProgramDir "soffice.com"
+$smokeBin   = if (Test-Path $sofficeCom) { $sofficeCom } else { Join-Path $loProgramDir "soffice.exe" }
+$profUrl    = "file:///" + ($smokeTmp -replace '\\','/') + "/profile"
+$smokeArgs  = @("--headless","--norestore","--nologo","--nofirststartwizard",
+    "-env:UserInstallation=$profUrl","--convert-to","pdf","--outdir",(Join-Path $smokeTmp "out"),(Join-Path $smokeTmp "smoke.txt"))
+$smokeProc  = Start-Process -FilePath $smokeBin -ArgumentList $smokeArgs -PassThru -WindowStyle Hidden
+if (-not $smokeProc.WaitForExit(120000)) {
+    # 120s 没出 = 大概率卡在 fatal-error 模态框(冷启动失败),杀掉防挂死
+    try { $smokeProc.Kill() } catch {}
+}
+$smokePdf = Join-Path $smokeTmp "out\smoke.pdf"
+if (Test-Path $smokePdf) {
+    Write-Host "    [OK] smoke 通过 — 剥皮后 bundle 能冷启动建 profile + 转换"
+    Remove-Item $smokeTmp -Recurse -Force -ErrorAction SilentlyContinue
+} else {
+    Remove-Item $smokeTmp -Recurse -Force -ErrorAction SilentlyContinue
+    throw "[!] 冷启动 smoke test 失败 — 剥皮删了 profile bootstrap 必需目录!全新 profile 下 soffice 起不来(典型 'User installation could not be completed')。核对上面 stripFolders 是否误删 presets / extensions 等必需项;此 bundle 不可打包。"
+}
+
 # -- Step 4: 复制到 bundle 输出目录 --------------------------------------------
 Write-Host "[4/4] 复制到 $outputDir ..."
 if (Test-Path $outputDir) { Remove-Item $outputDir -Recurse -Force }

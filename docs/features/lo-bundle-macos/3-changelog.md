@@ -125,3 +125,24 @@ code-review(high)指出:新增的 `lo-bundle-strip.test.ts` 当时**未接入任
 | `lo-bundle-strip.test.ts` | 注释订正:说明已接入 turbo test:ci |
 
 验证:`bun turbo test:ci --filter=@opencode-ai/branding` 真跑到本测试(21 pass)。
+
+### Follow-up(机制化:冷启动 smoke gate)— feat-id `lo-bundle-coldstart-smoke-gate`(2026-06-08)
+
+**复盘结论**:presets/extensions 这类 profile bootstrap 硬依赖被剥皮删掉,**根本机制问题**是「剥皮后没人验证冷启动还能不能起」——打包机有热 profile(`~/Library/Application Support/LibreOffice` / `%APPDATA%\LibreOffice\4` 已存在)测不出,干净用户机才暴露。原防回归测试是**黑名单**(只认 presets/extensions 两个名字),换个目录名同样的坑会再踩。本次从机制上根治,设三道闸:
+
+| 闸 | 文件 | 机制 |
+|---|---|---|
+| **打包闸(核心)** | `prepare-lo-bundle.sh` / `.ps1` | 剥皮后**强制冷启动 smoke test**:用全新空 `-env:UserInstallation` 真跑一次 `--convert-to pdf`,产不出 PDF 即 `exit 1` / `throw`,残缺 bundle 根本产不出。**不认目录名、只认行为** → presets/extensions/未来任意必需目录,任何破坏冷启动的过度剥皮当场暴露。 |
+| **打包闸(build 侧)** | `build-deskfox.sh` / `.ps1` | LO 注入前校验 bundle 含 `presets/` + `extensions/`,缺任一即中止 → 挡"fix 前的过期/过度剥皮 bundle"流入打包。 |
+| **测试闸(CI)** | `lo-bundle-strip.test.ts` | 扩展:除原黑名单断言外,再断言两 prepare 脚本含 smoke gate(`-env:UserInstallation`+`--convert-to`+失败中止)、两 build 脚本含完整性校验 → 防有人删闸。 |
+
+**macOS 实测**(2026-06-08):
+- 正向:`prepare-lo-bundle.sh` 重跑 → `smoke OK`,exit 0,bundle 规范态(presets 保留 + 签名移除)。
+- 负向:故意删 presets → 冷启动无 PDF → 确认 gate 会 `exit 1` 拦截(双向验证)。
+- `bun test --cwd packages/branding` 25 pass(+4 新)+ bash -n 语法 OK + build 完整性校验正向通过 + typecheck 干净。
+
+**macOS smoke 实现要点**:arm64 未签名/改签二进制被内核 SIGKILL → smoke 前 `codesign --force --deep --sign -` ad-hoc 签名让其可启动,随后既有"签名移除"步骤清掉(恢复 Tauri 重签的规范态);profile 用全新空目录 + `file://` 绝对路径。
+
+**Win 端待同事验证**(本机无 pwsh,ps1 未跑过):`.ps1` smoke 用 `soffice.com`(控制台变体阻塞)+ `Start-Process` `WaitForExit(120s)` 超时 kill 防失败时模态 fatal-error 框挂死;`build-deskfox.ps1` 完整性校验对称。需在 Windows 上跑 `prepare-lo-bundle.ps1` 确认正/负路径。
+
+**回退**:三道闸都是独立追加块,可单独 revert,不影响 presets 主修复。
