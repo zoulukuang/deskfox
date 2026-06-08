@@ -185,3 +185,22 @@ build-deskfox 的闸(按 --no-bundle)保留做**纵深防御**(Mac 发布走 pac
 1. 在 Windows 跑 `prepare-lo-bundle.ps1` 验证 smoke 正/负路径(svp 在 Win 不适用,靠 `WaitForExit(120s)` 超时兜底;Start-Process 数组参数空格拆裂修复待验)。
 2. 验证 `build-deskfox.ps1` / `pack-installer.ps1` 出货闸 + 发布闸的硬失败路径。
 3. **补 Windows 闸2(打包后产物验证)**:code-review(2026-06-08)发现 **`pack-installer.ps1 -SkipBuild` 会跳过 build-deskfox.ps1 连带其输出验证**,而发布闸只查 LO bundle 源、不查最终构建产物 → `-SkipBuild` 路径无人验证最终 NSIS 包真含 LO(Mac 无此口子,pack-installer.sh 总走 build-deskfox.sh 的 2.4 输出验证)。需在 Windows 侧补:无论走不走 build-deskfox,发布前验证最终产物(target/release 或 NSIS 内)真含 `libreoffice/program/soffice.exe`,确认 Tauri 在 Windows 的 resource 输出路径后落地。
+
+### Follow-up(Win 端落地:输出侧验证 闸4)— feat 内部标记 `win-lo-bundle-output-verify`(2026-06-08)
+
+**在 Windows 实机落地上方"Win 端 follow-up 清单",填掉同事在 Mac 上无法完成的部分**(他不知 Tauri 在 Windows 的 resource 输出路径)。
+
+**① smoke 正/负路径实证(清单 #1)**:本机跑内置 `soffice.com` + 全新空 `-env:UserInstallation` → 正路径转出 PDF(14408 bytes,`WaitForExit` 正常不挂);负路径(无 presets)→ fatal-error 模态框,被 `WaitForExit(120s)` + Kill 兜住。**Win smoke 闸确认可用**。
+
+**② 补 Windows 闸4 输出侧验证(清单 #3,核心缺口)**:确认 Tauri 在 Windows 把 LO 注入为 resource `libreoffice` → 输出到 **`target/release/libreoffice/program/soffice.exe`**(= `office-installer.ts bundledSofficePath` Win 分支)。两道输出闸:
+
+| 闸 | 文件 | 机制 |
+|---|---|---|
+| **闸4a 构建产物验证** | `build-deskfox.ps1`(全量 build 后,`$loConfigFile -and -not $NoBundle`)| 注入 LO 后验证 `target/release/libreoffice/program/soffice.exe` 存在;`--config` deep-merge 静默失败致缺 LO → throw。对称 Mac 的 `VERIFY_SOFFICE`。 |
+| **闸4b 产物大小哨兵** | `pack-installer.ps1`(定位 NSIS 产物后)| 完整安装包含 LO ~190MB+,无 LO 仅 ~15-25MB;<100MB → throw。**此闸在 NSIS 产物定位后无条件跑,覆盖 `-SkipBuild` 路径**(跳过 build 也校最终包),填掉清单 #3 的 `-SkipBuild` 缺口。 |
+
+**Tier 豁免正确**:闸4a 条件 `-not $NoBundle`、闸4b 在 pack-installer(Tier3 不走)→ 只发布物(prod/dev preview)受检,Tier3 raw exe 豁免。**符合 user 目标:稳定版+预览版打包必含完整 LO,本地测试版豁免。**
+
+**编码踩坑**:`build-deskfox.ps1` / `pack-installer.ps1` 原本无 BOM(一直 GBK-harmless 跑着),但新加的中文注释经 `Parser::ParseFile`(PS5.1 GBK 读盘)证实会破坏解析 → 给两文件补 UTF-8 BOM(对齐 `prepare-lo-bundle.ps1`,补后 ParseFile 0 错误)。
+
+**回归测试**:`lo-bundle-strip.test.ts` +2 断言(闸4a 输出路径 + 闸4b 大小哨兵),branding 33 测全过。
