@@ -49,9 +49,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | T1-T6 model 选择逻辑 | `feishu-edit-account-model.test.ts` | ✅ 12 pass |
 | T7/T15 pickFirstFreeModel + 离线兜底 | `pick-first-free-model.test.ts` | ✅ |
 | T8 resolveWorkspace | 扩 `deskfox-dir.test.ts` | ✅ |
-| T9-T12 View / 集成 | dialog 渲染 / 标题 / 列表 / 哨兵往返 | ⏳ 待 CDP/真机 |
-| T13 免登录自动免费真机回复 | native | ⏳ 真桌面 QA |
-| T14 哨兵 vision 预检不误判 | native | ⏳ 真桌面 QA |
+| T9-T12 View / 集成 | dialog 渲染 / 标题 / 列表 / 哨兵往返 | ✅ 真机 QA 通过 2026-06-09 |
+| T13 免登录自动免费真机回复 | native | ⏳ 日常使用验证 |
+| T14 哨兵 vision 预检不误判 | native | ⏳ 日常使用验证 |
+
+## 真机 QA 暴露并修复(R9 分支内解决)
+
+- **Ask③ workspace 行不显示**:`AccountSummary.workspace_effective` 误加 `serde(rename=camelCase)`,
+  前端读 snake_case 读不到 → 删 rename 对齐其它字段。
+- **列表哨兵裸 id**:`opencode/__auto_free__` → 改显「自动(始终用免费模型)」友好文案(`isAutoFree`)。
+- 重 build + 真机复验:workspace 行正常显示真实目录 + 哨兵友好文案 ✓(commit `81fc63da0`)。
 
 ## 验证
 
@@ -68,3 +75,5 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - `fe9fc34d9` 后端:pipeline 自动免费模型解析 + workspace 路径单一真相源
 - `7481d9551` 前端:编辑弹窗去跟随勾选+默认自动免费 / 标题带 bot 名 / 列表显 workspace
 - `84642f6e0` docs:三文档
+- `65a75f182` docs:填 hash + INDEX 登记
+- `81fc63da0` fix:QA 修 workspace_effective 序列化 + 列表哨兵友好文案
