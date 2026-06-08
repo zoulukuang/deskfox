@@ -127,6 +127,14 @@ describe("出货必须含 LibreOffice(缺 LO 不静默出货 + 打包后验证)"
     expect(BUILD_SH).toMatch(/VERIFY_SOFFICE/)
     expect(BUILD_SH).toMatch(/libreoffice\/Contents\/MacOS\/soffice/)
   })
+
+  // [feat: win-lo-bundle-output-verify 2026-06-08] Win 侧对称的"输出验证":发布构建(非 -NoBundle)
+  // 注入 LO 后,确认 Tauri 真把 LO 输出到 target/release/libreoffice/program/soffice.exe(填同事留的
+  // Win follow-up;Mac 有 VERIFY_SOFFICE,Win 之前空)。防 --config deep-merge 静默失败致产物缺 LO。
+  test("build-deskfox.ps1:全量 build 后验证 LO 已输出到 target/release/libreoffice/(挡 LO 没注入)", () => {
+    expect(BUILD_PS1).toMatch(/target\/release\/libreoffice\/program\/soffice\.exe/)
+    expect(BUILD_PS1).toMatch(/\$loConfigFile\s+-and\s+-not\s+\$NoBundle/) // 仅发布物验,Tier3 raw exe 豁免
+  })
 })
 
 // 守护"发布闸"(权威):pack-installer 是 Tier1/2 发布唯一入口,缺 LO bundle 在 bump 前硬失败。
@@ -150,5 +158,13 @@ describe("发布闸:pack-installer 缺 LO 硬失败(Tier1/2 发布物必须含 L
     expect(PACK_SH).toMatch(/for\s+_req\s+in\s+presets\s+extensions/)
     expect(PACK_PS1).toMatch(/presets["\s,]/)
     expect(PACK_PS1).toMatch(/share\/extensions/)
+  })
+
+  // [feat: win-lo-bundle-output-verify 2026-06-08] 末道产物大小哨兵:NSIS 安装包必含 LO(~190MB),
+  // 完整包 >100MB,无 LO 包仅 ~15-25MB。低于阈值 → NSIS 漏打 LO,绝不发。也覆盖 -SkipBuild 路径
+  // (跳过 build 直接校已存在的 NSIS 产物大小),填同事提到的"-SkipBuild 产物验证缺口"。
+  test("pack-installer.ps1:NSIS 产物大小哨兵(<100MB = 不含 LO,throw)", () => {
+    expect(PACK_PS1).toMatch(/minInstallerMB/)
+    expect(PACK_PS1).toMatch(/产物不完整/)
   })
 })

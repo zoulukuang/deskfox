@@ -1,4 +1,4 @@
-# [fork-only] DeskFox one-shot installer pipeline (NSIS)
+﻿# [fork-only] DeskFox one-shot installer pipeline (NSIS)
 #
 # 发布渠道与版本号规则完整 doc:docs/governance/版本号与发布渠道规范.md
 #   - Tier 1 稳定版(prod 无后缀,GitHub Release latest)
@@ -135,6 +135,18 @@ if ($nsisFiles.Count -eq 0) {
 }
 $installerPath = $nsisFiles[0].FullName
 $size = $nsisFiles[0].Length
+
+# [feat: win-lo-bundle-output-verify 2026-06-08] 产物大小哨兵(闸 4 末道)— 发布物必含 LibreOffice。
+# 前面"发布闸"验了 LO 源 bundle 在场、build-deskfox 验了 LO 进了 target/release/;这里验最终 NSIS
+# 安装包真把 LO 打进去了:LO bundle ~190MB,完整安装包 ~190MB+;不含 LO 的包仅 ~15-25MB。
+# 阈值 100MB 安全分隔两者。低于即 NSIS 漏打 LO → 产物不完整,绝不发(目标:prod/dev 必完整)。
+$minInstallerMB = 100
+$sizeMB = [math]::Round($size / 1MB)
+if ($size -lt ($minInstallerMB * 1MB)) {
+    throw "[pack] 产物不完整 — 安装包仅 ${sizeMB}MB(< ${minInstallerMB}MB),不含 LibreOffice(完整应 ~190MB+)。NSIS 没把 libreoffice/ 资源打进发布物。绝不发残缺包。重跑 prepare-lo-bundle.ps1 + 重 build。"
+}
+Write-Output "[pack] 产物验证: 安装包 ${sizeMB}MB 含 LibreOffice ✓"
+
 Write-Output ""
 Write-Output "[pack] installer ready:"
 Write-Output "  $installerPath"

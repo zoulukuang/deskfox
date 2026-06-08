@@ -1,4 +1,4 @@
-# [fork-only] DeskFox 一键构建 wrapper
+﻿# [fork-only] DeskFox 一键构建 wrapper
 #
 # 流程:
 #   1. apply-icons.ps1   把 DeskFox PNG/.ico 临时拷到 src-tauri/icons/{env}/
@@ -236,6 +236,20 @@ try {
 
 if ($buildExit -ne 0) {
     Write-Warning "tauri build exited with code $buildExit (NSIS SignTool missing 是已知挂账,exe 仍 build 出来了)"
+}
+
+# 3.55 输出侧验证(闸 4)— 发布物必含 LibreOffice
+# [feat: win-lo-bundle-output-verify 2026-06-08] 填同事留的 Win follow-up(他在 Mac、不知 Tauri 在
+# Windows 的 resource 输出路径,把"闸 2 Win 打包后验证"留空)。本机已实证:Tauri 把 LO 注入为
+# resource 'libreoffice' → 输出到 target/release/libreoffice/program/soffice.exe(office-installer.ts
+# bundledSofficePath 同款)。注入了 LO(发布物,非 -NoBundle raw exe)却没输出 = --config deep-merge
+# 静默失败 → 产物缺 LO,源 bundle 在场的"输入闸"查不出。目标:prod/dev 产物必完整,只本地 raw exe 豁免。
+if ($loConfigFile -and -not $NoBundle) {
+    $loOut = Join-Path $repoRoot "packages/desktop/src-tauri/target/release/libreoffice/program/soffice.exe"
+    if (-not (Test-Path $loOut)) {
+        throw "[deskfox] 发布物输出验证失败 — 已注入 LO 但 Tauri 没把它输出到 $loOut。--config LO resources deep-merge 未生效,产物不含 LibreOffice。绝不出残缺发布物。"
+    }
+    Write-Output "[deskfox] 输出验证: LibreOffice 已进构建产物 target/release/libreoffice/ ✓"
 }
 
 # 3.6 FORK: [启用自动升级] 2026-06-06 — updater .sig 兜底补签
