@@ -9,8 +9,25 @@
 ---
 
 
+## [Windows] 2026.7.1 - 2026-06-10 00:36
 
+**主题**:追赶式 prod 发布——首页品牌化定稿 + LibreOffice 打包健壮性(干净机器首启修复)+ 飞书编辑弹窗 UX + 文件预览 UX 三件套 + macOS 修复 + 冷启动 toast 静默 + dev 独立版本号工具链。小更新进"补"位(2026.7.0 → 2026.7.1)。
 
+**本次内容**(自 `ship-prod-2026.7.0` 起):
+- **首页品牌化定稿**(feat: home-empty-onboarding-copy):上游 `<Logo>` 换 DeskFoX.Ai wordmark(半透明)+ 常驻欢迎引导文案(有无最近项目都显示)+ 钢蓝实心「打开文件夹」CTA(取色自 logo)+ 全 17 语言;品牌色走自有 CSS 变量,不动上游 token。
+- **LibreOffice 打包健壮性**(feat: lo-bundle-coldstart-smoke-gate / lo-bundle-macos / libreoffice-user-install-fail-win):**剥皮保留 `presets/`** 修干净机器内置 LO 首启 `User installation could not be completed` fatal error(Win/Mac 双端,bug-repro)+ 冷启动 smoke 闸防过度剥皮 + 「发布物必含 LO」硬失败发布闸 + 打包后产物验证 + 防回归测试接入 CI。
+- **飞书编辑弹窗 UX**(feat: feishu-edit-dialog-ux / feishu-settings-workspace-above-advanced / feishu-workspace-picker-hang):编辑弹窗去跟随勾选 + 默认自动免费模型 + 标题带 bot 名 + 列表显 workspace;`workspace_effective` 序列化 snake_case + 哨兵友好文案;选工作目录原生 picker 第一步卡死修复(async + spawn_blocking + set_parent/set_directory);工作目录区上移到高级能力之上。
+- **文件预览 UX 三件套**(feat: new-project-hide-file-viewer-default / file-tab-close-others / filetree-hover-collapse-hint):新项目默认收起内容预览器(点文件才展开)+ 文件 tab 右键「关闭其他标签」+ 文件树「正在查看」行 hover 提示点击收起。
+- **macOS 修复**(feat: macos-dock-reopen-show-window / macos-monterey-no-launch):Dock 图标点击重开主窗口(补 `RunEvent::Reopen`)+ Monterey 12 装完点击无反应修复(sidecar minos 13.0 → 12.0)。
+- **冷启动 toast 静默**(feat: coldstart-project-reload-toast / coldstart-toast-race):冷启动重载项目的 transient 错(Missing queryFn / 连接级不可达)+ sidecar 看门狗重启窗口不再弹冗余红 toast;toast 起始位置上抬清过聊天输入框提交按钮。
+- **dev 独立版本号工具链**(feat: dev-independent-version-line):DEV 预览版版本号从稳定版独立出来(Dev 领先模式),`installer-versions.json` 新增 `dev-*` 三端独立号线 + bump/build/pack 脚本按 `-Env` 选号线;prod 路径不受影响(已 Win 端实测三步验证)。
+
+**Release**:GitHub `ship-prod-2026.7.1`(主仓 `zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN 地址)
+**installer**:`packages/desktop/src-tauri/target/release/bundle/nsis/DeskFox_2026.7.1_x64-setup.exe`(含 LibreOffice,~189 MB;NSIS 产物,未 Authenticode 签名但 updater 经 minisign 验签)
+**updater manifest**:`updates.deskfox.ai/v1/latest/desktop/windows/latest.json`
+**国内下载**:`https://dl.clawtray.com/DeskFox_2026.7.1_x64-setup.exe`
+
+---
 
 ## [Windows] 2026.7.0 - 2026-06-07 15:56
 
