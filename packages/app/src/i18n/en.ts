@@ -658,6 +658,7 @@ export const dict = {
     "The terminal connection was interrupted. This can happen when the server restarts.",
 
   "common.closeTab": "Close tab",
+  "common.closeOtherTabs": "Close Other Tabs",
   "common.dismiss": "Dismiss",
   "common.moreCountSuffix": " (+{{count}} more)",
   "common.requestFailed": "Request failed",
@@ -998,6 +999,7 @@ export const dict = {
   "fileTree.menu.newFile": "New file",
   "fileTree.menu.newFolder": "New folder",
   "fileTree.menu.refresh": "Refresh",
+  "fileTree.collapsePreviewHint": "Click to collapse preview",
   "fileTree.dialog.newFile.title": "New file",
   "fileTree.dialog.newFile.label": "File name",
   "fileTree.dialog.newFile.placeholder": "File name",

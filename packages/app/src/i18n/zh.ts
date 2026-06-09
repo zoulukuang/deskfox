@@ -598,6 +598,7 @@ export const dict = {
   "terminal.connectionLost.description": "终端连接已中断。这可能发生在服务器重启时。",
 
   "common.closeTab": "关闭标签页",
+  "common.closeOtherTabs": "关闭其他标签",
   "common.dismiss": "忽略",
   "common.requestFailed": "请求失败",
   "common.moreOptions": "更多选项",
@@ -954,6 +955,7 @@ export const dict = {
   "fileTree.menu.newFile": "新建文件",
   "fileTree.menu.newFolder": "新建文件夹",
   "fileTree.menu.refresh": "刷新",
+  "fileTree.collapsePreviewHint": "点击收起预览",
   "fileTree.dialog.newFile.title": "新建文件",
   "fileTree.dialog.newFile.label": "文件名",
   "fileTree.dialog.newFile.placeholder": "文件名",
