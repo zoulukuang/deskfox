@@ -157,8 +157,14 @@ if (Test-Path $signingConfig) {
 # 版本号 scheme 见 docs/governance/版本号与发布渠道规范.md §三。build 后 git 还原 tauri.conf.json。
 # 注意:本块【代码行】必须纯 ASCII。PS5.1 按 GBK 读 .ps1 时,中文紧邻代码引号会吞掉引号 → 解析崩。
 $versionsJson = Join-Path $root "branding/installer-versions.json"
-$appVersion = (Get-Content $versionsJson -Raw -Encoding UTF8 | ConvertFrom-Json).windows
-if (-not $appVersion) { throw "[deskfox] installer-versions.json missing 'windows' version field" }
+# env selects version line: prod -> bare "windows"; dev/beta -> independent "dev-windows"/"beta-windows"
+# (dev leading model, governance doc section 3.2). Fallback to bare "windows" if composite key absent.
+$verKey = if ($Env -eq "prod") { "windows" } else { "$Env-windows" }
+$verJson = Get-Content $versionsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+$appVersion = $verJson.$verKey
+if (-not $appVersion) { $appVersion = $verJson.windows }
+if (-not $appVersion) { throw "[deskfox] installer-versions.json missing version (key=$verKey, fallback windows)" }
+Write-Output "[deskfox] version line: $verKey"
 $baseConf = Join-Path $repoRoot "packages/desktop/src-tauri/tauri.conf.json"
 $confText = [System.IO.File]::ReadAllText($baseConf)
 $confRe = [regex]'"version"\s*:\s*"[^"]*"'

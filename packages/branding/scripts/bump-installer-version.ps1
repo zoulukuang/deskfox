@@ -8,7 +8,9 @@
 #   起步 2026.6.0。例:小更 2026.6.0->2026.6.1;大更 2026.6.0->2026.7.0;跨年 ->2027.1.0
 #
 # 各端独立计数:installer-versions.json 里 windows/macos/linux 各一条独立版本线。
-#   env(prod/dev/beta)【不进版本号】,只体现在文件名/渠道(见规范 §3.5);故本脚本不按 env 分计数。
+#   env 不进版本号【字符串】(纯数字,见规范 §3.5),但 dev/beta 走【独立号线】:
+#   dev-<plat>/beta-<plat> 各一条独立 key,与 prod 解耦(dev 领先模式,详规范 §3.2)。
+#   -Env prod 用裸 key;dev/beta 用前缀 key。
 #
 # Side effects:
 #   1. 更新 packages/branding/installer-versions.json 对应平台 key(前端读它渲染设置页版本牌)
@@ -41,6 +43,9 @@ if (-not (Test-Path $logFile)) { throw "version log not found: $logFile" }
 if (-not (Test-Path $jsonFile)) { throw "installer-versions.json not found: $jsonFile" }
 
 $jsonKey = switch ($Platform) { "Windows" { "windows" } "macOS" { "macos" } "Linux" { "linux" } }
+# env selects line: dev/beta -> prefixed key (dev-macos / beta-windows ...), prod -> bare key.
+# Composite key is grep/regex-safe vs bare: "macos" wont match "dev-macos" (preceded by '-' not '"').
+if ($Env -ne "prod") { $jsonKey = "$Env-$jsonKey" }
 
 # 读当前版本(per-platform 独立)
 $versions = Get-Content $jsonFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -77,10 +82,12 @@ if ($DryRun) {
 }
 
 # 1. Prepend 占位条目到台账(在首个 ## entry 之前)
+# dev/beta 在台账标 channel,跟 prod 同号线区分(dev 独立号线,见规范 §3.2)
+$ledgerTag = if ($Env -eq "prod") { $Platform } else { "$Platform $Env" }
 $logContent = Get-Content $logFile -Raw -Encoding UTF8
 $placeholder = @"
 
-## [$Platform] $newVersion - $(Get-Date -Format "yyyy-MM-dd HH:mm")
+## [$ledgerTag] $newVersion - $(Get-Date -Format "yyyy-MM-dd HH:mm")
 
 (待填: ship 后回填本条 — 包含 commits / 配套 plugin / installer 路径等)
 

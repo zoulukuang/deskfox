@@ -7,7 +7,9 @@
 #     MINOR = 功能波次,大更新 +1(--bump minor),进位时 PATCH 归零
 #     PATCH = 修补号,小更新 +1(--bump patch,默认)
 #   起步 2026.6.0。例:小更 2026.6.0->2026.6.1;大更 ->2026.7.0;跨年 ->2027.1.0
-#   各端独立计数(windows/macos/linux 各一条);env 不进版本号(见规范 §3.5),--env 仅兼容保留。
+#   各端独立计数(windows/macos/linux 各一条);env 不进版本号字符串(见规范 §3.5,纯数字),
+#   但 dev/beta 走【独立号线】(installer-versions.json 里 dev-<plat>/beta-<plat> 独立 key,
+#   与 prod 解耦,dev 领先模式 — 详规范 §3.2)。--env prod 用裸 key,dev/beta 用前缀 key。
 #
 # Usage:
 #   bash bump-installer-version.sh -Platform macOS                 # 小更(默认)
@@ -52,6 +54,11 @@ case "$PLATFORM" in
     macOS)   JSON_KEY="macos" ;;
     Linux)   JSON_KEY="linux" ;;
 esac
+# env 选号线:dev/beta 走独立 key(dev-macos / beta-windows ...),prod 用裸 key。
+# 复合 key 的 grep/sed 与裸 key 不互撞:`"macos"` 不匹配 `"dev-macos"`(后者 macos 前是 `-` 非 `"`)。
+if [[ "$ENV" != "prod" ]]; then
+    JSON_KEY="$ENV-$JSON_KEY"
+fi
 
 # 读当前版本(per-platform 独立)
 CURRENT=$(grep -oE "\"$JSON_KEY\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$JSON_FILE" | sed -E 's/.*"([^"]*)"$/\1/')
@@ -84,8 +91,11 @@ fi
 
 # 1. Prepend 占位条目到台账
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M')"
+# dev/beta 在台账标 channel,跟 prod 同号线区分(dev 独立号线,见规范 §3.2)
+LEDGER_TAG="$PLATFORM"
+[[ "$ENV" != "prod" ]] && LEDGER_TAG="$PLATFORM $ENV"
 PLACEHOLDER="
-## [$PLATFORM] $NEW_VERSION - $TIMESTAMP
+## [$LEDGER_TAG] $NEW_VERSION - $TIMESTAMP
 
 (to be filled: commits / plugin / installer path after ship)
 

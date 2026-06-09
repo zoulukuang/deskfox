@@ -75,8 +75,11 @@ if ($SkipBump) {
         # FORK: 从 installer-versions.json 读(不再有 .iss AppVersion)[启用自动升级] 2026-06-05
         $versionsJson = Join-Path $root "installer-versions.json"
         $versions = Get-Content $versionsJson -Raw -Encoding UTF8 | ConvertFrom-Json
-        $newVersion = $versions.windows
-        if (-not $newVersion) { throw "[pack] -SkipBump 但 -Version 未传 且 installer-versions.json 里找不到 windows" }
+        # env selects line: dev/beta read independent dev-windows/beta-windows, fallback bare windows (governance 3.2)
+        $verKey = if ($Env -eq "prod") { "windows" } else { "$Env-windows" }
+        $newVersion = $versions.$verKey
+        if (-not $newVersion) { $newVersion = $versions.windows }
+        if (-not $newVersion) { throw "[pack] -SkipBump 但 -Version 未传 且 installer-versions.json 里找不到 $verKey" }
         Write-Output "[pack] -SkipBump: read version from installer-versions.json = $newVersion (env=$Env)"
     }
 } else {
