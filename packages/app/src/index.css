@@ -6,6 +6,10 @@
    覆盖上游 packages/ui toast.css 的 max-width,不动上游 [fix: toast-width] 2026-06-04 */
 [data-component="toast-region"] {
   max-width: min(320px, calc(100vw - 64px));
+  /* FORK: 起始位置上抬(上游 bottom:48px → 112px),清过聊天输入框右下角的提交/执行按钮 —
+     右下角 toast 与 composer 提交按钮竖直区间重叠常盖住按钮;user 实测 96px 已不盖,再上抬一点留更多余量。
+     覆盖上游 toast.css 的 bottom,不动上游 [fix: toast-above-composer-submit] 2026-06-09 */
+  bottom: 112px;
 }
 
 @font-face {
