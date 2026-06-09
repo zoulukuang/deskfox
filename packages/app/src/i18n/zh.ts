@@ -952,6 +952,7 @@ export const dict = {
   "fileTree.menu.newFile": "新建文件",
   "fileTree.menu.newFolder": "新建文件夹",
   "fileTree.menu.refresh": "刷新",
+  "fileTree.collapsePreviewHint": "点击收起预览",
   "fileTree.dialog.newFile.title": "新建文件",
   "fileTree.dialog.newFile.label": "文件名",
   "fileTree.dialog.newFile.placeholder": "文件名",

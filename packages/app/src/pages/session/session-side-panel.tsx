@@ -509,6 +509,9 @@ export function SessionSidePanel(props: {
                           modified={diffFiles()}
                           kinds={kinds()}
                           active={activeFilePath()}
+                          // FORK: 预览区已开时,给「正在查看的那一行」加收起 hover tooltip(与 toggle 条件一致)
+                          //   [feat: filetree-hover-collapse-hint] 2026-06-09
+                          viewerOpen={view().reviewPanel.opened()}
                           onFileClick={(node) => openTab(file.tab(node.path))}
                         />
                       </Match>

@@ -948,6 +948,7 @@ export const dict = {
   "fileTree.menu.newFile": "新增檔案",
   "fileTree.menu.newFolder": "新增資料夾",
   "fileTree.menu.refresh": "重新整理",
+  "fileTree.collapsePreviewHint": "點擊收起預覽",
   "fileTree.dialog.newFile.title": "新增檔案",
   "fileTree.dialog.newFile.label": "檔案名稱",
   "fileTree.dialog.newFile.placeholder": "檔案名稱",
