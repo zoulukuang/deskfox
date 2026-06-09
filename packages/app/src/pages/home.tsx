@@ -1,10 +1,9 @@
-import { createMemo, For, Match, Switch } from "solid-js"
+import { createMemo, For, Show } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
-import { Logo } from "@opencode-ai/ui/logo"
+import { DeskFoxWordmark } from "@/components/deskfox-wordmark"
 import { useLayout } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { Icon } from "@opencode-ai/ui/icon"
 import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -69,8 +68,10 @@ export default function Home() {
   }
 
   return (
-    <div class="mx-auto mt-55 w-full md:w-auto px-4">
-      <Logo class="md:w-xl opacity-12" />
+    <div class="mx-auto mt-55 w-full md:w-[552px] px-4 flex flex-col items-center">
+      {/* FORK-BEGIN: 首页品牌化改造 — DeskFox wordmark + 常驻欢迎引导 + 钢蓝 CTA,
+          有无最近项目都常驻显示(对齐 onboarding 稿) 2026-06-09 */}
+      <DeskFoxWordmark class="block w-60 mx-auto opacity-50" />
       <Button
         size="large"
         variant="ghost"
@@ -85,56 +86,43 @@ export default function Home() {
         />
         {server.name}
       </Button>
-      <Switch>
-        <Match when={sync.data.project.length > 0}>
-          <div class="mt-20 w-full flex flex-col gap-4">
-            <div class="flex gap-2 items-center justify-between pl-3">
-              <div class="text-14-medium text-text-strong">{language.t("home.recentProjects")}</div>
-              <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                {language.t("command.project.open")}
-              </Button>
-            </div>
-            <ul class="flex flex-col gap-2">
-              <For each={recent()}>
-                {(project) => (
-                  <Button
-                    size="large"
-                    variant="ghost"
-                    class="text-14-mono text-left justify-between px-3"
-                    onClick={() => openProject(project.worktree)}
-                  >
-                    {project.worktree.replace(homedir(), "~")}
-                    <div class="text-14-regular text-text-weak">
-                      {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
-                    </div>
-                  </Button>
-                )}
-              </For>
-            </ul>
-          </div>
-        </Match>
-        <Match when={!sync.ready}>
-          <div class="mt-30 mx-auto flex flex-col items-center gap-3">
-            <div class="text-12-regular text-text-weak">{language.t("common.loading")}</div>
-            <Button class="px-3" onClick={chooseProject}>
-              {language.t("command.project.open")}
-            </Button>
-          </div>
-        </Match>
-        <Match when={true}>
-          <div class="mt-30 mx-auto flex flex-col items-center gap-3">
-            <Icon name="folder-add-left" size="large" />
-            <div class="flex flex-col gap-1 items-center justify-center">
-              <div class="text-14-medium text-text-strong">{language.t("home.empty.title")}</div>
-              <div class="text-12-regular text-text-weak">{language.t("home.empty.description")}</div>
-            </div>
-            <Button class="px-3 mt-1" onClick={chooseProject}>
-              {/* FORK: 空状态按钮用专属文案「打开项目文件夹」对齐引导稿 2026-06-09 */}
-              {language.t("home.empty.open")}
-            </Button>
-          </div>
-        </Match>
-      </Switch>
+      <div class="mt-8 mx-auto flex flex-col items-center gap-2 text-center">
+        <div class="text-20-medium deskfox-home-title">{language.t("home.welcome.title")}</div>
+        <div class="text-14-regular text-text-weak">{language.t("home.welcome.description")}</div>
+      </div>
+      <Button
+        size="large"
+        variant="primary"
+        icon="folder-add-left"
+        class="deskfox-cta mt-[26px] mx-auto"
+        onClick={chooseProject}
+      >
+        {language.t("home.welcome.open")}
+      </Button>
+      {/* FORK-END */}
+      <Show when={sync.data.project.length > 0}>
+        {/* FORK: 「最近项目」列表 — 引导/打开入口已上移常驻,此处去掉重复的「打开项目」头部按钮,只留标题+列表 2026-06-09 */}
+        <div class="mt-18 w-full flex flex-col gap-4">
+          <div class="text-14-medium text-text-strong pl-3">{language.t("home.recentProjects")}</div>
+          <ul class="flex flex-col gap-2">
+            <For each={recent()}>
+              {(project) => (
+                <Button
+                  size="large"
+                  variant="ghost"
+                  class="text-14-mono text-left justify-between px-3"
+                  onClick={() => openProject(project.worktree)}
+                >
+                  {project.worktree.replace(homedir(), "~")}
+                  <div class="text-14-regular text-text-weak">
+                    {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
+                  </div>
+                </Button>
+              )}
+            </For>
+          </ul>
+        </div>
+      </Show>
     </div>
   )
 }

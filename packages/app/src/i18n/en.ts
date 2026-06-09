@@ -539,9 +539,9 @@ export const dict = {
 
   "home.recentProjects": "Recent projects",
   // FORK-BEGIN: home empty-state welcome copy aligned to onboarding mock 2026-06-09
-  "home.empty.title": "Your personal AI work assistant is ready",
-  "home.empty.description": "Hand your local project folder to Fox, and it will deeply understand your project structure and help you anytime",
-  "home.empty.open": "Open project folder",
+  "home.welcome.title": "Your personal AI assistant is ready",
+  "home.welcome.description": "Hand your local project folder to Fox, and it will deeply understand your project structure and help you anytime",
+  "home.welcome.open": "Open folder",
   // FORK-END
 
   "session.tab.session": "Session",

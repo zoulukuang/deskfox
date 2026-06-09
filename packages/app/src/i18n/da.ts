@@ -493,9 +493,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Der opstod en fejl",
 
   "home.recentProjects": "Seneste projekter",
-  "home.empty.title": "Din personlige AI-arbejdsassistent er klar",
-  "home.empty.description": "Overlad din lokale projektmappe til Fox – den forstår din projektstruktur i dybden og hjælper dig når som helst",
-  "home.empty.open": "Åbn projektmappe",
+  "home.welcome.title": "Din personlige AI-assistent er klar",
+  "home.welcome.description": "Overlad din lokale projektmappe til Fox – den forstår din projektstruktur i dybden og hjælper dig når som helst",
+  "home.welcome.open": "Åbn mappe",
 
   "session.tab.session": "Session",
   "session.tab.review": "Gennemgang",

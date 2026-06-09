@@ -506,9 +506,9 @@ export const dict = {
 
   "home.recentProjects": "最近專案",
   // FORK-BEGIN: home 空狀態歡迎文案對齊首次引導稿 2026-06-09
-  "home.empty.title": "你的專屬 AI 工作助理已就緒",
-  "home.empty.description": "將本地專案資料夾交給 Fox，它將深度理解你的專案結構，隨時為你提供協助",
-  "home.empty.open": "開啟專案資料夾",
+  "home.welcome.title": "你的專屬 AI 助理已就緒",
+  "home.welcome.description": "將本地專案資料夾交給 Fox，它將深度理解你的專案結構，隨時為你提供協助",
+  "home.welcome.open": "開啟資料夾",
   // FORK-END
 
   "session.tab.session": "工作階段",

@@ -6,48 +6,57 @@ related: ./3-changelog.md
 
 # 3-changelog — home-empty-onboarding-copy
 
-> Tiny 规模(纯 i18n 文案 + 1 行组件 key 切换),按规范只写 3-changelog.md。
-> 需求:用户**没有打开任何项目**时的首页空状态,文案对齐首次引导设计稿
-> `D:\project\OPENCODE-PLAN\首次引导\onboarding-final.html`(只学文案,不学配色/用途)。
-> 「最近项目」区域(有项目时的列表)**不动**,只改其上方的空状态欢迎文案。
+> Medium 规模(首页 home 品牌化改造:常驻引导 + wordmark + CTA + 布局/配色),按规范写 3-changelog.md。
+> 需求起点:首页**引导欢迎文案常驻顶部**,对齐设计稿
+> `OPENCODE-PLAN/首次引导/onboarding-final.html`。随 user 真机迭代,逐步扩展为一次完整的首页视觉定稿。
+> 迭代过程用「独立 HTML 预览 + Edge 无头截图」做秒级调样,定稿后才搬回真应用(预览件留在 `D:\tmp\deskfox-preview\`,不入仓)。
 
-## 需求与决策
+## 最终定稿(user 逐项拍板)
 
-设计稿空状态文案三句,user 拍板套用其中三处、并去掉底部 hint:
-
-| 位置 | 旧文案(en/zh) | 新文案(zh) |
-|---|---|---|
-| 标题 `home.empty.title` | No recent projects / 没有最近项目 | **你的专属 AI 工作助理已就绪** |
-| 副标题 `home.empty.description` | Get started by opening a local project / 通过打开本地项目开始使用 | **将本地项目文件夹交给 Fox，它将深度理解你的项目结构，随时为你提供帮助** |
-| 按钮(新 key `home.empty.open`) | (原复用 `command.project.open`「打开项目」) | **打开项目文件夹** |
-
-- user 决策①:套设计稿三处文案,**去掉**底部提示「选择目标文件夹后，确认打开即可」。
-- user 决策②:**全部 17 种语言**都翻这套新文案。
-- 空状态按钮新建独立 key `home.empty.open`(「打开项目文件夹」),与「最近项目」头部按钮仍用的 `command.project.open`(「打开项目」)区分开 —— 后者不动。
-
-## 改法
-
-| 文件 | 改动 |
+| 项 | 定稿值 |
 |---|---|
-| `packages/app/src/i18n/{17 langs}.ts` | 每个语言文件改 `home.empty.title` / `home.empty.description` 两值 + 新增 `home.empty.open` 一行。共 17 文件。 |
-| `packages/app/src/pages/home.tsx` | 空状态(`<Match when={true}>`)按钮文案由 `command.project.open` → `home.empty.open`,加 FORK marker。其它两个状态(有最近项目 / 加载中)的按钮不动。 |
+| Logo | DeskFoX.Ai 品牌 **wordmark SVG**(来源 `OPENCODE-PLAN/品牌设计/SVG/wordmark.svg`),宽 240px(`w-60`),**半透明 0.5**(`opacity-50`) |
+| 标题 `home.welcome.title` | 「你的专属 AI 工作助理已就绪」,**加粗 700 + 中灰**(`--text-base` #6f6f6f,原近黑 #171717 太黑) |
+| 副标题 `home.welcome.description` | 「将本地项目文件夹交给 Fox…」,**一行**(列宽够宽自然不换行) |
+| CTA 按钮 `home.welcome.open` | 「**打开文件夹**」(原「打开项目文件夹」精简),**实心**,DeskFox **钢蓝 #7295C4**(取自 logo 狐狸脸主色),folder 图标,**常驻**(有无最近项目都显示) |
+| 列宽 | **552px**(`md:w-[552px]`,含 px-4 后内容 ≈520px),桌面端固定、居中;窄屏 `w-full` |
+| 最近项目 | 列表保留;**去掉**头部重复的「打开项目」小按钮(打开入口已上移为常驻 CTA),只留标题 + 列表 |
 
-### FORK marker 约定
+布局(常驻结构,有无最近项目都一致):
+```
+DeskFoX.Ai (wordmark, 半透明)
+● 本地服务器
+你的专属 AI 工作助理已就绪          (加粗中灰)
+将本地项目文件夹交给 Fox…           (一行)
+[ 📁 打开文件夹 ]                    (钢蓝实心 CTA,常驻)
+── 有最近项目时 ──
+最近项目
+<列表>
+```
 
-沿用既有惯例:i18n 仅 **en / zh / zht 三主力语言**打 FORK marker(全仓现状这三个文件各 15 处 marker,其余 14 语言文件 0 marker,按"批量译文不逐一标"对待)。
+## 关键决策与纠偏
 
-- en / zh / zht:三行新文案用 `FORK-BEGIN / FORK-END` 块包裹。
-- 其余 14 语言:跟随既有惯例不加 marker。
-- `home.tsx`(纯净上游文件,0 marker)按 R2 加单行 `{/* FORK: ... */}`。
+- **从「空状态」→「常驻」**:初版误把引导文案放进 `<Switch>` 的空状态分支(零项目才显示)。真机验收后 user 澄清要**常驻顶部**,遂提到 Switch 外;`<Switch>`(3 分支)简化为单个 `<Show when={有最近项目}>`(只控列表)。i18n key `home.empty.*` → `home.welcome.*`。
+- **宽度模型**:CDP 实测原 `md:w-auto` 是「收缩到最宽子元素」(实测 392px,被副标题 max-w 撑),非固定也非按分辨率。user 要更宽 → 改固定 `md:w-[552px]`。
+- **配色取自真 logo**:user 否决高亮蓝 #034cff,改从 `wordmark.svg` 取钢蓝 #7295C4;CTA 实心 vs 描边两种样式预览对比后选实心。
+
+## 落地改动
+
+| 文件 | 改动 | 类型 |
+|---|---|---|
+| `packages/app/src/components/deskfox-wordmark.tsx` | **新增** fork-only 组件:DeskFoX.Ai wordmark SVG(内联,品牌固有 fill 色) | 新文件(P1) |
+| `packages/app/src/pages/home.tsx` | 换 `<Logo>`→`<DeskFoxWordmark>`;欢迎横幅 + 钢蓝 CTA 提为常驻;`Switch/Match`→`Show`;列宽 `md:w-auto`→`md:w-[552px]`;去最近项目头部按钮;标题用 `deskfox-home-title`;CTA 用 `deskfox-cta` + `variant=primary`。整段 FORK marker | 改上游 |
+| `packages/app/src/index.css` | **新增** fork CSS:`--deskfox-cta-base/hover` 钢蓝变量 + `[data-variant=primary].deskfox-cta` 覆盖按钮色(加一档特异性稳压上游变体)+ `.deskfox-home-title`(700/中灰)。FORK marker | fork 入口 CSS(R3 合规:品牌色走自有 CSS 变量,不动上游 button/text token) |
+| `packages/app/src/i18n/{17 langs}.ts` | `home.welcome.{title,description,open}` 三值(title/desc 套设计稿、open 精简为「打开文件夹」);en/zh/zht 三主力带 FORK marker | i18n |
 
 ## 验证
 
-- i18n 全套测试(completeness + rebrand)**15 pass / 0 fail** —— 新 key `home.empty.open` 在 17 语言齐全,completeness 通过。
-- app 包 typecheck `tsgo -b` 通过(0 error)。
-- ⚠️ 空状态界面**视觉呈现**需「无任何最近项目」时才显示,真桌面渲染对齐待 user 在 release exe 上 QA(对照 [[feedback_cdp_selftest_complements_not_replaces_qa]] —— 文案/键值正确性测试已覆盖,视觉对齐属真桌面范畴)。
+- i18n 全套(completeness + rebrand)**15 pass / 0 fail** —— `home.welcome.*` 三键 17 语言齐全。
+- app 包 typecheck `tsgo -b` **通过**(0 error)。
+- release exe build + 真机最终验收(wordmark 渲染 / CTA 钢蓝 / 常驻引导 / 有最近项目时也显示) —— **待 user QA**(对照 [[feedback_cdp_selftest_complements_not_replaces_qa]],视觉/native 属真桌面范畴)。
 
 ## 规模 / 影响
 
-- **Tiny**:18 文件(17 i18n + 1 组件),净 ~59 行,几乎全是文案值;`home.tsx` 仅 1 行 key 切换 + marker。
-- **回退**:`git revert` 本 commit;恢复后空状态退回「没有最近项目 / 通过打开本地项目开始使用」+ 按钮「打开项目」。
-- **上游侵入**:`home.tsx` 1 行(已 marker)+ en/zh/zht 文案值改(已 marker);其余为译文值改动。**0 R4 override / 0 黑名单**。
+- **Medium**:1 新组件 + home.tsx 重排 + index.css 品牌 CSS + 17 i18n;`home.tsx` / `index.css` 是上游/ fork 入口,均带 FORK marker。
+- **回退**:`git revert` 本系列 commit;恢复后首页回上游「最近项目/空状态」原结构 + 原文案。
+- **R3**:品牌色集中走 `index.css` 自有 CSS 变量(`--deskfox-cta-*`),wordmark 走独立 fork 组件,**不改上游 button 变体 / text token / Logo 组件**。**0 R4 override / 0 黑名单**。

@@ -497,9 +497,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Произошла ошибка",
 
   "home.recentProjects": "Недавние проекты",
-  "home.empty.title": "Ваш персональный ИИ-ассистент для работы готов",
-  "home.empty.description": "Передайте Fox папку локального проекта — он глубоко изучит структуру вашего проекта и поможет вам в любой момент",
-  "home.empty.open": "Открыть папку проекта",
+  "home.welcome.title": "Ваш персональный ИИ-ассистент готов",
+  "home.welcome.description": "Передайте Fox папку локального проекта — он глубоко изучит структуру вашего проекта и поможет вам в любой момент",
+  "home.welcome.open": "Открыть папку",
 
   "session.tab.session": "Сессия",
   "session.tab.review": "Обзор",
