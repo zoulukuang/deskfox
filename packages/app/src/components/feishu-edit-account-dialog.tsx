@@ -244,40 +244,7 @@ export const FeishuEditAccountDialog: Component<{
                 </div>
               </div>
 
-              {/* 高级能力 分隔块 [feat: feishu-create-group-toggle-gui] 2026-05-24 */}
-              <div class="flex items-center gap-2 self-stretch">
-                <span class="text-13-medium text-text-weak">
-                  {language.t("settings.feishu.edit.advancedSectionTitle")}
-                </span>
-                <div class="flex-1 h-px bg-border-weak" />
-              </div>
-
-              {/* /group 命令用法说明 [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 */}
-              {/* 替换了旧的"允许 AI 自动创建新群" checkbox — flag 已删,建群统一走 user 显式 /group */}
-              <div class="flex flex-col gap-1 self-stretch">
-                <p class="text-13-regular text-text-weak">
-                  {language.t("settings.feishu.edit.groupCommand.info")}
-                </p>
-              </div>
-
-              {/* 允许 AI 免@ 读取群里所有信息 [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 */}
-              {/* GUI 语义反转 — checkbox.checked = !requireMention,save 时 set 回 requireMention */}
-              <div class="flex flex-col gap-1 self-stretch">
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={!requireMention()}
-                    onChange={(e) => setRequireMention(!e.currentTarget.checked)}
-                  />
-                  <span class="text-14-medium">
-                    {language.t("settings.feishu.edit.allowReadAll.label")}
-                  </span>
-                </label>
-                <p class="text-13-regular text-text-weak pl-6">
-                  {language.t("settings.feishu.edit.allowReadAll.hint")}
-                </p>
-              </div>
-
+              {/* FORK: 工作目录区域整体上移到「高级能力」之上 [feat: feishu-settings-workspace-above-advanced] 2026-06-09 */}
               {/* 工作目录 分隔块 [feat: feishu-account-workspace] 2026-06-07 */}
               <div class="flex items-center gap-2 self-stretch">
                 <span class="text-13-medium text-text-weak">
@@ -336,6 +303,40 @@ export const FeishuEditAccountDialog: Component<{
                     {language.t("settings.feishu.edit.workspace.security")}
                   </p>
                 </Show>
+              </div>
+
+              {/* 高级能力 分隔块 [feat: feishu-create-group-toggle-gui] 2026-05-24 */}
+              <div class="flex items-center gap-2 self-stretch">
+                <span class="text-13-medium text-text-weak">
+                  {language.t("settings.feishu.edit.advancedSectionTitle")}
+                </span>
+                <div class="flex-1 h-px bg-border-weak" />
+              </div>
+
+              {/* /group 命令用法说明 [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 */}
+              {/* 替换了旧的"允许 AI 自动创建新群" checkbox — flag 已删,建群统一走 user 显式 /group */}
+              <div class="flex flex-col gap-1 self-stretch">
+                <p class="text-13-regular text-text-weak">
+                  {language.t("settings.feishu.edit.groupCommand.info")}
+                </p>
+              </div>
+
+              {/* 允许 AI 免@ 读取群里所有信息 [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 */}
+              {/* GUI 语义反转 — checkbox.checked = !requireMention,save 时 set 回 requireMention */}
+              <div class="flex flex-col gap-1 self-stretch">
+                <label class="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!requireMention()}
+                    onChange={(e) => setRequireMention(!e.currentTarget.checked)}
+                  />
+                  <span class="text-14-medium">
+                    {language.t("settings.feishu.edit.allowReadAll.label")}
+                  </span>
+                </label>
+                <p class="text-13-regular text-text-weak pl-6">
+                  {language.t("settings.feishu.edit.allowReadAll.hint")}
+                </p>
               </div>
 
               {/* error */}
