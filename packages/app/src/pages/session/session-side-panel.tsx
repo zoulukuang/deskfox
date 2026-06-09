@@ -25,7 +25,13 @@ import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
 import { FileTabContent } from "@/pages/session/file-tabs"
-import { createOpenSessionFileTab, createSessionTabs, getTabReorderIndex, type Sizing } from "@/pages/session/helpers"
+import {
+  closeOtherTabs,
+  createOpenSessionFileTab,
+  createSessionTabs,
+  getTabReorderIndex,
+  type Sizing,
+} from "@/pages/session/helpers"
 import { setSessionHandoff } from "@/pages/session/handoff"
 import { useSessionLayout } from "@/pages/session/session-layout"
 
@@ -345,7 +351,16 @@ export function SessionSidePanel(props: {
                         </Tabs.Trigger>
                       </Show>
                       <SortableProvider ids={openedTabs()}>
-                        <For each={openedTabs()}>{(tab) => <SortableTab tab={tab} onTabClose={tabs().close} />}</For>
+                        <For each={openedTabs()}>
+                          {(tab) => (
+                            <SortableTab
+                              tab={tab}
+                              onTabClose={tabs().close}
+                              // FORK: 右键「关闭其他标签」[feat: file-tab-close-others] 2026-06-09
+                              onCloseOthers={(keep) => closeOtherTabs(openedTabs(), keep, tabs().close)}
+                            />
+                          )}
+                        </For>
                       </SortableProvider>
                       <div class="bg-background-stronger h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pr-3">
                         <TooltipKeybind
@@ -494,6 +509,9 @@ export function SessionSidePanel(props: {
                           modified={diffFiles()}
                           kinds={kinds()}
                           active={activeFilePath()}
+                          // FORK: 预览区已开时,给「正在查看的那一行」加收起 hover tooltip(与 toggle 条件一致)
+                          //   [feat: filetree-hover-collapse-hint] 2026-06-09
+                          viewerOpen={view().reviewPanel.opened()}
                           onFileClick={(node) => openTab(file.tab(node.path))}
                         />
                       </Match>

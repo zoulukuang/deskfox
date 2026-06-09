@@ -20,6 +20,8 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
+// FORK: 应用内 Tooltip(WKWebView 不渲染原生 title)— 文件树行「再次点击可收起预览」hover 提示 [feat: filetree-hover-collapse-hint] 2026-06-09
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
 import { invoke } from "@tauri-apps/api/core"
 import {
@@ -197,8 +199,12 @@ const FileTreeNode = (
       computeDragSources?: () => readonly string[]
       // FORK: 右键时同步更新 selection(OS-like:右键未选中行 → replace 为该行)
       onRowContextMenu?: () => void
+      // FORK: 预览区是否已开 — 决定「正在查看的那一行」hover 时是否提示「再次点击可收起预览」
+      //   [feat: filetree-hover-collapse-hint] 2026-06-09
+      viewerOpen?: boolean
     },
 ) => {
+  const language = useLanguage()
   const [local, rest] = splitProps(p, [
     "node",
     "level",
@@ -214,6 +220,7 @@ const FileTreeNode = (
     "onSelectMaybe",
     "computeDragSources",
     "onRowContextMenu",
+    "viewerOpen",
     "children",
     "class",
     "classList",
@@ -248,6 +255,13 @@ const FileTreeNode = (
   }
 
   return (
+    // FORK: 正在查看的那一行 + 预览区已开 → hover「再次点击可收起预览」(应用内 Tooltip;WKWebView 不渲染原生 title)
+    //   inactive=true 时直接渲染行、零侵入;仅 active 行包 Trigger wrapper [feat: filetree-hover-collapse-hint] 2026-06-09
+    <Tooltip
+      value={language.t("fileTree.collapsePreviewHint")}
+      inactive={!(local.viewerOpen && local.node.path === local.active)}
+      placement="bottom-end"
+    >
     <Dynamic
       component={local.as ?? "div"}
       // FORK: data-tree-path — 让外部(session-side-panel)能 scrollIntoView 到指定节点 2026-05-05
@@ -316,6 +330,7 @@ const FileTreeNode = (
         return <div class="shrink-0 size-1.5 mr-1.5 rounded-full" style={kindDotColor(value)} />
       })()}
     </Dynamic>
+    </Tooltip>
   )
 }
 
@@ -324,6 +339,8 @@ export default function FileTree(props: {
   class?: string
   nodeClass?: string
   active?: string
+  // FORK: 预览区是否已开 — 透传到行,给「正在查看的那一行」加收起 hover tooltip [feat: filetree-hover-collapse-hint] 2026-06-09
+  viewerOpen?: boolean
   level?: number
   allowed?: readonly string[]
   modified?: readonly string[]
@@ -1256,6 +1273,7 @@ export default function FileTree(props: {
                           node={node}
                           level={level}
                           active={props.active}
+                          viewerOpen={props.viewerOpen}
                           nodeClass={props.nodeClass}
                           draggable={draggable()}
                           kinds={kinds()}
@@ -1293,6 +1311,8 @@ export default function FileTree(props: {
                           modified={props.modified}
                           kinds={props.kinds}
                           active={props.active}
+                          // FORK: 递归子目录必须透传 viewerOpen,否则子目录文件的收起 hint 不显示 [feat: filetree-hover-collapse-hint] 2026-06-09
+                          viewerOpen={props.viewerOpen}
                           draggable={props.draggable}
                           onFileClick={props.onFileClick}
                           _filter={filter()}
@@ -1314,6 +1334,7 @@ export default function FileTree(props: {
                       node={node}
                       level={level}
                       active={props.active}
+                      viewerOpen={props.viewerOpen}
                       nodeClass={props.nodeClass}
                       draggable={draggable()}
                       kinds={kinds()}
