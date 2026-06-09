@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { createMemo, createRoot } from "solid-js"
 import { createStore } from "solid-js/store"
 import {
+  closeOtherTabs,
   createOpenReviewFile,
   createOpenSessionFileTab,
   createSessionTabs,
@@ -173,6 +174,38 @@ describe("getTabReorderIndex", () => {
 
   test("returns undefined for unknown droppable id", () => {
     expect(getTabReorderIndex(["a", "b", "c"], "a", "missing")).toBeUndefined()
+  })
+})
+
+describe("closeOtherTabs [feat: file-tab-close-others]", () => {
+  test("closes every tab except the kept one, preserving order", () => {
+    const closed: string[] = []
+    closeOtherTabs(["a", "b", "c", "d"], "b", (t) => closed.push(t))
+    expect(closed).toEqual(["a", "c", "d"])
+  })
+
+  test("keeps the kept tab even if duplicated, never closes it", () => {
+    const closed: string[] = []
+    closeOtherTabs(["a", "b", "b"], "b", (t) => closed.push(t))
+    expect(closed).toEqual(["a"])
+  })
+
+  test("no-op when only the kept tab is open", () => {
+    const closed: string[] = []
+    closeOtherTabs(["solo"], "solo", (t) => closed.push(t))
+    expect(closed).toEqual([])
+  })
+
+  test("no-op on empty list", () => {
+    const closed: string[] = []
+    closeOtherTabs([], "x", (t) => closed.push(t))
+    expect(closed).toEqual([])
+  })
+
+  test("closes all when kept tab is not present", () => {
+    const closed: string[] = []
+    closeOtherTabs(["a", "b"], "missing", (t) => closed.push(t))
+    expect(closed).toEqual(["a", "b"])
   })
 })
 

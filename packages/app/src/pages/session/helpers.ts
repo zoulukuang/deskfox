@@ -166,6 +166,15 @@ export const getTabReorderIndex = (tabs: readonly string[], from: string, to: st
   return toIndex
 }
 
+// FORK: tab 右键「关闭其他标签」逻辑 — 关掉除 keep 外的所有已开 tab(保持顺序遍历)。
+//   纯函数便于单测;UI 在 session-sortable-tab.tsx 右键菜单触发,close 由 caller 传(tabs().close)。
+//   [feat: file-tab-close-others] 2026-06-09
+export const closeOtherTabs = (tabs: readonly string[], keep: string, close: (tab: string) => void) => {
+  for (const tab of tabs) {
+    if (tab !== keep) close(tab)
+  }
+}
+
 export const createSizing = () => {
   const [state, setState] = createStore({ active: false })
   let t: number | undefined

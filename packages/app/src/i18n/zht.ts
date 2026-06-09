@@ -592,6 +592,7 @@ export const dict = {
   "terminal.connectionLost.title": "連線中斷",
   "terminal.connectionLost.description": "終端機連線已中斷。這可能會在伺服器重新啟動時發生。",
   "common.closeTab": "關閉標籤頁",
+  "common.closeOtherTabs": "關閉其他標籤",
   "common.dismiss": "忽略",
   "common.requestFailed": "要求失敗",
   "common.moreOptions": "更多選項",
