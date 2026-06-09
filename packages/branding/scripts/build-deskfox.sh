@@ -268,13 +268,18 @@ fi
 # tauri.conf.json 烧录 app version;上游 "version":"../package.json" 在 v2 是非法 semver → 回落 0.0.0,
 # 且 --config(走 env)不触发 cargo 重编。唯一可靠杠杆:patch on-disk tauri.conf.json(tauri-build
 # rerun-if-changed 强制重编宏)→ 版本号真进二进制(updater package_info().version)。build 后 git 还原。
-# Mac 读 installer-versions.json 的 macos 字段。版本号规则见 docs/governance/版本号与发布渠道规范.md §三。
+# Mac 读 installer-versions.json。版本号规则见 docs/governance/版本号与发布渠道规范.md §三。
+# env 选号线:prod 读裸 `macos`;dev/beta 读独立号线 `dev-macos`/`beta-macos`(dev 领先模式,§3.2)。
+# 兜底:复合 key 缺失时回落裸 `macos`(老 JSON / 未 seed 的 channel 不致 build 失败)。
 VERSIONS_JSON="$BRANDING_ROOT/installer-versions.json"
-APP_VERSION="$(bun -e "console.log(require('$VERSIONS_JSON').macos)")"
+VERSION_KEY="macos"
+[[ "$ENV" != "prod" ]] && VERSION_KEY="$ENV-macos"
+APP_VERSION="$(bun -e "const v=require('$VERSIONS_JSON'); console.log(v['$VERSION_KEY'] ?? v.macos)")"
 if [[ -z "$APP_VERSION" || "$APP_VERSION" == "undefined" ]]; then
-    echo "[deskfox] ERROR: installer-versions.json missing 'macos' version" >&2
+    echo "[deskfox] ERROR: installer-versions.json missing version (key=$VERSION_KEY, fallback macos)" >&2
     exit 1
 fi
+echo "[deskfox] version line: $VERSION_KEY"
 BASE_CONF="$REPO_ROOT/packages/desktop/src-tauri/tauri.conf.json"
 perl -0777 -i -pe 's/"version"\s*:\s*"[^"]*"/"version": "'"$APP_VERSION"'"/' "$BASE_CONF"
 echo "[deskfox] app version injected -> $APP_VERSION (tauri.conf.json on-disk patch, macos)"
