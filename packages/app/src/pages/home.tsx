@@ -129,7 +129,8 @@ export default function Home() {
               <div class="text-12-regular text-text-weak">{language.t("home.empty.description")}</div>
             </div>
             <Button class="px-3 mt-1" onClick={chooseProject}>
-              {language.t("command.project.open")}
+              {/* FORK: 空状态按钮用专属文案「打开项目文件夹」对齐引导稿 2026-06-09 */}
+              {language.t("home.empty.open")}
             </Button>
           </div>
         </Match>

@@ -497,8 +497,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Ocurrió un error",
 
   "home.recentProjects": "Proyectos recientes",
-  "home.empty.title": "Sin proyectos recientes",
-  "home.empty.description": "Empieza abriendo un proyecto local",
+  "home.empty.title": "Tu asistente de trabajo con IA personal está listo",
+  "home.empty.description": "Entrega tu carpeta de proyecto local a Fox: comprenderá a fondo la estructura de tu proyecto y te ayudará en cualquier momento",
+  "home.empty.open": "Abrir carpeta del proyecto",
 
   "session.tab.session": "Sesión",
   "session.tab.review": "Revisión",

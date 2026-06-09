@@ -501,8 +501,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Bir hata oluştu",
 
   "home.recentProjects": "Son projeler",
-  "home.empty.title": "Son proje yok",
-  "home.empty.description": "Yerel bir proje açarak başlayın",
+  "home.empty.title": "Kişisel AI çalışma asistanınız hazır",
+  "home.empty.description": "Yerel proje klasörünüzü Fox'a teslim edin; proje yapınızı derinlemesine anlayacak ve size her zaman yardımcı olacak",
+  "home.empty.open": "Proje klasörünü aç",
 
   "session.tab.session": "Oturum",
   "session.tab.review": "İnceleme",

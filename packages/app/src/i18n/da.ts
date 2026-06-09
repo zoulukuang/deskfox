@@ -493,8 +493,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Der opstod en fejl",
 
   "home.recentProjects": "Seneste projekter",
-  "home.empty.title": "Ingen seneste projekter",
-  "home.empty.description": "Kom i gang ved at åbne et lokalt projekt",
+  "home.empty.title": "Din personlige AI-arbejdsassistent er klar",
+  "home.empty.description": "Overlad din lokale projektmappe til Fox – den forstår din projektstruktur i dybden og hjælper dig når som helst",
+  "home.empty.open": "Åbn projektmappe",
 
   "session.tab.session": "Session",
   "session.tab.review": "Gennemgang",

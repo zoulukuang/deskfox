@@ -492,8 +492,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "เกิดข้อผิดพลาด",
 
   "home.recentProjects": "โปรเจกต์ล่าสุด",
-  "home.empty.title": "ไม่มีโปรเจกต์ล่าสุด",
-  "home.empty.description": "เริ่มต้นโดยเปิดโปรเจกต์ในเครื่อง",
+  "home.empty.title": "ผู้ช่วยทำงาน AI ส่วนตัวของคุณพร้อมแล้ว",
+  "home.empty.description": "มอบโฟลเดอร์โปรเจกต์ในเครื่องของคุณให้ Fox แล้วมันจะเข้าใจโครงสร้างโปรเจกต์ของคุณอย่างลึกซึ้งและช่วยเหลือคุณได้ทุกเมื่อ",
+  "home.empty.open": "เปิดโฟลเดอร์โปรเจกต์",
 
   "session.tab.session": "เซสชัน",
   "session.tab.review": "ตรวจสอบ",

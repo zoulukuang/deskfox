@@ -538,8 +538,11 @@ export const dict = {
   "notification.session.error.fallbackDescription": "An error occurred",
 
   "home.recentProjects": "Recent projects",
-  "home.empty.title": "No recent projects",
-  "home.empty.description": "Get started by opening a local project",
+  // FORK-BEGIN: home empty-state welcome copy aligned to onboarding mock 2026-06-09
+  "home.empty.title": "Your personal AI work assistant is ready",
+  "home.empty.description": "Hand your local project folder to Fox, and it will deeply understand your project structure and help you anytime",
+  "home.empty.open": "Open project folder",
+  // FORK-END
 
   "session.tab.session": "Session",
   "session.tab.review": "Review",
