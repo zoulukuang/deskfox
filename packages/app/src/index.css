@@ -12,6 +12,33 @@
   bottom: 112px;
 }
 
+/* FORK: 首页 home 品牌化 — CTA 主按钮用 DeskFox 钢蓝(取自 logo wordmark 狐狸脸主色),
+   标题灰度从近黑降到中灰;品牌色集中走自有 CSS 变量,不动上游 button 变体/text token
+   [feat: home-empty-onboarding-copy] 2026-06-09 */
+:root {
+  --deskfox-cta-base: #7295c4;
+  --deskfox-cta-hover: #5f82b4;
+}
+/* 选择器带上 [data-size="large"] 提高特异性,稳压上游 button.css 的 size/icon 定高定距规则,
+   把 CTA 做成厚实主按钮(对齐 onboarding 稿:12×26 内边距 / 15px / 圆角 10) */
+[data-component="button"][data-variant="primary"][data-size="large"].deskfox-cta {
+  background-color: var(--deskfox-cta-base);
+  color: #fff;
+  height: auto;
+  padding: 9px 26px;
+  font-size: 15px;
+  border-radius: 10px;
+  border-color: transparent;
+}
+[data-component="button"][data-variant="primary"][data-size="large"].deskfox-cta:hover:not(:disabled) {
+  background-color: var(--deskfox-cta-hover);
+}
+.deskfox-home-title {
+  font-weight: 700;
+  /* 显式中灰(原 #171717 太黑);不用 --text-base,因 DeskFox 主题把它覆成近黑 #19291c */
+  color: #666;
+}
+
 @font-face {
   font-family: "JetBrainsMono Nerd Font Mono";
   src: url("/assets/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");

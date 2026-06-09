@@ -496,8 +496,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Došlo je do greške",
 
   "home.recentProjects": "Nedavni projekti",
-  "home.empty.title": "Nema nedavnih projekata",
-  "home.empty.description": "Kreni tako što ćeš otvoriti lokalni projekat",
+  "home.welcome.title": "Vaš lični AI asistent je spreman",
+  "home.welcome.description": "Predajte svoj lokalni projektni folder Foxu — duboko će razumjeti strukturu vašeg projekta i pomoći vam u svakom trenutku",
+  "home.welcome.open": "Otvori folder",
 
   "session.tab.session": "Sesija",
   "session.tab.review": "Pregled",

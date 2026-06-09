@@ -505,8 +505,11 @@ export const dict = {
   "notification.session.error.fallbackDescription": "發生錯誤",
 
   "home.recentProjects": "最近專案",
-  "home.empty.title": "沒有最近專案",
-  "home.empty.description": "透過開啟本地專案開始使用",
+  // FORK-BEGIN: home 空狀態歡迎文案對齊首次引導稿 2026-06-09
+  "home.welcome.title": "你的專屬 AI 助理已就緒",
+  "home.welcome.description": "將本地專案資料夾交給 Fox，它將深度理解你的專案結構，隨時為你提供協助",
+  "home.welcome.open": "開啟資料夾",
+  // FORK-END
 
   "session.tab.session": "工作階段",
   "session.tab.review": "審查",
