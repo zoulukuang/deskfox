@@ -410,6 +410,13 @@ export default function Page() {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
   }
 
+  // FORK: 每次打开/切换项目默认收起内容预览器(reviewPanel),让"新项目打开"是干净的聊天 + 文件树,
+  //   点文件才展开预览(展开链路 createOpenSessionFileTab→openReviewPanel 已现成)。reviewPanel 是
+  //   全局持久化单例,这里监听项目目录(sdk.directory)变化主动 close —— 进/切/重开项目都触发;
+  //   同项目内切会话 directory 不变、不触发,保持当前开/关状态。
+  //   [feat: new-project-hide-file-viewer-default] 2026-06-09
+  createEffect(on(() => sdk.directory, () => view().reviewPanel.close()))
+
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const isChildSession = createMemo(() => !!info()?.parentID)
   const diffs = createMemo(() => (params.id ? list(sync.data.session_diff[params.id]) : []))
