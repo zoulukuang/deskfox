@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { ConfigInvalidError, ProviderModelNotFoundError } from "./server-errors"
-import { formatServerError, isBackendUnreachableError, parseReadableConfigInvalidError } from "./server-errors"
+import {
+  formatServerError,
+  isBackendUnreachableError,
+  isTransientStartupError,
+  parseReadableConfigInvalidError,
+} from "./server-errors"
 
 function fill(text: string, vars?: Record<string, string | number>) {
   if (!vars) return text
@@ -164,5 +169,33 @@ describe("isBackendUnreachableError [feat: coldstart-toast-race]", () => {
     expect(isBackendUnreachableError("")).toBe(false)
     expect(isBackendUnreachableError({})).toBe(false)
     expect(isBackendUnreachableError(new Error("something unrelated broke"))).toBe(false)
+  })
+})
+
+describe("isTransientStartupError [feat: coldstart-project-reload-toast]", () => {
+  test("继承连接级不可达(复用 isBackendUnreachableError)", () => {
+    expect(isTransientStartupError(new Error("error sending request for url (http://127.0.0.1:53890/agent)"))).toBe(true)
+    expect(isTransientStartupError("Failed to fetch")).toBe(true)
+  })
+
+  test("识别 tanstack Missing queryFn(sdk 未 ready 的冷启动瞬时态)", () => {
+    expect(isTransientStartupError(new Error('Missing queryFn: \'["/Volumes/ExtSSD/OPENCODE-PLAN","providers"]\''))).toBe(
+      true,
+    )
+    expect(isTransientStartupError('Missing queryFn: \'["/x","providers"]\'')).toBe(true)
+    expect(isTransientStartupError("missing queryfn")).toBe(true)
+  })
+
+  test("真错不误判(应 surface)", () => {
+    expect(isTransientStartupError(new Error("Server returned 500"))).toBe(false)
+    expect(isTransientStartupError(new Error("Unauthorized"))).toBe(false)
+    expect(isTransientStartupError(new Error("something unrelated broke"))).toBe(false)
+  })
+
+  test("空/非错误输入安全返回 false", () => {
+    expect(isTransientStartupError(undefined)).toBe(false)
+    expect(isTransientStartupError(null)).toBe(false)
+    expect(isTransientStartupError("")).toBe(false)
+    expect(isTransientStartupError({})).toBe(false)
   })
 })

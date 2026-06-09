@@ -32,6 +32,20 @@ export function isBackendUnreachableError(error: unknown): boolean {
   return BACKEND_UNREACHABLE_RE.test(msg)
 }
 
+// FORK: 冷启动瞬时态(含项目重载)识别 [feat: coldstart-project-reload-toast] 2026-06-09
+// 比 isBackendUnreachableError 多覆盖一类冷启动产物:tanstack-query 的 "Missing queryFn"。
+// 起因:启动重载上次项目(如 OPENCODE-PLAN)时,bootstrap 在 sidecar 后端 ready 前抢跑,
+// 弹两条"无法重新加载 <项目>":① providers 查询 `Missing queryFn`(sdk 未 ready → queryFn=skipToken,
+// fetchQuery 抛)② agent 查询 `error sending request`(连接级不可达)。两者都是 transient、sdk/后端
+// ready 后重跑即恢复,不该弹红 toast。连接级不可达仍交看门狗统管恢复 UX(见 isBackendUnreachableError)。
+export function isTransientStartupError(error: unknown): boolean {
+  if (isBackendUnreachableError(error)) return true
+  const msg = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  if (!msg) return false
+  // tanstack-query 对 skipToken 查询 fetchQuery 时抛 "Missing queryFn: '[...]'"
+  return /missing queryfn/i.test(msg)
+}
+
 type Translator = (key: string, vars?: Record<string, string | number>) => string
 
 function tr(translator: Translator | undefined, key: string, text: string, vars?: Record<string, string | number>) {
