@@ -36,6 +36,6 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 待办 / 边界
 
-- **Win 端 .ps1 未实测**(本机无 pwsh):逻辑与已验证的 .sh 完全镜像,需 Win 同事跑 `bump/pack -Env dev` 验证。
+- ~~**Win 端 .ps1 未实测**(本机无 pwsh):需 Win 同事跑 `bump/pack -Env dev` 验证。~~ → ✅ **Win 同事 2026-06-10 实测三步通过**(dev 读 dev-windows 领先 / prod 读裸 key 不受影响 / 真写只动 dev-windows 不误伤 prod),PS5.1 中文编码无报错。双端齐活。
 - dev updater 产物仍未启用(`build-deskfox` 对 dev 跳过 updater),与本改动无关。
 - §五 操作 SOP 里 `ship-dev-...-dev` 等旧 4 段+后缀示例未清(文档头已标"随 NSIS 切换更新中"),留给那条 feat。

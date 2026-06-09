@@ -34,7 +34,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## 回归测试
 
 Mac 端实测(2-plan 详列):bump dev minor→2026.7.0 / bump prod→2026.6.1 / build 读取 prod·dev 各对 / **sed 双向不误伤** / grep 双向精确命中 / `bash -n` 4 脚本 + JSON 合法。
-⚠️ **Win 端 .ps1 未实测**(本机无 pwsh),逻辑与 .sh 镜像,需 Win 同事验。
+✅ **Win 端 .ps1 已由同事实测通过**(2026-06-10):三步全过(dev 读 dev-windows 领先 / prod 读裸 key 不受影响 / 真写一次只动 dev-windows 不误伤 prod),PS5.1 中文编码无报错。**双端验证齐活。**
+
+## follow-up(2026-06-10)
+
+Win 同事实测三步通过后:把本 changelog / 2-plan / INDEX 的「Win 待验」措辞 flip 为「双端已验」(commit `<本笔>`);origin feat 分支 `chore/pack-preview-dev-script` 已删(合 main 即销毁)。
 
 ## 回退方法
 
