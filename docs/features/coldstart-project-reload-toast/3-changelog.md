@@ -11,6 +11,16 @@ related: ./3-changelog.md
 > 补它未覆盖的 `bootstrapDirectory` 重载路径 + tanstack-query `Missing queryFn` 这类新瞬时产物。
 > 本分支另搭车一笔独立 Tiny UI fix(toast 起始位置上抬),见文末「搭车」节。
 
+## Commits
+
+| commit | 内容 |
+|---|---|
+| `d7ef2e333c` | fix(app): 冷启动重载项目 transient 错不弹冗余 toast(主修复 + 文档)`[bug-repro]` |
+| `ed6dfc2757` | fix(app): toast 起始位置上抬清过聊天输入框提交按钮 `[fix: toast-above-composer-submit]`(搭车) |
+| `1495d348e7` | Merge fix/coldstart-project-reload-toast → main(`--no-ff`) |
+
+合并后 main 已 push origin(`76ab7e0dd8..1495d348e7`)。
+
 ## 背景 / 现象
 
 启动 DeskFox 自动重载上次打开的项目(如 OPENCODE-PLAN)时,屏幕弹两条红 toast:
