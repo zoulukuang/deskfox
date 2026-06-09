@@ -587,6 +587,16 @@ pub fn run() {
                         }
                     }
                 }
+                // FORK: macOS Dock 图标点击(app 后台运行、主窗口已 hide)→ 重显主窗口。
+                // Dock reopen 走 RunEvent::Reopen(macOS 专有事件),不走 single-instance(那是二次启动);
+                // req-031 只覆盖了 tray 左键 + single-instance 二次启动,这条 Mac Dock 路径漏了。
+                // show_main_window_impl 幂等(show→unminimize→set_focus),跟 tray 左键单击同一恢复入口。
+                // [fix: macos-dock-reopen-show-window] 2026-06-09
+                #[cfg(target_os = "macos")]
+                RunEvent::Reopen { .. } => {
+                    tracing::debug!("dock reopen → show main window");
+                    system_tray::show_main_window_impl(app);
+                }
                 _ => {}
             }
         });
