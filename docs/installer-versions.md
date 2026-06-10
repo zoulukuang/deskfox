@@ -29,6 +29,27 @@
 
 ---
 
+
+## [macOS] 2026.7.0 - 2026-06-10 00:50
+
+**主题**:匿名使用统计重做 + macOS Monterey 启动修复 + 首页品牌化 + 文件预览 UX 三件套 + 飞书与冷启动稳健性。新功能波次,版本号进"次"位(2026.6.0 → 2026.7.0)。
+
+**本次内容**(自 `ship-mac-prod-2026.6.5.1` 起):
+- **telemetry-usage-stats**:匿名使用统计重做(Node SDK → Tauri Rust 原生客户端,opt-out 默认开,最小匿名集 version/os/arch/install_id,fire-and-forget 不阻断启动)。
+- **macos-monterey-no-launch**:Monterey 12 装完点击无反应修复(sidecar minos 13→12 回贴 + ad-hoc 重签 + `minimumSystemVersion` 钉 12.0)。⚠️ 真 Monterey 12 机器启动待验。
+- **home-empty-onboarding-copy**:首页品牌化(wordmark + 常驻引导 + 钢蓝 CTA + 全 17 语言)。
+- **文件预览 UX 三件套**:新项目默认隐藏预览器 / tab 右键关闭其他 / 文件树「正在查看」hover 收起提示。
+- **feishu**:编辑弹窗 UX(去跟随勾选 + 默认自动免费模型 + workspace 路径单一真相源)+ 原生选目录 picker 卡死修复 + 设置 dialog 工作目录区上移。
+- **coldstart**:看门狗重启窗口冗余红 toast 静默 + 重载项目 transient 错不弹冗余 toast + toast 起始位置上抬。
+- **macos-dock-reopen-show-window**:Dock 图标点击重开主窗口(补 `RunEvent::Reopen`)。
+- **lo-bundle-coldstart-smoke-gate**:LO 打包全链路稳健性(冷启动 smoke 闸 + 出货硬失败 + 发布闸 + 打包后验证)。
+- **dev-independent-version-line**:DEV 预览版独立版本号号线(Dev 领先模式,构建工具,不影响 prod 运行时)。
+
+**installer**:`DeskFox-2026.7.0_aarch64.dmg`(arm64,Developer ID 签名 + 公证 + staple)。
+
+**已知边界**:① Monterey 12 真机启动待验(赌 Bun runtime 不依赖 macOS 13 符号)② 3 个新增 i18n key 仅 en/zh/zht,14 语言回退英文。
+
+---
 ## [Windows] 2026.7.0 - 2026-06-07 15:56
 
 **主题**:飞书桥接两大能力(账号级 workspace + LLM 卡死防护)+ 防休眠开关 + 匿名使用统计 + UI 品牌字收尾。新功能波次,版本号进"次"位(2026.6.1 → 2026.7.0)。
