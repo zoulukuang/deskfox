@@ -54,3 +54,20 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 - `mirror-asset-to-gitee.sh` 保留不动(<100MB 包 / Win fallback 仍可用)。
 
 **验证**:脚本 `bash -n` 语法通过 + `--help`/缺凭据报错路径自检通过;真上传(传 274MB 到生产 OSS)按 user 决策留到下次实际发版时跑。
+
+---
+
+## Follow-up(2026-06-10):新增步骤 7.6 — 官网 deskfox-site 一键部署集成 [feat: ship-site-publish]
+
+**起因**:`deskfox-site` 新增 `publish.sh`(自包含 bash 一键部署)。原 ship 步骤 10 只「提醒手动跑 `update-version.ps1`」,官网下载链接更新靠人肉。`publish.sh` 复用 ship 已有凭据,适合直接集成自动化。
+
+**改造**:
+- ship skill 新增**步骤 7.6**(放步骤 7.5 之后):`cd deskfox-site && bash publish.sh`。`publish.sh` 一站式:查 GitHub API 认最新 `ship-prod-*`/`ship-mac-prod-*` → 读 index.html(已最新则幂等退出)→ 验 CDN 200 回退 Gitee → patch 下载链接 → commit+push deskfox-site → `git archive`+scp 部署到 **`52.197.46.120:/var/www/deskfox-site`(与步骤 7.5 updater 同一台 Tokyo Lightsail + 同一把 SSH key,零新增凭据)** → 线上 smoke。
+- **定位非阻断**(同 OSS/updater):GitHub Release + CDN 已成,publish 失败只报告。**幂等**:Win ship 后可能已跑过(它同时更两端),Mac 再跑多半 `nothing to do`。
+- 步骤 10 报告把「手动跑 update-version.ps1」改为「7.6 已自动更新+部署官网」。
+- **仅 Mac /ship**;Win 端走 deskfox-site 自己的 `update-version.ps1`/`deploy.ps1`。
+- skill `.claude/commands/ship.md` 本机 gitignored(同上,不入仓);本 follow-up 入仓存知识。
+
+**验证**:`publish.sh --dry-run --skip-pull` 实测对刚发的 `ship-mac-prod-2026.7.0` 正确识别(GitHub API 认出 macOS 2026.7.0 / Win 2026.7.1),且官网 index.html 已是最新 → 输出 `already at latest versions, nothing to do`(幂等路径验通)。
+
+> **附记**:本次 2026.7.0 是 `/ship` skill **首次真实完整发版**,跑通了此前 changelog 标注「真推送待下次实际发版验证」的步骤 3-9 全链路(签名+公证+staple+GitHub Release+OSS+Gitee+updater manifest+合 main+push)。中途撞 macOS 收回外置卷 TCC 权限卡在步骤 7,授权后从断点续跑成功(产物零重做)。
