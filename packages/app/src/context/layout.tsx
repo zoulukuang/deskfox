@@ -9,13 +9,19 @@ import { ServerConnection, useServer } from "./server"
 import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
+// FORK: REQ-041/042 — 文件 tab 项目级 key + 会话级伪标签合成 [feat: iconbar-left-decouple] 2026-06-02
+import { projectTabKey, synthTabs, type SessionPseudoTab } from "./session-key"
 import { decode64 } from "@/utils/base64"
+// FORK: REQ-042 #2 — 关项目时按项目 key 删其文件 tab [feat: file-tabs-project-level] 2026-06-02
+import { base64Encode } from "@opencode-ai/core/util/encode"
 import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
 import type { ProjectAvatarVariant } from "@opencode-ai/ui/v2/project-avatar-v2"
 import { migrateLegacySessionStateKeys, ServerScope, SessionStateKey } from "@/utils/server-scope"
 import { createSessionKeyReader, ensureSessionKey, pruneSessionKeys } from "./layout-helpers"
+// FORK: project-avatar-save [feat: project-avatar-save]
+import { resolveLocalIconOverride } from "./project-icon-override"
 
 export { createSessionKeyReader, ensureSessionKey, pruneSessionKeys }
 
@@ -62,6 +68,8 @@ type SessionView = {
   pendingMessage?: string
   pendingMessageAt?: number
   todoCollapsed?: boolean
+  // FORK: REQ-042 #3 — 会话级伪标签(审查/上下文 active + 上下文是否打开),从项目级文件 tab 拆出 [feat: file-tabs-project-level]
+  tab?: SessionPseudoTab
 }
 
 type TabHandoff = {
@@ -265,9 +273,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           panelOpened: true,
         },
         fileTree: {
-          opened: false,
+          // FORK-BEGIN: 新用户默认展开 + tab 默认所有文件 [feat: file-tree-ux-polish] 2026-05-04
+          opened: true,
           width: DEFAULT_FILE_TREE_WIDTH,
-          tab: "changes" as "changes" | "all",
+          tab: "all" as "changes" | "all",
+          // FORK-END
         },
         session: {
           width: DEFAULT_SESSION_WIDTH,
@@ -276,7 +286,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
         },
         sessionTabs: {} as Record<string, SessionTabs>,
+        // FORK: REQ-041 后续 — 文件 tab 改项目级存储(key=项目 dir),切会话保持不变;
+        // 旧 sessionTabs(会话级)不再写入,自然废弃。2026-06-02
+        projectTabs: {} as Record<string, SessionTabs>,
         sessionView: {} as Record<string, SessionView>,
+        // FORK: 保留上游 handoff(跨 server tab 交接,submit/session 仍用)与 fork projectTabs 共存 [feat: electron-replatform]
         handoff: {
           tabs: undefined as TabHandoff | undefined,
         },
@@ -419,8 +433,12 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       // Without this, different subdirectories of the same git repo would share the same
       // icon from the database instead of using their individual overrides.
       const base = { ...metadata, ...project }
-      if (childStore.icon) {
-        return { ...base, icon: { ...base.icon, override: childStore.icon } }
+      // FORK: project-avatar-save — 除 childStore.icon 外也读 childStore.projectMeta.icon.override。
+      // 编辑对话框对无 id / global 项目走 globalSync.project.meta,override 只写进 projectMeta,
+      // 旧 enrich 不读它 → 上传头像永久不显示。见 ./project-icon-override.ts [feat: project-avatar-save]
+      const override = resolveLocalIconOverride(childStore.icon, childStore.projectMeta)
+      if (override) {
+        return { ...base, icon: { ...base.icon, override } }
       }
       return base
     }
@@ -589,6 +607,17 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         close(directory: string) {
           server.projects.close(directory)
+          // FORK: REQ-042 #2 — 移除项目时删掉它的项目级文件 tab,避免残留;否则重新添加同目录会复活
+          // 旧标签(可能指向已删/改名的文件)。projectTabs 的 key = 路由 dir = base64Encode(worktree)。2026-06-02
+          const tabKey = base64Encode(directory)
+          if (store.projectTabs[tabKey]) {
+            setStore(
+              "projectTabs",
+              produce((draft) => {
+                delete draft[tabKey]
+              }),
+            )
+          }
         },
         expand(directory: string) {
           server.projects.expand(directory)
@@ -645,7 +674,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       fileTree: {
         opened: createMemo(() => store.fileTree?.opened ?? true),
         width: createMemo(() => store.fileTree?.width ?? DEFAULT_FILE_TREE_WIDTH),
-        tab: createMemo(() => store.fileTree?.tab ?? "changes"),
+        tab: createMemo(() => store.fileTree?.tab ?? "all"), // FORK: 默认 tab 改 all [feat: file-tree-ux-polish] 2026-05-04
         setTab(tab: "changes" | "all") {
           if (!store.fileTree) {
             setStore("fileTree", { opened: true, width: DEFAULT_FILE_TREE_WIDTH, tab })
@@ -653,34 +682,36 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           }
           setStore("fileTree", "tab", tab)
         },
+        // FORK-BEGIN: 4 处 fallback 内默认 tab 改 all,与初始 state 一致 [feat: file-tree-ux-polish] 2026-05-04
         open() {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: true, width: DEFAULT_FILE_TREE_WIDTH, tab: "changes" })
+            setStore("fileTree", { opened: true, width: DEFAULT_FILE_TREE_WIDTH, tab: "all" })
             return
           }
           setStore("fileTree", "opened", true)
         },
         close() {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: false, width: DEFAULT_FILE_TREE_WIDTH, tab: "changes" })
+            setStore("fileTree", { opened: false, width: DEFAULT_FILE_TREE_WIDTH, tab: "all" })
             return
           }
           setStore("fileTree", "opened", false)
         },
         toggle() {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: true, width: DEFAULT_FILE_TREE_WIDTH, tab: "changes" })
+            setStore("fileTree", { opened: true, width: DEFAULT_FILE_TREE_WIDTH, tab: "all" })
             return
           }
           setStore("fileTree", "opened", (x) => !x)
         },
         resize(width: number) {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: true, width, tab: "changes" })
+            setStore("fileTree", { opened: true, width, tab: "all" })
             return
           }
           setStore("fileTree", "width", width)
         },
+        // FORK-END
       },
       session: {
         width: createMemo(() => store.session?.width ?? DEFAULT_SESSION_WIDTH),
@@ -888,70 +919,92 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       },
       tabs(sessionKey: string | Accessor<string>) {
         const key = createSessionKeyReader(sessionKey, ensureKey)
+        // FORK-BEGIN: REQ-041/042 — 文件 tab 按项目(dir)存 projectTabs[dir](切会话保持);
+        // 「审查/上下文」是会话级伪标签(active + context-open),存 sessionView[sessionKey].tab,
+        // 不跟项目级文件 tab 串味。对外 { all, active } 形状不变,下游(helpers/session-side-panel)零改。2026-06-02
+        const projectKey = createMemo(() => projectTabKey(key()))
         const path = createMemo(() => sessionPath(key()))
-        const tabs = createMemo(() => store.sessionTabs[key()] ?? { all: [] })
+        const files = createMemo<SessionTabs>(() => store.projectTabs[projectKey()] ?? { all: [] })
+        const pseudo = createMemo(() => store.sessionView[key()]?.tab)
+        const tabs = createMemo<SessionTabs>(() => synthTabs(files(), pseudo()))
         const normalize = (tab: string) => normalizeSessionTab(path(), tab)
         const normalizeAll = (all: string[]) => normalizeSessionTabList(path(), all)
+
+        const setFileActive = (active: string | undefined) => {
+          const pk = projectKey()
+          if (!store.projectTabs[pk]) setStore("projectTabs", pk, { all: [], active })
+          else setStore("projectTabs", pk, "active", active)
+        }
+        const setFileAll = (all: string[]) => {
+          const pk = projectKey()
+          if (!store.projectTabs[pk]) setStore("projectTabs", pk, { all })
+          else setStore("projectTabs", pk, "all", all)
+        }
+        const setPseudo = (patch: Partial<SessionPseudoTab>) => {
+          const sk = key()
+          if (!store.sessionView[sk]) setStore("sessionView", sk, { scroll: {}, tab: { ...patch } })
+          else setStore("sessionView", sk, "tab", (prev) => ({ ...prev, ...patch }))
+        }
+
         return {
           tabs,
           active: createMemo(() => tabs().active),
           all: createMemo(() => tabs().all.filter((tab) => tab !== "review")),
           setActive(tab: string | undefined) {
-            const session = key()
             const next = tab ? normalize(tab) : tab
-            if (!store.sessionTabs[session]) {
-              setStore("sessionTabs", session, { all: [], active: next })
-            } else {
-              setStore("sessionTabs", session, "active", next)
-            }
+            if (next === "review") return setPseudo({ active: "review" })
+            if (next === "context") return setPseudo({ active: "context", context: true })
+            // 文件 tab(或 undefined):项目级 active + 离开会话伪标签
+            setFileActive(next)
+            setPseudo({ active: undefined })
           },
           setAll(all: string[]) {
-            const session = key()
-            const next = normalizeAll(all).filter((tab) => tab !== "review")
-            if (!store.sessionTabs[session]) {
-              setStore("sessionTabs", session, { all: next, active: undefined })
-            } else {
-              setStore("sessionTabs", session, "all", next)
-            }
+            // 仅设文件 tab 列表(项目级);伪标签(review/context)不进文件存储
+            setFileAll(normalizeAll(all).filter((tab) => tab !== "review" && tab !== "context"))
           },
           async open(tab: string) {
-            const session = key()
-            const next = nextSessionTabsForOpen(store.sessionTabs[session], normalize(tab))
-            setStore("sessionTabs", session, next)
+            const n = normalize(tab)
+            if (n === "review") return setPseudo({ active: "review" })
+            if (n === "context") return setPseudo({ active: "context", context: true })
+            // 打开文件:加入项目级文件 tab + active;离开会话伪标签
+            setStore("projectTabs", projectKey(), nextSessionTabsForOpen(store.projectTabs[projectKey()], n))
+            setPseudo({ active: undefined })
           },
           close(tab: string) {
-            const session = key()
-            const current = store.sessionTabs[session]
-            if (!current) return
-
             if (tab === "review") {
-              if (current.active !== tab) return
-              setStore("sessionTabs", session, "active", current.all[0])
+              if (store.sessionView[key()]?.tab?.active === "review") setPseudo({ active: undefined })
               return
             }
-
+            if (tab === "context") {
+              const wasActive = store.sessionView[key()]?.tab?.active === "context"
+              setPseudo(wasActive ? { context: false, active: undefined } : { context: false })
+              return
+            }
+            // 文件 tab
+            const pk = projectKey()
+            const current = store.projectTabs[pk]
+            if (!current) return
             const all = current.all.filter((x) => x !== tab)
             if (current.active !== tab) {
-              setStore("sessionTabs", session, "all", all)
+              setStore("projectTabs", pk, "all", all)
               return
             }
-
             const index = current.all.findIndex((f) => f === tab)
             const next = current.all[index - 1] ?? current.all[index + 1] ?? all[0]
             batch(() => {
-              setStore("sessionTabs", session, "all", all)
-              setStore("sessionTabs", session, "active", next)
+              setStore("projectTabs", pk, "all", all)
+              setStore("projectTabs", pk, "active", next)
             })
           },
           move(tab: string, to: number) {
-            const session = key()
-            const current = store.sessionTabs[session]
+            const pk = projectKey()
+            const current = store.projectTabs[pk]
             if (!current) return
             const index = current.all.findIndex((f) => f === tab)
             if (index === -1) return
             setStore(
-              "sessionTabs",
-              session,
+              "projectTabs",
+              pk,
               "all",
               produce((opened) => {
                 opened.splice(to, 0, opened.splice(index, 1)[0])
@@ -959,6 +1012,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             )
           },
         }
+        // FORK-END
       },
     }
   },
