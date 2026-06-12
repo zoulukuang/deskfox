@@ -18,6 +18,7 @@ import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
 import { registerDeskfoxIpc } from "./deskfox/ipc"
 import { createTray, attachCloseToTray, setQuitting, isQuitting } from "./deskfox/tray"
+import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { parseMarkdown } from "./markdown"
@@ -260,6 +261,8 @@ const main = Effect.gen(function* () {
   const updater = setupAutoUpdater(stopSidecars)
   // FORK: DeskFox 原生 IPC(文件操作等) [feat: electron-replatform]
   registerDeskfoxIpc()
+  // FORK: 插件注入 + 自愈(必须在 sidecar 启动前,sidecar 读 opencode.jsonc)[feat: electron-replatform]
+  ensureDeskfoxPlugins()
   registerIpcHandlers({
     killSidecar: () => killSidecar(),
     relaunch,
