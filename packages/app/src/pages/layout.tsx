@@ -345,7 +345,14 @@ export default function Layout(props: ParentProps) {
               {
                 label: language.t("toast.update.action.installRestart"),
                 onClick: async () => {
-                  await platform.updateAndRestart!()
+                  // FORK: 捕获 install/relaunch 错误并展示 — 否则失败时 toast action 静默吞,用户"点了没反应"
+                  // [bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
+                  try {
+                    await platform.updateAndRestart!()
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : String(err)
+                    showToast({ title: language.t("common.requestFailed"), description: message })
+                  }
                 },
               },
               {
@@ -355,6 +362,9 @@ export default function Layout(props: ParentProps) {
             ],
           })
         })
+        // FORK: checkUpdate 现在会抛错(不再静默吞)— 后台轮询保持安静,避免每 10min 未处理 rejection
+        // [bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
+        .catch(() => {})
 
       createEffect(() => {
         if (!settings.ready()) return
