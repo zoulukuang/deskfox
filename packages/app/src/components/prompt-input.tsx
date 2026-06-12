@@ -68,6 +68,11 @@ import {
   promptLength,
 } from "./prompt-input/history"
 import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
+// FORK-BEGIN: 创作模式 — 模式菜单 + 生成编排 [feat: media-creation-mode]
+import { creation } from "./media-creation-store"
+import { MediaModeMenu, MediaCreationControls } from "./media-creation-bar"
+import { buildCreationInput } from "./prompt-input/creation-input"
+// FORK-END
 import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
@@ -373,15 +378,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const suggest = createMemo(() => !hasUserPrompt())
 
-  const placeholder = createMemo(() =>
-    promptPlaceholder({
+  const placeholder = createMemo(() => {
+    // FORK: 创作模式 — 各 capability 不同引导文案(empty 状态显眼)[feat: media-creation-mode]
+    const cap = creation.createMode()
+    if (cap === "tts_clone") return "先 @ 引用参考音频（wav/mp3，< 7MB），然后在这里写要克隆说的话"
+    if (cap === "tts_design") return "在这里写要朗读的文字，下方输入声音要求"
+    if (cap === "tts") return "在这里写要朗读的文字"
+    if (cap === "asr") return "先 @ 引用音频文件（wav/mp3）"
+    if (cap === "translate") return "在这里写要翻译的原文"
+    if (cap === "image" || cap === "video") return "用文字描述你想要生成的内容"
+    if (cap === "image_edit" || cap === "video_i2v") return "先 @ 引用一张图，然后写要怎么改 / 让它怎么动"
+    return promptPlaceholder({
       mode: store.mode,
       commentCount: commentCount(),
       example: suggest() ? (store.mode === "shell" ? "git status" : language.t(EXAMPLES[store.placeholder])) : "",
       suggest: suggest(),
       t: (key, params) => language.t(key as Parameters<typeof language.t>[0], params as never),
-    }),
-  )
+    })
+  })
 
   const historyComments = () => {
     const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
@@ -1155,6 +1169,35 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSubmit: props.onSubmit,
   })
 
+  // FORK-BEGIN: 创作模式 — 启动拉取可用模型 + send 拦截到生成 [feat: media-creation-mode]
+  void creation.loadModels()
+  const submitCreation = async (cap: NonNullable<ReturnType<typeof creation.createMode>>) => {
+    const entry = creation.selectedModel(cap)
+    if (!entry) return
+    const parts = prompt.current()
+    const input = buildCreationInput({
+      parts,
+      capability: cap,
+      projectDir: sdk.directory,
+      voice: cap === "tts" ? creation.currentVoice("tts") : undefined,
+      targetLang: cap === "translate" ? "English" : undefined,
+      voiceDesignHint: cap === "tts_design" ? creation.voiceDesignHint() : undefined,
+    })
+    clearEditor()
+    prompt.reset()
+    await creation.runCreation(entry, input, sdk.directory)
+  }
+  const handleFormSubmit = (...args: Parameters<typeof handleSubmit>) => {
+    const cap = creation.createMode()
+    if (cap) {
+      ;(args[0] as { preventDefault?: () => void } | undefined)?.preventDefault?.()
+      void submitCreation(cap)
+      return
+    }
+    return handleSubmit(...args)
+  }
+  // FORK-END
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
@@ -1313,7 +1356,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       ) {
         return
       }
-      void handleSubmit(event)
+      void handleFormSubmit(event)
     }
   }
 
@@ -1489,7 +1532,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           <div class="flex flex-col gap-3">
             <DockShellForm
               data-component={newSession() ? "session-new-composer" : "session-composer"}
-              onSubmit={handleSubmit}
+              onSubmit={handleFormSubmit}
               classList={{
                 "group/prompt-input min-h-[96px] w-full rounded-xl bg-v2-background-bg-base shadow-[var(--v2-elevation-raised)]": true,
                 "border-icon-info-active border-dashed": store.draggingType !== null,
@@ -1661,7 +1704,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         </Match>
         <Match when>
           <DockShellForm
-            onSubmit={handleSubmit}
+            onSubmit={handleFormSubmit}
             classList={{
               "group/prompt-input": true,
               "focus-within:shadow-xs-border": true,
@@ -1848,6 +1891,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     </Button>
                   </div>
                   <div class="flex items-center gap-1.5 min-w-0 flex-1 h-7">
+                    {/* FORK: 创作模式左侧随动 — 创作档显示生成模型控制,否则原 agent/model [feat: media-creation-mode] */}
+                    <Show when={creation.createMode()}>
+                      <MediaCreationControls />
+                    </Show>
+                    <Show when={!creation.createMode()}>
                     <Show when={!agentsLoading()}>
                       <div
                         data-component="prompt-agent-control"
@@ -1983,9 +2031,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         </Show>
                       </Show>
                     </Show>
+                    {/* FORK: 创作模式 — 关闭 !createMode 包裹 [feat: media-creation-mode] */}
+                    </Show>
                   </div>
                 </div>
               </div>
+              {/* FORK: 创作模式统一模式菜单(最右)[feat: media-creation-mode] */}
+              <MediaModeMenu />
             </DockTray>
           </Show>
         </Match>
