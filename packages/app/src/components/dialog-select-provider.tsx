@@ -9,6 +9,7 @@ import { DialogConnectProvider } from "./dialog-connect-provider"
 import { useLanguage } from "@/context/language"
 import { DialogCustomProvider } from "./dialog-custom-provider"
 
+import { GETBOT_PROVIDER_ID, GETBOT_PROVIDER_NAME } from "@/utils/getbot" // FORK: getbot 合成项 [feat: electron-replatform]
 const CUSTOM_ID = "_custom"
 
 export const DialogSelectProvider: Component = () => {
@@ -20,6 +21,7 @@ export const DialogSelectProvider: Component = () => {
   const otherGroup = () => language.t("dialog.provider.group.other")
   const customLabel = () => language.t("settings.providers.tag.custom")
   const note = (id: string) => {
+    if (id === "getbot") return language.t("dialog.provider.getbot.tagline") // FORK: getbot tagline 2026-04-26
     if (id === "anthropic") return language.t("dialog.provider.anthropic.note")
     if (id === "openai") return language.t("dialog.provider.openai.note")
     if (id.startsWith("github-copilot")) return language.t("dialog.provider.copilot.note")
@@ -36,13 +38,23 @@ export const DialogSelectProvider: Component = () => {
         key={(x) => x?.id}
         items={() => {
           language.locale()
-          return [{ id: CUSTOM_ID, name: customLabel() }, ...providers.all().values()]
+          const all = providers.all()
+          const list: { id: string; name: string }[] = [
+            { id: CUSTOM_ID, name: customLabel() },
+            ...all.values(),
+          ]
+          // FORK: getbot 合成项在弹窗层注入(all() 保持上游 Map);置顶/Tag 逻辑在 sortBy/Tag 处 [feat: electron-replatform]
+          if (!all.has(GETBOT_PROVIDER_ID)) list.push({ id: GETBOT_PROVIDER_ID, name: GETBOT_PROVIDER_NAME })
+          return list
         }}
         filterKeys={["id", "name"]}
         groupBy={(x) => (popularProviders.includes(x.id) ? popularGroup() : otherGroup())}
         sortBy={(a, b) => {
           if (a.id === CUSTOM_ID) return -1
           if (b.id === CUSTOM_ID) return 1
+          // FORK: provider 弹窗里 getbot 强制置顶(盈利核心,与 popularProviders 自然顺序解耦) 2026-04-26
+          if (a.id === "getbot") return -1
+          if (b.id === "getbot") return 1
           if (popularProviders.includes(a.id) && popularProviders.includes(b.id))
             return popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id)
           return a.name.localeCompare(b.name)
@@ -77,6 +89,10 @@ export const DialogSelectProvider: Component = () => {
             </Show>
             <Show when={note(i.id)}>{(value) => <div class="text-14-regular text-text-weak">{value()}</div>}</Show>
             <Show when={i.id === "opencode-go"}>
+              <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
+            </Show>
+            {/* FORK: getbot 推荐 Tag 2026-04-26 */}
+            <Show when={i.id === "getbot"}>
               <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
             </Show>
           </div>
