@@ -9,6 +9,22 @@
 ---
 
 
+## [Windows] 2026.7.2 - 2026-06-12 10:15
+
+**主题**:两笔体验型 bug fix——编辑项目头像保存不生效 + AI 回复"永久思考中"(SSE 死流空闲超时)。小更新进"补"位(2026.7.1 → 2026.7.2)。
+
+**本次内容**(自 `ship-prod-2026.7.1` 起):
+- **项目头像保存修复**(feat: project-avatar-save,bug-repro):编辑项目上传头像保存后侧边栏不显示(所有项目所有端)。根因:无 id / global 项目走 meta 保存路径时 override 只写 `projectMeta`(渲染端 enrich 不读)→ 死数据。修法:写入侧两条路径统一补写 canonical 的 `childStore.icon` + 读取侧 enrich 经 fork-only `resolveLocalIconOverride` 兼读 `projectMeta.icon.override`(4 单测)。
+- **SSE 流空闲超时**(feat: llm-stream-idle-timeout,bug-repro + override-blacklist):直连 provider 的 LLM 流式请求原默认无任何超时,网络死连接(NAT/LB 静默丢链)→ 会话永久"思考中"留 tokens.output=0 残骸。修法:`chunkTimeout` 默认 120s(相邻 SSE chunk 间隔超时即 abort 走正常错误路径,可见可重试),只杀停滞流不杀健康长回复;用户可 per-provider 配置覆盖或 `false` 关闭。默认值逻辑抽 fork-only `stream-timeout.ts`(7 单测含停滞流 bug-repro),上游 `provider.ts` 仅 3 行接线;config schema 文档默认值与代码对齐。
+- 发版前 code-review:4 角度审查无高危项;SSE 默认超时为 spec 内明确接受的行为变化(留 `chunkTimeout: false` 退出口)。
+
+**Release**:GitHub `ship-prod-2026.7.2`(主仓 `zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN 地址)
+**installer**:`packages/desktop/src-tauri/target/release/bundle/nsis/DeskFox_2026.7.2_x64-setup.exe`(含 LibreOffice,189 MB;NSIS 产物,未 Authenticode 签名但 updater 经 minisign 验签)
+**updater manifest**:`updates.deskfox.ai/v1/latest/desktop/windows/latest.json`
+**国内下载**:`https://dl.clawtray.com/DeskFox_2026.7.2_x64-setup.exe`
+
+---
+
 ## [Windows] 2026.7.1 - 2026-06-10 00:36
 
 **主题**:追赶式 prod 发布——首页品牌化定稿 + LibreOffice 打包健壮性(干净机器首启修复)+ 飞书编辑弹窗 UX + 文件预览 UX 三件套 + macOS 修复 + 冷启动 toast 静默 + dev 独立版本号工具链。小更新进"补"位(2026.7.0 → 2026.7.1)。
