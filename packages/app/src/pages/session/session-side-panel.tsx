@@ -238,6 +238,9 @@ export function SessionSidePanel(props: {
             class="size-full flex"
             classList={{
               "border-l border-border-weaker-base": !settings.general.newLayoutDesigns(),
+              // FORK: REQ-041 五栏 — 经典布局下文件树锚左、编辑器锚右(对齐 DeskFox Image#2,box1↔box2 互换)
+              //   [feat: electron-replatform] 2026-06-12
+              "flex-row-reverse": !settings.general.newLayoutDesigns(),
             }}
           >
             <div
@@ -393,7 +396,11 @@ export function SessionSidePanel(props: {
               >
                 <div
                   class="h-full flex flex-col overflow-hidden group/filetree"
-                  classList={{ "border-l border-border-weaker-base": reviewOpen() }}
+                  classList={{
+                    // FORK: 经典布局文件树锚左 → 分隔边在右(border-r);上游 v2 维持左(border-l)[feat: electron-replatform]
+                    "border-l border-border-weaker-base": reviewOpen() && settings.general.newLayoutDesigns(),
+                    "border-r border-border-weaker-base": reviewOpen() && !settings.general.newLayoutDesigns(),
+                  }}
                 >
                   <Tabs
                     variant="pill"
@@ -402,15 +409,16 @@ export function SessionSidePanel(props: {
                     class="h-full"
                     data-scope="filetree"
                   >
+                    {/* FORK: 「所有文件」tab 置前、「更改」tab 置后(对齐 DeskFox Image#2 tab 顺序)[feat: electron-replatform] 2026-06-12 */}
                     <Tabs.List>
+                      <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
+                        {language.t("session.files.all")}
+                      </Tabs.Trigger>
                       <Tabs.Trigger value="changes" class="flex-1" classes={{ button: "w-full" }}>
                         {props.reviewCount()}{" "}
                         {language.t(
                           props.reviewCount() === 1 ? "session.review.change.one" : "session.review.change.other",
                         )}
-                      </Tabs.Trigger>
-                      <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
-                        {language.t("session.files.all")}
                       </Tabs.Trigger>
                     </Tabs.List>
                     <Tabs.Content value="changes" class="bg-background-stronger px-3 py-0">
