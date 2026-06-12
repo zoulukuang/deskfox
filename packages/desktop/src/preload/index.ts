@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron"
+// FORK: DeskFox 原生桥 — 自执行暴露 window.deskfox [feat: electron-replatform]
+import "./deskfox"
 import type { ElectronAPI, WslServersEvent } from "./types"
 import type { UpdaterState } from "@opencode-ai/app/updater"
 

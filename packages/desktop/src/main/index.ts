@@ -15,6 +15,8 @@ import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
 import { CHANNEL } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
+// FORK: DeskFox 原生 IPC [feat: electron-replatform]
+import { registerDeskfoxIpc } from "./deskfox/ipc"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { parseMarkdown } from "./markdown"
@@ -241,6 +243,8 @@ const main = Effect.gen(function* () {
   registerRendererProtocol()
   setDockIcon()
   const updater = setupAutoUpdater(stopSidecars)
+  // FORK: DeskFox 原生 IPC(文件操作等) [feat: electron-replatform]
+  registerDeskfoxIpc()
   registerIpcHandlers({
     killSidecar: () => killSidecar(),
     relaunch,
