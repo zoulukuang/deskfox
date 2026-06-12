@@ -26,7 +26,7 @@ export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
   if (!serverStarted) {
     serverStarted = true
     try {
-      startMediaServer()
+      await startMediaServer() // FORK: 改 async(node:http listen 异步)[feat: electron-replatform]
     } catch (e) {
       console.error("[media-gen] generate server start failed:", e)
     }

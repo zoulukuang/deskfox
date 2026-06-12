@@ -20,6 +20,7 @@ import { DashScopeError } from "./dashscope-task"
 import { runEntry } from "./dispatch"
 import { availableEntries, findEntry } from "./registry"
 import { listCreations, saveAssets } from "./asset-save"
+import { serveFetch } from "./node-serve" // FORK: Bun.serve → Node http(Electron 边车跑 Node)[feat: electron-replatform]
 
 export const MEDIA_SERVER_PORT = 51737 // 固定 loopback 端口(P1);前端按此 fetch
 const PORT_FILE = join(homedir(), ".opencode", "media-gen-server.json")
@@ -92,13 +93,13 @@ export async function handler(req: Request): Promise<Response> {
 
 export type MediaServerHandle = { url: string; stop: () => void }
 
-export function startMediaServer(opts?: { port?: number }): MediaServerHandle {
-  // R6:显式绑 loopback 127.0.0.1。Bun.serve 默认 hostname=0.0.0.0 会暴露到 LAN + 触发 Win
-  // Firewall 弹窗。参考 feishu-server-loopback-bind feat-id(2026-05-10)。
-  const server = Bun.serve({
+export async function startMediaServer(opts?: { port?: number }): Promise<MediaServerHandle> {
+  // R6:显式绑 loopback 127.0.0.1。默认 0.0.0.0 会暴露到 LAN + 触发 Win Firewall 弹窗。
+  // 参考 feishu-server-loopback-bind feat-id(2026-05-10)。
+  // FORK: Bun.serve → serveFetch(node:http);serveFetch 内已关 socket/request 超时(对齐 idleTimeout:0)[feat: electron-replatform]
+  const server = await serveFetch({
     port: opts?.port ?? MEDIA_SERVER_PORT,
     hostname: "127.0.0.1",
-    idleTimeout: 0, // 视频生成可能几分钟,关闭空闲超时,避免 SSE 流被掐
     fetch: handler,
   })
   const url = `http://127.0.0.1:${server.port}`

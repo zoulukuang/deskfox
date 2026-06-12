@@ -183,7 +183,8 @@ async function initBackground(): Promise<void> {
   chatSessionStore = new ChatSessionStore()
 
   // 1. 起 server(给 DeskFox GUI 调 OAuth + accounts CRUD + 列 providers)
-  const handle = startServer({
+  // FORK: startServer 改 async(node:http listen 异步)[feat: electron-replatform]
+  const handle = await startServer({
     onReady: writePluginPortFile,
     onAccountsChanged: () => syncAccounts(),
     onListProviders: async () => {
