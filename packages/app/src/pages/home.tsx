@@ -362,7 +362,8 @@ function HomeDesign() {
           clearNotifications={clearNotifications}
           unseenCount={unseenCount}
           openSettings={openSettings}
-          openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+          // FORK: DeskFox 社区页(替上游 opencode.ai feedback)[feat: electron-replatform]
+          openHelp={() => platform.openLink("https://deskfox.ai/#community")}
           language={language}
         />
 
