@@ -85,16 +85,18 @@ export function DialogEditProject(props: { project: LocalProject }) {
           icon: { color: store.color || "", override: store.iconOverride || "" },
           commands: { start },
         })
-        globalSync.project.icon(props.project.worktree, store.iconOverride || undefined)
-        dialog.close()
-        return
+      } else {
+        globalSync.project.meta(props.project.worktree, {
+          name,
+          icon: { color: store.color || undefined, override: store.iconOverride || undefined },
+          commands: { start: start || undefined },
+        })
       }
 
-      globalSync.project.meta(props.project.worktree, {
-        name,
-        icon: { color: store.color || undefined, override: store.iconOverride || undefined },
-        commands: { start: start || undefined },
-      })
+      // FORK: project-avatar-save — 把 override 写进 canonical 的 childStore.icon(enrich 唯一无条件读取的本地源),
+      // 对「有 id 走 update」和「无 id / global 走 meta」两条路径都生效。旧代码只在 update 分支写 icon,
+      // meta 分支的 override 仅落 projectMeta(enrich 不读)→ 上传头像永久不显示。[feat: project-avatar-save]
+      globalSync.project.icon(props.project.worktree, store.iconOverride || undefined)
       dialog.close()
     },
   }))
