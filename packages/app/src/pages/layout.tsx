@@ -2325,7 +2325,9 @@ export default function Layout(props: ParentProps) {
 
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
-  const sidebarContent = (mobile?: boolean) => (
+  // FORK: railOnly — DeskFox 五栏 REQ-041 把图标条与会话面板解耦,左侧只渲染图标条(panel 置空),
+  //   会话面板单独锚最右。[feat: electron-replatform] 2026-06-12
+  const sidebarContent = (mobile?: boolean, railOnly?: boolean) => (
     <SidebarContent
       mobile={mobile}
       opened={() => layout.sidebar.opened()}
@@ -2348,7 +2350,7 @@ export default function Layout(props: ParentProps) {
       // FORK: DeskFox 社区页(替上游 opencode.ai feedback)[feat: electron-replatform]
       onOpenHelp={() => platform.openLink("https://deskfox.ai/#community")}
       renderPanel={() =>
-        mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
+        railOnly ? null : mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
       }
     />
   )
@@ -2380,6 +2382,7 @@ export default function Layout(props: ParentProps) {
         <div class="flex-1 min-h-0 min-w-0 flex">
           <div class="flex-1 min-h-0 relative">
             <div class="size-full relative overflow-x-hidden">
+              {/* FORK-BEGIN: REQ-041 五栏 — 图标条锚最左 64px(rail only),会话面板锚最右,解耦 [feat: electron-replatform] 2026-06-12 */}
               <nav
                 aria-label={language.t("sidebar.nav.projectsAndSessions")}
                 data-component="sidebar-nav-desktop"
@@ -2388,31 +2391,41 @@ export default function Layout(props: ParentProps) {
                   "absolute inset-y-0 left-0": true,
                   "z-10": true,
                 }}
-                style={{ width: `${side()}px` }}
+                style={{ width: "64px" }}
                 ref={(el) => {
                   setState("nav", el)
                 }}
-                onMouseEnter={() => {
-                  disarm()
-                }}
-                onMouseLeave={() => {
-                  aim.reset()
-                  if (!sidebarHovering()) return
-
-                  arm()
-                }}
               >
-                <div class="@container w-full h-full contain-strict">{sidebarContent()}</div>
+                <div class="@container w-full h-full contain-strict">{sidebarContent(false, true)}</div>
               </nav>
 
+              {/* 会话面板:锚最右,仅展开时占位(收起 width=0)*/}
+              <div
+                data-component="sidebar-session-panel"
+                aria-hidden={!layout.sidebar.opened()}
+                inert={!layout.sidebar.opened()}
+                classList={{
+                  "hidden xl:block absolute inset-y-0 right-0 z-10 overflow-hidden": true,
+                  "transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+                    !state.sizing,
+                }}
+                style={{ width: layout.sidebar.opened() ? `${panel()}px` : "0px" }}
+              >
+                <div class="@container h-full contain-strict" style={{ width: `${panel()}px` }}>
+                  <SidebarPanel project={currentProject} merged />
+                </div>
+              </div>
+
+              {/* resize 手柄:会话面板左缘(right = 面板宽)*/}
               <Show when={layout.sidebar.opened()}>
                 <div
                   class="hidden xl:block absolute inset-y-0 z-30 w-0 overflow-visible"
-                  style={{ left: `${side()}px` }}
+                  style={{ right: `${panel()}px` }}
                   onPointerDown={() => setState("sizing", true)}
                 >
                   <ResizeHandle
                     direction="horizontal"
+                    edge="start"
                     size={layout.sidebar.width()}
                     min={244}
                     max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.3 + 64}
@@ -2456,16 +2469,17 @@ export default function Layout(props: ParentProps) {
                 </nav>
               </div>
 
+              {/* main:左固定 64(图标条)+ 右留会话面板宽(收起则 0)*/}
               <div
                 classList={{
                   "absolute inset-0": true,
-                  "xl:inset-y-0 xl:right-0 xl:left-[var(--main-left)]": true,
+                  "xl:inset-y-0 xl:left-16 xl:right-[var(--main-right)]": true,
                   "z-20": true,
-                  "transition-[left] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[left] motion-reduce:transition-none":
+                  "transition-[right] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[right] motion-reduce:transition-none":
                     !state.sizing,
                 }}
                 style={{
-                  "--main-left": layout.sidebar.opened() ? `${side()}px` : "4rem",
+                  "--main-right": layout.sidebar.opened() ? `${panel()}px` : "0px",
                 }}
               >
                 <main
@@ -2478,6 +2492,7 @@ export default function Layout(props: ParentProps) {
                   </Show>
                 </main>
               </div>
+              {/* FORK-END: REQ-041 五栏 */}
 
               <div
                 classList={{
