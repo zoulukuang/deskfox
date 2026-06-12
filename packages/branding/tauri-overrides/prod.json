@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DeskFox",
+  "mainBinaryName": "DeskFox",
+  "identifier": "ai.deskfox.app",
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/prod/32x32.png",
+      "icons/prod/128x128.png",
+      "icons/prod/128x128@2x.png",
+      "icons/prod/icon.icns",
+      "icons/prod/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/prod/icon.ico"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJBMDA4RjNEQTQ5NDBGREUKUldUZUQ1U2tQWThBS2thLzFzOGxtSW5hRDBjdlJ5Q3dpcDM1dlAzSGlMRkZITkxzZE5ocGJ1RzgK",
+      "endpoints": ["https://updates.deskfox.ai/v1/latest/desktop/{{target}}/latest.json"]
+    }
+  }
+}

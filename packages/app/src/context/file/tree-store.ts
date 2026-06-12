@@ -46,8 +46,12 @@ export function createFileTreeStore(options: TreeStoreOptions) {
     const current = tree.dir[dir]
     if (!opts?.force && current?.loaded) return Promise.resolve()
 
-    const pending = inflight.get(dir)
-    if (pending) return pending
+    // FORK: force=true 必须绕过 inflight,否则会等到一个可能返回 stale 数据的旧 promise
+    // (拖放后 refresh 拿到操作前的列表 → UI 不刷新的根因)2026-04-28
+    if (!opts?.force) {
+      const pending = inflight.get(dir)
+      if (pending) return pending
+    }
 
     setTree(
       "dir",
@@ -157,6 +161,19 @@ export function createFileTreeStore(options: TreeStoreOptions) {
     return out
   }
 
+  // FORK-BEGIN: 递归刷新 — 强制 re-list 根 + 所有 expanded 子目录,修复"刷新但子目录没变"问题
+  // [feat: file-tree-ux-polish] 2026-05-04
+  const refreshAllExpanded = async (rootInput: string) => {
+    const root = options.normalizeDir(rootInput)
+    const tasks: Promise<void>[] = [listDir(root, { force: true })]
+    for (const [path, state] of Object.entries(tree.dir)) {
+      if (path === root) continue
+      if (state?.expanded) tasks.push(listDir(path, { force: true }))
+    }
+    await Promise.all(tasks)
+  }
+  // FORK-END
+
   return {
     listDir,
     expandDir,
@@ -166,5 +183,6 @@ export function createFileTreeStore(options: TreeStoreOptions) {
     node: (path: string) => tree.node[path],
     isLoaded: (path: string) => Boolean(tree.dir[path]?.loaded),
     reset,
+    refreshAllExpanded,
   }
 }

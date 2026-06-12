@@ -16,6 +16,36 @@ export type ProviderModelNotFoundError = {
   }
 }
 
+// FORK: 后端不可达(连接级)瞬时错识别 [feat: coldstart-toast-race] 2026-06-08
+// sidecar 假死 / 被看门狗(REQ-049 Layer③)重启的窗口里,所有请求都以连接级错误失败:
+//   - Tauri/reqwest 路径:`error sending request for url (...)`(实测截图里就是这条)
+//   - web fetch 路径:`Failed to fetch` / `NetworkError` 等
+// 这类"后端暂时不可达"由看门狗统一出"后台引擎重启中 / 后台已恢复"提示并自动同 port 重启恢复,
+// 各请求站点不应再各弹一条红 toast(冗余噪音)。识别后在 toast 站点 suppress(仍 console 记录)。
+// 仅 match 连接级不可达 —— 不含 HTTP 4xx/5xx(那是后端在、业务/服务故障,应正常 surface)。
+const BACKEND_UNREACHABLE_RE =
+  /error sending request|failed to fetch|networkerror|connection refused|econnrefused|tcp connect error|connection closed before message completed/i
+
+export function isBackendUnreachableError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  if (!msg) return false
+  return BACKEND_UNREACHABLE_RE.test(msg)
+}
+
+// FORK: 冷启动瞬时态(含项目重载)识别 [feat: coldstart-project-reload-toast] 2026-06-09
+// 比 isBackendUnreachableError 多覆盖一类冷启动产物:tanstack-query 的 "Missing queryFn"。
+// 起因:启动重载上次项目(如 OPENCODE-PLAN)时,bootstrap 在 sidecar 后端 ready 前抢跑,
+// 弹两条"无法重新加载 <项目>":① providers 查询 `Missing queryFn`(sdk 未 ready → queryFn=skipToken,
+// fetchQuery 抛)② agent 查询 `error sending request`(连接级不可达)。两者都是 transient、sdk/后端
+// ready 后重跑即恢复,不该弹红 toast。连接级不可达仍交看门狗统管恢复 UX(见 isBackendUnreachableError)。
+export function isTransientStartupError(error: unknown): boolean {
+  if (isBackendUnreachableError(error)) return true
+  const msg = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  if (!msg) return false
+  // tanstack-query 对 skipToken 查询 fetchQuery 时抛 "Missing queryFn: '[...]'"
+  return /missing queryfn/i.test(msg)
+}
+
 type Translator = (key: string, vars?: Record<string, string | number>) => string
 
 function tr(translator: Translator | undefined, key: string, text: string, vars?: Record<string, string | number>) {

@@ -455,8 +455,8 @@ export const dict = {
   "error.page.action.checking": "Comprobando...",
   "error.page.action.checkUpdates": "Buscar actualizaciones",
   "error.page.action.updateTo": "Actualizar a {{version}}",
-  "error.page.report.prefix": "Por favor reporta este error al equipo de OpenCode",
-  "error.page.report.discord": "en Discord",
+  "error.page.report.prefix": "Por favor reporta este error al equipo de DeskFox",
+  "error.page.report.discord": "en GitHub",
   "error.page.version": "Versión: {{version}}",
 
   "error.dev.rootNotFound":
@@ -498,8 +498,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Ocurrió un error",
 
   "home.recentProjects": "Proyectos recientes",
-  "home.empty.title": "Sin proyectos recientes",
-  "home.empty.description": "Empieza abriendo un proyecto local",
+  "home.welcome.title": "Tu asistente de IA personal está listo",
+  "home.welcome.description": "Entrega tu carpeta de proyecto local a Fox: comprenderá a fondo la estructura de tu proyecto y te ayudará en cualquier momento",
+  "home.welcome.open": "Abrir carpeta",
 
   "session.tab.session": "Sesión",
   "session.tab.review": "Revisión",

@@ -8,6 +8,8 @@ import { getFilename } from "@opencode-ai/core/util/path"
 import { A, useParams } from "@solidjs/router"
 import { type Accessor, createMemo, For, type JSX, Match, Show, Switch } from "solid-js"
 import { useServerSync } from "@/context/server-sync"
+// FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
 import { getAvatarColors, type LocalProject, useLayout } from "@/context/layout"
 import { useNotification } from "@/context/notification"
@@ -16,6 +18,8 @@ import { messageAgentColor } from "@/utils/agent"
 import { sessionTitle } from "@/utils/session-title"
 import { sessionPermissionRequest } from "../session/composer/session-request-tree"
 import { childSessionOnPath, getProjectAvatarSource, hasProjectPermissions } from "./helpers"
+// FORK: stuck-working-indicator-fix [feat: stuck-working-indicator-fix] 2026-06-06
+import { deriveSessionWorking } from "./session-working"
 
 export const ProjectIcon = (props: {
   project: LocalProject
@@ -155,10 +159,14 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       return !permission.autoResponds(item, props.session.directory)
     })
   })
-  const isWorking = createMemo(() => {
-    if (hasPermissions()) return false
-    return sessionStore.session_working(props.session.id)
-  })
+  // FORK: stuck-working-indicator-fix — 判定逻辑抽到 deriveSessionWorking 纯函数 [feat: stuck-working-indicator-fix]
+  const isWorking = createMemo(() =>
+    deriveSessionWorking({
+      hasPermissions: hasPermissions(),
+      messages: sessionStore.message[props.session.id],
+      status: sessionStore.session_status[props.session.id],
+    }),
+  )
 
   const tint = createMemo(() => messageAgentColor(sessionStore.message[props.session.id], sessionStore.agent))
   const tooltip = createMemo(() => props.showTooltip ?? (props.mobile || !props.sidebarExpanded()))
@@ -286,6 +294,7 @@ export const NewSessionItem = (props: {
       end
       class={`flex items-center gap-2 min-w-0 w-full text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
       onClick={() => {
+        creation.resetDraft()
         if (layout.sidebar.opened()) return
         props.clearHoverProjectSoon()
       }}

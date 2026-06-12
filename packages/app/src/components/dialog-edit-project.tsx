@@ -87,16 +87,17 @@ export function DialogEditProject(props: { project: LocalProject; server: Server
           icon: { color: store.color || "", override: store.iconOverride || "" },
           commands: { start },
         })
-        serverSync().project.icon(props.project.worktree, store.iconOverride || undefined)
-        dialog.close()
-        return
+      } else {
+        serverSync().project.meta(props.project.worktree, {
+          name,
+          icon: { color: store.color || undefined, override: store.iconOverride || undefined },
+          commands: { start: start || undefined },
+        })
       }
 
-      serverSync().project.meta(props.project.worktree, {
-        name,
-        icon: { color: store.color || undefined, override: store.iconOverride || undefined },
-        commands: { start: start || undefined },
-      })
+      // FORK: project-avatar-save — override 写进 canonical childStore.icon(enrich 唯一无条件读取的本地源),
+      // 对「有 id 走 update」和「无 id / global 走 meta」两条路径都生效 [feat: project-avatar-save]
+      serverSync().project.icon(props.project.worktree, store.iconOverride || undefined)
       dialog.close()
     },
   }))

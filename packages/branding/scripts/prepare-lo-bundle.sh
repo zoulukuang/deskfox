@@ -1,0 +1,295 @@
+#!/usr/bin/env bash
+# [fork-only] macOS LibreOffice 预捆绑 bundle 准备脚本
+# 对称 Windows prepare-lo-bundle.ps1,用于在 macOS 开发机上一次性准备 LO bundle。
+#
+# 流程:
+#   1. 下载 LibreOffice DMG (arm64 / x86_64,国内镜像加速)
+#   2. 校验 DMG 文件头(compound doc magic)
+#   3. hdiutil attach 挂载
+#   4. cp -R LibreOffice.app 到输出目录
+#   5. hdiutil detach 卸载
+#   6. 剥皮:删 help/gallery/template/autotext/autocorrect/wordbook/basic/extensions 内容
+#      (同 Windows 策略;保留 extensions 目录骨架,否则 soffice 首次 profile 创建 fatal error)
+#   7. 移除 LibreOffice 原有代码签名(允许后续 Tauri 统一对整个 .app 重签)
+#   8. 体积检查 + 完成提示
+#
+# 输出: packages/branding/libreoffice-bundle/macos/LibreOffice.app
+#       (目录已在 .gitignore,不进 git)
+#
+# 用法:
+#   bash packages/branding/scripts/prepare-lo-bundle.sh
+#   bash packages/branding/scripts/prepare-lo-bundle.sh -Version 25.8.7
+#   bash packages/branding/scripts/prepare-lo-bundle.sh -Arch x86_64
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BRANDING_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# --- 默认参数 ---
+VERSION="25.8.7"   # Still 稳定线,与 Windows prepare-lo-bundle.ps1 保持一致
+ARCH="aarch64"     # Apple Silicon 默认;Intel Mac 传 -Arch x86_64
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -Version|--version|-v) VERSION="$2"; shift 2 ;;
+        -Arch|--arch|-a)       ARCH="$2";    shift 2 ;;
+        *) echo "Unknown arg: $1" >&2; exit 1 ;;
+    esac
+done
+
+# arm64 和 x86_64 的 URL 后缀不同
+if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+    ARCH_DIR="aarch64"
+    ARCH_SUFFIX="aarch64"
+elif [[ "$ARCH" == "x86_64" || "$ARCH" == "x64" ]]; then
+    ARCH_DIR="x86_64"
+    ARCH_SUFFIX="x86-64"
+else
+    echo "Unknown arch: $ARCH (supported: aarch64/arm64, x86_64/x64)" >&2
+    exit 1
+fi
+
+DMG_NAME="LibreOffice_${VERSION}_MacOS_${ARCH_SUFFIX}.dmg"
+PATH_SUFFIX="${VERSION}/mac/${ARCH_DIR}/${DMG_NAME}"
+
+# --- 镜像列表(与 office-installer.ts MIRRORS 同步) ---
+MIRRORS=(
+    "https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable"
+    "https://mirrors.ustc.edu.cn/tdf/libreoffice/stable"
+    "https://mirrors.bfsu.edu.cn/libreoffice/libreoffice/stable"
+    "https://mirrors.nju.edu.cn/tdf/libreoffice/stable"
+    "https://download.documentfoundation.org/libreoffice/stable"
+)
+
+CACHE_DIR="$BRANDING_ROOT/libreoffice-bundle/cache"
+DEST_DIR="$BRANDING_ROOT/libreoffice-bundle/macos"
+DMG_PATH="$CACHE_DIR/$DMG_NAME"
+
+mkdir -p "$CACHE_DIR" "$DEST_DIR"
+
+echo "[lo-bundle-mac] target: LibreOffice $VERSION macOS $ARCH_SUFFIX"
+echo "[lo-bundle-mac] DMG: $DMG_NAME"
+
+# --- 下载 DMG(尝试各镜像,第一个成功的使用) ---
+if [[ -f "$DMG_PATH" ]]; then
+    SIZE_MB=$(( $(stat -f%z "$DMG_PATH") / 1024 / 1024 ))
+    echo "[lo-bundle-mac] cache hit: $DMG_PATH ($SIZE_MB MB)"
+else
+    DOWNLOADED=0
+    for MIRROR in "${MIRRORS[@]}"; do
+        URL="${MIRROR}/${PATH_SUFFIX}"
+        echo "[lo-bundle-mac] trying: $URL"
+        if curl -L --fail --progress-bar -o "$DMG_PATH.part" "$URL" 2>&1; then
+            mv "$DMG_PATH.part" "$DMG_PATH"
+            DOWNLOADED=1
+            break
+        else
+            echo "[lo-bundle-mac] mirror failed, trying next..."
+            rm -f "$DMG_PATH.part"
+        fi
+    done
+    if [[ "$DOWNLOADED" -eq 0 ]]; then
+        echo "[lo-bundle-mac] ERROR: all mirrors failed" >&2
+        exit 1
+    fi
+fi
+
+# --- 校验 DMG 文件头(Apple Disk Image 以 "koly" trailer 结尾,头部是 ZIP/HFS 数据) ---
+# 简单检查:文件大于 100MB(正常 DMG ~280MB,截断/HTML 错误页通常 <1MB)
+DMG_SIZE=$(stat -f%z "$DMG_PATH")
+if [[ "$DMG_SIZE" -lt $((100 * 1024 * 1024)) ]]; then
+    echo "[lo-bundle-mac] ERROR: DMG too small ($DMG_SIZE bytes), likely a download error" >&2
+    rm -f "$DMG_PATH"
+    exit 1
+fi
+echo "[lo-bundle-mac] DMG size OK: $(( DMG_SIZE / 1024 / 1024 )) MB"
+
+# --- 挂载 DMG ---
+echo "[lo-bundle-mac] mounting DMG..."
+MOUNT_OUTPUT=$(hdiutil attach "$DMG_PATH" -nobrowse -noautoopen 2>&1)
+echo "$MOUNT_OUTPUT"
+MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | tail -1 | awk -F'\t' '{print $NF}' | sed 's/^[[:space:]]*//')
+
+if [[ -z "$MOUNT_POINT" || ! -d "$MOUNT_POINT" ]]; then
+    echo "[lo-bundle-mac] ERROR: could not parse mount point from hdiutil output" >&2
+    exit 1
+fi
+echo "[lo-bundle-mac] mounted at: $MOUNT_POINT"
+
+# --- 找 LibreOffice.app ---
+APP_SRC=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | grep -i libre | head -1)
+if [[ -z "$APP_SRC" ]]; then
+    echo "[lo-bundle-mac] ERROR: LibreOffice.app not found in $MOUNT_POINT" >&2
+    hdiutil detach "$MOUNT_POINT" -force 2>/dev/null || true
+    exit 1
+fi
+echo "[lo-bundle-mac] found: $APP_SRC"
+
+# --- 复制到输出目录 ---
+DEST_APP="$DEST_DIR/LibreOffice.app"
+rm -rf "$DEST_APP"
+echo "[lo-bundle-mac] copying LibreOffice.app (~280MB, takes ~30s)..."
+cp -R "$APP_SRC" "$DEST_APP"
+hdiutil detach "$MOUNT_POINT" -force 2>/dev/null || true
+echo "[lo-bundle-mac] unmounted"
+
+# --- 剥皮:删除对 headless PDF 转换无用的大体积目录 ---
+# 同 Windows prepare-lo-bundle.ps1 策略
+RESOURCES="$DEST_APP/Contents/Resources"
+echo "[lo-bundle-mac] stripping unnecessary files..."
+
+# [fix: libreoffice-user-install-fail-win 2026-06-07] presets/ 不可整删 ——
+# LibreOffice 首次为新用户建 profile 时从 presets/ 拷初始模板(autotext/basic/config/database/
+# gallery,~200KB),删光 → 干净机器 100% 报 "User installation could not be completed"
+# (extensions 修复后 2026.7.0 仍复现的残留真因)。Win C 实验 + Mac A/B/C 锁定就是它;保留即修复。
+STRIP_DIRS=(
+    "help"
+    "gallery"
+    "template"
+    "autotext"
+    "autocorrect"
+    "wordbook"
+    "basic"
+    "xslt"
+    "wizards"
+)
+
+for DIR in "${STRIP_DIRS[@]}"; do
+    TARGET="$RESOURCES/$DIR"
+    if [[ -d "$TARGET" ]]; then
+        SIZE=$(du -sm "$TARGET" 2>/dev/null | awk '{print $1}')
+        rm -rf "$TARGET"
+        echo "[lo-bundle-mac]   deleted $DIR/ (~${SIZE}MB)"
+    fi
+done
+
+# extensions: 保留目录骨架,只删内容
+# (整删会导致 soffice 首次创建 user profile 时 fatal error — Windows 踩坑 #2)
+EXT_DIR="$RESOURCES/extensions"
+if [[ -d "$EXT_DIR" ]]; then
+    EXT_SIZE=$(du -sm "$EXT_DIR" 2>/dev/null | awk '{print $1}')
+    find "$EXT_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+    echo "[lo-bundle-mac]   cleared extensions/ contents (~${EXT_SIZE}MB, kept dir skeleton)"
+fi
+
+# LibreOfficePython.framework (~110MB) — headless docx/xlsx/pptx→pdf 不需要 Python
+PYTHON_FW="$DEST_APP/Contents/Frameworks/LibreOfficePython.framework"
+if [[ -d "$PYTHON_FW" ]]; then
+    PY_SIZE=$(du -sm "$PYTHON_FW" 2>/dev/null | awk '{print $1}')
+    rm -rf "$PYTHON_FW"
+    echo "[lo-bundle-mac]   deleted LibreOfficePython.framework (~${PY_SIZE}MB)"
+fi
+
+# Java scripting bridge
+if [[ -d "$RESOURCES/java" ]]; then
+    JAVA_SIZE=$(du -sm "$RESOURCES/java" 2>/dev/null | awk '{print $1}')
+    rm -rf "$RESOURCES/java"
+    echo "[lo-bundle-mac]   deleted Resources/java (~${JAVA_SIZE}MB)"
+fi
+
+# Firebird DB engine (不用于 PDF 转换)
+if [[ -d "$RESOURCES/firebird" ]]; then
+    rm -rf "$RESOURCES/firebird"
+    echo "[lo-bundle-mac]   deleted Resources/firebird"
+fi
+
+# 非默认 UI 图标主题(保留 colibre 默认,删其他主题 ~35MB)
+for IMG_THEME in karasa_jaga elementary sukapura; do
+    for f in "$RESOURCES/config/images_${IMG_THEME}"*.zip; do
+        [[ -f "$f" ]] && rm "$f" && echo "[lo-bundle-mac]   deleted $(basename "$f")"
+    done
+done
+
+# 大型文本文件(不影响运行)
+for f in "$RESOURCES/CREDITS.fodt" "$RESOURCES/LICENSE.html" "$RESOURCES/LICENSE"; do
+    [[ -f "$f" ]] && rm "$f" && echo "[lo-bundle-mac]   deleted $(basename "$f")"
+done
+
+# 多语言 UI 翻译文件:只保留 en-US
+# (Windows 实测:zh-CN 等翻译文件 ~200MB,UTF-8 headless 转换不需要 UI locale)
+if [[ -d "$RESOURCES/registry" ]]; then
+    find "$RESOURCES/registry" -name "*_*.xcu" ! -name "*en_US*" -delete 2>/dev/null || true
+fi
+
+# 清理剥皮后产生的悬空符号链接(如 Frameworks/intl/fbintl.conf → firebird/fbintl.conf)
+# Tauri 处理 resources 时会解析 symlink,悬空链接导致 "resource path doesn't exist" 报错
+echo "[lo-bundle-mac] removing broken symlinks..."
+find "$DEST_APP" -type l | while read -r f; do
+    if [[ ! -e "$f" ]]; then
+        rm "$f"
+        echo "[lo-bundle-mac]   removed broken symlink: $(basename "$f")"
+    fi
+done
+
+# --- 体积检查 ---
+FINAL_SIZE_MB=$(du -sm "$DEST_APP" 2>/dev/null | awk '{print $1}')
+echo "[lo-bundle-mac] stripped size: ${FINAL_SIZE_MB} MB"
+if [[ "$FINAL_SIZE_MB" -gt 600 ]]; then
+    echo "[lo-bundle-mac] WARNING: size > 600MB, stripping may not have worked correctly"
+    echo "                Check: du -sh $APP/Contents/Resources/* $APP/Contents/Frameworks/*"
+fi
+
+# --- 冷启动 smoke test:验证剥皮后 bundle 能在"全新空 profile"下起来 ---
+# [feat: lo-bundle-coldstart-smoke-gate 2026-06-08] 机制化防"过度剥皮"再发生。
+# 起源:presets/extensions 这类 profile bootstrap 硬依赖被剥皮删掉 → 干净机器(冷 profile)
+# 100% 报 "User installation could not be completed",但打包机有热 profile 测不出 → 直达线上。
+# 本闸不认目录名、只认行为:用全新空 -env:UserInstallation 真跑一次转换,失败即 exit 1,
+# 任何破坏冷启动的过度剥皮(presets/extensions/未来任意必需目录)当场暴露,残缺 bundle 产不出。
+# 注:① arm64 未签名/改签二进制会被内核 SIGKILL,故先 ad-hoc 签名让其可启动(下方正式签名移除会清掉)
+#    ② profile 必须是全新空目录,-env:UserInstallation 用三斜杠绝对路径(file://<绝对路径>)
+#    ③ SAL_USE_VCLPLUGIN=svp 强制 headless VCL 后端 —— 失败时错误走 stderr 而非弹模态 Cocoa
+#       fatal-error 框(否则模态框阻塞脚本 + 在开发者屏幕弹窗)
+#    ④ soffice 输出存盘,失败分支回显定位真实错因;成功仍静默
+#    ⑤ 主进程轮询超时(macOS 无 GNU timeout):svp 下失败应秒退,120s 兜底防万一卡住;
+#       轮询跑主进程 + 每次 sleep 1 即时回收 → 无孤儿子进程、不占下游管道 fd(成功秒退)
+echo "[lo-bundle-mac] cold-start smoke test (fresh empty profile)..."
+codesign --force --deep --sign - "$DEST_APP" >/dev/null 2>&1 || true
+SMOKE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/deskfox-lo-smoke.XXXXXX")"
+mkdir -p "$SMOKE_TMP/out"
+printf 'DeskFox LO cold-start smoke test\n' > "$SMOKE_TMP/smoke.txt"
+SAL_USE_VCLPLUGIN=svp "$DEST_APP/Contents/MacOS/soffice" --headless --norestore --nologo --nofirststartwizard \
+    -env:UserInstallation="file://$SMOKE_TMP/profile" \
+    --convert-to pdf --outdir "$SMOKE_TMP/out" "$SMOKE_TMP/smoke.txt" >"$SMOKE_TMP/soffice.log" 2>&1 &
+SMOKE_PID=$!
+SMOKE_SECS=0
+while kill -0 "$SMOKE_PID" 2>/dev/null; do
+    sleep 1
+    SMOKE_SECS=$((SMOKE_SECS + 1))
+    if [[ "$SMOKE_SECS" -ge 120 ]]; then
+        echo "[lo-bundle-mac]   smoke 超时 120s,强杀 soffice" >&2
+        kill -9 "$SMOKE_PID" 2>/dev/null || true
+        break
+    fi
+done
+wait "$SMOKE_PID" 2>/dev/null || true
+if [[ -f "$SMOKE_TMP/out/smoke.pdf" ]]; then
+    echo "[lo-bundle-mac]   smoke OK — 剥皮后 bundle 能冷启动建 profile + 转换"
+    rm -rf "$SMOKE_TMP"
+else
+    echo "[lo-bundle-mac] ERROR: 冷启动 smoke test 失败 — 剥皮删了 profile bootstrap 必需目录!" >&2
+    echo "[lo-bundle-mac]   全新 profile 下 soffice 起不来(典型:'User installation could not be completed')。" >&2
+    echo "[lo-bundle-mac]   核对上面 STRIP_DIRS 是否误删 presets/extensions 等必需项;此 bundle 已废弃,不可打包。" >&2
+    echo "[lo-bundle-mac]   --- soffice 输出(定位真实错因)---" >&2
+    sed 's/^/[lo-bundle-mac]   | /' "$SMOKE_TMP/soffice.log" >&2 2>/dev/null || true
+    rm -rf "$SMOKE_TMP" "$DEST_APP"
+    exit 1
+fi
+
+# --- 移除 LibreOffice 原有代码签名 ---
+# 让 DeskFox Tauri build 在打包时统一对整个 .app 重签
+# (保留 LO 原签名会导致 codesign 对 .app 整体签名失败 — 不允许嵌套签名主体)
+echo "[lo-bundle-mac] removing existing code signatures (Tauri will re-sign)..."
+find "$DEST_APP" -type f \( -perm +0111 -o -name "*.dylib" -o -name "*.so" \) \
+    -exec codesign --remove-signature {} \; 2>/dev/null || true
+# 主 bundle
+codesign --remove-signature "$DEST_APP" 2>/dev/null || true
+echo "[lo-bundle-mac] signatures removed"
+
+echo ""
+echo "[lo-bundle-mac] === DONE ==="
+echo "[lo-bundle-mac] output: $DEST_APP"
+echo "[lo-bundle-mac] size:   ${FINAL_SIZE_MB} MB"
+echo ""
+echo "Next: run build-deskfox.sh -Env dev (or prod) to include it in DeskFox.app"
+echo "      build-deskfox.sh auto-detects libreoffice-bundle/macos/LibreOffice.app"

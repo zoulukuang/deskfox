@@ -18,6 +18,8 @@ type ProviderSource = "env" | "api" | "config" | "custom"
 type ProviderItem = ReturnType<ReturnType<typeof useProviders>["connected"]>[number]
 
 const PROVIDER_NOTES = [
+  // FORK: getbot tagline 在设置→提供商热门列表展示 2026-04-27
+  { match: (id: string) => id === "getbot", key: "dialog.provider.getbot.tagline" },
   { match: (id: string) => id === "opencode", key: "dialog.provider.opencode.note" },
   { match: (id: string) => id === "opencode-go", key: "dialog.provider.opencodeGo.tagline" },
   { match: (id: string) => id === "anthropic", key: "dialog.provider.anthropic.note" },
@@ -55,7 +57,12 @@ const SettingsProvidersContent: Component = () => {
       .popular()
       .filter((p) => !connectedIDs.has(p.id))
       .slice()
-    items.sort((a, b) => popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id))
+    items.sort((a, b) => {
+      // FORK: getbot 在设置→提供商热门列表强制置顶（与选择提供商弹窗一致） 2026-04-27
+      if (a.id === "getbot") return -1
+      if (b.id === "getbot") return 1
+      return popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id)
+    })
     return items
   })
 
@@ -193,6 +200,10 @@ const SettingsProvidersContent: Component = () => {
                     <div class="flex items-center gap-x-3">
                       <ProviderIcon id={item.id} class="size-5 shrink-0 icon-strong-base" />
                       <span class="text-14-medium text-text-strong">{item.name}</span>
+                      {/* FORK: getbot 推荐 Tag 2026-04-27 */}
+                      <Show when={item.id === "getbot"}>
+                        <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
+                      </Show>
                       <Show when={item.id === "opencode"}>
                         <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
                       </Show>

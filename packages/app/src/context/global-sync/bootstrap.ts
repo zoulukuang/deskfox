@@ -16,8 +16,9 @@ import { batch } from "solid-js"
 import { reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { State, VcsCache } from "./types"
 import { cmp, normalizeAgentList, normalizeProviderList } from "./utils"
-import { formatServerError } from "@/utils/server-errors"
-import { QueryClient, queryOptions } from "@tanstack/solid-query"
+// FORK: 加 isTransientStartupError(coldstart 守卫)+ skipToken [feat: electron-replatform]
+import { formatServerError, isTransientStartupError } from "@/utils/server-errors"
+import { QueryClient, queryOptions, skipToken } from "@tanstack/solid-query"
 import { loadMcpQuery } from "../server-sync"
 import { NormalizedProviderListResponse } from "@opencode-ai/ui/context"
 import { ScopedKey, type ServerScope } from "@/utils/server-scope"
@@ -312,6 +313,11 @@ export async function bootstrapDirectory(input: {
       input.mcp && (() => input.queryClient.fetchQuery(loadMcpQuery(input.scope, input.directory, input.sdk))),
       () =>
         input.queryClient.fetchQuery(loadProvidersQuery(input.scope, input.directory, input.sdk)).catch((err) => {
+          // FORK: 冷启动重载竞态(sdk/后端未 ready)不弹 toast — transient,ready 后重跑即恢复 [feat: coldstart-project-reload-toast]
+          if (isTransientStartupError(err)) {
+            console.error("bootstrap providers reload (transient, suppressed)", err)
+            return
+          }
           const project = getFilename(input.directory)
           showToast({
             variant: "error",
@@ -325,12 +331,17 @@ export async function bootstrapDirectory(input: {
     const slowErrs = errors(await runAll(slow))
     if (slowErrs.length > 0) {
       console.error("Failed to finish bootstrap instance", slowErrs[0])
-      const project = getFilename(input.directory)
-      showToast({
-        variant: "error",
-        title: input.translate("toast.project.reloadFailed.title", { project }),
-        description: formatServerError(slowErrs[0], input.translate),
-      })
+      // FORK: 冷启动重载竞态全是 transient(连接级不可达 / Missing queryFn)时不弹 toast —
+      // ready 后重跑即恢复;只有含真错才 surface [feat: coldstart-project-reload-toast] 2026-06-09
+      const realErr = slowErrs.find((e) => !isTransientStartupError(e))
+      if (realErr) {
+        const project = getFilename(input.directory)
+        showToast({
+          variant: "error",
+          title: input.translate("toast.project.reloadFailed.title", { project }),
+          description: formatServerError(realErr, input.translate),
+        })
+      }
     }
 
     if (loading && slowErrs.length === 0) input.setStore("status", "complete")

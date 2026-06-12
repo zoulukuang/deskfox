@@ -458,8 +458,8 @@ export const dict = {
   "error.page.action.checking": "Kontrol ediliyor...",
   "error.page.action.checkUpdates": "Güncellemeleri kontrol et",
   "error.page.action.updateTo": "{{version}} sürümüne güncelle",
-  "error.page.report.prefix": "Lütfen bu hatayı OpenCode ekibine bildirin",
-  "error.page.report.discord": "Discord üzerinden",
+  "error.page.report.prefix": "Lütfen bu hatayı DeskFox ekibine bildirin",
+  "error.page.report.discord": "GitHub üzerinden",
   "error.page.version": "Sürüm: {{version}}",
 
   "error.dev.rootNotFound":
@@ -502,8 +502,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Bir hata oluştu",
 
   "home.recentProjects": "Son projeler",
-  "home.empty.title": "Son proje yok",
-  "home.empty.description": "Yerel bir proje açarak başlayın",
+  "home.welcome.title": "Kişisel AI asistanınız hazır",
+  "home.welcome.description": "Yerel proje klasörünüzü Fox'a teslim edin; proje yapınızı derinlemesine anlayacak ve size her zaman yardımcı olacak",
+  "home.welcome.open": "Klasörü aç",
 
   "session.tab.session": "Oturum",
   "session.tab.review": "İnceleme",

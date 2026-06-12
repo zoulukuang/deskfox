@@ -455,8 +455,8 @@ export const dict = {
   "error.page.action.checking": "Provjera...",
   "error.page.action.checkUpdates": "Provjeri ažuriranja",
   "error.page.action.updateTo": "Ažuriraj na {{version}}",
-  "error.page.report.prefix": "Molimo prijavi ovu grešku OpenCode timu",
-  "error.page.report.discord": "na Discordu",
+  "error.page.report.prefix": "Molimo prijavi ovu grešku DeskFox timu",
+  "error.page.report.discord": "na GitHubu",
   "error.page.version": "Verzija: {{version}}",
 
   "error.dev.rootNotFound":
@@ -497,8 +497,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Došlo je do greške",
 
   "home.recentProjects": "Nedavni projekti",
-  "home.empty.title": "Nema nedavnih projekata",
-  "home.empty.description": "Kreni tako što ćeš otvoriti lokalni projekat",
+  "home.welcome.title": "Vaš lični AI asistent je spreman",
+  "home.welcome.description": "Predajte svoj lokalni projektni folder Foxu — duboko će razumjeti strukturu vašeg projekta i pomoći vam u svakom trenutku",
+  "home.welcome.open": "Otvori folder",
 
   "session.tab.session": "Sesija",
   "session.tab.review": "Pregled",

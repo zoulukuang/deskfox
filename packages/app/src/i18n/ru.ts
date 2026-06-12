@@ -454,8 +454,8 @@ export const dict = {
   "error.page.action.checking": "Проверка...",
   "error.page.action.checkUpdates": "Проверить обновления",
   "error.page.action.updateTo": "Обновить до {{version}}",
-  "error.page.report.prefix": "Пожалуйста, сообщите об этой ошибке команде OpenCode",
-  "error.page.report.discord": "в Discord",
+  "error.page.report.prefix": "Пожалуйста, сообщите об этой ошибке команде DeskFox",
+  "error.page.report.discord": "в GitHub",
   "error.page.version": "Версия: {{version}}",
 
   "error.dev.rootNotFound":
@@ -498,8 +498,9 @@ export const dict = {
   "notification.session.error.fallbackDescription": "Произошла ошибка",
 
   "home.recentProjects": "Недавние проекты",
-  "home.empty.title": "Нет недавних проектов",
-  "home.empty.description": "Начните с открытия локального проекта",
+  "home.welcome.title": "Ваш персональный ИИ-ассистент готов",
+  "home.welcome.description": "Передайте Fox папку локального проекта — он глубоко изучит структуру вашего проекта и поможет вам в любой момент",
+  "home.welcome.open": "Открыть папку",
 
   "session.tab.session": "Сессия",
   "session.tab.review": "Обзор",

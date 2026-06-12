@@ -104,6 +104,7 @@ export const dict = {
   "dialog.provider.opencode.note": "Curated models including Claude, GPT, Gemini and more",
   "dialog.provider.opencode.tagline": "Reliable optimized models",
   "dialog.provider.opencodeGo.tagline": "Low cost subscription for everyone",
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK: getbot 2026-04-26
   "dialog.provider.anthropic.note": "Direct access to Claude models, including Pro and Max",
   "dialog.provider.copilot.note": "AI models for coding assistance via GitHub Copilot",
   "dialog.provider.openai.note": "GPT models for fast, capable general AI tasks",
@@ -142,6 +143,19 @@ export const dict = {
   "provider.connect.opencodeZen.visit.prefix": "Visit ",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
   "provider.connect.opencodeZen.visit.suffix": " to collect your API key.",
+  // FORK-BEGIN: getbot 连接对话框文案 2026-04-26
+  "provider.connect.getbot.line1":
+    "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.",
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.",
+  "provider.connect.getbot.visit.prefix": "Visit ",
+  "provider.connect.getbot.visit.link": "getbot.me",
+  "provider.connect.getbot.visit.suffix": " to collect your API key.",
+  "provider.connect.getbot.fetchModels.failed":
+    "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.",
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.",
+  "provider.connect.getbot.timeout":
+    "Request to api.getbot.me timed out (15s). Please check your network and try again.",
+  // FORK-END
   "provider.connect.oauth.code.visit.prefix": "Visit ",
   "provider.connect.oauth.code.visit.link": "this link",
   "provider.connect.oauth.code.visit.suffix":
@@ -280,6 +294,8 @@ export const dict = {
   "prompt.context.includeActiveFile": "Include active file",
   "prompt.context.removeActiveFile": "Remove active file from context",
   "prompt.context.removeFile": "Remove file from context",
+  "prompt.context.chatQuoteLabel": "Chat quote",
+  "prompt.context.removeChatQuote": "Remove chat quote",
   "prompt.action.attachFile": "Add files",
   "prompt.attachment.remove": "Remove attachment",
   "prompt.action.send": "Send",
@@ -495,6 +511,8 @@ export const dict = {
 
   "toast.file.loadFailed.title": "Failed to load file",
   "toast.file.listFailed.title": "Failed to list files",
+  "toast.file.dirtyConflict.title": "AI modified this file",
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.",
 
   "toast.context.noLineSelection.title": "No line selection",
   "toast.context.noLineSelection.description": "Select a line range in a file tab first.",
@@ -530,8 +548,8 @@ export const dict = {
   "error.page.action.checkUpdates": "Check for updates",
   "error.page.action.updateTo": "Update to {{version}}",
   "error.page.circular": "[Circular]",
-  "error.page.report.prefix": "Please report this error to the OpenCode team",
-  "error.page.report.discord": "on Discord",
+  "error.page.report.prefix": "Please report this error to the DeskFox team",
+  "error.page.report.discord": "on GitHub",
   "error.page.version": "Version: {{version}}",
 
   "error.dev.rootNotFound":
@@ -592,6 +610,11 @@ export const dict = {
   "home.sessions.group.today": "Today",
   "home.sessions.group.yesterday": "Yesterday",
   "home.sessions.group.older": "Older",
+  // FORK-BEGIN: home empty-state welcome copy aligned to onboarding mock 2026-06-09
+  "home.welcome.title": "Your personal AI assistant is ready",
+  "home.welcome.description": "Hand your local project folder to Fox, and it will deeply understand your project structure and help you anytime",
+  "home.welcome.open": "Open folder",
+  // FORK-END
 
   "session.tab.session": "Session",
   "session.tab.review": "Review",
@@ -710,6 +733,7 @@ export const dict = {
     "The terminal connection was interrupted. This can happen when the server restarts.",
 
   "common.closeTab": "Close tab",
+  "common.closeOtherTabs": "Close Other Tabs",
   "common.dismiss": "Dismiss",
   "common.moreCountSuffix": " (+{{count}} more)",
   "common.requestFailed": "Request failed",
@@ -851,6 +875,12 @@ export const dict = {
   "settings.general.row.newLayoutDesigns.description": "Enable the redesigned layout, home, composer, and session UI",
   "settings.general.row.pinchZoom.title": "Pinch to zoom",
   "settings.general.row.pinchZoom.description": "Allow trackpad pinch and Ctrl-scroll gestures to zoom",
+  "settings.general.row.telemetry.title": "Anonymous usage statistics",
+  "settings.general.row.telemetry.description":
+    "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.",
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting",
+  "settings.general.row.telemetry.locked":
+    "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)",
 
   "settings.general.row.wayland.title": "Use native Wayland",
   "settings.general.row.wayland.description": "Disable X11 fallback on Wayland. Requires restart.",
@@ -1038,4 +1068,151 @@ export const dict = {
   "workspace.reset.archived.one": "1 session will be archived.",
   "workspace.reset.archived.many": "{{count}} sessions will be archived.",
   "workspace.reset.note": "This will reset the workspace to match the default branch.",
+
+  // FORK-BEGIN: 文件树菜单 i18n 2026-05-04
+  "fileTree.menu.rename": "Rename",
+  "fileTree.menu.revealInFolder": "Reveal in folder",
+  "fileTree.menu.copyPath": "Copy path",
+  "fileTree.menu.cut": "Cut",
+  "fileTree.menu.copy": "Copy",
+  "fileTree.menu.paste.toFolder": "Paste into this folder",
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory",
+  "fileTree.menu.paste.toRoot": "Paste to project root",
+  "fileTree.menu.delete": "Delete",
+  "fileTree.menu.newFile": "New file",
+  "fileTree.menu.newFolder": "New folder",
+  "fileTree.menu.refresh": "Refresh",
+  "fileTree.collapsePreviewHint": "Click to collapse preview",
+  "fileTree.dialog.newFile.title": "New file",
+  "fileTree.dialog.newFile.label": "File name",
+  "fileTree.dialog.newFile.placeholder": "File name",
+  "fileTree.dialog.newFolder.title": "New folder",
+  "fileTree.dialog.newFolder.label": "Folder name",
+  "fileTree.dialog.newFolder.placeholder": "New folder",
+  "fileTree.dialog.rename.fileTitle": "Rename file",
+  "fileTree.dialog.rename.folderTitle": "Rename folder",
+  "fileTree.dialog.rename.label": "New name",
+  "fileTree.dialog.rename.confirm": "Rename",
+  "fileTree.dialog.rename.unchanged": "Name unchanged",
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file",
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder",
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items",
+  "fileTree.dialog.confirmDelete.messageSingle": 'Are you sure you want to delete "{{name}}"?',
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?",
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items",
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.",
+  "fileTree.dialog.confirmDelete.confirm": "Delete",
+  "fileTree.dialog.create": "Create",
+  "fileTree.dialog.cancel": "Cancel",
+  "fileTree.dialog.validation.empty": "Name cannot be empty",
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\",
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists",
+  "fileTree.toast.operationFailed": "Operation failed",
+  "fileTree.toast.openFailed": "Failed to open",
+  "fileTree.toast.deleteFailedSingle": "Delete failed",
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete",
+  "fileTree.toast.moveFailedSingle": "Move failed",
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move",
+  "fileTree.toast.copyFailedSingle": "Copy failed",
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy",
+  "fileTree.toast.pasteFailedSingle": "Paste failed",
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste",
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)",
+  "fileTree.toast.copyPathSuccessSingle": "Path copied",
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied",
+  // FORK: md-export-pdf-word — viewer 右键导出 Word 菜单 i18n(PDF v1 drop)2026-05-05
+  "fileViewer.menu.exportDocx": "Export as Word",
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word",
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document",
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word",
+  "fileViewer.toast.exportDocxFail": "Export failed",
+  // FORK: md-editing-iter-2 — 编辑器状态栏行/列号 / 选中字符数 2026-05-09
+  "fileViewer.editor.statusBar.line": "Ln {{count}}",
+  "fileViewer.editor.statusBar.col": "Col {{count}}",
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}",
+  // FORK: md-context-menu-i18n — remaining viewer right-click menu items 2026-05-07
+  "fileViewer.menu.addToChat": "Add to Chat",
+  "fileViewer.menu.copy": "Copy",
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...",
+  "fileViewer.menu.input.shortcutHint": "{{shortcut}} to submit · Esc to cancel",
+  "fileViewer.menu.input.submit": "Add to Chat",
+  // FORK: cross-page selection hint [feat: office-选中加聊天] 2026-05-24
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.",
+  // FORK: editDisabled reasons i18n — 禁编辑提示多语言(原为硬编码中英混杂)[feat: ui-brand-deskfox] 2026-06-06
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app",
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.",
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited",
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled",
+  // FORK-END
+  // FORK-BEGIN: feishu-bridge Settings Tab + bind dialog 2026-05-08 [feat: feishu-bridge]
+  "settings.tab.feishu": "Lark Bridge",
+  "settings.feishu.title": "Lark Bridge",
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.",
+  "settings.feishu.preventSleep.title": "Keep computer awake",
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.",
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.",
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.",
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured",
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.",
+  "settings.feishu.account.empty.title": "No Lark account bound",
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.",
+  "settings.feishu.account.add": "Add Lark account",
+  "settings.feishu.account.delete": "Delete",
+  "settings.feishu.bind.title": "Bind Lark account",
+  "settings.feishu.bind.domain.label": "Domain",
+  "settings.feishu.bind.domain.feishu": "Feishu (China)",
+  "settings.feishu.bind.domain.lark": "Lark (Global)",
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app",
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app",
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s",
+  "settings.feishu.bind.statusPending": "Waiting for authorization...",
+  "settings.feishu.bind.statusSuccess": "Bound successfully",
+  "settings.feishu.bind.statusDenied": "Authorization denied by user",
+  "settings.feishu.bind.statusExpired": "QR code expired",
+  "settings.feishu.bind.statusError": "Error: {{msg}}",
+  "settings.feishu.bind.cancel": "Cancel",
+  "settings.feishu.bind.retry": "Retry",
+  "settings.feishu.bind.done": "Done",
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch",
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch",
+  "settings.feishu.bind.qrLoading": "Generating QR code...",
+  "settings.feishu.account.edit": "Edit",
+  "settings.feishu.account.modelLabel": "model",
+  "settings.feishu.account.modelDefault": "(use default)",
+  "settings.feishu.edit.title": "Edit account settings",
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.",
+  // FORK: [feat: feishu-create-group-toggle-gui] 2026-05-24
+  "settings.feishu.edit.modelSectionTitle": "Model",
+  "settings.feishu.edit.advancedSectionTitle": "Advanced",
+  // FORK: [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 — deleted enableAutoGroupCreate flag
+  // Old keys removed; new key groupCommand.info describes /group usage
+  "settings.feishu.edit.groupCommand.info":
+    "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.",
+  // FORK: [feat: feishu-group-mention-policy] 2026-05-24 → [feat: feishu-group-new-cmd-and-mention-rename] 2026-05-25 inverted + renamed key
+  "settings.feishu.edit.allowReadAll.label":
+    "Allow AI to read all group messages without @ mention",
+  "settings.feishu.edit.allowReadAll.hint":
+    "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.",
+  "settings.feishu.edit.saving": "Saving...",
+  "settings.feishu.edit.providerLabel": "Provider",
+  "settings.feishu.edit.modelLabel": "Model",
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)",
+  "settings.feishu.edit.autoFreeModel.hint":
+    "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.",
+  "settings.feishu.edit.providerPlaceholder": "Select provider",
+  "settings.feishu.edit.modelPlaceholder": "Select model",
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.",
+  "settings.feishu.edit.save": "Save",
+  "settings.feishu.edit.cancel": "Cancel",
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}",
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace",
+  "settings.feishu.edit.workspace.default": "Default (global home base)",
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}",
+  "settings.feishu.edit.workspace.pick": "Choose folder",
+  "settings.feishu.edit.workspace.clear": "Reset to default",
+  "settings.feishu.edit.workspace.hintFollow":
+    "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.",
+  "settings.feishu.edit.workspace.security":
+    "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.",
+  // FORK-END
 }

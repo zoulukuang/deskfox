@@ -1,3 +1,4 @@
+import { showToast } from "@/utils/toast"
 import { Component, Show, createMemo, createResource, onMount, type JSX } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -199,6 +200,34 @@ export const SettingsGeneral: Component = () => {
     void update.catch(() => setPinchZoom(!checked))
   }
 
+  // FORK: 匿名使用统计开关 — 状态来自后端 config(桌面端);仅当平台暴露该能力时加载 [feat: telemetry-usage-stats]
+  const [telemetryStatus, { refetch: refetchTelemetry }] = createResource(
+    () => (platform.getTelemetryEnabled ? true : false),
+    () =>
+      Promise.resolve(platform.getTelemetryEnabled?.() ?? { enabled: true, locked: false }).catch(() => ({
+        enabled: true,
+        locked: false,
+      })),
+    { initialValue: { enabled: true, locked: false } },
+  )
+
+  const onTelemetryChange = async (checked: boolean) => {
+    if (!platform.setTelemetryEnabled) return
+    try {
+      await platform.setTelemetryEnabled(checked)
+    } catch (e) {
+      // 写失败(只读/磁盘满)不再静默:提示用户,否则隐私开关"没关上"用户却以为关了
+      showToast({
+        variant: "error",
+        title: language.t("settings.general.row.telemetry.saveFailed"),
+        description: String(e),
+      })
+    } finally {
+      // 无论成败都 refetch:回读真实有效值,UI 不会停在用户点击的错误态
+      void refetchTelemetry()
+    }
+  }
+
   const colorSchemeOptions = createMemo((): { value: ColorScheme; label: string }[] => [
     { value: "system", label: language.t("theme.scheme.system") },
     { value: "light", label: language.t("theme.scheme.light") },
@@ -364,6 +393,26 @@ export const SettingsGeneral: Component = () => {
             />
           </div>
         </SettingsRow>
+        {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
+        <Show when={platform.getTelemetryEnabled}>
+          <SettingsRow
+            title={language.t("settings.general.row.telemetry.title")}
+            description={
+              language.t("settings.general.row.telemetry.description") +
+              (telemetryStatus().locked ? " " + language.t("settings.general.row.telemetry.locked") : "")
+            }
+          >
+            <div data-action="settings-telemetry">
+              {/* locked(env / 其他配置文件覆盖了 config.json)时禁用开关 + 上面 description 追加说明,
+                  避免用户点了"弹回"却无解释 */}
+              <Switch
+                checked={telemetryStatus().enabled}
+                disabled={telemetryStatus().locked}
+                onChange={onTelemetryChange}
+              />
+            </div>
+          </SettingsRow>
+        </Show>
       </SettingsList>
     </div>
   )
