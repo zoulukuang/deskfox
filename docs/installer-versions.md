@@ -25,6 +25,22 @@
 
 ---
 
+## [macOS] 2026.7.1 - 2026-06-12 10:33
+
+**主题**:与 Win 2026.7.2 同批两笔体验型 bug fix——编辑项目头像保存不生效 + AI 回复"永久思考中"(SSE 死流空闲超时)。小更新进"补"位(2026.7.0 → 2026.7.1;Mac N 序列独立于 Win)。
+
+**本次内容**(自 `ship-mac-prod-2026.7.0` 起):
+- **项目头像保存修复**(feat: project-avatar-save,bug-repro):编辑项目上传头像保存后侧边栏不显示(所有项目所有端)。根因:无 id / global 项目走 meta 保存路径时 override 只写 `projectMeta`(渲染端 enrich 不读)→ 死数据。修法:写入侧两条路径统一补写 canonical `childStore.icon` + 读取侧 enrich 经 fork-only `resolveLocalIconOverride` 兼读 `projectMeta.icon.override`(4 单测)。**真机已验生效**。
+- **SSE 流空闲超时**(feat: llm-stream-idle-timeout,bug-repro + override-blacklist):直连 provider 的 LLM 流式请求原默认无超时,死连接 → 永久"思考中"留 tokens.output=0 残骸。修法:`chunkTimeout` 默认 120s,只杀停滞流不杀健康长回复,可 per-provider `false` 关闭。
+- 发版前 code-review:3 角度独立审查无高危项(守 ≤5 agent 预算)。
+
+**Release**:GitHub `ship-mac-prod-2026.7.1`(主仓 `zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN 地址)
+**签名公证**:Developer ID Application: shimin yue (GZ4LT9W9H9) + Apple 公证 Accepted + staple;下载双击直接打开,无 Gatekeeper 拦截
+**installer**:`DeskFox-2026.7.1_aarch64.dmg`(含 LibreOffice,~224 MB)
+**updater manifest**:`updates.deskfox.ai/v1/latest/desktop/darwin/latest.json`(线上 version=2026.7.1)
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.7.1_aarch64.dmg`
+
+---
 ## [Windows] 2026.7.1 - 2026-06-10 00:36
 
 **主题**:追赶式 prod 发布——首页品牌化定稿 + LibreOffice 打包健壮性(干净机器首启修复)+ 飞书编辑弹窗 UX + 文件预览 UX 三件套 + macOS 修复 + 冷启动 toast 静默 + dev 独立版本号工具链。小更新进"补"位(2026.7.0 → 2026.7.1)。
