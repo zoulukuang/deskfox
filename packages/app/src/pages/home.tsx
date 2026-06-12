@@ -1152,8 +1152,10 @@ function LegacyHome() {
   }
 
   return (
-    <div class="mx-auto mt-55 w-full md:w-auto px-4">
-      <Logo class="md:w-xl opacity-12" />
+    <div class="mx-auto mt-55 w-full md:w-[552px] px-4 flex flex-col items-center">
+      {/* FORK-BEGIN: 首页品牌化 — DeskFox wordmark + 常驻欢迎引导 + 钢蓝 CTA(对齐 Tauri 版 onboarding 稿)
+          [feat: home-empty-onboarding-copy] 2026-06-09 / 还原于 electron-replatform 2026-06-13 */}
+      <DeskFoxWordmark class="block w-60 mx-auto opacity-50" />
       <Button
         size="large"
         variant="ghost"
@@ -1168,15 +1170,25 @@ function LegacyHome() {
         />
         {server.name}
       </Button>
+      <div class="mt-8 mx-auto flex flex-col items-center gap-2 text-center">
+        <div class="text-20-medium deskfox-home-title">{language.t("home.welcome.title")}</div>
+        <div class="text-14-regular text-text-weak">{language.t("home.welcome.description")}</div>
+      </div>
+      <Button
+        size="large"
+        variant="primary"
+        icon="folder-add-left"
+        class="deskfox-cta mt-[26px] mx-auto"
+        onClick={chooseProject}
+      >
+        {language.t("home.welcome.open")}
+      </Button>
+      {/* FORK-END */}
       <Switch>
         <Match when={sync.data.project.length > 0}>
-          <div class="mt-20 w-full flex flex-col gap-4">
-            <div class="flex gap-2 items-center justify-between pl-3">
-              <div class="text-14-medium text-text-strong">{language.t("home.recentProjects")}</div>
-              <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                {language.t("command.project.open")}
-              </Button>
-            </div>
+          <div class="mt-18 w-full flex flex-col gap-4">
+            {/* FORK: 引导/打开入口已上移常驻,去掉重复的「打开项目」头部按钮 2026-06-09 */}
+            <div class="text-14-medium text-text-strong pl-3">{language.t("home.recentProjects")}</div>
             <ul class="flex flex-col gap-2">
               <For each={recent()}>
                 {(project) => (
