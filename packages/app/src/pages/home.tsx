@@ -20,6 +20,8 @@ import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useDirectoryPicker } from "@/components/directory-picker"
+// FORK: DeskFox 品牌 wordmark(启动器品牌位,关键还原)[feat: electron-replatform] 2026-06-12
+import { DeskFoxWordmark } from "@/components/deskfox-wordmark"
 import { DialogSelectServer, useServerManagementController } from "@/components/dialog-select-server"
 import { DialogServerV2 } from "@/components/settings-v2/dialog-server-v2"
 import { ServerConnection, useServer } from "@/context/server"
@@ -454,6 +456,8 @@ function HomeProjectColumn(props: {
   const controller = useServerManagementController({ navigateOnAdd: false })
   return (
     <aside class="flex min-w-0 flex-col lg:pt-[52px] mt-14 gap-4" aria-label={props.language.t("home.projects")}>
+      {/* FORK: DeskFox 品牌 wordmark — 启动器顶部品牌位(关键还原,上游用 <Logo>)[feat: electron-replatform] 2026-06-12 */}
+      <DeskFoxWordmark class="block w-40 mb-1 pl-1.5 opacity-70" />
       <div class="flex h-7 min-w-0 items-center justify-between pl-1.5">
         <div class={HOME_SECTION_LABEL}>{props.language.t("home.projects")}</div>
         <Show when={global.servers.list().length === 1}>
