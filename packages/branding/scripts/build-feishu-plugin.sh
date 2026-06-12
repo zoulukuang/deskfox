@@ -47,9 +47,10 @@ mkdir -p "$OUT_DIR"
 echo "[feishu-plugin] bundling $ENTRY → $OUT_FILE ..."
 # external @opencode-ai/plugin + sdk:这些 sidecar runtime 提供(PluginInput),不能内嵌
 # external @opencode-ai/core:sidecar 已有,内嵌会重复
+# FORK: target bun→node — Electron 边车跑 Node 不再是 Bun(Bun.serve 已转 node:http)[feat: electron-replatform] 2026-06-12
 bun build "$ENTRY" \
     --outfile="$OUT_FILE" \
-    --target=bun \
+    --target=node \
     --external='@opencode-ai/plugin' \
     --external='@opencode-ai/sdk' \
     --external='@opencode-ai/sdk/v2' \
