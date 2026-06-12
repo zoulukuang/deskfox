@@ -234,7 +234,10 @@ export type StepStartPart = Types.DeepMutable<Schema.Schema.Type<typeof StepStar
 export const StepFinishPart = Schema.Struct({
   ...partBase,
   type: Schema.Literal("step-finish"),
-  reason: Schema.String,
+  // FORK: 老数据容错 — 早期(reason 字段加入前)写入的 step-finish part 无 reason,严格必填会让
+  //   整个老会话 fetchMessages 报 BadRequest "Missing key"(实测主库 511/8333 个缺)。decode 缺省
+  //   "unknown",Type 仍 string 不影响下游;同文件 retryCount 同款先例。[feat: electron-replatform] 2026-06-12
+  reason: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unknown"))),
   snapshot: Schema.optional(Schema.String),
   cost: Schema.Finite,
   tokens: Schema.Struct({
