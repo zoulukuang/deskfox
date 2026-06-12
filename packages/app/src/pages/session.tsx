@@ -57,6 +57,11 @@ import {
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
+// FORK: ChatSelectionMenu 提到 Session 顶层,不受 messagesReady() Show 门控
+//   确保 user 看 PDF/office 无 chat 会话时也能用右键菜单 [feat: office-选中加聊天] 2026-05-25
+import { ChatSelectionMenu } from "@/pages/session/chat-selection-menu"
+// FORK: 创作卡作用域随当前 session 切换 [feat: media-creation-mode]
+import { creation, DRAFT_SCOPE } from "@/components/media-creation-store"
 import { useServer } from "@/context/server"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
@@ -308,6 +313,30 @@ export default function Page() {
   const openReviewPanel = () => {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
   }
+
+  // FORK: 每次打开/切换项目默认收起内容预览器(reviewPanel),让"新项目打开"是干净的聊天 + 文件树,
+  //   点文件才展开预览(展开链路 createOpenSessionFileTab→openReviewPanel 已现成)。监听项目目录
+  //   (sdk.directory)变化主动 close;同项目内切会话 directory 不变、不触发。
+  //   [feat: new-project-hide-file-viewer-default] 2026-06-09
+  createEffect(on(() => sdk.directory, () => view().reviewPanel.close()))
+
+  // FORK: 创作卡作用域跟随当前 session [feat: media-creation-mode]
+  //   - 进某 session → 切到该 session 作用域;首页 draft 直接建出 session(prev 无 id)→ draft 卡过继;
+  //   - 回首页/新建会话(id 变空)→ 重置 draft 作用域,修"旧创作记录在新会话冒出来"。
+  createEffect(
+    on(
+      () => params.id,
+      (id, prevId) => {
+        if (id) {
+          if (!prevId) creation.adoptDraftInto(id)
+          creation.setScope(id)
+        } else {
+          creation.resetScope(DRAFT_SCOPE)
+          creation.setScope(DRAFT_SCOPE)
+        }
+      },
+    ),
+  )
 
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const isChildSession = createMemo(() => !!info()?.parentID)
@@ -1719,6 +1748,10 @@ export default function Page() {
   return (
     <div class="relative size-full overflow-hidden flex flex-col">
       {sessionSync() ?? ""}
+      {/* FORK: 选区菜单 Host 提到 Session 顶层(原在 MessageTimeline,被 messagesReady Show 门控)
+          确保 user 看 PDF/office 无 chat 会话时也能用右键菜单 + 拖拽 overlay
+          [feat: office-选中加聊天] 2026-05-25 */}
+      <ChatSelectionMenu />
       <SessionHeader />
       <div
         // FORK: REQ-041 五栏 — 经典布局下文件树/审查面板锚左(rail 右侧)、聊天居中,对齐 DeskFox Image#2;
