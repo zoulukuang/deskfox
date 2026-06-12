@@ -33,9 +33,10 @@ Tauri `tauri-plugin-updater` 2.9.0 macOS `install_inner` 解压时对每个 entr
       重打包后 3532 entry 全解压成功(已验,见 3-changelog)。
 - [x] `build-deskfox.sh` 2.6 段加 `COPYFILE_DISABLE=1` + python3 防回归断言(检测到任何 `._` 成员即删毒产物 + 报错)。
 - [x] 客户端不再吞 check/download/install 错误,失败时弹 toast 展示真实原因(三个调用站点)。
-- [ ] 线上 2026.7.1 updater 包重新打洁净 tarball + 重签 + 重部署(production,需 user 授权,见 2-plan)。
-- [ ] 真机端到端:2026.7.0 点升级 → 成功安装 + 重启进 2026.7.1。
+- [x] 线上 2026.7.1 updater 包重新打洁净 tarball + 重签 + 重部署(2026-06-12 完成;staple 现有公证票免重审;
+      踩 CDN 同名缓存陷阱 → 改名 cache-bust `-fix1-`;端到端 sha256/0-AppleDouble/Rust 解压三验,见 3-changelog)。
+- [x] 真机端到端:2026.7.0 点升级 → 成功安装 + 重启进 2026.7.1(user 真机验收通过,TC-3 首次跑通)。
 
 ## 范围/分级
 
-Small。1 build 脚本 + 3 前端文件(全 fork 自有 / FORK marker),不改上游。production 重部署单列待授权。
+Small。1 build 脚本 + 3 前端文件(全 fork 自有 / FORK marker),不改上游。线上洁净包重发已完成(免苹果重审)。
