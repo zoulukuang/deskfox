@@ -213,7 +213,11 @@ function createSidecarEnv(): Record<string, string> {
   )
   delete env.DEBUG
   if (process.platform === "linux") delete env.LD_PRELOAD
-  if (!app.isPackaged) env.OPENCODE_DISABLE_CHANNEL_DB = "1"
+  // FORK: DeskFox 全渠道统一 opencode.db(不分 opencode-dev/beta.db)— 对齐 Tauri 版行为
+  //   (build 时烤 OPENCODE_CHANNEL=prod,401-fix),保证打包后 dev/beta 渠道升级时老用户
+  //   会话/DB 不"消失"。上游原生读此 env,薄 FORK。原逻辑仅 !isPackaged 时设,DeskFox 改为恒设。
+  //   [feat: electron-replatform] 2026-06-12 — 升级无感关键(见 OPENCODE-PLAN 复审实锤)
+  env.OPENCODE_DISABLE_CHANNEL_DB = "1"
   return env
 }
 
