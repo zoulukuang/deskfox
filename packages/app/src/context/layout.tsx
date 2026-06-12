@@ -16,6 +16,8 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
+// FORK: project-avatar-save [feat: project-avatar-save] 2026-06-12
+import { resolveLocalIconOverride } from "./project-icon-override"
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 const DEFAULT_SIDEBAR_WIDTH = 344
@@ -398,8 +400,12 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       // Without this, different subdirectories of the same git repo would share the same
       // icon from the database instead of using their individual overrides.
       const base = { ...metadata, ...project }
-      if (childStore.icon) {
-        return { ...base, icon: { ...base.icon, override: childStore.icon } }
+      // FORK: project-avatar-save — 除 childStore.icon 外也读 childStore.projectMeta.icon.override。
+      // 编辑对话框对无 id / global 项目走 globalSync.project.meta,override 只写进 projectMeta,
+      // 旧 enrich 不读它 → 上传头像永久不显示。见 ./project-icon-override.ts [feat: project-avatar-save]
+      const override = resolveLocalIconOverride(childStore.icon, childStore.projectMeta)
+      if (override) {
+        return { ...base, icon: { ...base.icon, override } }
       }
       return base
     }
