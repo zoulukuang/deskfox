@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { attachmentMime, pickAttachmentFiles } from "./files"
+import { attachmentMime } from "./files"
 import { pasteMode } from "./paste"
+import { parseMultiPathDropPaths } from "./multi-path-drop"
 
 describe("attachmentMime", () => {
   test("keeps PDFs when the browser reports the mime", async () => {
@@ -24,67 +25,59 @@ describe("attachmentMime", () => {
   })
 })
 
-describe("pickAttachmentFiles", () => {
-  test("reads the current project directory for every native picker invocation", async () => {
-    const paths: string[] = []
-    const files: File[] = []
-    const file = new File(["hello"], "hello.txt", { type: "text/plain" })
-    let directory = "C:\\Projects\\LoremIpsum"
-    const picker = async (options?: { defaultPath?: string }, onFile?: (file: File) => Promise<unknown>) => {
-      paths.push(options?.defaultPath ?? "")
-      await onFile?.(file)
-    }
+// FORK: 多选拖动从 file-tree 到聊天 — 测试 abs path JSON → rel path 转换 [feat: file-tree-multi-drag-to-chat] 2026-05-15
+describe("parseMultiPathDropPaths", () => {
+  const root = "D:/project/notes"
 
-    pickAttachmentFiles({
-      picker,
-      directory: () => directory,
-      fallback: () => undefined,
-      onFile: async (selected) => files.push(selected),
-      onError: () => undefined,
-    })
-    await Promise.resolve()
-    directory = "C:\\Projects\\DolorSit"
-    pickAttachmentFiles({
-      picker,
-      directory: () => directory,
-      fallback: () => undefined,
-      onFile: async (selected) => files.push(selected),
-      onError: () => undefined,
-    })
-    await Promise.resolve()
-    expect(files).toEqual([file, file])
-    expect(paths).toEqual(["C:\\Projects\\LoremIpsum", "C:\\Projects\\DolorSit"])
+  test("empty / null / undefined input → []", () => {
+    expect(parseMultiPathDropPaths(null, root)).toEqual([])
+    expect(parseMultiPathDropPaths(undefined, root)).toEqual([])
+    expect(parseMultiPathDropPaths("", root)).toEqual([])
   })
 
-  test("uses the browser file input when no native picker exists", async () => {
-    let fallback = 0
-    pickAttachmentFiles({
-      directory: () => "/projects/consectetur-adipiscing",
-      fallback: () => {
-        fallback += 1
-      },
-      onFile: async () => undefined,
-      onError: () => undefined,
-    })
-    expect(fallback).toBe(1)
+  test("invalid JSON → []", () => {
+    expect(parseMultiPathDropPaths("not json", root)).toEqual([])
+    expect(parseMultiPathDropPaths("{broken", root)).toEqual([])
   })
 
-  test("reports native picker failures without rejecting", async () => {
-    const error = new Error("picker unavailable")
-    const errors: unknown[] = []
-    const handled = Promise.withResolvers<void>()
-    pickAttachmentFiles({
-      picker: async () => Promise.reject(error),
-      directory: () => "C:\\Projects\\LoremIpsum",
-      fallback: () => undefined,
-      onFile: async () => undefined,
-      onError: (cause) => {
-        errors.push(cause)
-        handled.resolve()
-      },
-    })
-    await handled.promise
-    expect(errors).toEqual([error])
+  test("non-array JSON → []", () => {
+    expect(parseMultiPathDropPaths('{"a":1}', root)).toEqual([])
+    expect(parseMultiPathDropPaths('"single string"', root)).toEqual([])
+  })
+
+  test("converts abs paths under root to relative (forward slash)", () => {
+    const json = JSON.stringify(["D:/project/notes/a.md", "D:/project/notes/sub/b.md"])
+    expect(parseMultiPathDropPaths(json, root)).toEqual(["a.md", "sub/b.md"])
+  })
+
+  test("normalizes Windows backslash in abs paths", () => {
+    const json = JSON.stringify(["D:\\project\\notes\\a.md", "D:\\project\\notes\\sub\\b.md"])
+    expect(parseMultiPathDropPaths(json, root)).toEqual(["a.md", "sub/b.md"])
+  })
+
+  test("handles root with trailing slash", () => {
+    const json = JSON.stringify(["D:/project/notes/a.md"])
+    expect(parseMultiPathDropPaths(json, "D:/project/notes/")).toEqual(["a.md"])
+  })
+
+  test("abs path not under root → fallback original path (forward slash normalized)", () => {
+    const json = JSON.stringify(["E:/elsewhere/x.md", "D:\\other\\y.md"])
+    expect(parseMultiPathDropPaths(json, root)).toEqual(["E:/elsewhere/x.md", "D:/other/y.md"])
+  })
+
+  test("missing root → returns all paths normalized to forward slash", () => {
+    const json = JSON.stringify(["D:\\project\\notes\\a.md"])
+    expect(parseMultiPathDropPaths(json, undefined)).toEqual(["D:/project/notes/a.md"])
+  })
+
+  test("non-string entries filtered out", () => {
+    const json = JSON.stringify(["D:/project/notes/a.md", null, 42, "", "D:/project/notes/b.md"])
+    expect(parseMultiPathDropPaths(json, root)).toEqual(["a.md", "b.md"])
+  })
+
+  test("abs path equal to root → empty string (project root)", () => {
+    const json = JSON.stringify(["D:/project/notes"])
+    expect(parseMultiPathDropPaths(json, root)).toEqual([""])
   })
 })
 

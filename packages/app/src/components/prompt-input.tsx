@@ -18,6 +18,8 @@ import {
 } from "solid-js"
 import { Popover as KobaltePopover } from "@kobalte/core/popover"
 import { createStore } from "solid-js/store"
+// FORK: 聊天输入框焦点跟随 helper [feat: chat-input-focus-follow] 2026-05-21
+import { registerChatInputRef, unregisterChatInputRef } from "@/utils/chat-input-focus"
 import { useLocal } from "@/context/local"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import {
@@ -1572,7 +1574,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   const target = e.target
                   if (!(target instanceof HTMLElement)) return
                   if (target.closest('[data-action^="prompt-"]')) return
-                  editorRef?.focus()
+                  // FORK: preventScroll — focus() 默认 scrollIntoView 会把长内容拽回顶部,cursor 视觉"消失" 2026-05-29
+                  editorRef?.focus({ preventScroll: true })
                 }}
               >
                 <div class="relative max-h-[180px] overflow-y-auto no-scrollbar" ref={(el) => (scrollRef = el)}>
@@ -1581,6 +1584,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     ref={(el) => {
                       editorRef = el
                       props.ref?.(el)
+                      // FORK: 注册全局 chat-input-focus,外部"加到聊天"入口能 focus 回来 [feat: chat-input-focus-follow] 2026-05-21
+                      registerChatInputRef(el)
+                      onCleanup(() => unregisterChatInputRef(el))
                     }}
                     role="textbox"
                     aria-multiline="true"
@@ -1747,7 +1753,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 if (target.closest('[data-action="prompt-attach"], [data-action="prompt-submit"]')) {
                   return
                 }
-                editorRef?.focus()
+                // FORK: preventScroll — focus() 默认 scrollIntoView 会把长内容拽回顶部,cursor 视觉"消失" 2026-05-29
+                editorRef?.focus({ preventScroll: true })
               }}
             >
               <div
@@ -1760,6 +1767,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   ref={(el) => {
                     editorRef = el
                     props.ref?.(el)
+                    // FORK: 注册全局 chat-input-focus,外部"加到聊天"入口能 focus 回来 [feat: chat-input-focus-follow] 2026-05-21
+                    registerChatInputRef(el)
+                    onCleanup(() => unregisterChatInputRef(el))
                   }}
                   role="textbox"
                   aria-multiline="true"
