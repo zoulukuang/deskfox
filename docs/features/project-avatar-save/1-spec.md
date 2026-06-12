@@ -1,5 +1,5 @@
 feat-id: project-avatar-save
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # project-avatar-save — spec
@@ -32,8 +32,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] childStore.icon 优先于 projectMeta(unit)
 - [x] 两源皆空 → undefined(unit)
 - [x] projectMeta undefined / 无 icon 不抛错(unit)
-- [ ] 真机:上传→保存→侧边栏更新(native QA,待 user)
-- [ ] 真机:重开 + 重启持久化(native QA,待 user)
+- [x] 真机:上传→保存→侧边栏更新(2026-06-12 user 实测生效)
+- [x] 真机:重开 + 重启持久化(2026-06-12 user 实测)
 
 ## 架构选型(R1)
 
