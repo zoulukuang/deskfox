@@ -35,6 +35,11 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
     },
   },
+  // FORK: DeskFox 本地资源协议(文件查看器图片/音视频/HTML 预览)[feat: electron-replatform]
+  {
+    scheme: "localasset",
+    privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true, bypassCSP: true, corsEnabled: true },
+  },
 ])
 
 let backgroundColor: string | undefined

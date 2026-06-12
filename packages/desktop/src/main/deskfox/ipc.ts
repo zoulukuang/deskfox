@@ -7,8 +7,12 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron"
 import * as fileOps from "./file-ops"
 import * as preventSleep from "./prevent-sleep"
+import { registerLocalAssetProtocol } from "./local-asset"
 
 export function registerDeskfoxIpc() {
+  // 本地资源协议(localasset://)— app.whenReady 后注册 [feat: electron-replatform]
+  registerLocalAssetProtocol()
+
   const h = (cmd: string, fn: (args: any) => unknown) =>
     ipcMain.handle(`deskfox:${cmd}`, (_e: IpcMainInvokeEvent, args: unknown) => fn((args ?? {}) as any))
 
