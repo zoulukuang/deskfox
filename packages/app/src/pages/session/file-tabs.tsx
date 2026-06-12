@@ -670,7 +670,8 @@ export function FileTabContent(props: {
     selection: SelectedLineRange
     comment: string
     preview?: string
-    origin?: "review" | "file" | "quote"
+    // FORK-TODO[electron-replatform]: "quote" origin 暂去掉(quote 特性随 deferred prompt-input 一起延后,上游 commentOrigin 仅 review|file)
+    origin?: "review" | "file"
   }) => {
     const selection = selectionFromLines(input.selection)
     const preview = input.preview ?? buildPreview(input.file, selection)
@@ -1500,20 +1501,22 @@ export function FileTabContent(props: {
             })
           },
           officeTooling: {
+            // FORK-TODO[electron-replatform]: SDK regen 待办 — office 路由已在后端 HttpApi(/office-tooling/*),
+            // 重生成 SDK 后 sdk.client.office.tooling.* 即有类型;暂 cast 解锁 typecheck(runtime 路由真实存在)
             getStatus: async () =>
-              sdk.client.office.tooling
+              (sdk.client as any).office.tooling
                 .status()
-                .then((x) => x.data as any)
+                .then((x: any) => x.data as any)
                 .catch(() => undefined),
             startInstall: async () =>
-              sdk.client.office.tooling
+              (sdk.client as any).office.tooling
                 .install()
-                .then((x) => x.data as any)
+                .then((x: any) => x.data as any)
                 .catch(() => undefined),
             getProgress: async () =>
-              sdk.client.office.tooling
+              (sdk.client as any).office.tooling
                 .progress()
-                .then((x) => x.data as any)
+                .then((x: any) => x.data as any)
                 .catch(() => undefined),
           },
           onRetryFile: () => {
@@ -1538,7 +1541,8 @@ export function FileTabContent(props: {
             const cached = officePdfCacheGet(cacheKey)
             if (cached) return cached
             try {
-              const res = await sdk.client.file.officePdf(
+              // FORK-TODO[electron-replatform]: SDK regen 待办 — /file/office-pdf 路由已在后端,regen 后 file.officePdf 有类型
+              const res = await (sdk.client.file as any).officePdf(
                 { path: filePath },
                 { parseAs: "arrayBuffer" } as any,
               )
