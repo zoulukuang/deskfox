@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
+import type { Message, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { createStore, reconcile, type SetStoreFunction } from "solid-js/store"
 import type { State } from "./types"
-import { applyReconciledSessionStatus, reconcileSessionStatus } from "./session-status-reconcile"
+import {
+  applyReconciledSessionStatus,
+  healClearedSessionOrphans,
+  reconcileSessionStatus,
+  trailingOrphanIndex,
+} from "./session-status-reconcile"
 
 const busy = { type: "busy" } as SessionStatus
 const idle = { type: "idle" } as SessionStatus
@@ -83,5 +88,54 @@ describe("session_status store reconciliation (root-cause guard)", () => {
     // 健康场景:后端仍上报 ses_live busy → 保留,不误清
     applyReconciledSessionStatus(store as Pick<State, "session_status">, write, { ses_live: busy })
     expect(store.session_status.ses_live).toEqual(busy as never)
+  })
+})
+
+const userMsg = (created: number) => ({ role: "user", time: { created } }) as Message
+const asstOrphan = (created: number) => ({ role: "assistant", time: { created } }) as Message
+const asstDone = (created: number, completed: number) => ({ role: "assistant", time: { created, completed } }) as Message
+const completedOf = (m: Message | undefined) => (m?.time as { completed?: number } | undefined)?.completed
+
+describe("trailingOrphanIndex", () => {
+  test("末条是未完成 assistant → 返回其下标", () => {
+    expect(trailingOrphanIndex([userMsg(1), asstOrphan(2)])).toBe(1)
+  })
+  test("末条 assistant 已完成 → -1", () => {
+    expect(trailingOrphanIndex([userMsg(1), asstDone(2, 3)])).toBe(-1)
+  })
+  test("末条是 user → -1(不误判)", () => {
+    expect(trailingOrphanIndex([asstOrphan(1), userMsg(2)])).toBe(-1)
+  })
+  test("空/undefined → -1", () => {
+    expect(trailingOrphanIndex([])).toBe(-1)
+    expect(trailingOrphanIndex(undefined)).toBe(-1)
+  })
+})
+
+describe("healClearedSessionOrphans (侧边栏残骸补盖)", () => {
+  // 复现 2026-06-12 真机测出的第二层:sidecar 杀掉后末条 assistant 残骸 completed=NULL,
+  // 侧边栏永久转圈。对账清掉 busy 的会话,要把末条残骸补盖 completed=created。
+  test("被清会话的末条 assistant 残骸补盖 completed=created", () => {
+    const [store, setStore] = createStore<{ message: Record<string, Message[]> }>({
+      message: { ses_stuck: [userMsg(100), asstOrphan(200)] },
+    })
+    const write = setStore as unknown as SetStoreFunction<State>
+
+    const healed = healClearedSessionOrphans(store as Pick<State, "message">, write, ["ses_stuck"])
+    expect(healed).toEqual(["ses_stuck"])
+    expect(completedOf(store.message.ses_stuck[1])).toBe(200) // = created,不伪造时长
+  })
+
+  test("已完成的末条不动 + 未被清的会话不动", () => {
+    const [store, setStore] = createStore<{ message: Record<string, Message[]> }>({
+      message: { ses_done: [userMsg(1), asstDone(2, 3)], ses_other: [userMsg(1), asstOrphan(2)] },
+    })
+    const write = setStore as unknown as SetStoreFunction<State>
+
+    // 只清 ses_done(它末条已完成,无残骸);ses_other 不在 cleared 列表里不该动
+    const healed = healClearedSessionOrphans(store as Pick<State, "message">, write, ["ses_done"])
+    expect(healed).toEqual([])
+    expect(completedOf(store.message.ses_done[1])).toBe(3)
+    expect(completedOf(store.message.ses_other[1])).toBeUndefined()
   })
 })

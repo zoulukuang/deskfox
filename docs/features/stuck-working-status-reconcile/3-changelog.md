@@ -33,10 +33,14 @@ related: ./3-changelog.md
 
 ## 回归测试
 
-- 新增 `session-status-reconcile.test.ts` 7 pass(含复现 + 根因守门)
-- `bun test src/context/global-sync/` 40 pass / 0 fail
-- `packages/app` 全量 `bun test` 845 pass / 0 fail
+- `session-status-reconcile.test.ts` 13 pass(reconcile 复现/根因守门 + `trailingOrphanIndex` + `healClearedSessionOrphans`)
+- `bun test src/context/global-sync/` 46 pass / 0 fail
 - `bun run typecheck` 16/16
+
+## 真机验证(2026-06-12,dev 测试包 pkill sidecar A/B)
+
+- **主路径(崩溃→重连)双层自愈通过**:发消息→「思考中」→ `pkill -9 -f opencode-cli` → 看门狗重启 sidecar + 重连 → ① 主视图「思考中」+停止按钮消失(session_status 对账)② 侧边栏该会话转圈停止(末条残骸前端补盖)。自截图 + DB 双重确认。
+- **已知残留(本次暴露,未在本 feat 内根治)**:① 前端补盖只改 store 不落 DB ② 仅对"本次崩溃被清"的会话生效 → **重启后 reopen 老会话 / 装包前已有的残骸会话** 侧边栏仍转圈。**根因实证**:2026-06-06 后端 `heal-interrupted` 只挂「无 limit 全量 message GET」分支(`session.ts:116`),桌面前端加载消息一律带 `limit` 分页(`session-prefetch.ts`)→ 该 heal 对桌面端从不触发 = 死代码,残骸 `completed=NULL` 永不落盘。**注**:不能靠改 `deriveSessionWorking` 去 pending —— 其用例 7 故意把「末条残骸+无 status」判转圈以覆盖直播流式刚开始窗口,(messages,status) 区分不了"直播中/崩溃遗弃"。永久根治需让 heal 在前端实际分页 GET 路径触发并落 DB(动 `packages/opencode/` = R4 + sidecar rebuild),或前端消息加载完成钩子按 idle 补 store。待 user 定夺。
 
 ## 回退方法
 

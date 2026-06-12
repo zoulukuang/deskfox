@@ -11,7 +11,7 @@
 // 由调用方用 reconcile(next, { merge: false }) 完成 —— 裸 setStore 是 merge,清不掉残留。
 // 详见 docs/features/stuck-working-status-reconcile/
 
-import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
+import type { Message, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { reconcile, type SetStoreFunction } from "solid-js/store"
 import type { State } from "./types"
 
@@ -46,4 +46,44 @@ export function applyReconciledSessionStatus(
   if (cleared.length) console.warn("[session-status] cleared stale busy after reconcile", cleared)
   setStore("session_status", reconcile(next, { merge: false }))
   return cleared
+}
+
+/**
+ * 纯函数:一组消息里,末条是否是「未完成的 assistant 残骸」。是则返回其下标,否则 -1。
+ * 与侧边栏 deriveSessionWorking 的 pending 判定同口径(只看末条),可单测。
+ */
+export function trailingOrphanIndex(messages: ReadonlyArray<Message> | undefined): number {
+  if (!messages?.length) return -1
+  const i = messages.length - 1
+  const last = messages[i]
+  if (last?.role !== "assistant") return -1
+  if (typeof last.time?.completed === "number") return -1
+  return i
+}
+
+/**
+ * session_status 对账清掉某会话 stale busy = 后端已确认它 idle。但 sidecar 崩溃/重启时,
+ * 它正在生成的末条 assistant 消息没盖 `time.completed` → 残骸,侧边栏 deriveSessionWorking
+ * 仍判 pending 永久转圈(2026-06-06 的后端 heal-interrupted 挂在「消息 GET 时补盖」,重连
+ * 后前端不重新 GET 已打开会话的消息,故不触发)。这里镜像它:对被清的会话,把末条残骸在前端
+ * store 补盖 `completed=created`(保留原始时序,不伪造时长)。只对「后端已 idle」的会话做,
+ * 绝不误伤健康直播流(那种 status 仍 busy、不会进 cleared)。返回实际补盖的会话 id。
+ */
+export function healClearedSessionOrphans(
+  store: Pick<State, "message">,
+  setStore: SetStoreFunction<State>,
+  clearedSessionIDs: ReadonlyArray<string>,
+): string[] {
+  const healed: string[] = []
+  for (const sid of clearedSessionIDs) {
+    const messages = store.message[sid]
+    const idx = trailingOrphanIndex(messages)
+    if (idx < 0) continue
+    const created = messages![idx].time?.created
+    const completed = typeof created === "number" ? created : Date.now()
+    setStore("message", sid, idx, "time", "completed" as never, completed as never)
+    healed.push(sid)
+  }
+  if (healed.length) console.warn("[session-status] healed trailing orphan messages after reconcile", healed)
+  return healed
 }
