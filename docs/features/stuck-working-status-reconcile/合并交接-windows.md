@@ -22,11 +22,11 @@ related: ./3-changelog.md
 
 > 上游 `dev` 里对应行:`bootstrap.ts` 的 session_status 同步(裸 setStore)+ `session.tsx` 的 `const halt`(`.catch(()=>{})`)——**两处 bug 原样还在**,所以合并很可能把我们的改动覆盖回 bug 版,务必核对。
 
-## 注入点 1:bootstrap.ts —— session.status() 对账
+## 注入点 1:bootstrap.ts —— session.status() 对账(只 1 行)
 
 **顶部加 import:**
 ```ts
-import { reconcileSessionStatus } from "./session-status-reconcile"
+import { applyReconciledSessionStatus } from "./session-status-reconcile"
 ```
 
 **上游 bug 版(合并后若看到这行 = 被覆盖了,要改回去):**
@@ -34,21 +34,13 @@ import { reconcileSessionStatus } from "./session-status-reconcile"
 () => retry(() => input.sdk.session.status().then((x) => input.setStore("session_status", x.data!))),
 ```
 
-**应保留成我们的版本:**
+**应保留成我们的版本(reconcile 逻辑全在 fork-only helper 里,这里只 1 行调用):**
 ```ts
-      () =>
-        retry(() =>
-          input.sdk.session.status().then((x) => {
-            // FORK: 用 reconcile 整体替换清掉残留 busy。后端 session.status() 只上报非 idle 会话,
-            // 裸 setStore 是 merge → 进程死/事件丢/sidecar 重启后残留的 busy 永远刷不掉 → 主视图
-            // 永久「思考中」卡死。改对账后,重连/重 bootstrap 能自愈。[feat: stuck-working-status-reconcile]
-            const { next, cleared } = reconcileSessionStatus(input.store.session_status, x.data)
-            if (cleared.length) console.warn("[session-status] cleared stale busy after reconcile", cleared)
-            input.setStore("session_status", reconcile(next, { merge: false }))
-          }),
-        ),
+      // FORK: 对账改用 applyReconciledSessionStatus(reconcile 整体替换)清掉进程死/事件丢/sidecar
+      // 重启后残留的 busy;裸 setStore 是 merge 清不掉 → 主视图永久「思考中」卡死。[feat: stuck-working-status-reconcile]
+      () => retry(() => input.sdk.session.status().then((x) => applyReconciledSessionStatus(input.store, input.setStore, x.data))),
 ```
-> `reconcile` 上游本就 import 了(同文件 config 同步在用),无需新加。
+> 把判定 + reconcile 写回都收进 `session-status-reconcile.ts`(fork-only),上游注入面只剩 1 行,合并冲突面最小。
 
 ## 注入点 2:session.tsx —— 停止按钮 halt 不再吞错
 

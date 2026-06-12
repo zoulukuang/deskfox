@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
-import { createStore, reconcile } from "solid-js/store"
-import { reconcileSessionStatus } from "./session-status-reconcile"
+import { createStore, reconcile, type SetStoreFunction } from "solid-js/store"
+import type { State } from "./types"
+import { applyReconciledSessionStatus, reconcileSessionStatus } from "./session-status-reconcile"
 
 const busy = { type: "busy" } as SessionStatus
 const idle = { type: "idle" } as SessionStatus
@@ -64,5 +65,23 @@ describe("session_status store reconciliation (root-cause guard)", () => {
     const { next } = reconcileSessionStatus(store.session_status, {})
     setStore("session_status", reconcile(next, { merge: false }))
     expect(store.session_status.ses_stuck).toBeUndefined()
+  })
+
+  // 端到端守门:跑 bootstrap 对账实际调用的那个函数(applyReconciledSessionStatus),
+  // 模拟 sidecar 重启后 session.status() 返回空 → 残留 busy 必须被清、活跃 busy 必须保留。
+  test("applyReconciledSessionStatus clears stale busy on a real store (bootstrap path)", () => {
+    const [store, setStore] = createStore<{ session_status: Record<string, SessionStatus> }>({
+      session_status: { ses_stuck: busy, ses_idle_noise: idle },
+    })
+    const write = setStore as unknown as SetStoreFunction<State>
+
+    // sidecar 重启:后端权威结果为空(它已不知道任何 session busy)
+    const cleared = applyReconciledSessionStatus(store as Pick<State, "session_status">, write, {})
+    expect(store.session_status.ses_stuck).toBeUndefined()
+    expect(cleared).toEqual(["ses_stuck"])
+
+    // 健康场景:后端仍上报 ses_live busy → 保留,不误清
+    applyReconciledSessionStatus(store as Pick<State, "session_status">, write, { ses_live: busy })
+    expect(store.session_status.ses_live).toEqual(busy as never)
   })
 })

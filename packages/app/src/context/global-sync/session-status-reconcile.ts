@@ -12,6 +12,8 @@
 // 详见 docs/features/stuck-working-status-reconcile/
 
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
+import { reconcile, type SetStoreFunction } from "solid-js/store"
+import type { State } from "./types"
 
 export function reconcileSessionStatus(
   current: Record<string, SessionStatus | undefined>,
@@ -28,4 +30,20 @@ export function reconcileSessionStatus(
     if (!next[id]) cleared.push(id)
   }
   return { next, cleared }
+}
+
+/**
+ * 把后端 session.status() 的权威结果写回前端 store:用 reconcile 整体替换(merge:false),
+ * 清掉后端不再上报的残留 busy —— 裸 setStore 是 merge,清不掉残留 key 是卡死根因。
+ * 返回被清掉的残留 busy id(供日志/测试)。bootstrap 对账只此一行,逻辑全在这里可单测。
+ */
+export function applyReconciledSessionStatus(
+  store: Pick<State, "session_status">,
+  setStore: SetStoreFunction<State>,
+  data: Record<string, SessionStatus | undefined> | null | undefined,
+): string[] {
+  const { next, cleared } = reconcileSessionStatus(store.session_status, data)
+  if (cleared.length) console.warn("[session-status] cleared stale busy after reconcile", cleared)
+  setStore("session_status", reconcile(next, { merge: false }))
+  return cleared
 }

@@ -20,9 +20,9 @@ related: ./3-changelog.md
 
 | 文件 | 变更 | 说明 |
 |---|---|---|
-| `packages/app/src/context/global-sync/session-status-reconcile.ts` | 新增(FORK-ONLY,~30 行) | 纯函数 `reconcileSessionStatus(current, authoritative)`:算出权威表 + 列出被清掉的残留 busy(Logic 清单可单测) |
-| `packages/app/src/context/global-sync/session-status-reconcile.test.ts` | 新增 | 6 用例:残留 busy 清除(复现) / 后端 busy 保留 / idle 过滤 / null 容错 + 真实 solid store 证明「裸 merge 清不掉、reconcile 才清」(根因守门) |
-| `packages/app/src/context/global-sync/bootstrap.ts` | 改 1 处(+FORK marker) | `session.status()` 对账改用 `reconcileSessionStatus` + `reconcile(next, { merge: false })` 整体替换,清残留 busy;有清除时 `console.warn` 留痕 |
+| `packages/app/src/context/global-sync/session-status-reconcile.ts` | 新增(FORK-ONLY,~50 行) | `reconcileSessionStatus`(纯函数:算权威表 + 列残留)+ `applyReconciledSessionStatus`(写回 store:reconcile 整体替换 + console.warn 留痕);判定与写回全收进 fork-only,bootstrap 注入只 1 行 |
+| `packages/app/src/context/global-sync/session-status-reconcile.test.ts` | 新增 | 7 用例:残留 busy 清除(复现) / 后端 busy 保留 / idle 过滤 / null 容错 + 真实 solid store 证明「裸 merge 清不掉、reconcile 才清」+ **端到端跑 bootstrap 实际调用的 `applyReconciledSessionStatus`**(根因守门) |
+| `packages/app/src/context/global-sync/bootstrap.ts` | 改 1 行(+FORK marker) | `session.status()` 对账改用 `applyReconciledSessionStatus(input.store, input.setStore, x.data)`,清残留 busy |
 | `packages/app/src/pages/session.tsx` | 改 `halt`(+FORK marker) | abort 失败不再静默吞错,弹真实 toast;残留 busy 交对账自愈 |
 
 ## 自愈触发点
@@ -33,8 +33,8 @@ related: ./3-changelog.md
 
 ## 回归测试
 
-- 新增 `session-status-reconcile.test.ts` 6 pass(含复现 + 根因守门)
-- `bun test src/context/global-sync/` 39 pass / 0 fail
+- 新增 `session-status-reconcile.test.ts` 7 pass(含复现 + 根因守门)
+- `bun test src/context/global-sync/` 40 pass / 0 fail
 - `packages/app` 全量 `bun test` 845 pass / 0 fail
 - `bun run typecheck` 16/16
 
