@@ -2411,7 +2411,12 @@ export default function Layout(props: ParentProps) {
                 }}
                 style={{ width: layout.sidebar.opened() ? `${panel()}px` : "0px" }}
               >
-                <div class="@container h-full contain-strict" style={{ width: `${panel()}px` }}>
+                {/* FORK: 会话面板左缘分界线 — 镜像后会话面板锚最右,与聊天间需竖直分界(原 main border-l
+                    随镜像移到了左侧文件树缘,这里补回右侧)[feat: electron-replatform] 2026-06-12 */}
+                <div
+                  class="@container h-full contain-strict border-l border-border-weak-base"
+                  style={{ width: `${panel()}px` }}
+                >
                   <SidebarPanel project={currentProject} merged />
                 </div>
               </div>
