@@ -9,6 +9,12 @@
 ---
 
 
+
+## [macOS] 2026.7.1 - 2026-06-12 10:25
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows] 2026.7.1 - 2026-06-10 00:36
 
 **主题**:追赶式 prod 发布——首页品牌化定稿 + LibreOffice 打包健壮性(干净机器首启修复)+ 飞书编辑弹窗 UX + 文件预览 UX 三件套 + macOS 修复 + 冷启动 toast 静默 + dev 独立版本号工具链。小更新进"补"位(2026.7.0 → 2026.7.1)。
