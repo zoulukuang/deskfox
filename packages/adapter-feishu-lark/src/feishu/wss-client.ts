@@ -1,0 +1,281 @@
+// [fork-only] FeishuWSSClient — 飞书 WSS 长连接 + 事件订阅(C2.WSS)
+// [feat: feishu-bridge] 2026-05-08
+//
+// 用 @larksuiteoapi/node-sdk 的 WSClient + EventDispatcher 包装,接 im.message.receive_v1
+// 事件,经 dedup + chatQueue 串行处理,转给调用方注入的 onMessage handler。
+//
+// SDK autoReconnect 自带断线重连,我们不再手动 retry。
+// SDK domain 参数:`https://open.feishu.cn`(国内) / `https://open.larksuite.com`(国际)。
+
+import { homedir } from "node:os"
+import { join } from "node:path"
+import { EventDispatcher, WSClient } from "@larksuiteoapi/node-sdk"
+import type { FeishuAccount } from "../core/config-schema"
+import { readSecret } from "../core/secret-ref"
+import { ChatQueue } from "./chat-queue"
+import { DedupCache, makeDedupKey } from "./dedup"
+
+// SDK 接受 domain 字符串 — 飞书国内 / Lark 国际
+const FEISHU_OPEN_API_DOMAIN: Record<"feishu" | "lark", string> = {
+  feishu: "https://open.feishu.cn",
+  lark: "https://open.larksuite.com",
+}
+
+/** 标准化后的消息事件(adapter 内部用) */
+export interface ImMessageEvent {
+  accountId: string
+  /** 飞书 message_id(`om_xxx`) */
+  messageId: string
+  /** chat_id(`oc_xxx`,私聊也是),chatQueue 串行 key */
+  chatId: string
+  chatType: string
+  /** 消息类型:text / interactive / image / file / ... */
+  messageType: string
+  /** 消息内容(JSON 字符串,需根据 messageType 解析) */
+  content: string
+  /** 发送者 openId(私聊白名单 / 群级权限校验用) */
+  senderOpenId?: string
+  /** 飞书 create_time(ms timestamp string) */
+  ts: string
+  /** 群消息中 @ 列表(检测是否 @bot 触发) */
+  mentions: Array<{ key: string; name: string; openId?: string }>
+  // FORK-BEGIN: REQ-036 引用/回复原文 2026-06-02
+  /** 被引用/回复的原消息 ID(飞书引用回复时携带 parent_id)*/
+  parentId?: string
+  // FORK-END
+}
+
+export type OnMessageHandler = (event: ImMessageEvent) => Promise<void> | void
+
+/** 飞书 CardKit user 点击交互卡片按钮时触发的事件子集 */
+export interface CardActionEvent {
+  /** 触发的 user open_id */
+  openId?: string
+  /** 卡片 message_id */
+  cardMessageId?: string
+  /** action.value 原始 payload(由具体卡片业务自己 decode)*/
+  actionValue: unknown
+  /** 触发的 button tag */
+  actionTag?: string
+}
+
+export type OnCardActionHandler = (event: CardActionEvent) => Promise<void> | void
+
+export interface WssClientOptions {
+  account: FeishuAccount
+  accountId: string
+  onMessage: OnMessageHandler
+  /** 飞书交互卡片按钮触发(本期用于 permission 卡片;不传则跳过 card.action.trigger 订阅 )*/
+  onCardAction?: OnCardActionHandler
+}
+
+export class FeishuWSSClient {
+  private readonly wsClient: WSClient
+  private readonly dispatcher: EventDispatcher
+  private readonly chatQueue = new ChatQueue()
+  /** 第一层:同 messageId+ts 12h dedup(防 WSS 重连重放,飞书 message_id 同 = 真正重复)
+   *  **持久化到磁盘** — sidecar 重启后能识别之前 mark 的 message_id,防飞书 WSS 重连
+   *  server 重推老 message 时 in-memory cache 失忆把老 message 当新的(2026-05-12 实测撞过) */
+  private readonly dedup = new DedupCache({
+    persistPath: join(homedir(), ".opencode", "feishu-wss-dedup.json"),
+  })
+  /** 第二层:同 chatId+text 10s 短期 dedup(防飞书 IM 客户端连击/retry 发出**不同 message_id 但内容一致**
+   *  的 2 条消息 — 飞书后台分配新 id 第一层拦不住,但 user 实际是想发一次)
+   *  [feat: permission-card-ux-fixes] 2026-05-12 */
+  private readonly textDedup = new DedupCache({ ttlMs: 10_000, maxEntries: 200 })
+  private readonly opts: WssClientOptions
+  private started = false
+
+  constructor(opts: WssClientOptions) {
+    this.opts = opts
+    const account = opts.account
+    const appSecret = readSecret(account.appSecret)
+
+    this.wsClient = new WSClient({
+      appId: account.appId,
+      appSecret,
+      domain: FEISHU_OPEN_API_DOMAIN[account.domain],
+      autoReconnect: true,
+    })
+
+    this.dispatcher = new EventDispatcher({})
+    this.dispatcher.register({
+      "im.message.receive_v1": async (data) => {
+        const msg = data.message
+        const sender = data.sender
+        const event: ImMessageEvent = {
+          accountId: opts.accountId,
+          messageId: msg.message_id,
+          chatId: msg.chat_id,
+          chatType: msg.chat_type,
+          messageType: msg.message_type,
+          content: msg.content,
+          senderOpenId: sender?.sender_id?.open_id,
+          ts: msg.create_time,
+          mentions: (msg.mentions ?? []).map((m) => ({
+            key: m.key,
+            name: m.name,
+            openId: m.id?.open_id,
+          })),
+          // FORK: REQ-036 引用/回复原文 2026-06-02
+          parentId: typeof msg.parent_id === "string" && msg.parent_id ? msg.parent_id : undefined,
+        }
+
+        // dedup 第一层:同 messageId + ts(12h)— 防 WSS 重连重放
+        const dedupKey = makeDedupKey(event.messageId, event.ts)
+        if (this.dedup.hasAndMark(dedupKey)) {
+          console.log(`[wss ${opts.accountId}] dedup skip ${event.messageId}`)
+          return
+        }
+
+        // dedup 第二层:同 chatId + text(10s)— 防飞书 IM 客户端连击/retry 发出**不同 message_id 但内容一致**的多条 message
+        // 只对 text 消息有效(其它 messageType 如 image / file 不走 text dedup,messageId 已第一层覆盖)
+        const textKey = makeTextDedupKey(event.messageType, event.chatId, event.content)
+        if (textKey && this.textDedup.hasAndMark(textKey)) {
+          const txt = textKey.split("::").slice(1).join("::") // 取 :: 之后(还原 text)
+          console.log(
+            `[wss ${opts.accountId}] text-dedup skip ${event.messageId} (同 chat 10s 内重复发"${txt.slice(0, 40)}")`,
+          )
+          return
+        }
+
+        // chatQueue:同 chat 串行处理
+        await this.chatQueue.enqueue(event.chatId, async () => {
+          try {
+            await opts.onMessage(event)
+          } catch (err) {
+            console.error(`[wss ${opts.accountId}] onMessage error:`, err)
+          }
+        })
+      },
+    })
+
+    // 卡片按钮触发事件 — 仅当调用方注入了 onCardAction handler 才注册(本期 permission 卡片)。
+    if (opts.onCardAction) {
+      this.dispatcher.register({
+        "card.action.trigger": async (data: unknown) => {
+          // 飞书 InteractiveCardActionEvent 实际 payload 形状:
+          //   { action: {value, tag}, open_id, open_message_id, token, ... }
+          const evt = data as Record<string, unknown> | undefined
+          if (!evt) return
+          const action = evt.action as Record<string, unknown> | undefined
+          const cardEvent: CardActionEvent = {
+            openId: typeof evt.open_id === "string" ? evt.open_id : undefined,
+            cardMessageId: typeof evt.open_message_id === "string" ? evt.open_message_id : undefined,
+            actionValue: action?.value,
+            actionTag: typeof action?.tag === "string" ? (action.tag as string) : undefined,
+          }
+          try {
+            await opts.onCardAction!(cardEvent)
+          } catch (err) {
+            console.error(`[wss ${opts.accountId}] onCardAction error:`, err)
+          }
+          // CardActionHandler 路径要求返响应,WSS 路径 SDK 通常忽略返值;返空对象兜一下
+          return {}
+        },
+      })
+    }
+  }
+
+  /** 启动连接(SDK 自带 autoReconnect,start 一次即可) */
+  async start(): Promise<void> {
+    if (this.started) return
+    this.started = true
+    try {
+      await this.wsClient.start({ eventDispatcher: this.dispatcher })
+      console.log(
+        `[wss] connected: account=${this.opts.accountId} domain=${this.opts.account.domain}`,
+      )
+    } catch (err) {
+      this.started = false
+      throw err
+    }
+  }
+
+  get isStarted(): boolean {
+    return this.started
+  }
+
+  get accountId(): string {
+    return this.opts.accountId
+  }
+}
+
+// ============================================================
+// Manager — 按 accounts 列表起多个 WSSClient,saveAccount 后可 refresh
+// ============================================================
+
+export class WSSClientManager {
+  private readonly clients = new Map<string, FeishuWSSClient>()
+  private readonly onMessage: OnMessageHandler
+  /** 卡片交互事件 handler(可选,plugin 用于 permission 卡片路由)*/
+  private readonly onCardAction?: (accountId: string, event: CardActionEvent) => Promise<void> | void
+
+  constructor(
+    onMessage: OnMessageHandler,
+    onCardAction?: (accountId: string, event: CardActionEvent) => Promise<void> | void,
+  ) {
+    this.onMessage = onMessage
+    this.onCardAction = onCardAction
+  }
+
+  /** 同步当前 accounts 列表:新 account 起 WSS,失败 account silently 跳过 */
+  async sync(accounts: Array<{ accountId: string; account: FeishuAccount }>): Promise<void> {
+    for (const { accountId, account } of accounts) {
+      if (!account.enabled) continue
+      if (this.clients.has(accountId)) continue
+      const client = new FeishuWSSClient({
+        account,
+        accountId,
+        onMessage: this.onMessage,
+        onCardAction: this.onCardAction
+          ? (event) => this.onCardAction!(accountId, event)
+          : undefined,
+      })
+      try {
+        await client.start()
+        this.clients.set(accountId, client)
+      } catch (err) {
+        console.error(`[wss-manager] start failed ${accountId}:`, err)
+      }
+    }
+    // FUTURE:account.enabled=false 或 account 已删 → close & remove
+    // SDK 没暴露 stop,目前只在 process restart 时清理
+  }
+
+  get size(): number {
+    return this.clients.size
+  }
+
+  has(accountId: string): boolean {
+    return this.clients.has(accountId)
+  }
+}
+
+/**
+ * 给 wss-client 第二层 text dedup 算 dedup key。
+ *
+ * - 仅 messageType === "text" 才返 key,其它(image/file/sticker)返 null(不走 text dedup)
+ * - content 是 JSON 字符串 `{"text": "..."}`,失败 → null
+ * - trim 后空 string → null
+ * - key 格式:`<chatId>::<trimmedText>`(:: 是分隔符,chatId 跟 text 不应含 ::)
+ *
+ * export 给单测;wss-client handler 直接调。
+ * [feat: wss-text-dedup] 2026-05-12
+ */
+export function makeTextDedupKey(
+  messageType: string,
+  chatId: string,
+  content: string,
+): string | null {
+  if (messageType !== "text") return null
+  let txt = ""
+  try {
+    const parsed = JSON.parse(content) as { text?: string }
+    txt = (parsed.text ?? "").trim()
+  } catch {
+    return null
+  }
+  if (!txt) return null
+  return `${chatId}::${txt}`
+}
