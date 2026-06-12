@@ -87,19 +87,27 @@ export const Info = Schema.Struct({
         setCacheKey: Schema.optional(Schema.Boolean).annotate({
           description: "Enable promptCacheKey for this provider (default false)",
         }),
+        // FORK-BEGIN: 文档默认值与代码对齐 + chunkTimeout 默认 120s 可关 [feat: llm-stream-idle-timeout] 2026-06-11
+        // timeout 原描述声称 "Default is 300000 (5 minutes)" 但全代码库无处应用该默认 —— 修正为与实现一致(无默认)。
         timeout: Schema.optional(
           Schema.Union([PositiveInt, Schema.Literal(false)]).annotate({
             description:
-              "Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.",
+              "Total timeout in milliseconds for requests to this provider. No default is applied unless set. Set to false to disable.",
           }),
         ).annotate({
           description:
-            "Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.",
+            "Total timeout in milliseconds for requests to this provider. No default is applied unless set. Set to false to disable.",
         }),
-        chunkTimeout: Schema.optional(PositiveInt).annotate({
+        chunkTimeout: Schema.optional(
+          Schema.Union([PositiveInt, Schema.Literal(false)]).annotate({
+            description:
+              "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted. Defaults to 120000 (2 minutes). Set to false to disable.",
+          }),
+        ).annotate({
           description:
-            "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
+            "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted. Defaults to 120000 (2 minutes). Set to false to disable.",
         }),
+        // FORK-END
       }),
       [Schema.Record(Schema.String, Schema.Any)],
     ),
