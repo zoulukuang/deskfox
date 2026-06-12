@@ -1,10 +1,67 @@
 import { marked } from "marked"
 import markedKatex from "marked-katex-extension"
 import markedShiki from "marked-shiki"
+// FORK: GitHub 风 callout(> [!NOTE] ...)+ 脚注 ([^1])2026-05-05
+import markedAlert from "marked-alert"
+import markedFootnote from "marked-footnote"
 import katex from "katex"
 import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
 import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
+
+// FORK: 2026-05-08 — GFM 风 heading slug:小写 + 去标点 + 空格转连字符 + 保留中文
+// 与 GitHub 的 anchor 生成规则尽量对齐,让 markdown-test.md 的目录链接 [...](#1-标题层级) 能跳转
+function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}一-龥\s-]/gu, "") // 保 alphanumeric + 中文 + 空格 + 连字符
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+// FORK: 2026-05-08 — GFM emoji shortcode 表(常见 ~80 个)
+// 不在表内的 :xxx: 保持原文(避免误吞 CSS :hover/::before 类语法)
+const EMOJI_SHORTCODES: Record<string, string> = {
+  // 测试文档常用
+  rocket: "🚀", tada: "🎉", sparkles: "✨", white_check_mark: "✅",
+  warning: "⚠️", bug: "🐛", book: "📖", art: "🎨",
+  // 表情
+  smile: "😄", grin: "😁", joy: "😂", laughing: "😆", wink: "😉",
+  blush: "😊", heart_eyes: "😍", thinking: "🤔", cry: "😢", angry: "😠",
+  // 手势
+  thumbsup: "👍", "+1": "👍", thumbsdown: "👎", "-1": "👎",
+  ok_hand: "👌", clap: "👏", pray: "🙏", muscle: "💪", wave: "👋",
+  // 符号
+  heart: "❤️", broken_heart: "💔", star: "⭐", star2: "🌟",
+  fire: "🔥", boom: "💥", zap: "⚡", bulb: "💡",
+  // 标记 / 状态
+  x: "❌", o: "⭕", heavy_check_mark: "✔️", heavy_multiplication_x: "✖️",
+  question: "❓", exclamation: "❗", grey_question: "❔", grey_exclamation: "❕",
+  no_entry: "⛔", no_entry_sign: "🚫", recycle: "♻️",
+  // 物品
+  computer: "💻", phone: "📱", iphone: "📱", email: "📧", mailbox: "📫",
+  package: "📦", file_folder: "📁", open_file_folder: "📂", page_facing_up: "📄",
+  pencil: "📝", memo: "📝", paperclip: "📎", chart_with_upwards_trend: "📈",
+  chart_with_downwards_trend: "📉", bar_chart: "📊", date: "📅",
+  // 自然
+  sun: "☀️", cloud: "☁️", umbrella: "☂️", snowflake: "❄️",
+  rainbow: "🌈", ocean: "🌊", mountain: "⛰️",
+  // 动物
+  dog: "🐶", cat: "🐱", mouse: "🐭", panda_face: "🐼", lion: "🦁",
+  // 食物
+  coffee: "☕", tea: "🍵", beer: "🍺", pizza: "🍕", hamburger: "🍔",
+  apple: "🍎", lemon: "🍋", strawberry: "🍓", watermelon: "🍉",
+  // 交通
+  car: "🚗", taxi: "🚕", bus: "🚌", airplane: "✈️", ship: "🚢",
+  rocket_alt: "🚀",
+  // 时间
+  clock: "🕐", hourglass: "⌛", alarm_clock: "⏰",
+  // 杂项
+  gift: "🎁", trophy: "🏆", medal: "🏅", crown: "👑",
+  earth_americas: "🌎", earth_asia: "🌏", earth_africa: "🌍",
+}
 
 registerCustomTheme("OpenCode", () => {
   return Promise.resolve({
@@ -471,11 +528,72 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
     const jsParser = marked.use(
       {
         renderer: {
-          link({ href, title, text }) {
-            const titleAttr = title ? ` title="${title}"` : ""
-            return `<a href="${href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${text}</a>`
+          link(token) {
+            const titleAttr = token.title ? ` title="${token.title}"` : ""
+            // FORK: 2026-05-08 — 用 parseInline(tokens) 而非 raw text,让嵌套 ![]() 能正确渲染成 <img>
+            const inner = token.tokens
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ? (this as any).parser.parseInline(token.tokens)
+              : token.text
+            // 锚点链接(href 以 # 开头)走内部跳转,不加 target=_blank 等外链属性
+            if (token.href.startsWith("#")) {
+              return `<a href="${token.href}"${titleAttr}>${inner}</a>`
+            }
+            return `<a href="${token.href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${inner}</a>`
+          },
+          heading(token) {
+            // FORK: 2026-05-08 — 给 heading 自动生成 GFM-style anchor id(支持中文),让 [text](#anchor) 目录跳转生效
+            const level = token.depth
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const text = (this as any).parser.parseInline(token.tokens)
+            const id = slugifyHeading(token.text || "")
+            return `<h${level} id="${id}">${text}</h${level}>\n`
           },
         },
+      },
+      // FORK: GitHub 风 callout — > [!NOTE] / > [!TIP] / > [!IMPORTANT] / > [!WARNING] / > [!CAUTION] 2026-05-05
+      markedAlert(),
+      // FORK: 脚注 [^1] + [^1]: 解释 — 学术 / 技术文档高频 2026-05-05
+      markedFootnote(),
+      // FORK: ==高亮文本== → <mark>高亮文本</mark> 2026-05-08
+      // GFM 不支持 ==,需自定义 inline extension(marked-mark 等包不维护,inline 写更稳)
+      // 顺带 :emoji: shortcode 也走同一 use 调用
+      {
+        extensions: [
+          {
+            name: "mark",
+            level: "inline",
+            start(src: string) {
+              return src.match(/==[^=\n]/)?.index
+            },
+            tokenizer(src: string) {
+              const m = /^==([^=\n]+)==/.exec(src)
+              if (!m) return undefined
+              return { type: "mark", raw: m[0], text: m[1] }
+            },
+            renderer(token: any) {
+              return `<mark>${token.text}</mark>`
+            },
+          } as any,
+          // FORK: 2026-05-08 :rocket: 类 GFM emoji shortcode → Unicode emoji
+          // 内置常用 ~80 个;不在表里的 :xxx: 保持原文(避免误吞 ::pseudo / :hover: 等 CSS 语法)
+          {
+            name: "emojiShortcode",
+            level: "inline",
+            start(src: string) {
+              return src.match(/:[a-z_+0-9-]+:/)?.index
+            },
+            tokenizer(src: string) {
+              const m = /^:([a-z_+0-9-]+):/.exec(src)
+              if (!m) return undefined
+              if (!(m[1] in EMOJI_SHORTCODES)) return undefined
+              return { type: "emojiShortcode", raw: m[0], name: m[1] }
+            },
+            renderer(token: any) {
+              return EMOJI_SHORTCODES[token.name] ?? `:${token.name}:`
+            },
+          } as any,
+        ],
       },
       markedKatex({
         throwOnError: false,
@@ -483,6 +601,15 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
       }),
       markedShiki({
         async highlight(code, lang) {
+          // FORK: ```mermaid 代码块拦截 — 在 shiki 处理前返回 placeholder,
+          // 让 markdown.tsx 异步渲染为 SVG;不走 shiki 高亮 2026-05-05
+          if (lang === "mermaid") {
+            const escaped = code
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+            return `<div data-component="markdown-mermaid" data-mermaid-pending="">${escaped}</div>`
+          }
           const highlighter = await getSharedHighlighter({
             themes: ["OpenCode"],
             langs: [],
