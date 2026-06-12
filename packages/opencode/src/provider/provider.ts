@@ -11,6 +11,8 @@ import { Plugin } from "../plugin"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import { type LanguageModelV3 } from "@ai-sdk/provider"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
+// FORK: SSE 空闲超时默认值 [feat: llm-stream-idle-timeout]
+import { effectiveChunkTimeout } from "./stream-timeout"
 import { Auth } from "../auth"
 import { Env } from "../env"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -34,7 +36,8 @@ import { ProviderError } from "./error"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 10_000
 
-function wrapSSE(res: Response, ms: number, ctl: AbortController) {
+// FORK: export 供 stream-timeout 单测复现"流停滞";ms 放宽 number|undefined(首行已防御,与 effectiveChunkTimeout 返回型对齐)[feat: llm-stream-idle-timeout]
+export function wrapSSE(res: Response, ms: number | undefined, ctl: AbortController) {
   if (typeof ms !== "number" || ms <= 0) return res
   if (!res.body) return res
   if (!res.headers.get("content-type")?.includes("text/event-stream")) return res
@@ -1671,7 +1674,8 @@ export const layer = Layer.effect(
         if (existing) return existing
 
         const customFetch = options["fetch"]
-        const chunkTimeout = options["chunkTimeout"]
+        // FORK: chunkTimeout 未配置时默认 120s(原 undefined = 永不超时,死流无限挂)[feat: llm-stream-idle-timeout]
+        const chunkTimeout = effectiveChunkTimeout(options["chunkTimeout"])
         const headerTimeout = options["headerTimeout"]
         delete options["chunkTimeout"]
         delete options["headerTimeout"]

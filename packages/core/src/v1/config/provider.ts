@@ -108,10 +108,17 @@ export const Info = Schema.Struct({
           description:
             "Timeout in milliseconds to wait for response headers. Provider integrations may set defaults. Set to false to disable timeout.",
         }),
-        chunkTimeout: Schema.optional(PositiveInt).annotate({
+        // FORK-BEGIN: chunkTimeout 默认 120s 可关(默认值逻辑在 opencode/src/provider/stream-timeout.ts) [feat: llm-stream-idle-timeout]
+        chunkTimeout: Schema.optional(
+          Schema.Union([PositiveInt, Schema.Literal(false)]).annotate({
+            description:
+              "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted. Defaults to 120000 (2 minutes). Set to false to disable.",
+          }),
+        ).annotate({
           description:
-            "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
+            "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted. Defaults to 120000 (2 minutes). Set to false to disable.",
         }),
+        // FORK-END
       }),
       [Schema.Record(Schema.String, Schema.Any)],
     ),
