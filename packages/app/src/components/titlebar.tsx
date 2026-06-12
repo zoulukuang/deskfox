@@ -12,6 +12,8 @@ import {
   untrack,
 } from "solid-js"
 import { createStore } from "solid-js/store"
+// FORK: 新建会话时清空首页创作 draft [feat: media-creation-mode]
+import { creation } from "@/components/media-creation-store"
 import { useLocation, useMatch, useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -329,7 +331,11 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               tabsStoreActions.removeSessions(detail)
             })
 
-            const openNewTab = () => navigate(newSessionHref())
+            const openNewTab = () => {
+              // FORK: 新建会话时清空首页创作 draft(同路由跳转 effect 测不到)[feat: media-creation-mode]
+              creation.resetDraft()
+              navigate(newSessionHref())
+            }
 
             command.register("tabs", () => {
               const current = currentTab()
