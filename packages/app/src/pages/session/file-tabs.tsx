@@ -1501,22 +1501,22 @@ export function FileTabContent(props: {
             })
           },
           officeTooling: {
-            // FORK-TODO[electron-replatform]: SDK regen 待办 — office 路由已在后端 HttpApi(/office-tooling/*),
-            // 重生成 SDK 后 sdk.client.office.tooling.* 即有类型;暂 cast 解锁 typecheck(runtime 路由真实存在)
+            // FORK: office 路由已在后端 HttpApi(/office-tooling/*),SDK 已 regen 生成 office.tooling.* 方法 [feat: electron-replatform]
+            
             getStatus: async () =>
-              (sdk.client as any).office.tooling
+              sdk.client.office.tooling
                 .status()
-                .then((x: any) => x.data as any)
+                .then((x) => x.data as any)
                 .catch(() => undefined),
             startInstall: async () =>
-              (sdk.client as any).office.tooling
+              sdk.client.office.tooling
                 .install()
-                .then((x: any) => x.data as any)
+                .then((x) => x.data as any)
                 .catch(() => undefined),
             getProgress: async () =>
-              (sdk.client as any).office.tooling
+              sdk.client.office.tooling
                 .progress()
-                .then((x: any) => x.data as any)
+                .then((x) => x.data as any)
                 .catch(() => undefined),
           },
           onRetryFile: () => {
@@ -1541,8 +1541,8 @@ export function FileTabContent(props: {
             const cached = officePdfCacheGet(cacheKey)
             if (cached) return cached
             try {
-              // FORK-TODO[electron-replatform]: SDK regen 待办 — /file/office-pdf 路由已在后端,regen 后 file.officePdf 有类型
-              const res = await (sdk.client.file as any).officePdf(
+              // FORK: /file/office-pdf 路由已在后端,SDK 已 regen 生成 file.officePdf [feat: electron-replatform]
+              const res = await sdk.client.file.officePdf(
                 { path: filePath },
                 { parseAs: "arrayBuffer" } as any,
               )

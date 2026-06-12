@@ -64,6 +64,8 @@ import type {
   ExperimentalWorkspaceWarpResponses,
   FileListErrors,
   FileListResponses,
+  FileOfficePdfErrors,
+  FileOfficePdfResponses,
   FilePartInput,
   FilePartSource,
   FileReadErrors,
@@ -114,6 +116,12 @@ import type {
   McpStatusErrors,
   McpStatusResponses,
   MoveSessionDestination,
+  OfficeToolingInstallErrors,
+  OfficeToolingInstallResponses,
+  OfficeToolingProgressErrors,
+  OfficeToolingProgressResponses,
+  OfficeToolingStatusErrors,
+  OfficeToolingStatusResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -1911,6 +1919,72 @@ export class File extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  /**
+   * Office file as PDF (binary)
+   *
+   * Convert an office document to PDF via LibreOffice and return the bytes. Used by the in-app PDF viewer to avoid the memory cost of base64 + JSON for very large decks.
+   */
+  public officePdf<ThrowOnError extends boolean = false>(
+    parameters: {
+      path: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "path" }] }])
+    return (options?.client ?? this.client).get<FileOfficePdfResponses, FileOfficePdfErrors, ThrowOnError>({
+      url: "/file/office-pdf",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Tooling extends HeyApiClient {
+  /**
+   * Get office tooling install status
+   *
+   * Returns LibreOffice availability + install progress on this machine.
+   */
+  public status<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<OfficeToolingStatusResponses, OfficeToolingStatusErrors, ThrowOnError>({
+      url: "/office-tooling/status",
+      ...options,
+    })
+  }
+
+  /**
+   * Start office tooling install
+   *
+   * Kick off background LibreOffice download + install. Returns immediately.
+   */
+  public install<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).post<
+      OfficeToolingInstallResponses,
+      OfficeToolingInstallErrors,
+      ThrowOnError
+    >({ url: "/office-tooling/install", ...options })
+  }
+
+  /**
+   * Poll office tooling install progress
+   *
+   * Returns current phase, bytes downloaded/total, percent, speed.
+   */
+  public progress<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      OfficeToolingProgressResponses,
+      OfficeToolingProgressErrors,
+      ThrowOnError
+    >({ url: "/office-tooling/progress", ...options })
+  }
+}
+
+export class Office extends HeyApiClient {
+  private _tooling?: Tooling
+  get tooling(): Tooling {
+    return (this._tooling ??= new Tooling({ client: this.client }))
   }
 }
 
@@ -6313,6 +6387,11 @@ export class OpencodeClient extends HeyApiClient {
   private _file?: File
   get file(): File {
     return (this._file ??= new File({ client: this.client }))
+  }
+
+  private _office?: Office
+  get office(): Office {
+    return (this._office ??= new Office({ client: this.client }))
   }
 
   private _instance?: Instance

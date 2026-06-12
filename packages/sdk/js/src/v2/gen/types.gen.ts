@@ -1802,8 +1802,11 @@ export type ProviderConfig = {
      * Timeout in milliseconds to wait for response headers. Provider integrations may set defaults. Set to false to disable timeout.
      */
     headerTimeout?: number | false
-    chunkTimeout?: number
-    [key: string]: unknown | string | boolean | number | false | number | false | number | undefined
+    /**
+     * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted. Defaults to 120000 (2 minutes). Set to false to disable.
+     */
+    chunkTimeout?: number | false
+    [key: string]: unknown | string | boolean | number | false | number | false | number | false | undefined
   }
   models?: {
     [key: string]: {
@@ -2337,6 +2340,28 @@ export type File = {
   added: number
   removed: number
   status: "added" | "deleted" | "modified"
+}
+
+export type OfficeInstallProgress = {
+  phase: "idle" | "probing" | "downloading" | "installing" | "done" | "error"
+  bytesDownloaded?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  bytesTotal?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  percent?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  speedBps?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  message?: string
+  mirrorName?: string
+}
+
+export type OfficeToolingStatus = {
+  installed: boolean
+  sofficePath?: string
+  platformSupported: boolean
+  downloadSizeMB?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  selectedMirror?: {
+    name: string
+    url: string
+  }
+  progress: OfficeInstallProgress
 }
 
 export type Path = {
@@ -6274,6 +6299,108 @@ export type FileStatusResponses = {
 }
 
 export type FileStatusResponse = FileStatusResponses[keyof FileStatusResponses]
+
+export type FileOfficePdfData = {
+  body?: never
+  path?: never
+  query: {
+    path: string
+  }
+  url: "/file/office-pdf"
+}
+
+export type FileOfficePdfErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type FileOfficePdfError = FileOfficePdfErrors[keyof FileOfficePdfErrors]
+
+export type FileOfficePdfResponses = {
+  /**
+   * Success
+   */
+  200: Blob | File
+}
+
+export type FileOfficePdfResponse = FileOfficePdfResponses[keyof FileOfficePdfResponses]
+
+export type OfficeToolingStatusData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/office-tooling/status"
+}
+
+export type OfficeToolingStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OfficeToolingStatusError = OfficeToolingStatusErrors[keyof OfficeToolingStatusErrors]
+
+export type OfficeToolingStatusResponses = {
+  /**
+   * Office tooling install status
+   */
+  200: OfficeToolingStatus
+}
+
+export type OfficeToolingStatusResponse = OfficeToolingStatusResponses[keyof OfficeToolingStatusResponses]
+
+export type OfficeToolingInstallData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/office-tooling/install"
+}
+
+export type OfficeToolingInstallErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OfficeToolingInstallError = OfficeToolingInstallErrors[keyof OfficeToolingInstallErrors]
+
+export type OfficeToolingInstallResponses = {
+  /**
+   * Office tooling status (post-install start)
+   */
+  200: OfficeToolingStatus
+}
+
+export type OfficeToolingInstallResponse = OfficeToolingInstallResponses[keyof OfficeToolingInstallResponses]
+
+export type OfficeToolingProgressData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/office-tooling/progress"
+}
+
+export type OfficeToolingProgressErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type OfficeToolingProgressError = OfficeToolingProgressErrors[keyof OfficeToolingProgressErrors]
+
+export type OfficeToolingProgressResponses = {
+  /**
+   * Install progress
+   */
+  200: OfficeInstallProgress
+}
+
+export type OfficeToolingProgressResponse = OfficeToolingProgressResponses[keyof OfficeToolingProgressResponses]
 
 export type InstanceDisposeData = {
   body?: never
