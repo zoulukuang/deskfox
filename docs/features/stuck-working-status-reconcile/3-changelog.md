@@ -46,4 +46,4 @@ related: ./3-changelog.md
 
 | commit | 简述 |
 |---|---|
-| `2cbc85356a` | `fix(session): 主视图永久「思考中」卡死 — session_status 对账清残留 busy + halt 停止吞错 [feat: stuck-working-status-reconcile] [bug-repro: 进程死/事件丢后前端 busy 永不回 idle]` |
+| `e4a850c503` | `fix(session): 主视图永久「思考中」卡死 — session_status 对账清残留 busy + halt 停止吞错 [feat: stuck-working-status-reconcile] [bug-repro: 进程死/事件丢后前端 busy 永不回 idle]` |
