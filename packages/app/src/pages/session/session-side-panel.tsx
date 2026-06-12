@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createMemo, onCleanup, type JSX } from "solid-js"
+import { For, Match, Show, Switch, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { Tabs } from "@opencode-ai/ui/tabs"
@@ -25,6 +25,7 @@ import { useSync } from "@/context/sync"
 import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
 import { FileTabContent } from "@/pages/session/file-tabs"
 import {
+  closeOtherTabs,
   createOpenSessionFileTab,
   createSessionTabs,
   getTabReorderIndex,
@@ -138,15 +139,7 @@ export function SessionSidePanel(props: {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
   }
 
-  const openTab = createOpenSessionFileTab({
-    normalizeTab,
-    openTab: tabs().open,
-    pathFromTab: file.pathFromTab,
-    loadFile: file.load,
-    openReviewPanel,
-    setActive: tabs().setActive,
-  })
-
+  // FORK: tabState 上移到 openTab 之前 — openTab 的 toggle 关闭需要 activeFileTab [fix: filetree-toggle] 2026-06-04
   const tabState = createSessionTabs({
     tabs,
     pathFromTab: file.pathFromTab,
@@ -158,6 +151,71 @@ export function SessionSidePanel(props: {
   const openedTabs = tabState.openedTabs
   const activeTab = tabState.activeTab
   const activeFileTab = tabState.activeFileTab
+
+  const openTab = createOpenSessionFileTab({
+    normalizeTab,
+    openTab: tabs().open,
+    pathFromTab: file.pathFromTab,
+    loadFile: file.load,
+    openReviewPanel,
+    setActive: tabs().setActive,
+    // FORK: 再次点击正在查看的文件 → 收起整个查看面板 [fix: filetree-toggle] 2026-06-04
+    activeFileTab,
+    isViewerOpen: () => view().reviewPanel.opened(),
+    closeViewer: () => view().reviewPanel.close(),
+  })
+
+  // FORK-BEGIN: LLM 响应结束(busy→idle)自动递归刷新文件树 [feat: file-tree-ux-polish] 2026-05-04
+  createEffect(
+    on(
+      () => sync.data.session_status[params.id ?? ""]?.type,
+      (next, prev) => {
+        if (next !== "idle" || prev === undefined || prev === "idle") return
+        void file.tree.refreshAll("")
+      },
+      { defer: true },
+    ),
+  )
+  // FORK-END
+
+  // FORK-BEGIN: 切 tab(包括 .md 内链跳转)→ 文件树 active 高亮 + 自动展开父目录 + 滚动入视野 2026-05-05
+  // Windows 文件树用 backslash 作 path 分隔符(server 原生),file.pathFromTab 返回 forward slash
+  // → 必须转 OS 原生分隔符,否则 expand key 不匹配 / 不高亮 / selector 找不到。
+  const isWindowsPath = typeof navigator !== "undefined" && /\bWindows\b/i.test(navigator.userAgent)
+  const toFsPath = (p: string) => (isWindowsPath ? p.replaceAll("/", "\\") : p)
+  const fsSep = isWindowsPath ? "\\" : "/"
+
+  const activeFilePath = createMemo<string | undefined>(() => {
+    const tab = activeFileTab()
+    if (!tab) return undefined
+    const p = file.pathFromTab(tab)
+    if (!p) return undefined
+    return toFsPath(p)
+  })
+
+  createEffect(() => {
+    const p = activeFilePath()
+    if (!p) return
+    // 展开所有父目录(expand 幂等;内部 listDir 异步)
+    const parts = p.split(fsSep)
+    for (let i = 1; i < parts.length; i++) {
+      file.tree.expand(parts.slice(0, i).join(fsSep))
+    }
+    // 滚动到 active 节点 — DOM 在异步加载 + render 后才出现,rAF 重试 30 帧(~500ms)
+    const sel = `[data-tree-path="${CSS.escape(p)}"]`
+    let attempts = 0
+    const tryScroll = () => {
+      const node = document.querySelector(sel)
+      if (node instanceof HTMLElement) {
+        node.scrollIntoView({ behavior: "smooth", block: "nearest" })
+        return
+      }
+      attempts++
+      if (attempts < 30) requestAnimationFrame(tryScroll)
+    }
+    requestAnimationFrame(tryScroll)
+  })
+  // FORK-END
 
   const fileTreeTab = () => layout.fileTree.tab()
 
@@ -308,7 +366,16 @@ export function SessionSidePanel(props: {
                           </Tabs.Trigger>
                         </Show>
                         <SortableProvider ids={openedTabs()}>
-                          <For each={openedTabs()}>{(tab) => <SortableTab tab={tab} onTabClose={tabs().close} />}</For>
+                          <For each={openedTabs()}>
+                            {(tab) => (
+                              <SortableTab
+                                tab={tab}
+                                onTabClose={tabs().close}
+                                // FORK: 右键「关闭其他标签」[feat: file-tab-close-others] 2026-06-09
+                                onCloseOthers={(keep) => closeOtherTabs(openedTabs(), keep, tabs().close)}
+                              />
+                            )}
+                          </For>
                         </SortableProvider>
                         <div class="bg-background-stronger h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pr-3">
                           <TooltipKeybind
@@ -363,7 +430,8 @@ export function SessionSidePanel(props: {
                     </Show>
 
                     <Show when={activeFileTab()} keyed>
-                      {(tab) => <FileTabContent tab={tab} />}
+                      {/* FORK: 接通 openTab 让 .md 内链 [link](./other.md) 点击在查看器打开 2026-05-05 */}
+                      {(tab) => <FileTabContent tab={tab} onOpenTab={(path) => openTab(file.tab(path))} />}
                     </Show>
                   </Tabs>
                   <DragOverlay>
@@ -456,6 +524,10 @@ export function SessionSidePanel(props: {
                             class="pt-3"
                             modified={diffFiles()}
                             kinds={kinds()}
+                            active={activeFilePath()}
+                            // FORK: 预览区已开时,给「正在查看的那一行」加收起 hover tooltip(与 toggle 条件一致)
+                            //   [feat: filetree-hover-collapse-hint] 2026-06-09
+                            viewerOpen={view().reviewPanel.opened()}
                             onFileClick={(node) => openTab(file.tab(node.path))}
                           />
                         </Match>
