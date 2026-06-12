@@ -53,7 +53,8 @@ python3 `tarfile` 看 raw 成员:原版 7064(3532 真 + 3532 `._`),修复版 353
 
 ## commit
 
-- `<待填>` [bug-repro: auto-updater 安装/检查静默失败]
+- `63c35840bb` fix(updater): 代码修复(build 脚本 + 客户端)[bug-repro: auto-updater 安装/检查静默失败]
+- `8d050f2a25` Merge → main(`--no-ff`),已 push origin
 
 ## 影响范围
 
@@ -64,7 +65,25 @@ python3 `tarfile` 看 raw 成员:原版 7064(3532 真 + 3532 `._`),修复版 353
 
 `git revert <commit>`(4 文件均独立可逆,无 DB/迁移/外部状态)。
 
-## 遗留(production,待 user 授权,详见 2-plan)
+## 线上重发(2026-06-12 ✅ 已完成 + 真机验收通过)
 
-线上 2026.7.1 updater 包带毒,2026.7.0 用户全部 stranded → 需用洁净 tarball 重打 + 重签 + 重传 OSS +
-重部署 manifest 才能让存量用户真正升上去。本地已有 notarized 2026.7.1 .app,可直接重打、免 full rebuild。
+user 授权后执行,**全程未找苹果重新公证**:
+1. `xcrun stapler staple DeskFox.app` —— 用现有公证记录贴票(不重审),`spctl` = Notarized accepted。
+2. `COPYFILE_DISABLE=1 tar` 重打 → 3533 成员 / 0 AppleDouble。
+3. minisign 重签(2A00 prod 私钥,`source ~/.deskfox-signing/config.env`)。
+4. R9 三验:python3(0 AppleDouble)+ Rust 复刻 install_inner(3533 entry 解压 OK)+
+   `verify-updater-artifacts.ts --env prod --target darwin` 8 pass(Ed25519 对字节验签)。
+5. 传 OSS + 部署 manifest 到 `updates.deskfox.ai`。
+
+**🪤 CDN 同名缓存陷阱(踩到 + 解决)**:第一轮按原名覆盖上传,Aliyun CDN(dl.clawtray.com)边缘仍
+`X-Cache: HIT` 吐旧带毒字节(Content-Length 还是 235606072)→ 新 manifest 配旧字节会**验签失配**。
+`upload-asset-to-oss.sh` 无自动 CDN 刷新。**解法 = 改文件名 cache-bust**:新对象名
+`DeskFox-2026.7.1-fix1-darwin.app.tar.gz`(CDN 必 miss 回源取洁净;`.sig` 对字节签名、与文件名无关仍有效)
++ manifest 指向新 URL 重部署。
+
+**端到端验证(下载线上实际字节核对)**:Content-Length=235467371(洁净)/ sha256
+`f13980b0c8a42ea428f831851532c4f118237689b2e5f2152760479b1e3d86a6` == 本地基准 / 0 AppleDouble /
+Rust 复刻解压 3533 entry 全过。**真机:user 在 2026.7.0 点「安装并重启」升级成功(TC-3 端到端首次跑通)。**
+
+> 对未来提醒:同版本号重发 updater 包必须 cache-bust 改名(CDN 不自动刷新同名);新版本号天然新名无此问题。
+> 下次发版 updater tarball 已由 build-deskfox.sh 的 `COPYFILE_DISABLE=1` + python3 防回归断言根治。

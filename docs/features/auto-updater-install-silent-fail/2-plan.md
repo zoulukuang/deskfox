@@ -38,5 +38,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 待办
 
-- production 重部署 + 真机端到端验证(见上)。
-- 可选:`verify-updater-artifacts.ts` 加「无 AppleDouble 成员」校验作 ship 前第二道闸(当前靠 build 内断言)。
+- ~~production 重部署 + 真机端到端验证~~ ✅ **2026-06-12 完成**(staple 现有公证票免重审 → COPYFILE_DISABLE 重打
+  → minisign 重签 → R9 三验 → 传 OSS + 部署 manifest;踩 CDN 同名缓存陷阱 → 改名 cache-bust `-fix1-`;
+  端到端字节 sha256/0-AppleDouble/Rust 解压三验 + user 真机点升级成功。详见 3-changelog)。
+- 可选(未做):`verify-updater-artifacts.ts` 加「无 AppleDouble 成员」校验作 ship 前第二道闸(当前靠 build 内断言)。
+- 已知约束:同版本号重发 updater 包需 cache-bust 改名(Aliyun CDN 不自动刷新同名;`upload-asset-to-oss.sh` 无刷新逻辑)。
