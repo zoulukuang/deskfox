@@ -24,6 +24,22 @@ related: ./3-changelog.md
 | `packages/app/src/context/global-sync/session-status-reconcile.test.ts` | 新增 | 7 用例:残留 busy 清除(复现) / 后端 busy 保留 / idle 过滤 / null 容错 + 真实 solid store 证明「裸 merge 清不掉、reconcile 才清」+ **端到端跑 bootstrap 实际调用的 `applyReconciledSessionStatus`**(根因守门) |
 | `packages/app/src/context/global-sync/bootstrap.ts` | 改 1 行(+FORK marker) | `session.status()` 对账改用 `applyReconciledSessionStatus(input.store, input.setStore, x.data)`,清残留 busy |
 | `packages/app/src/pages/session.tsx` | 改 `halt`(+FORK marker) | abort 失败不再静默吞错,弹真实 toast;残留 busy 交对账自愈 |
+| `packages/opencode/src/server/routes/instance/session.ts` | 改(+FORK marker,**R4 override**) | 把 `heal-interrupted` 接到桌面端真正命中的两条分支(标准路由 GET messages 的 no-limit + 分页首页 `before===undefined`)→ idle 时补盖残骸 + 落 DB。修复 2026-06-06 heal 错放 httpapi+no-limit 致桌面双重死代码的根因 |
+
+## 🔑 根因(机制级,2026-06-12 深挖):2026-06-06 后端 heal 对桌面端是「双重死代码」
+
+「会话在不在运行」前端由两个独立信号判定,后端兜底都没接到桌面端真正走的路径:
+1. **路由错位**:`heal-interrupted` 仅挂 **HTTPAPI handler**;桌面 sidecar 锁 `prod` channel → HTTPAPI 关(`flag.ts:16` 仅 dev/beta/local 默认开,`instance/index.ts:50` 仅 flag 开时挂 httpapi 路由)→ 桌面走**标准 `instance/session.ts` 路由**,不经过 heal。
+2. **分支错位**:即便在 httpapi,heal 也只在 **no-limit 分支**;前端 `fetchMessages`(`sync.tsx:302`)**始终带 limit** → 走分页分支。
+
+→ 残骸 `completed=NULL` **从未被补盖**,侧边栏"运行中"的后端兜底等于不存在,只剩前端 `deriveSessionWorking` 硬扛(对末条残骸无解)。**这是同类"卡死/转圈"bug 反复发作的结构性根因 —— 补救机制接错代码路径。** 实证:对 prod sidecar 发无 limit 全量 GET,assistant 仍 `completed=NULL`(走标准路由无 heal);两条老残骸会话装新包后仍转、点击不愈。
+
+## R4 复核报告(`packages/opencode/` 黑名单 override)
+
+- **wrapper 不可行性**:heal 逻辑本就是 fork-only `heal-interrupted.ts`;缺的是在「桌面端读消息的上游路由」调用它。该路由 Hono 内联定义,无中间件能在带 session 上下文下补盖特定响应 → 只能上游注入(import 1 行 + 两分支各 1-2 行),正是 R1「fork-only 逻辑 + ≤5 行/点注入」。
+- **风险评估**:heal **仅 session idle(无活跃 runner)时写** → 直播流式 status=busy、planHeal 空操作,零风险碰生成中;补 `completed=created` 不伪造时长;仅改 GET 读路径不碰 prompt/abort/write;幂等(补过即跳);分页仅首页补不碰历史页。
+- **改动日志论证**:把 2026-06-06 错放的 heal 接到桌面 prod 标准路由实际命中的两分支,让那次修复**真正生效 + 落盘**。
+- **验证**:heal-interrupted 单测 7 pass + 前端 13 pass + typecheck 16/16 + 真机 A/B(见下)。
 
 ## 自愈触发点
 
@@ -34,7 +50,7 @@ related: ./3-changelog.md
 ## 回归测试
 
 - `session-status-reconcile.test.ts` 13 pass(reconcile 复现/根因守门 + `trailingOrphanIndex` + `healClearedSessionOrphans`)
-- `bun test src/context/global-sync/` 46 pass / 0 fail
+- `heal-interrupted.test.ts` 7 pass(后端补盖逻辑)
 - `bun run typecheck` 16/16
 
 ## 真机验证(2026-06-12,dev 测试包 pkill sidecar A/B)

@@ -11,6 +11,11 @@ import { SessionCompaction } from "@/session/compaction"
 import { SessionRevert } from "@/session/revert"
 import { SessionShare } from "@/share/session"
 import { SessionStatus } from "@/session/status"
+// FORK: 残骸消息自愈补盖。heal-interrupted 原仅挂在 httpapi handler,但桌面端锁 prod channel
+// 走的是本标准/legacy 路由(HTTPAPI 默认仅 dev/beta/local 开),且前端始终带 limit 走分页分支
+// → 2026-06-06 的 heal 对桌面端双重死代码,残骸永不补盖、侧边栏"运行中"永久转。此处把 heal
+// 接到桌面端真正命中的两条分支。[feat: stuck-working-status-reconcile] 2026-06-12
+import { HealInterrupted } from "@/session/heal-interrupted"
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "@/session/todo"
 import { Effect } from "effect"
@@ -681,7 +686,9 @@ export const SessionRoutes = lazy(() =>
             Effect.gen(function* () {
               const session = yield* Session.Service
               yield* session.get(sessionID)
-              return yield* session.messages({ sessionID })
+              const msgs = yield* session.messages({ sessionID })
+              // FORK: idle 时补盖残骸 + 落 DB(全量分支)
+              return yield* HealInterrupted.healInterrupted({ sessionID, messages: msgs })
             }),
           )
           return c.json(messages)
@@ -692,6 +699,15 @@ export const SessionRoutes = lazy(() =>
           limit: query.limit,
           before: query.before,
         })
+        // FORK: 首页(before 未设)= 最近消息含末条,idle 时补盖残骸 + 落 DB。桌面端分页加载
+        // 走这里 → 修复"侧边栏运行中永久转"。heal 仅在无活跃 runner(idle)时写,不误伤直播流式。
+        if (query.before === undefined) {
+          page.items = await runRequest(
+            "SessionRoutes.messages.heal",
+            c,
+            HealInterrupted.healInterrupted({ sessionID, messages: page.items }),
+          )
+        }
         if (page.cursor) {
           const url = new URL(c.req.url)
           url.searchParams.set("limit", query.limit.toString())
