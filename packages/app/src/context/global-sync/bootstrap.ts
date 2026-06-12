@@ -16,6 +16,7 @@ import { retry } from "@opencode-ai/core/util/retry"
 import { batch } from "solid-js"
 import { reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { State, VcsCache } from "./types"
+import { applyReconciledSessionStatus, healClearedSessionOrphans } from "./session-status-reconcile"
 import { cmp, normalizeAgentList, normalizeProviderList } from "./utils"
 import { formatServerError, isTransientStartupError } from "@/utils/server-errors"
 import { QueryClient, queryOptions, skipToken } from "@tanstack/solid-query"
@@ -276,7 +277,16 @@ export async function bootstrapDirectory(input: {
         ),
       () =>
         retry(() => input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false })))),
-      () => retry(() => input.sdk.session.status().then((x) => input.setStore("session_status", x.data!))),
+      // FORK: 对账清掉进程死/事件丢/sidecar 重启后残留的 stale 状态。两份独立:① session_status
+      // 残留 busy(主视图「思考中」)用 reconcile 整体替换清掉;② 被清会话末条 assistant 残骸
+      // (侧边栏转圈,2026-06-06 heal-interrupted 重连路径不触发)前端补盖 completed。[feat: stuck-working-status-reconcile] 2026-06-12
+      () =>
+        retry(() =>
+          input.sdk.session.status().then((x) => {
+            const cleared = applyReconciledSessionStatus(input.store, input.setStore, x.data)
+            healClearedSessionOrphans(input.store, input.setStore, cleared)
+          }),
+        ),
       !seededProject &&
         (() => retry(() => input.sdk.project.current()).then((x) => input.setStore("project", x.data!.id))),
       !seededPath &&
