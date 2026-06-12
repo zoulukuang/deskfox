@@ -6,6 +6,7 @@
 
 import { ipcMain, type IpcMainInvokeEvent } from "electron"
 import * as fileOps from "./file-ops"
+import * as preventSleep from "./prevent-sleep"
 
 export function registerDeskfoxIpc() {
   const h = (cmd: string, fn: (args: any) => unknown) =>
@@ -27,5 +28,9 @@ export function registerDeskfoxIpc() {
   h("write_binary_file_absolute_base64", fileOps.writeBinaryFileAbsoluteBase64)
   h("fetch_url_base64", fileOps.fetchUrlBase64)
 
-  // TODO[electron-replatform]: 防休眠(get/set_prevent_sleep)、飞书(10 command)、事件(flush-before-close/sidecar-watchdog)逐模块补
+  // ── 防休眠(powerSaveBlocker)──
+  h("get_prevent_sleep", preventSleep.getPreventSleep)
+  h("set_prevent_sleep", preventSleep.setPreventSleep)
+
+  // TODO[electron-replatform]: 飞书(10 command)、本地资源协议(localasset://)、托盘、事件(flush-before-close/sidecar-watchdog)逐模块补
 }
