@@ -37,6 +37,8 @@ import { InlineInput } from "@opencode-ai/ui/inline-input"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { SessionRetry } from "@opencode-ai/ui/session-retry"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
+// FORK: 创作结果融入聊天滚动流 [feat: media-creation-mode]
+import { MediaCreationResults } from "@/components/media-creation-results"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { TextReveal } from "@opencode-ai/ui/text-reveal"
@@ -1608,6 +1610,14 @@ export function MessageTimeline(props: {
             </Virtualizer>
           )}
         </Show>
+        {/* FORK: 创作结果卡融入聊天滚动流(消息之后)[feat: media-creation-mode] */}
+        <div
+          classList={{
+            "md:max-w-200 2xl:max-w-[1000px] md:mx-auto": props.centered,
+          }}
+        >
+          <MediaCreationResults />
+        </div>
       </ScrollView>
     </div>
   )
