@@ -237,10 +237,11 @@ export function SessionSidePanel(props: {
           <div
             class="size-full flex"
             classList={{
-              "border-l border-border-weaker-base": !settings.general.newLayoutDesigns(),
-              // FORK: REQ-041 五栏 — 经典布局下文件树锚左、编辑器锚右(对齐 DeskFox Image#2,box1↔box2 互换)
+              // FORK: REQ-041 五栏 — 经典布局下面板翻到左侧(文件树锚左、编辑器锚右),分界线随之从
+              //   左边框(border-l)改到右边框(border-r)= 编辑器↔聊天的竖直分界;上游 v2 维持 border-l。
               //   [feat: electron-replatform] 2026-06-12
-              "flex-row-reverse": !settings.general.newLayoutDesigns(),
+              "border-r border-border-weaker-base flex-row-reverse": !settings.general.newLayoutDesigns(),
+              "border-l border-border-weaker-base": settings.general.newLayoutDesigns(),
             }}
           >
             <div
