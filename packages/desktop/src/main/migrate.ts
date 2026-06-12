@@ -21,14 +21,18 @@ function tauriDir(id: string) {
   }
 }
 
-// The Tauri app identifier changes between dev/beta/prod builds.
+// FORK: DeskFox Tauri 版的 app identifier(非上游 ai.opencode.desktop.*)。
+//   实测旧 DeskFox Tauri 前端偏好(.dat)落点:%APPDATA%\Roaming\ai.deskfox.app[.dev|.beta]\*.dat
+//   (default/opencode.global/opencode.settings/opencode.workspace.*),迁移须指向这里,
+//   否则升级后窗口/布局/设置偏好丢(关键数据 会话/config/飞书 走 xdg 自动继承,不在此列)。
+//   [feat: electron-replatform] 2026-06-12 — 升级无感(前端偏好迁移)
 const TAURI_APP_IDS: Record<string, string> = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "ai.deskfox.app.dev",
+  beta: "ai.deskfox.app.beta",
+  prod: "ai.deskfox.app",
 }
 function tauriAppId() {
-  return app.isPackaged ? TAURI_APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
+  return app.isPackaged ? TAURI_APP_IDS[CHANNEL] : "ai.deskfox.app.dev"
 }
 
 // Migrate a single Tauri .dat file into the corresponding electron-store.
