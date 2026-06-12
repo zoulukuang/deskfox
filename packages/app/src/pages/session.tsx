@@ -1721,9 +1721,12 @@ export default function Page() {
       {sessionSync() ?? ""}
       <SessionHeader />
       <div
-        class="flex-1 min-h-0 flex flex-col md:flex-row "
+        // FORK: REQ-041 五栏 — 经典布局下文件树/审查面板锚左(rail 右侧)、聊天居中,对齐 DeskFox Image#2;
+        //   上游新 v2 维持 flex-row [feat: electron-replatform] 2026-06-12
+        class="flex-1 min-h-0 flex flex-col "
         classList={{
-          "gap-2 p-2": settings.general.newLayoutDesigns(),
+          "md:flex-row gap-2 p-2": settings.general.newLayoutDesigns(),
+          "md:flex-row-reverse": !settings.general.newLayoutDesigns(),
         }}
       >
         <Show when={!isDesktop() && !!params.id}>
