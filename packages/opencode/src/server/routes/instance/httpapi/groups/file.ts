@@ -11,6 +11,8 @@ import {
   WorkspaceRoutingQueryFields,
 } from "../middleware/workspace-routing"
 import { described } from "./metadata"
+// FORK: office routes schema 集中区(office-routes-effect-httpapi)[feat: electron-replatform]
+import { OfficePdfQuery, OfficePdfBytes, OfficeInstallProgress, OfficeToolingStatus } from "./file-office"
 
 export const FileQuery = Schema.Struct({
   ...WorkspaceRoutingQueryFields,
@@ -99,6 +101,11 @@ export const FilePaths = {
   list: "/file",
   content: "/file/content",
   status: "/file/status",
+  // FORK: office routes [feat: electron-replatform]
+  officePdf: "/file/office-pdf",
+  officeToolingStatus: "/office-tooling/status",
+  officeToolingInstall: "/office-tooling/install",
+  officeToolingProgress: "/office-tooling/progress",
 } as const
 
 export const FileApi = HttpApi.make("file")
@@ -165,6 +172,46 @@ export const FileApi = HttpApi.make("file")
             description: "Get the git status of all files in the project.",
           }),
         ),
+        // FORK-BEGIN: office routes — fork Hono routes 迁到 PublicApi [feat: electron-replatform]
+        HttpApiEndpoint.get("officePdf", FilePaths.officePdf, {
+          query: OfficePdfQuery,
+          success: OfficePdfBytes,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "file.officePdf",
+            summary: "Office file as PDF (binary)",
+            description:
+              "Convert an office document to PDF via LibreOffice and return the bytes. Used by the in-app PDF viewer to avoid the memory cost of base64 + JSON for very large decks.",
+          }),
+        ),
+        HttpApiEndpoint.get("officeToolingStatus", FilePaths.officeToolingStatus, {
+          success: described(OfficeToolingStatus, "Office tooling install status"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "office.tooling.status",
+            summary: "Get office tooling install status",
+            description: "Returns LibreOffice availability + install progress on this machine.",
+          }),
+        ),
+        HttpApiEndpoint.post("officeToolingInstall", FilePaths.officeToolingInstall, {
+          success: described(OfficeToolingStatus, "Office tooling status (post-install start)"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "office.tooling.install",
+            summary: "Start office tooling install",
+            description: "Kick off background LibreOffice download + install. Returns immediately.",
+          }),
+        ),
+        HttpApiEndpoint.get("officeToolingProgress", FilePaths.officeToolingProgress, {
+          success: described(OfficeInstallProgress, "Install progress"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "office.tooling.progress",
+            summary: "Poll office tooling install progress",
+            description: "Returns current phase, bytes downloaded/total, percent, speed.",
+          }),
+        ),
+        // FORK-END
       )
       .annotateMerge(
         OpenApi.annotations({

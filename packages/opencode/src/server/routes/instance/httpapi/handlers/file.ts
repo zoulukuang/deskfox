@@ -10,6 +10,12 @@ import ignore from "ignore"
 import path from "path"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
+// FORK-BEGIN: office routes + 分类(上游 #30447 删 src/file/,迁来 @/office)[feat: electron-replatform]
+import * as LibreOffice from "@/office/libreoffice"
+import * as OfficeInstaller from "@/office/office-installer"
+import { isOfficeDirect, isOfficeConvert, getOfficeMimeType } from "@/office/classify"
+import { OFFICE_PDF_REF_MIME } from "@opencode-ai/core/office-pdf-protocol"
+// FORK-END
 
 export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handlers) =>
   Effect.gen(function* () {
@@ -98,6 +104,26 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       const file = path.resolve(directory, ctx.query.path)
       if (!FSUtil.contains(directory, file)) return yield* Effect.die(new Error("Path escapes the location"))
       if (!(yield* FSUtil.Service.use((fs) => fs.existsSafe(file)))) return { type: "text" as const, content: "" }
+      // FORK-BEGIN: office 分类(上游 #30447 删 src/file/ 后迁来 server content handler)[feat: electron-replatform]
+      if (isOfficeConvert(ctx.query.path)) {
+        // pre-warm 转换;前端经 office-pdf-ref MIME 探测后从 /file/office-pdf 取真 PDF 字节
+        const pdfBytes = yield* Effect.promise(() => LibreOffice.convertToPdf(file).catch(() => undefined))
+        if (!pdfBytes) return { type: "binary" as const, content: "" }
+        return { type: "text" as const, content: "", mimeType: OFFICE_PDF_REF_MIME }
+      }
+      if (isOfficeDirect(ctx.query.path)) {
+        return yield* filesystem(
+          FileSystem.Service.use((fs) => fs.read({ path: RelativePath.make(ctx.query.path) })),
+        ).pipe(
+          Effect.map((item) => ({
+            type: "text" as const,
+            content: Buffer.from(item.content).toString("base64"),
+            encoding: "base64" as const,
+            mimeType: getOfficeMimeType(ctx.query.path),
+          })),
+        )
+      }
+      // FORK-END
       return yield* filesystem(
         FileSystem.Service.use((fs) => fs.read({ path: RelativePath.make(ctx.query.path) })),
       ).pipe(
@@ -128,6 +154,31 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       return []
     })
 
+    // FORK-BEGIN: office routes handlers(office-routes-effect-httpapi 2026-05-03)[feat: electron-replatform]
+    const officePdf = Effect.fn("FileHttpApi.officePdf")(function* (ctx: { query: { path: string } }) {
+      const filePath = ctx.query.path
+      const directory = (yield* InstanceState.context).directory
+      const full = path.isAbsolute(filePath) ? filePath : path.join(directory, filePath)
+      const bytes = yield* Effect.promise(() => LibreOffice.convertToPdf(full).catch(() => undefined))
+      if (!bytes || bytes.length === 0) return new Uint8Array()
+      return bytes
+    })
+
+    const officeToolingStatus = Effect.fn("FileHttpApi.officeToolingStatus")(function* () {
+      return yield* Effect.promise(() => OfficeInstaller.status())
+    })
+
+    const officeToolingInstall = Effect.fn("FileHttpApi.officeToolingInstall")(function* () {
+      // 启动后台 install 但立即返回当前 status(避免 client 等待数分钟下载)
+      yield* Effect.promise(() => OfficeInstaller.startInstall())
+      return yield* Effect.promise(() => OfficeInstaller.status())
+    })
+
+    const officeToolingProgress = Effect.fn("FileHttpApi.officeToolingProgress")(function* () {
+      return OfficeInstaller.getProgress()
+    })
+    // FORK-END
+
     return handlers
       .handle("findText", findText)
       .handle("findFile", findFile)
@@ -135,5 +186,11 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       .handle("list", list)
       .handle("content", content)
       .handle("status", status)
+      // FORK-BEGIN: office routes 注册 [feat: electron-replatform]
+      .handle("officePdf", officePdf)
+      .handle("officeToolingStatus", officeToolingStatus)
+      .handle("officeToolingInstall", officeToolingInstall)
+      .handle("officeToolingProgress", officeToolingProgress)
+      // FORK-END
   }),
 ).pipe(Layer.provide(LocationServiceMap.layer))
