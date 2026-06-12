@@ -12,6 +12,8 @@ import { SessionPrompt } from "@/session/prompt"
 import { SessionRevert } from "@/session/revert"
 import { SessionRunState } from "@/session/run-state"
 import { SessionStatus } from "@/session/status"
+// FORK: stuck-working-indicator-fix — 残骸消息自愈 [feat: stuck-working-indicator-fix]
+import { HealInterrupted } from "@/session/heal-interrupted"
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "@/session/todo"
 import { MessageID, PartID, SessionID } from "@/session/schema"
@@ -115,7 +117,10 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       }
       yield* requireSession(ctx.params.sessionID)
       if (ctx.query.limit === undefined || ctx.query.limit === 0) {
-        return yield* SessionError.mapStorageNotFound(session.messages({ sessionID: ctx.params.sessionID }))
+        // FORK: stuck-working-indicator-fix — 硬杀漏盖 time.completed 的残骸消息在 idle 时自愈,
+        // 清除前端永久"运行中"图标 [feat: stuck-working-indicator-fix]
+        const msgs = yield* SessionError.mapStorageNotFound(session.messages({ sessionID: ctx.params.sessionID }))
+        return yield* HealInterrupted.healInterrupted({ sessionID: ctx.params.sessionID, messages: msgs })
       }
 
       const page = yield* SessionError.mapStorageNotFound(
