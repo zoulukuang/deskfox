@@ -33,6 +33,10 @@ const iconIco = path.join(brandingDir, "src", "assets", "icons", iconEnv, "icon.
 const config: Configuration = {
   appId: APP_IDS[channel],
   productName: PRODUCT_NAMES[channel],
+  // 安装目录独立(默认取 package.json name "@opencode-ai/desktop" → 与上游官方版同目录互踩,实测踩坑)
+  extraMetadata: {
+    name: channel === "prod" ? "deskfox" : `deskfox-${channel}`,
+  },
   artifactName: `${ARTIFACT_PREFIX[channel]}-\${version}-\${os}-\${arch}.\${ext}`,
   directories: {
     output: "dist-deskfox",
