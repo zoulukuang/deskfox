@@ -52,7 +52,9 @@ export interface Settings {
 export const monoDefault = "System Mono"
 export const sansDefault = "System Sans"
 export const terminalDefault = "JetBrainsMono Nerd Font Mono"
-export const newLayoutDesignsDefault = import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"
+// FORK: DeskFox 默认经典布局(sidebar rail + 会话面板,DeskFox 五栏 REQ-041 的基座);
+// 上游新 v2 布局(标签+聊天)与 DeskFox 既有交互差异大,默认关 [feat: electron-replatform] 2026-06-12
+export const newLayoutDesignsDefault = false
 
 const monoFallback =
   'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
