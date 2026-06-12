@@ -7,6 +7,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron"
 import * as fileOps from "./file-ops"
 import * as preventSleep from "./prevent-sleep"
+import * as feishu from "./feishu"
 import { registerLocalAssetProtocol } from "./local-asset"
 
 export function registerDeskfoxIpc() {
@@ -36,5 +37,17 @@ export function registerDeskfoxIpc() {
   h("get_prevent_sleep", preventSleep.getPreventSleep)
   h("set_prevent_sleep", preventSleep.setPreventSleep)
 
-  // TODO[electron-replatform]: 飞书(10 command)、本地资源协议(localasset://)、托盘、事件(flush-before-close/sidecar-watchdog)逐模块补
+  // ── 飞书桥接(转发到 ~/.opencode/feishu-plugin-server.json 指向的插件 server)──
+  h("feishu_adapter_status", feishu.feishuAdapterStatus)
+  h("feishu_oauth_start", feishu.feishuOauthStart)
+  h("feishu_oauth_poll", feishu.feishuOauthPoll)
+  h("feishu_save_account", feishu.feishuSaveAccount)
+  h("feishu_list_accounts", feishu.feishuListAccounts)
+  h("feishu_delete_account", feishu.feishuDeleteAccount)
+  h("feishu_update_account_model", feishu.feishuUpdateAccountModel)
+  h("feishu_update_account_settings", feishu.feishuUpdateAccountSettings)
+  h("feishu_pick_workspace_dir", feishu.feishuPickWorkspaceDir)
+  h("feishu_list_providers", feishu.feishuListProviders)
+
+  // TODO[electron-replatform]: 托盘、事件(flush-before-close/sidecar-watchdog)逐模块补
 }
