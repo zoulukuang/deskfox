@@ -1,5 +1,5 @@
 feat-id: llm-stream-idle-timeout
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # llm-stream-idle-timeout — changelog
