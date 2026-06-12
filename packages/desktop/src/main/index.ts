@@ -42,16 +42,20 @@ import { registerWslIpcHandlers } from "./wsl/ipc"
 import { spawnWslSidecar } from "./wsl/sidecar"
 import { migrate } from "./migrate"
 
+// FORK-BEGIN: DeskFox 应用身份 — 继承 Tauri 版三档 identifier(ai.deskfox.app,治理规则 R3/应用身份-命名规则)
+//   userData 与旧 Tauri 版同目录(Roaming/<id>):前端偏好迁移同目录原地完成,Win 任务栏固定/通知
+//   身份(AppUserModelId)延续,升级无感。[feat: electron-replatform] 2026-06-13
 const APP_NAMES: Record<string, string> = {
-  dev: "OpenCode Dev",
-  beta: "OpenCode Beta",
-  prod: "OpenCode",
+  dev: "DeskFox Dev",
+  beta: "DeskFox Beta",
+  prod: "DeskFox",
 }
 const APP_IDS: Record<string, string> = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "ai.deskfox.app.dev",
+  beta: "ai.deskfox.app.beta",
+  prod: "ai.deskfox.app",
 }
+// FORK-END
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 
@@ -113,7 +117,8 @@ const main = Effect.gen(function* () {
 
   process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
 
-  const appId = app.isPackaged ? APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
+  // FORK: 未打包 dev 跑也用 DeskFox dev 身份(身份/迁移路径与打包一致,便于自动化验证)[feat: electron-replatform]
+  const appId = app.isPackaged ? APP_IDS[CHANNEL] : "ai.deskfox.app.dev"
   const onboardingTestRoot = ((): string | undefined => {
     if (!TEST_ONBOARDING) return
 
@@ -129,7 +134,7 @@ const main = Effect.gen(function* () {
     process.env.XDG_STATE_HOME = join(root, "state")
     return root
   })()
-  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "OpenCode Dev")
+  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "DeskFox Dev") // FORK: DeskFox 品牌 [feat: electron-replatform]
   app.setAppUserModelId(appId)
   app.setPath(
     "userData",
