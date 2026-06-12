@@ -143,7 +143,14 @@ export const SettingsGeneral: Component = () => {
               {
                 label: language.t("toast.update.action.installRestart"),
                 onClick: async () => {
-                  await platform.updateAndRestart!()
+                  // FORK: 捕获 install/relaunch 错误并展示 — 否则失败时 toast action 静默吞,用户"点了没反应"
+                  // [bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
+                  try {
+                    await platform.updateAndRestart!()
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : String(err)
+                    showToast({ title: language.t("common.requestFailed"), description: message })
+                  }
                 },
               },
               {

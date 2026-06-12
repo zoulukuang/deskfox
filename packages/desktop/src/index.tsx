@@ -324,13 +324,12 @@ const createPlatform = (): Platform => {
     ...(UPDATER_ENABLED
       ? {
           checkUpdate: async () => {
-            const next = await check().catch(() => null)
+            // FORK: 不再 .catch(() => null/false) 吞掉 check/download 错误 — 静默吞会把网络/验签/下载失败
+            // 误报成"已是最新版"。check() 抛错(网络等)→ 向上传播由调用方提示;返回 null = 服务端确认已是最新。
+            // download() 抛错 → 传播(原 .catch(()=>false) 会假报"已是最新")。[bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
+            const next = await check()
             if (!next) return { updateAvailable: false }
-            const ok = await next
-              .download()
-              .then(() => true)
-              .catch(() => false)
-            if (!ok) return { updateAvailable: false }
+            await next.download()
             update = next
             // FORK: 匿名使用统计 update_downloaded(fire-and-forget;Rust 侧白名单校验 + opt-out)
             // [feat: telemetry-usage-stats] 2026-06-06
@@ -340,11 +339,11 @@ const createPlatform = (): Platform => {
           updateAndRestart: async () => {
             if (!update) return
             if (ostype() === "windows") await commands.killSidecar().catch(() => undefined)
-            const installed = await update
-              .install()
-              .then(() => true)
-              .catch(() => false)
-            if (!installed) return
+            // FORK: 不再 .catch(() => false) 吞掉 install 错误 — 静默吞 + `if(!installed) return` = 用户点
+            // "安装并重启"后零反馈零报错(macOS prod 升级真实路径 TC-3 此前从未端到端验证)。
+            // 让 install() 抛错向上传播,调用方(settings/layout toast action、error 页)捕获后展示真实原因。
+            // [bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
+            await update.install()
             // FORK: 匿名使用统计 update_applied —— 用**阻塞**上报 + await,确保 relaunch 前发出;
             // fire-and-forget 会被紧接着的进程重启杀掉,事件几乎必丢。[feat: telemetry-usage-stats]
             await invoke("track_event_cmd", { name: TELEMETRY_EVENT.UPDATE_APPLIED, blocking: true }).catch(() => {})
