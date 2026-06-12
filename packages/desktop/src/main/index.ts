@@ -17,6 +17,7 @@ import { CHANNEL } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
 import { registerDeskfoxIpc } from "./deskfox/ipc"
+import { createTray, attachCloseToTray, setQuitting, isQuitting } from "./deskfox/tray"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { parseMarkdown } from "./markdown"
@@ -209,7 +210,16 @@ const main = Effect.gen(function* () {
   })
 
   app.on("before-quit", () => {
+    // FORK: 真退出意图 — 让关闭到托盘的 close 拦截放行(Cmd+Q / 菜单退出 / app.quit)[feat: electron-replatform]
+    setQuitting()
     void stopSidecars()
+  })
+
+  // FORK: 关闭到托盘 backstop — 订阅 window-all-closed 即覆盖"非 mac 默认 quit";
+  //   仅退出意图时才真 quit,否则主进程常驻(飞书/边车不退)[feat: electron-replatform]
+  app.on("window-all-closed", () => {
+    writeLog("window", "[deskfox-tray] window-all-closed", { isQuitting: isQuitting() })
+    if (isQuitting()) app.quit()
   })
 
   app.on("will-quit", () => {
@@ -353,6 +363,9 @@ const main = Effect.gen(function* () {
 
   mainWindow = createMainWindow()
   if (mainWindow) {
+    // FORK: 系统托盘 + 关闭到托盘(关 GUI ≠ 退主进程,飞书/边车常驻)[feat: electron-replatform]
+    createTray()
+    attachCloseToTray(mainWindow)
     createMenu({
       trigger: (id) => {
         const win = BrowserWindow.getFocusedWindow() ?? mainWindow

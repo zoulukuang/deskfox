@@ -13,7 +13,7 @@ import { Markdown } from "@opencode-ai/ui/markdown"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { showToast } from "@opencode-ai/ui/toast"
-import { invoke } from "@/utils/native"
+import { invoke, listen } from "@/utils/native"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useComments } from "@/context/comments"
@@ -614,8 +614,10 @@ export function FileTabContent(props: {
     }
   })
 
-  // FORK: window close flush — 监听 Tauri prevent_close 之前发的 "flush-before-close" event
+  // FORK: window close flush — 关闭到托盘前 silent save 未保存改动
   // [feat: auto-save-debounce-flush] 2026-05-21
+  // [feat: electron-replatform] 2026-06-12 — Electron 主进程 close 时直接 emit deskfox-flush-before-close,
+  //   本组件直连 native.listen(不再依赖 layout 把它转成 DOM 事件);DOM 事件路径保留向后兼容。
   onMount(() => {
     const handler = () => {
       if (editing() && dirty()) {
@@ -623,7 +625,12 @@ export function FileTabContent(props: {
       }
     }
     window.addEventListener("deskfox-flush-now", handler)
-    onCleanup(() => window.removeEventListener("deskfox-flush-now", handler))
+    let unlisten: (() => void) | undefined
+    void listen("deskfox-flush-before-close", handler).then((u) => (unlisten = u))
+    onCleanup(() => {
+      window.removeEventListener("deskfox-flush-now", handler)
+      unlisten?.()
+    })
   })
   // FORK: dirty 状态同步给 file context,让 watcher reload 守卫(查看器-自动刷新)2026-04-28
   createEffect(

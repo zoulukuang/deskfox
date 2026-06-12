@@ -15,9 +15,23 @@ export function getPreventSleep(): boolean {
   return blockerId !== null && powerSaveBlocker.isStarted(blockerId)
 }
 
+// 变更订阅(托盘"保持电脑不休眠"勾选项与设置页双入口同步)— 对齐 Tauri set_prevent_sleep_check
+const subscribers = new Set<(enabled: boolean) => void>()
+export function onPreventSleepChanged(cb: (enabled: boolean) => void): () => void {
+  subscribers.add(cb)
+  return () => subscribers.delete(cb)
+}
+
 function broadcast(enabled: boolean) {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(`deskfox:${PREVENT_SLEEP_CHANGED_EVENT}`, enabled)
+  }
+  for (const cb of subscribers) {
+    try {
+      cb(enabled)
+    } catch {
+      /* 订阅者异常不影响其它 */
+    }
   }
 }
 
