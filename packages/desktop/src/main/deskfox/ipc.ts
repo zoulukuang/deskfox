@@ -26,6 +26,7 @@ export function registerDeskfoxIpc() {
   h("trash_path", fileOps.trashPath)
   h("open_path", fileOps.openPath)
   h("reveal_in_folder", fileOps.revealInFolder)
+  h("open_in_terminal", fileOps.openInTerminal)
   h("get_file_mtime", fileOps.getFileMtime)
   h("get_file_size", fileOps.getFileSize)
   h("write_text_file", fileOps.writeTextFile)

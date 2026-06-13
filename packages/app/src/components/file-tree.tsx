@@ -889,6 +889,78 @@ export default function FileTree(props: {
   }
   // FORK-END
 
+  // FORK-BEGIN: #12 复制相对路径 + 在终端打开 [feat: file-tree-ux-polish-p2] 2026-06-13
+  /** 复制相对路径(node.path 即相对项目根);多选拼 \n。 */
+  const copyRelPathToClipboard = async (target: FileNode) => {
+    const sel = selection.paths()
+    const rels =
+      sel.length > 1
+        ? sel.map((p) => file.tree.node(p)?.path).filter((p): p is string => Boolean(p))
+        : [target.path]
+    if (rels.length === 0) return
+    try {
+      await navigator.clipboard.writeText(rels.join("\n"))
+      showToast({
+        variant: "success",
+        title:
+          rels.length === 1
+            ? language.t("fileTree.toast.copyRelPathSuccessSingle")
+            : language.t("fileTree.toast.copyRelPathSuccessBulk", { count: rels.length }),
+      })
+    } catch (e) {
+      showToast({
+        variant: "error",
+        title: language.t("fileTree.toast.copyFailedSingle"),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  /** 在系统终端打开:文件夹→自身,文件→其父目录。 */
+  const openInTerminalAt = (target: FileNode) => {
+    const dir = target.type === "directory" ? target.absolute : dirname(target.absolute)
+    void invoke("open_in_terminal", { path: dir }).catch((e) => {
+      showToast({ variant: "error", title: language.t("fileTree.toast.terminalFailed"), description: String(e) })
+    })
+  }
+  // FORK-END
+
+  // FORK-BEGIN: #8 全部展开 / 全部折叠 [feat: file-tree-ux-polish-p2] 2026-06-13
+  /** 收集 rootRel 子树下所有当前 expanded 的目录(深度优先,含自身后代)。 */
+  const collectExpandedDirs = (rootRel: string): string[] => {
+    const out: string[] = []
+    const visit = (rel: string) => {
+      for (const c of file.tree.children(rel)) {
+        if (c.type === "directory" && (file.tree.state(c.path)?.expanded ?? false)) {
+          out.push(c.path)
+          visit(c.path)
+        }
+      }
+    }
+    visit(rootRel)
+    return out
+  }
+  const collapseAll = () => {
+    for (const dir of collectExpandedDirs(props.path)) file.tree.collapse(dir)
+  }
+  /** 递归展开(跳过 ignored 目录如 node_modules;深度上限防爆树)。 */
+  const expandAll = async () => {
+    const MAX_EXPAND_DEPTH = 8
+    const expandUnder = async (rel: string, depth: number) => {
+      if (depth > MAX_EXPAND_DEPTH) return
+      const kids = file.tree.children(rel).filter((n) => n.type === "directory" && !n.ignored)
+      await Promise.all(
+        kids.map(async (k) => {
+          file.tree.expand(k.path)
+          await file.tree.list(k.path)
+          await expandUnder(k.path, depth + 1)
+        }),
+      )
+    }
+    await expandUnder(props.path, 0)
+  }
+  // FORK-END
+
   // FORK-BEGIN: 拖放移动 — drop handler + spring-load 共享 timer 2026-04-27
   let springTimer: ReturnType<typeof setTimeout> | undefined
   const cancelSpringTimer = () => {
@@ -1005,6 +1077,22 @@ export default function FileTree(props: {
       // FORK: 外部 OS 文件拖入(从 Windows Explorer 等)— dataTransfer.types 含 "Files"(commit #4)2026-04-28
       const externalFiles = event.dataTransfer?.types.includes("Files") ?? false
       if (!inTree && !externalFiles) return
+      // FORK: #11 非法目标(拖进自身子目录 / 自身 / 原父目录)→ 禁止光标,不高亮、不 spring-load、不接收。
+      //   需 preventDefault 才能让 dropEffect=none 生效(否则浏览器用默认 cursor)。[feat: file-tree-ux-polish-p2] 2026-06-13
+      if (inTree && !externalFiles) {
+        const sources = draggingPaths()
+        const anyValid = sources.some((s) => isValidMoveTarget(s, { absolute: targetAbs, type: "directory" }))
+        if (!anyValid) {
+          event.preventDefault()
+          event.stopPropagation()
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+          if (dropTargetPath() === targetAbs) {
+            cancelSpringTimer()
+            setDropTargetPath(null)
+          }
+          return
+        }
+      }
       event.preventDefault()
       event.stopPropagation()
       if (event.dataTransfer) event.dataTransfer.dropEffect = externalFiles ? "copy" : "move"
@@ -1134,6 +1222,13 @@ export default function FileTree(props: {
         <ContextMenu.Item onSelect={() => void copyPathToClipboard(target)}>
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.copyPath")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
+        {/* FORK: #12 复制相对路径 + 在终端打开 [feat: file-tree-ux-polish-p2] 2026-06-13 */}
+        <ContextMenu.Item onSelect={() => void copyRelPathToClipboard(target)}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.copyRelativePath")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => openInTerminalAt(target)}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.openInTerminal")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
         <ContextMenu.Separator />
         {/* 组 3: 新建文件 / 新建文件夹 */}
         <ContextMenu.Item onSelect={() => promptNewFileAt(newTargetAbs, newTargetRel, onAfterNew)}>
@@ -1143,7 +1238,14 @@ export default function FileTree(props: {
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.newFolder")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
         <ContextMenu.Separator />
-        {/* 组 4: 刷新 */}
+        {/* 组 4: 全部展开 / 全部折叠(放行菜单,保证树铺满时仍可达 — 空白区可能滚出视口)/ 刷新
+            [feat: file-tree-ux-polish-p2 #8] 2026-06-13 */}
+        <ContextMenu.Item onSelect={() => void expandAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.expandAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => collapseAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.collapseAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
         <ContextMenu.Item onSelect={() => void refreshNode(target)}>
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.refresh")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
@@ -1173,7 +1275,18 @@ export default function FileTree(props: {
           </ContextMenu.Item>
         </Show>
         <ContextMenu.Separator />
-        {/* 组 2: 刷新(递归) */}
+        {/* FORK: #8 全部展开 / 全部折叠 [feat: file-tree-ux-polish-p2] 2026-06-13 */}
+        <ContextMenu.Item onSelect={() => void expandAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.expandAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => collapseAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.collapseAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => void invoke("open_in_terminal", { path: rootAbs }).catch(() => {})}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.openInTerminal")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Separator />
+        {/* 组 3: 刷新(递归) */}
         <ContextMenu.Item onSelect={() => void file.tree.refreshAll(rootRel)}>
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.refresh")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
@@ -1351,6 +1464,17 @@ export default function FileTree(props: {
     })
 
     return out
+  })
+
+  // FORK: #7 根级占位 — 加载中 / 加载错误(空目录由 host session-side-panel 的 nofiles 处理,
+  //   这里只接管 loading / error 两态,避免与 host 的 empty 冲突)[feat: file-tree-ux-polish-p2] 2026-06-13
+  const rootPlaceholder = createMemo<{ kind: "loading" | "error"; msg?: string } | null>(() => {
+    if (level !== 0) return null
+    if (nodes().length > 0) return null
+    const st = file.tree.state(props.path)
+    if (st?.error) return { kind: "error", msg: st.error }
+    if (st?.loading || !st?.loaded) return { kind: "loading" }
+    return null
   })
 
   const bodyClass = `flex flex-col gap-0.5 ${level === 0 ? "min-h-full" : ""} ${props.class ?? ""}`
@@ -1568,6 +1692,29 @@ export default function FileTree(props: {
         onDrop={rootDropHandlers.onDrop}
       >
         {treeContent}
+        {/* FORK: #7 加载中 / 错误占位 [feat: file-tree-ux-polish-p2] 2026-06-13 */}
+        <Show when={rootPlaceholder()} keyed>
+          {(ph) => (
+            <div class="px-3 py-6 flex flex-col items-center gap-2 text-12-regular text-text-weak">
+              <Show when={ph.kind === "loading"}>
+                <span>
+                  {language.t("common.loading")}
+                  {language.t("common.loading.ellipsis")}
+                </span>
+              </Show>
+              <Show when={ph.kind === "error"}>
+                <span class="text-text-base">{language.t("fileTree.placeholder.error")}</span>
+                <button
+                  type="button"
+                  class="px-2 py-0.5 rounded border border-border-base text-text-base hover:bg-surface-raised-base-hover"
+                  onClick={() => void file.tree.refresh(props.path)}
+                >
+                  {language.t("fileTree.placeholder.retry")}
+                </button>
+              </Show>
+            </div>
+          )}
+        </Show>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>{renderEmptyMenuItems()}</ContextMenu.Portal>
     </ContextMenu>

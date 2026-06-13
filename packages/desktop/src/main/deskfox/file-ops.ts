@@ -76,6 +76,48 @@ export function revealInFolder(args: { path: string }): void {
   shell.showItemInFolder(path.resolve(args.path))
 }
 
+// FORK: 在系统终端打开目录 [feat: file-tree-ux-polish-p2 #12] 2026-06-13
+//   Win:优先 Windows Terminal(wt),回退 cmd;mac:Terminal.app;linux:x-terminal-emulator。
+//   失败抛错由 renderer toast 提示。
+export async function openInTerminal(args: { path: string }): Promise<void> {
+  const { spawn } = await import("child_process")
+  const dir = path.resolve(args.path)
+  try {
+    await fs.stat(dir)
+  } catch {
+    throw new Error(`path not found(可能已被移动或删除): ${dir}`)
+  }
+  const launch = (cmd: string, argv: string[]) =>
+    new Promise<void>((resolve, reject) => {
+      try {
+        const child = spawn(cmd, argv, { cwd: dir, detached: true, stdio: "ignore", windowsHide: false })
+        child.on("error", reject)
+        child.unref()
+        // spawn 成功即认为已拉起(终端是独立进程,不等退出)
+        setImmediate(resolve)
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)))
+      }
+    })
+
+  if (process.platform === "win32") {
+    try {
+      await launch("wt.exe", ["-d", dir])
+      return
+    } catch {
+      // 无 Windows Terminal → 回退到 cmd 新窗口
+      await launch("cmd.exe", ["/c", "start", "cmd.exe", "/k", `cd /d "${dir}"`])
+      return
+    }
+  }
+  if (process.platform === "darwin") {
+    await launch("open", ["-a", "Terminal", dir])
+    return
+  }
+  // linux 及其他:尽力而为
+  await launch("x-terminal-emulator", ["--working-directory", dir])
+}
+
 export async function getFileMtime(args: { root: string; path: string }): Promise<number> {
   const st = await fs.stat(resolve(args.root, args.path))
   return Math.floor(st.mtimeMs)
