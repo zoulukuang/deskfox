@@ -5,10 +5,15 @@ import {
   dataUrlFromMediaValue,
   hasMediaValue,
   isBinaryContent,
+  isOfficePdfRef,
   mediaKindFromPath,
   normalizeMimeType,
   svgTextFromValue,
 } from "../pierre/media"
+// FORK: 从 Tauri 版迁回 —— PDF/Office 预览(pdf.js TextLayerBuilder 可选中 + LibreOffice 安装引导),
+//   上游 electron 重写时丢了这套。[feat: pdf-render-path] 2026-06-14
+import { DocumentViewer } from "./document-viewer"
+import { OfficeInstallPrompt, type OfficeToolingApi } from "./office-install-prompt"
 
 export type FileMediaOptions = {
   mode?: "auto" | "off"
@@ -19,7 +24,12 @@ export type FileMediaOptions = {
   deleted?: boolean
   readFile?: (path: string) => Promise<FileContent | undefined>
   onLoad?: () => void
-  onError?: (ctx: { kind: "image" | "audio" | "svg" }) => void
+  onError?: (ctx: { kind: "image" | "audio" | "svg" | "pdf" }) => void
+  // FORK: Office/PDF 预览所需(随 file-tabs media 传入)[feat: pdf-render-path] 2026-06-14
+  officeTooling?: OfficeToolingApi
+  onRetryFile?: () => void
+  onOpenExternal?: () => void
+  loadOfficePdf?: (path: string) => Promise<Uint8Array | undefined>
 }
 
 function mediaValue(cfg: FileMediaOptions, mode: "image" | "audio") {
@@ -244,6 +254,58 @@ export function FileMedia(props: { media?: FileMediaOptions; fallback: () => JSX
                 )}
               </Show>
             </div>
+          )
+        })()}
+      </Match>
+      {/* FORK: PDF/Office 预览分支(从 Tauri 版迁回,上游 electron 重写丢失)[feat: pdf-render-path] 2026-06-14 */}
+      <Match when={kind() === "pdf"}>
+        {(() => {
+          const value = cfg()?.current
+          const path = cfg()?.path ?? ""
+          const ext = path.split(".").pop()?.toLowerCase() ?? ""
+          const isPdf = ext === "pdf"
+          const isOfficeRef = isOfficePdfRef(value as any)
+          // Office 文件后端已转 PDF — 从二进制端点取字节(避免 base64+JSON OOM)
+          if (isOfficeRef) {
+            return (
+              <DocumentViewer
+                kind="pdf"
+                value={value}
+                path={path}
+                loadBinary={cfg()?.loadOfficePdf ? () => cfg()!.loadOfficePdf!(path) : undefined}
+                onLoad={onLoad}
+                onError={() => cfg()?.onError?.({ kind: "pdf" })}
+                fallback={props.fallback}
+              />
+            )
+          }
+          if (!hasMediaValue(value as any)) {
+            if (!isPdf) {
+              return (
+                <OfficeInstallPrompt
+                  fileName={path.split(/[\\/]/).pop() ?? path}
+                  fileExt={ext}
+                  api={cfg()?.officeTooling}
+                  onRetryFile={() => cfg()?.onRetryFile?.()}
+                  onOpenExternal={cfg()?.onOpenExternal ? () => cfg()?.onOpenExternal?.() : undefined}
+                />
+              )
+            }
+            return (
+              <div class="flex min-h-40 items-center justify-center px-6 py-4 text-center text-text-weak">
+                无法读取 {path.split(/[\\/]/).pop() ?? "该文件"} 的内容
+              </div>
+            )
+          }
+          return (
+            <DocumentViewer
+              kind="pdf"
+              value={value}
+              path={path}
+              onLoad={onLoad}
+              onError={() => cfg()?.onError?.({ kind: "pdf" })}
+              fallback={props.fallback}
+            />
           )
         })()}
       </Match>
