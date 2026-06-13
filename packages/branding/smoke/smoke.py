@@ -362,7 +362,8 @@ def probe_settings(cdp):
 # ───────────────────────── probe: 文件预览(可见文件) ─────────────────────────
 RENDER_CHECK_JS = r"""
 (() => {
-  const v = document.querySelector('#review-panel') || document.querySelector('[data-context="file-viewer"]');
+  // 只看当前激活的文件查看器(keyed Show 同时只挂一个),不含文件树,避免树文本干扰
+  const v = document.querySelector('[data-component="file-viewer"]') || document.querySelector('#review-panel');
   if (!v) return {ok:false, why:'无查看器'};
   const q = s => !!v.querySelector(s);
   const hasCanvas = q('canvas');
@@ -380,8 +381,22 @@ PDFISH_EXT = {"pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt", "odt", "ods", 
 HTML_EXT = {"html", "htm"}
 
 
+TREE_SCROLLER_JS = r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return null;
+  let s=t;for(const e of [t,...t.querySelectorAll('*')]){if(e.scrollHeight>e.clientHeight+20){s=e;break;}}
+  return {sh:s.scrollHeight,ch:s.clientHeight};})()"""
+
+VISIBLE_LEAVES_JS = r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return[];
+  const out=[];
+  [...t.querySelectorAll('*')].forEach(e=>{const tx=(e.textContent||'').trim();
+    if(e.children.length>1)return; if(tx.length>80)return; if(!/^[^\n/]+\.[a-z0-9]{1,5}$/i.test(tx))return;
+    const r=e.getBoundingClientRect(); if(r.width<40||r.height>40)return;
+    if(r.top<70||r.bottom>window.innerHeight-10)return; // 仅视口内、可点
+    out.push({name:tx, ext:tx.split('.').pop().toLowerCase(), x:Math.round(r.x+r.width/2), y:Math.round(r.y+r.height/2)});});
+  return out;})()"""
+
+
 def probe_files(cdp):
-    print("[files] 打开文件树里可见的各类型文件,断言能渲染...", flush=True)
+    print("[files] 滚动遍历文件树,逐个打开各类型文件,断言能渲染...", flush=True)
     close_all_overlays(cdp)
     has_tree = cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');return !!t && t.getBoundingClientRect().width>30;})()""")
     if not has_tree:
@@ -389,41 +404,99 @@ def probe_files(cdp):
         if xy:
             cdp.click(xy["x"], xy["y"])
             time.sleep(0.6)
-    files = cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return[];
-        const out=[];const seen={};
-        [...t.querySelectorAll('*')].forEach(e=>{const tx=(e.textContent||'').trim();
-          if(e.children.length>1)return; if(tx.length>80)return; if(!/^[^\n/]+\.[a-z0-9]{1,5}$/i.test(tx))return;
-          const r=e.getBoundingClientRect(); if(r.width<40||r.height>40||r.y<60)return;
-          const ext=tx.split('.').pop().toLowerCase(); seen[ext]=(seen[ext]||0)+1; if(seen[ext]>2)return;
-          out.push({name:tx, ext, x:Math.round(r.x+r.width/2), y:Math.round(r.y+r.height/2)});});
-        return out.slice(0,24);})()""") or []
-    if not files:
-        record(_skip("files", "可见文件", "文件树里没看到带扩展名的文件(可能需展开文件夹)"))
+    # FORK: 冷启动后文件夹是折叠的 → 几乎没有叶子文件可测。先展开:自上而下点可见的折叠文件夹
+    #   (aria-expanded="false"),边展开边滚动,有上限防失控。
+    cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return;let s=t;for(const e of [t,...t.querySelectorAll('*')]){if(e.scrollHeight>e.clientHeight+20){s=e;break;}}s.scrollTop=0;})()""")
+    time.sleep(0.3)
+    expanded, stale = 0, 0
+    while expanded < 45 and stale < 8:
+        xy = cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return null;
+          const el=[...t.querySelectorAll('[aria-expanded="false"]')].find(e=>{const r=e.getBoundingClientRect();return r.top>70 && r.bottom<window.innerHeight-10 && r.width>20;});
+          if(!el)return null;const r=el.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()""")
+        if xy:
+            cdp.click(xy["x"], xy["y"])
+            expanded += 1
+            stale = 0
+            time.sleep(0.2)
+        else:
+            atBottom = cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');let s=t;for(const e of [t,...t.querySelectorAll('*')]){if(e.scrollHeight>e.clientHeight+20){s=e;break;}}
+              const was=s.scrollTop; s.scrollTop=Math.min(s.scrollTop+s.clientHeight*0.7, s.scrollHeight); return s.scrollTop<=was+2;})()""")
+            stale += 1
+            time.sleep(0.25)
+            if atBottom:
+                break
+    print("  展开了 ~%d 个文件夹" % expanded, flush=True)
+    cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return;let s=t;for(const e of [t,...t.querySelectorAll('*')]){if(e.scrollHeight>e.clientHeight+20){s=e;break;}}s.scrollTop=0;})()""")
+    time.sleep(0.3)
+
+    sc = cdp.ev(TREE_SCROLLER_JS)
+    if not sc:
+        record(_skip("files", "文件树", "找不到可滚动文件树"))
         return
-    print("  发现 %d 个可见文件" % len(files), flush=True)
-    for f in files:
-        cdp.clear_events()
-        cdp.click(f["x"], f["y"])
-        time.sleep(1.2)
-        r = Result("files", f["name"])
-        if is_crashed(cdp):
-            r.status, r.detail = "crash", "打开即崩溃"
-            r.errors = cdp.take_events()
-            record(r)
-            cdp.reload_app(wait=7)
-            continue
-        chk = cdp.ev(RENDER_CHECK_JS) or {}
-        ext = f["ext"]
-        if ext in PDFISH_EXT and not chk.get("hasCanvas"):
-            time.sleep(2.5)
+    # FORK: 文件树是虚拟列表(只渲染视口内行)+ 很长 → 必须滚动分页遍历。否则视口外文件点不到、
+    #   读到上一个文件的查看器 → 误判(html/xlsx 等曾因此误报)。每种扩展名最多测 PER_EXT 个。
+    step = max(200, int(sc["ch"] * 0.8))
+    processed: set = set()
+    seen_ext: dict = {}
+    PER_EXT = 2
+    pos = 0
+    while pos <= sc["sh"] + step:
+        cdp.ev(r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return;
+          let s=t;for(const e of [t,...t.querySelectorAll('*')]){if(e.scrollHeight>e.clientHeight+20){s=e;break;}}
+          s.scrollTop=%d;})()""" % int(pos))
+        time.sleep(0.5)
+        for f in cdp.ev(VISIBLE_LEAVES_JS) or []:
+            name = f["name"]
+            if name in processed:
+                continue
+            processed.add(name)
+            ext = f["ext"]
+            if seen_ext.get(ext, 0) >= PER_EXT:
+                continue
+            # 重新按名取当前坐标(确认仍在视口),再点 —— 防止枚举后行被滚走
+            xy = cdp.ev(
+                r"""(()=>{const t=document.querySelector('#file-tree-panel');if(!t)return null;
+                  const n=%s;const el=[...t.querySelectorAll('*')].find(e=>e.children.length<=1 && (e.textContent||'').trim()===n);
+                  if(!el)return null;const r=el.getBoundingClientRect();
+                  if(r.top<70||r.bottom>window.innerHeight-10||r.width<10)return null;
+                  return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()""" % json.dumps(name)
+            )
+            if not xy:
+                continue
+            seen_ext[ext] = seen_ext.get(ext, 0) + 1
+            cdp.clear_events()
+            cdp.click(xy["x"], xy["y"])
+            time.sleep(1.0)
+            r = Result("files", name)
+            if is_crashed(cdp):
+                r.status, r.detail = "crash", "打开即崩溃"
+                r.errors = cdp.take_events()
+                record(r)
+                cdp.reload_app(wait=7)
+                continue
+            # FORK: 轮询等待渲染 —— office 首次转换(LibreOffice 冷启动)/大 PDF 渲染较慢,
+            #   固定 wait 会误判空白。pdf-like 等 canvas 最多 ~22s,html 等 iframe ~6s。
             chk = cdp.ev(RENDER_CHECK_JS) or {}
-        ok, why = _assert_render(ext, chk)
-        r.errors = cdp.take_events()
-        if not ok:
-            r.status, r.detail = "fail", why
-        elif r.errors:
-            r.status, r.detail = "fail", "渲染了但有 %d 条报错" % len(r.errors)
-        record(r)
+            if ext in PDFISH_EXT:
+                for _ in range(20):
+                    if chk.get("hasCanvas"):
+                        break
+                    time.sleep(1.1)
+                    chk = cdp.ev(RENDER_CHECK_JS) or {}
+            elif ext in HTML_EXT:
+                for _ in range(6):
+                    if chk.get("hasIframe"):
+                        break
+                    time.sleep(0.8)
+                    chk = cdp.ev(RENDER_CHECK_JS) or {}
+            ok, why = _assert_render(ext, chk)
+            r.errors = cdp.take_events()
+            if not ok:
+                r.status, r.detail = "fail", why
+            elif r.errors:
+                r.status, r.detail = "fail", "渲染了但有 %d 条报错" % len(r.errors)
+            record(r)
+        pos += step
 
 
 def _assert_render(ext, chk):
