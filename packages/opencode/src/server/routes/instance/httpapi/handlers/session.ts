@@ -130,6 +130,12 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
           before: ctx.query.before,
         }),
       )
+      // FORK: 首页(before 未设)= 最近消息含末条,idle 补盖残骸 + 落 DB,修侧边栏永久转圈。
+      //   重连后前端只重 GET 分页首页(带 limit),不走上面 no-limit 分支,故残骸 heal 必须在这也补一份。
+      //   [feat: stuck-working-status-reconcile] 2026-06-13(主分支 instance/session.ts 同款,适配 electron httpapi)
+      if (ctx.query.before === undefined) {
+        page.items = yield* HealInterrupted.healInterrupted({ sessionID: ctx.params.sessionID, messages: page.items })
+      }
       if (!page.cursor) return page.items
 
       const request = yield* HttpServerRequest.HttpServerRequest

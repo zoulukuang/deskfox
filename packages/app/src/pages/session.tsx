@@ -1516,8 +1516,19 @@ export default function Page() {
     setFollowup("edit", id, undefined)
   }
 
-  const halt = (sessionID: string) =>
-    busy(sessionID) ? sdk.client.session.abort({ sessionID }).catch(() => {}) : Promise.resolve()
+  // FORK: 停止失败不再静默吞错(原 .catch(()=>{})),弹真实提示;残留 busy 由 session.status()
+  // 对账自愈,见 global-sync/session-status-reconcile.ts [feat: stuck-working-status-reconcile] 2026-06-13
+  const halt = async (sessionID: string) => {
+    if (!busy(sessionID)) return
+    try {
+      await sdk.client.session.abort({ sessionID })
+    } catch (err) {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: formatServerError(err, language.t),
+      })
+    }
+  }
 
   const revertMutation = useMutation(() => ({
     mutationFn: async (input: { sessionID: string; messageID: string }) => {
