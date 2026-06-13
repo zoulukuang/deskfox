@@ -33,6 +33,8 @@ import { langFromExt } from "@/utils/lang-from-ext"
 // FORK: .md 编辑增强(列表续延 / Ctrl+B/I/K / 拖图 / 智能粘贴 / Ctrl+F 等)2026-05-05
 import { markdownEditorExtensions } from "@/utils/markdown-editor-extensions"
 import { isBinary, isOfficeDocument, tooLarge } from "@/utils/file-limits"
+// FORK: 补回 PDF 渲染(上游 electron 版前端无 pdf 渲染,pdf/office 预览全空白)[feat: pdf-render-path] 2026-06-13
+import { PdfViewer } from "@/components/pdf-viewer"
 // FORK: 本地资源 protocol(.md 内 <img>/<video>/<audio> 重写 + HTML 预览 iframe)2026-05-05
 import { localAssetUrl, resolveAbsolute, rewriteAssetSrc } from "@/utils/local-asset"
 // FORK: 大文件预览统一防护 — L4 UX 兜底组件 [feat: large-file-preview-guard] 2026-05-21
@@ -1409,6 +1411,77 @@ export function FileTabContent(props: {
     setMediaState((s) => ({ ...s, url: null, error: `解码失败: ${detail}` }))
   }
 
+  // FORK: PDF/Office 统一渲染路径 [feat: pdf-render-path] 2026-06-13
+  //   pdfLikeExtensions(media.ts)含 pdf + 全 office 扩展 → 两者 mediaKindFromPath 都为 "pdf",
+  //   但 renderMedia 的 Switch 无 pdf 分支 → 预览空白(冒烟扫出)。这里专设 renderPdf 接管:
+  //   原生 pdf 用已加载的 base64 内容解码出字节;office 用 /file/office-pdf(LibreOffice)转换字节。
+  //   都喂给 <PdfViewer>(pdf.js 画 canvas),不依赖 localasset,最稳。
+  const loadOfficePdf = async (filePath: string): Promise<Uint8Array | undefined> => {
+    const key = `${sdk.directory ?? ""}::${filePath}`
+    const cached = officePdfCacheGet(key)
+    if (cached) return cached
+    try {
+      const res = await sdk.client.file.officePdf({ path: filePath }, { parseAs: "arrayBuffer" } as any)
+      const data = (res as any)?.data
+      let bytes: Uint8Array | undefined
+      if (data instanceof ArrayBuffer) bytes = new Uint8Array(data)
+      else if (data instanceof Uint8Array) bytes = data
+      else if (data && (data as any).byteLength != null) bytes = new Uint8Array(data as ArrayBufferLike)
+      if (bytes && bytes.length > 0) officePdfCacheSet(key, bytes)
+      return bytes
+    } catch (e) {
+      console.warn("loadOfficePdf failed", e)
+      return undefined
+    }
+  }
+  const decodeNativePdfBytes = (): Uint8Array | undefined => {
+    const c = state()?.content as any
+    if (!c || typeof c.content !== "string") return undefined
+    if (c.encoding && c.encoding !== "base64") return undefined
+    try {
+      const bin = atob(c.content)
+      const u = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i)
+      return u
+    } catch {
+      return undefined
+    }
+  }
+  const renderPdf = () => {
+    const p = path()
+    const office = !!p && isOfficeDocument(p)
+    const openExternal = () => {
+      const root = sdk.directory
+      if (!root || !p) return
+      const absPath = `${root}/${p}`.replace(/\\/g, "/")
+      invoke("open_path", { path: absPath, appName: null }).catch((e) => {
+        showToast({ variant: "error", title: "无法用本机软件打开", description: String(e) })
+      })
+    }
+    return (
+      <div data-slot="pdf-viewer" data-file-path={p ?? ""} class="flex flex-col h-full select-text">
+        <div class="flex items-center justify-end gap-2 px-3 py-1 border-b border-border-base bg-surface-raised-stronger-non-alpha text-xs">
+          <button
+            type="button"
+            onClick={openExternal}
+            class="px-2 py-1 rounded border border-border-base hover:bg-surface-base-hover"
+            title="用系统默认应用打开此文件(Word / Excel / PowerPoint / PDF Reader)"
+          >
+            用本机软件打开
+          </button>
+        </div>
+        <div class="flex-1 min-h-0 overflow-hidden">
+          <Show
+            when={office}
+            fallback={<PdfViewer loadBytes={async () => decodeNativePdfBytes()} />}
+          >
+            <PdfViewer loadBytes={() => loadOfficePdf(p!)} />
+          </Show>
+        </div>
+      </div>
+    )
+  }
+
   const renderMedia = () => (
     <div class="flex flex-col items-center justify-center px-6 py-8 gap-3">
       <Show
@@ -1669,6 +1742,9 @@ export function FileTabContent(props: {
       )
     }
     if (isMarkdownPath(p)) return renderMarkdown(source)
+    // FORK: pdf/office 走专设的 PdfViewer(必须在 mediaKindFromPath 之前,因 pdfLikeExtensions 含 office
+    //   会让它们落到无 pdf 分支的 renderMedia → 空白)[feat: pdf-render-path] 2026-06-13
+    if (isPdfLikePath(p)) return renderPdf()
     if (mediaKindFromPath(p)) return renderMedia()
     if (isHtmlPath(p)) return renderHtml(source)
     return renderDefault(source)
