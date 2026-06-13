@@ -576,8 +576,11 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   />
                 </div>
               </Show>
+              {/* FORK: 隐藏窗口缩小(<xl)时新出现的「移动端菜单」☰ 按钮 —— 它与 WindowsAppMenu 的 ☰ 视觉重复,
+                  且左侧三图标(状态·文件树·审查)已改为常驻不再消失,这个冗余按钮没必要再出现(user 反馈 Image#28)
+                  原 `xl:hidden`(<xl 显示)→ `hidden`(始终不显示)[feat: titlebar-icons-rearrange] 2026-06-13 */}
               <Show when={!mac()}>
-                <div class="xl:hidden w-[48px] shrink-0 flex items-center justify-center">
+                <div class="hidden w-[48px] shrink-0 items-center justify-center">
                   <IconButton
                     icon="menu"
                     variant="ghost"

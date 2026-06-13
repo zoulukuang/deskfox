@@ -1801,11 +1801,13 @@ export default function Page() {
         <div
           classList={{
             "@container relative shrink-0 flex flex-col min-h-0 h-full flex-1 md:flex-none transition-[width]": true,
-            // FORK: 文件查看区开/收动画放慢 240→360ms —— 查看区跟随聊天区宽度动画,但其位移(~505px)
-            //   远大于文件树(~265px),同样 240ms 下视觉速度偏快;360ms 让单位像素速度与其他面板看齐,更从容
+            // FORK: 文件查看区开/收动画 240→360ms + 去掉 !ui.reviewSnap 抑制 —— reviewSnap 在 review 切换的那一帧
+            //   移除 transition class 导致宽度"啪"地 snap(实测 708→265 仅 24ms,360ms 根本没机会跑);
+            //   去掉该抑制后切换查看区才真正按 360ms 过渡。位移(~505px)远大于文件树(~265px),360ms 让
+            //   单位像素速度与其他面板看齐,更从容(仍保留 !size.active() 在拖拽 resize 时不过渡)
             //   [feat: titlebar-icons-rearrange] 2026-06-13
             "duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
-              !size.active() && !ui.reviewSnap,
+              !size.active(),
           }}
           style={{
             width: sessionPanelWidth(),

@@ -2073,6 +2073,10 @@ export default function Layout(props: ParentProps) {
       <div
         classList={{
           "flex flex-col min-h-0 min-w-0 box-border rounded-tl-[12px] px-3": true,
+          // FORK: 桌面会话面板补 h-full —— 否则面板按内容高度撑开(实测 930px)超出 818px 的容器、底部会话被裁切且不滚动;
+          //   h-full 把面板钉到容器高度,内部滚动容器(SortableProject)才拿到有界高度从而正常滚动
+          //   [feat: titlebar-icons-rearrange] 2026-06-13
+          "h-full": !panelProps.mobile,
           "border border-b-0 border-border-weak-base": !merged(),
           "border-l border-t border-border-weaker-base": merged(),
           "bg-background-base": merged() || hover(),
