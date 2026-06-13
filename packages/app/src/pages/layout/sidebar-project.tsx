@@ -4,7 +4,6 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Button } from "@opencode-ai/ui/button"
 import { ContextMenu } from "@opencode-ai/ui/context-menu"
 import { HoverCard } from "@opencode-ai/ui/hover-card"
-import { Tooltip } from "@opencode-ai/ui/tooltip" // FORK: 项目图标悬停 tooltip [feat: electron-replatform]
 import { Icon } from "@opencode-ai/ui/icon"
 import { createSortable } from "@thisbeyond/solid-dnd"
 import { useLayout, type LocalProject } from "@/context/layout"
@@ -87,23 +86,8 @@ const ProjectTile = (props: {
       .forEach((directory) => notification.project.markViewed(directory))
 
   return (
-    // FORK: REQ-041 后续 — 项目图标加悬停 tooltip(项目名 + 完整路径),补识别不恢复会话预览 2026-06-02
-    <Tooltip
-      placement="right"
-      openDelay={0}
-      contentStyle={{
-        // FORK: inline style 强制浅底 — --surface-panel 本主题为空;--background-stronger 深色也自适应
-        "background-color": "var(--background-stronger)",
-        border: "1px solid var(--border-weak-base)",
-        padding: "0",
-      }}
-      value={
-        <div class="flex max-w-96 flex-col gap-1 px-3 py-2">
-          <span class="text-14-medium text-text-strong">{displayName(props.project)}</span>
-          <span class="text-12-regular text-text-weak break-all">{props.project.worktree}</span>
-        </div>
-      }
-    >
+    // FORK: 去掉项目图标悬停的"项目名+路径"小 tooltip(与下层会话弹窗重叠,user 要求只留会话弹窗)
+    //   [feat: titlebar-icons-rearrange] 2026-06-13
     <ContextMenu
       modal={!props.sidebarHovering()}
       onOpenChange={(value) => {
@@ -198,7 +182,6 @@ const ProjectTile = (props: {
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu>
-    </Tooltip>
   )
 }
 

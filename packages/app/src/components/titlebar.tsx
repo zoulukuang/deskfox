@@ -615,43 +615,8 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               data-tauri-drag-region
               onMouseDown={drag}
             >
-              {/* FORK: 新建会话(创作)移到右侧,贴近聊天/创作模块 [feat: titlebar-icons-mirror] 2026-06-13 */}
-              <Show when={params.dir}>
-                <TooltipKeybind
-                  placement="bottom"
-                  title={language.t("command.session.new")}
-                  keybind={command.keybind("session.new")}
-                  openDelay={2000}
-                >
-                  <Button
-                    variant="ghost"
-                    icon={creating() ? "new-session-active" : "new-session"}
-                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0 mr-1 [app-region:no-drag]"
-                    onClick={() => {
-                      if (!params.dir) return
-                      navigate(`/${params.dir}/session`)
-                    }}
-                    aria-label={language.t("command.session.new")}
-                    aria-current={creating() ? "page" : undefined}
-                  />
-                </TooltipKeybind>
-              </Show>
-              {/* FORK: 切换侧边栏 + 前进/后退 从左移到右,与新建会话同组 [feat: titlebar-icons-rearrange] 2026-06-13 */}
-              <TooltipKeybind
-                placement="bottom"
-                title={language.t("command.sidebar.toggle")}
-                keybind={command.keybind("sidebar.toggle")}
-              >
-                <Button
-                  variant="ghost"
-                  class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0 [app-region:no-drag]"
-                  onClick={layout.sidebar.toggle}
-                  aria-label={language.t("command.sidebar.toggle")}
-                  aria-expanded={layout.sidebar.opened()}
-                >
-                  <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
-                </Button>
-              </TooltipKeybind>
+              {/* FORK: 右侧图标组顺序 返回·前进·新建会话·切换侧边栏(前进后退在两个操作图标左侧)
+                  [feat: titlebar-icons-rearrange] 2026-06-13 */}
               <Show when={hasProjects() && nav()}>
                 <div class="flex items-center gap-0 shrink-0 [app-region:no-drag]">
                   <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
@@ -676,9 +641,45 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   </Tooltip>
                 </div>
               </Show>
+              <Show when={params.dir}>
+                <TooltipKeybind
+                  placement="bottom"
+                  title={language.t("command.session.new")}
+                  keybind={command.keybind("session.new")}
+                  openDelay={2000}
+                >
+                  <Button
+                    variant="ghost"
+                    icon={creating() ? "new-session-active" : "new-session"}
+                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0 [app-region:no-drag]"
+                    onClick={() => {
+                      if (!params.dir) return
+                      navigate(`/${params.dir}/session`)
+                    }}
+                    aria-label={language.t("command.session.new")}
+                    aria-current={creating() ? "page" : undefined}
+                  />
+                </TooltipKeybind>
+              </Show>
+              <TooltipKeybind
+                placement="bottom"
+                title={language.t("command.sidebar.toggle")}
+                keybind={command.keybind("sidebar.toggle")}
+              >
+                <Button
+                  variant="ghost"
+                  class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0 mr-1 [app-region:no-drag]"
+                  onClick={layout.sidebar.toggle}
+                  aria-label={language.t("command.sidebar.toggle")}
+                  aria-expanded={layout.sidebar.opened()}
+                >
+                  <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
+                </Button>
+              </TooltipKeybind>
               <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
+              {/* FORK: electron 下 header 已用 env(titlebar-area-width) 排除原生控件区,去掉多余 spacer
+                  让右侧图标组贴近最小化按钮 [feat: titlebar-icons-rearrange] 2026-06-13 */}
               <Show when={windows()}>
-                {!tauriApi() && <div class="shrink-0" style={{ width: windowsControlsWidth() }} />}
                 <div data-tauri-decorum-tb class="flex flex-row" />
               </Show>
             </div>

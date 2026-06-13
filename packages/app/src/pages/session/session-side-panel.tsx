@@ -80,11 +80,6 @@ export function SessionSidePanel(props: {
   )
   const open = createMemo(() => reviewOpen() || fileOpen())
   const reviewTab = createMemo(() => isDesktop())
-  const panelWidth = createMemo(() => {
-    if (!open()) return "0px"
-    if (reviewOpen()) return "auto"
-    return `${layout.fileTree.width()}px`
-  })
   const treeWidth = createMemo(() => (fileOpen() ? `${layout.fileTree.width()}px` : "0px"))
 
   const diffs = createMemo(() => props.diffs().filter(renderDiff))
@@ -284,12 +279,20 @@ export function SessionSidePanel(props: {
         class="relative min-w-0 h-full flex shrink-0 overflow-hidden bg-background-base"
         classList={{
           "pointer-events-none": !open(),
-          "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+          // FORK: 文件查看区开/收动画 — 原先 files-only/review 间把本面板钉成显式 width(panelWidth 返回 px),
+          //   面板不再跟随聊天区(session.tsx 的 sessionPanelWidth 已有 transition-[width]),于是查看区"啪"地弹开。
+          //   改法:本面板恒为唯一可伸长项(open 时 flex-grow:1 填满剩余 = 容器 - 聊天区),宽度完全由聊天区
+          //   的 width 动画反向驱动 → 聊天区收窄查看区就展开(从左向右)、聊天区变宽查看区收起(从右向左),
+          //   与文件树/侧边栏等其他栏目一致;flex-grow 仅在整面板全开/全关时 0↔1 切换,这一过渡也加上动画兜底
+          //   [feat: titlebar-icons-rearrange] 2026-06-13
+          "transition-[flex-grow,flex-basis] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[flex-grow,flex-basis] motion-reduce:transition-none":
             !props.size.active() && !props.reviewSnap,
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
-          "flex-1": reviewOpen(),
         }}
-        style={{ width: panelWidth() }}
+        style={{
+          "flex-grow": open() ? "1" : "0",
+          "flex-basis": "0px",
+        }}
       >
         <Show when={open()}>
           <div
