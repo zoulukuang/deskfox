@@ -1,7 +1,7 @@
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { encodeFilePath } from "@/context/file/path"
-import { DialogFileTreePrompt, DialogFileTreeConfirm } from "@/components/dialog-file-tree"
+import { DialogFileTreeConfirm } from "@/components/dialog-file-tree"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -154,6 +154,85 @@ function resetDragState(): void {
 }
 // FORK-END
 
+// FORK-BEGIN: 内联编辑 — 全树共享(模块级 signal,跨 FileTree 层级)[feat: file-tree-inline-edit] 2026-06-13
+// 重命名:editingPath = 正在改名的节点 rel path → 该行 name 换成 input。
+// 新建:pendingNew = { parentRel, type } → 目标文件夹内顶部渲染一个空 input 行,提交即创建。
+const [editingPath, setEditingPath] = createSignal<string | null>(null)
+// FORK: 含 parentAbs/onAfter —— FileTree 递归,startNew 在父实例(文件夹菜单)set,input 在子实例
+//   (path=该文件夹)render+commit,instance-local 取不到,故全放模块级 signal。
+const [pendingNew, setPendingNew] = createSignal<{
+  parentRel: string
+  parentAbs: string
+  type: "file" | "directory"
+  onAfter?: () => void
+} | null>(null)
+
+/** 内联名称输入 — 自动聚焦 + 选中(重命名时选文件名不含扩展名);Enter 提交 / Escape 取消 / blur 提交。 */
+function InlineNameInput(props: {
+  initial: string
+  selectBasename?: boolean
+  onCommit: (name: string) => void
+  onCancel: () => void
+}) {
+  let ref: HTMLInputElement | undefined
+  let done = false
+  const commit = () => {
+    if (done) return
+    done = true
+    const v = ref?.value.trim() ?? ""
+    if (v && v !== props.initial) props.onCommit(v)
+    else props.onCancel()
+  }
+  const focusSelect = () => {
+    if (!ref) return
+    ref.value = props.initial
+    ref.focus()
+    const v = props.initial
+    const dot = v.lastIndexOf(".")
+    if (props.selectBasename && dot > 0) ref.setSelectionRange(0, dot)
+    else ref.select()
+  }
+  onMount(() => {
+    focusSelect()
+    // FORK: 右键菜单触发新建时,Kobalte 菜单关闭(含动画)会延迟把焦点抢回 trigger → 多帧 + 延时重夺,
+    //   直到 input 拿到焦点(rename 走 F2 无此问题但重试无害)。
+    let tries = 0
+    const reclaim = () => {
+      if (!ref) return
+      if (document.activeElement === ref) return
+      focusSelect()
+      if (++tries < 12) requestAnimationFrame(reclaim)
+    }
+    requestAnimationFrame(reclaim)
+    setTimeout(reclaim, 80)
+    setTimeout(reclaim, 180)
+  })
+  return (
+    <input
+      ref={ref}
+      class="flex-1 min-w-0 h-5 text-12-medium bg-surface-base text-text-base border border-interactive-base rounded px-1 outline-none"
+      spellcheck={false}
+      autocomplete="off"
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === "Enter") {
+          e.preventDefault()
+          commit()
+        } else if (e.key === "Escape") {
+          e.preventDefault()
+          done = true
+          props.onCancel()
+        }
+      }}
+      onBlur={commit}
+      onClick={(e) => e.stopPropagation()}
+      onDblClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    />
+  )
+}
+// FORK-END
+
 const buildDragImage = (target: HTMLElement) => {
   const icon = target.querySelector('[data-component="file-icon"]') ?? target.querySelector("svg")
   const text = target.querySelector("span")
@@ -202,6 +281,9 @@ const FileTreeNode = (
       // FORK: 预览区是否已开 — 决定「正在查看的那一行」hover 时是否提示「再次点击可收起预览」
       //   [feat: filetree-hover-collapse-hint] 2026-06-09
       viewerOpen?: boolean
+      // FORK: 内联重命名 [feat: file-tree-inline-edit] 2026-06-13
+      onCommitRename?: (name: string) => void
+      onCancelEdit?: () => void
     },
 ) => {
   const language = useLanguage()
@@ -221,6 +303,8 @@ const FileTreeNode = (
     "computeDragSources",
     "onRowContextMenu",
     "viewerOpen",
+    "onCommitRename",
+    "onCancelEdit",
     "children",
     "class",
     "classList",
@@ -307,16 +391,29 @@ const FileTreeNode = (
       {...rest}
     >
       {local.children}
-      <span
-        classList={{
-          "flex-1 min-w-0 text-12-medium whitespace-nowrap truncate": true,
-          "text-text-weaker": local.node.ignored,
-          "text-text-weak": !local.node.ignored && !active(),
-        }}
-        style={active() ? color() : undefined}
+      {/* FORK: 内联重命名 — 编辑态换 input,否则原 name span [feat: file-tree-inline-edit] 2026-06-13 */}
+      <Show
+        when={editingPath() === local.node.path}
+        fallback={
+          <span
+            classList={{
+              "flex-1 min-w-0 text-12-medium whitespace-nowrap truncate": true,
+              "text-text-weaker": local.node.ignored,
+              "text-text-weak": !local.node.ignored && !active(),
+            }}
+            style={active() ? color() : undefined}
+          >
+            {local.node.name}
+          </span>
+        }
       >
-        {local.node.name}
-      </span>
+        <InlineNameInput
+          initial={local.node.name}
+          selectBasename={local.node.type === "file"}
+          onCommit={(name) => local.onCommitRename?.(name)}
+          onCancel={() => local.onCancelEdit?.()}
+        />
+      </Show>
       {(() => {
         const value = kind()
         if (!value) return null
@@ -671,61 +768,48 @@ export default function FileTree(props: {
   }
   // FORK-END
 
-  const promptNewFileAt = (targetAbs: string, targetRel: string, onAfter?: () => void) => {
-    dialog.show(() => (
-      <DialogFileTreePrompt
-        title={language.t("fileTree.dialog.newFile.title")}
-        label={language.t("fileTree.dialog.newFile.label")}
-        defaultValue="untitled.md"
-        placeholder={language.t("fileTree.dialog.newFile.placeholder")}
-        confirmLabel={language.t("fileTree.dialog.create")}
-        onConfirm={async (name) => {
-          await invoke("create_empty_file", { path: joinAbs(targetAbs, name) })
-          onAfter?.()
-          await file.tree.refresh(targetRel)
-        }}
-      />
-    ))
+  // FORK: 内联新建 — 展开目标目录 + 在其内顶部渲染空 input 行(treeContent 里),提交即创建
+  //   [feat: file-tree-inline-edit] 2026-06-13。targetAbs/onAfter 暂存供 commitNew 用。
+  const startNew = (targetAbs: string, targetRel: string, type: "file" | "directory", onAfter?: () => void) => {
+    setEditingPath(null)
+    if (targetRel !== props.path) file.tree.expand(targetRel)
+    setPendingNew({ parentRel: targetRel, parentAbs: targetAbs, type, onAfter })
+  }
+  const promptNewFileAt = (targetAbs: string, targetRel: string, onAfter?: () => void) =>
+    startNew(targetAbs, targetRel, "file", onAfter)
+  const promptNewFolderAt = (targetAbs: string, targetRel: string, onAfter?: () => void) =>
+    startNew(targetAbs, targetRel, "directory", onAfter)
+
+  const commitNew = async (name: string) => {
+    const pn = pendingNew()
+    setPendingNew(null)
+    if (!pn) return
+    try {
+      const target = joinAbs(pn.parentAbs, name)
+      if (pn.type === "directory") await invoke("create_directory", { path: target })
+      else await invoke("create_empty_file", { path: target })
+      pn.onAfter?.()
+      await file.tree.refresh(pn.parentRel)
+    } catch (e) {
+      showToast({ variant: "error", title: language.t("fileTree.toast.createFailed"), description: String(e) })
+    }
   }
 
-  const promptNewFolderAt = (targetAbs: string, targetRel: string, onAfter?: () => void) => {
-    dialog.show(() => (
-      <DialogFileTreePrompt
-        title={language.t("fileTree.dialog.newFolder.title")}
-        label={language.t("fileTree.dialog.newFolder.label")}
-        defaultValue=""
-        placeholder={language.t("fileTree.dialog.newFolder.placeholder")}
-        confirmLabel={language.t("fileTree.dialog.create")}
-        onConfirm={async (name) => {
-          await invoke("create_directory", { path: joinAbs(targetAbs, name) })
-          onAfter?.()
-          await file.tree.refresh(targetRel)
-        }}
-      />
-    ))
-  }
-
+  // FORK: 内联重命名 — 该行换 input,Enter 提交 [feat: file-tree-inline-edit] 2026-06-13
   const promptRename = (target: FileNode) => {
-    const oldName = basename(target.absolute)
+    setPendingNew(null)
+    setEditingPath(target.path)
+  }
+  const commitRename = async (target: FileNode, name: string) => {
+    setEditingPath(null)
     const parentAbs = dirname(target.absolute)
     const parentRel = dirname(target.path)
-    dialog.show(() => (
-      <DialogFileTreePrompt
-        title={
-          target.type === "directory"
-            ? language.t("fileTree.dialog.rename.folderTitle")
-            : language.t("fileTree.dialog.rename.fileTitle")
-        }
-        label={language.t("fileTree.dialog.rename.label")}
-        defaultValue={oldName}
-        confirmLabel={language.t("fileTree.dialog.rename.confirm")}
-        validate={(v) => (v === oldName ? language.t("fileTree.dialog.rename.unchanged") : undefined)}
-        onConfirm={async (name) => {
-          await invoke("rename_path", { from: target.absolute, to: joinAbs(parentAbs, name) })
-          await file.tree.refresh(parentRel)
-        }}
-      />
-    ))
+    try {
+      await invoke("rename_path", { from: target.absolute, to: joinAbs(parentAbs, name) })
+      await file.tree.refresh(parentRel)
+    } catch (e) {
+      showToast({ variant: "error", title: language.t("fileTree.toast.renameFailed"), description: String(e) })
+    }
   }
 
   // FORK-BEGIN: 复制文件路径 / 刷新单节点 helpers [feat: file-tree-ux-polish] 2026-05-04
@@ -1238,6 +1322,26 @@ export default function FileTree(props: {
 
   const bodyClass = `flex flex-col gap-0.5 ${level === 0 ? "min-h-full" : ""} ${props.class ?? ""}`
   const treeContent = (
+    <>
+      {/* FORK: 内联新建行 — 当前目录是新建目标时,顶部渲染空 input 行 [feat: file-tree-inline-edit] 2026-06-13 */}
+      <Show when={pendingNew()?.parentRel === props.path}>
+        <div
+          class="w-full h-6 flex items-center gap-x-1.5 rounded-md px-1.5"
+          style={`padding-left: ${Math.max(0, 8 + (level + 1) * 12 - (pendingNew()?.type === "file" ? 24 : 4))}px`}
+        >
+          <Show when={pendingNew()?.type === "directory"}>
+            <div class="size-4 flex items-center justify-center text-icon-weak">
+              <Icon name="chevron-right" size="small" />
+            </div>
+          </Show>
+          <InlineNameInput
+            initial={pendingNew()?.type === "file" ? "untitled.md" : ""}
+            selectBasename={pendingNew()?.type === "file"}
+            onCommit={(name) => void commitNew(name)}
+            onCancel={() => setPendingNew(null)}
+          />
+        </div>
+      </Show>
     <For each={nodes()}>
         {(node) => {
           const expanded = () => file.tree.state(node.path)?.expanded ?? false
@@ -1284,6 +1388,8 @@ export default function FileTree(props: {
                           onSelectMaybe={(e) => handleRowSelect(node, e)}
                           computeDragSources={computeDragSources(node)}
                           onRowContextMenu={() => handleRowContextMenu(node)}
+                          onCommitRename={(name) => void commitRename(node, name)}
+                          onCancelEdit={() => setEditingPath(null)}
                         >
                           <div class="size-4 flex items-center justify-center text-icon-weak">
                             <Icon name={expanded() ? "chevron-down" : "chevron-right"} size="small" />
@@ -1343,7 +1449,9 @@ export default function FileTree(props: {
                       selected={selection.isSelected(node.absolute)}
                       onSelectMaybe={(e) => handleRowSelect(node, e)}
                       computeDragSources={computeDragSources(node)}
-                      as="button"
+                      onCommitRename={(name) => void commitRename(node, name)}
+                      onCancelEdit={() => setEditingPath(null)}
+                      as={editingPath() === node.path ? "div" : "button"}
                       type="button"
                       onClick={() => props.onFileClick?.(node)}
                     >
@@ -1388,6 +1496,7 @@ export default function FileTree(props: {
           )
         }}
       </For>
+    </>
   )
 
   if (level !== 0) {
