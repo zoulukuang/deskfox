@@ -995,15 +995,17 @@ export default function FileTree(props: {
   // FORK-END
 
   // FORK-BEGIN: #8 全部展开 / 全部折叠 [feat: file-tree-ux-polish-p2] 2026-06-13
-  /** 收集 rootRel 子树下所有当前 expanded 的目录(深度优先,含自身后代)。 */
+  /** 收集 rootRel 子树下所有 expanded 的目录(深度优先)。
+   *  关键:对所有**已加载**目录都下钻 —— 折叠隐藏的子目录其 expanded 状态也要清,
+   *  否则"全部折叠"后再展开某顶层文件夹,其子目录会"记得"展开直接弹开(非 Explorer/VSCode 行为)。
+   *  collapse 只置 expanded=false 不清 children,故被折叠父目录的 children() 仍可读 → 能完整下钻。 */
   const collectExpandedDirs = (rootRel: string): string[] => {
     const out: string[] = []
     const visit = (rel: string) => {
       for (const c of file.tree.children(rel)) {
-        if (c.type === "directory" && (file.tree.state(c.path)?.expanded ?? false)) {
-          out.push(c.path)
-          visit(c.path)
-        }
+        if (c.type !== "directory") continue
+        if (file.tree.state(c.path)?.expanded ?? false) out.push(c.path)
+        visit(c.path) // 不论自身是否展开都继续下钻(未加载目录 children 为空,自然终止)
       }
     }
     visit(rootRel)

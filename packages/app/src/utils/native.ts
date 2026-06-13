@@ -8,12 +8,12 @@
 // main 进程 ipcMain.handle 实现 —— 均属【阶段3 桌面能力移植】,本缝只定 renderer 侧契约 + 类型)。
 //
 // ┌─ 契约(阶段3 main 须实现)─────────────────────────────────────────────┐
-// │ invoke(cmd, args) — 23 命令(从 fork Tauri #[command] 平移):           │
+// │ invoke(cmd, args) — 24 命令(从 fork Tauri #[command] 平移 + 新增):    │
 // │   文件操作: copy_path / create_directory / create_empty_file /         │
 // │     next_available_path / rename_path / trash_path / open_path /       │
-// │     reveal_in_folder / get_file_mtime / get_file_size / write_text_file/│
-// │     read_binary_file_base64 / write_binary_file_absolute_base64 /      │
-// │     fetch_url_base64                                                    │
+// │     reveal_in_folder / open_in_terminal / get_file_mtime /             │
+// │     get_file_size / write_text_file / read_binary_file_base64 /        │
+// │     write_binary_file_absolute_base64 / fetch_url_base64               │
 // │   防休眠: get_prevent_sleep / set_prevent_sleep                         │
 // │   飞书: feishu_oauth_start / feishu_oauth_poll / feishu_adapter_status /│
 // │     feishu_save_account / feishu_list_accounts / feishu_delete_account /│
