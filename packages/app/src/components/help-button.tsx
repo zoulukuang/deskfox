@@ -4,7 +4,10 @@ import { createSignal, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 
 export function HelpButton() {
-  if (import.meta.env.VITE_OPENCODE_CHANNEL !== "dev") return null
+  // FORK: 上游右下角「?」帮助气泡内容还是 Lorem ipsum 占位、未完成,原本仅 dev 渠道显示;
+  //   dev 预览版可对外发,占位文案外泄不专业 → 改成始终不显示(把渠道判断换成永真条件,保留下方实现待日后放开)
+  //   [feat: titlebar-icons-rearrange] 2026-06-13
+  if (import.meta.env.VITE_OPENCODE_CHANNEL !== "__disabled-until-real-content__") return null
 
   const [state, setState] = /* persisted(Persist.global("help-button"), */ createStore({ dismissed: false }) /* ) */
   const [shown, setShown] = createSignal(false)

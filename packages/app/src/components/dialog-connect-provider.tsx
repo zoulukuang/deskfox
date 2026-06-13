@@ -16,7 +16,7 @@ import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-import { useProviders } from "@/hooks/use-providers"
+import { useProviders, GETBOT_SYNTHETIC } from "@/hooks/use-providers"
 // FORK: getbot 内置接入流程 2026-04-26
 import {
   buildGetbotProviderConfig,
@@ -51,9 +51,15 @@ export function DialogConnectProvider(props: { provider: string }) {
     timer.current = undefined
   })
 
-  const provider = createMemo(
-    () => providers.all().get(props.provider) ?? serverSync.data.provider.all.get(props.provider)!,
-  )
+  const provider = createMemo(() => {
+    const found = providers.all().get(props.provider) ?? serverSync.data.provider.all.get(props.provider)
+    if (found) return found
+    // FORK: getbot 合成项只在 popular() / 选择弹窗里,不在 all();直连 getbot 时 found 为 undefined,
+    //   原 `!` 断言在运行时无效 → provider() 为 undefined → 下方 provider().id/.name 渲染 TypeError 崩溃。
+    //   回退到合成定义(下方已有 provider().id === GETBOT_PROVIDER_ID 分支接管)[feat: getbot-接入] 2026-06-13
+    if (props.provider === GETBOT_PROVIDER_ID) return GETBOT_SYNTHETIC as unknown as NonNullable<typeof found>
+    return found!
+  })
   const fallback = createMemo<ProviderAuthMethod[]>(() => [
     {
       type: "api" as const,

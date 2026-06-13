@@ -289,6 +289,13 @@ const WorkspaceSessionList = (props: {
         </Button>
       </div>
     </Show>
+    {/* FORK: 列表到底时给「没有更多了」提示 + 底部留白(user 要求 Image#30)。单条提示不值得改 17 个 i18n 文件,
+        按 locale 内联中/英 [feat: titlebar-icons-rearrange] 2026-06-13 */}
+    <Show when={!props.hasMore() && props.sessions().length > 0}>
+      <div class="w-full pt-2 pb-4 text-center text-12-regular text-text-weak select-none">
+        {props.language.locale().startsWith("zh") ? "没有更多了" : "No more"}
+      </div>
+    </Show>
   </nav>
 )
 

@@ -21,7 +21,8 @@ export const popularProviders = [
 const popularProviderSet = new Set(popularProviders)
 
 // FORK-BEGIN: 未配置时注入合成 getbot 项，让其在 provider 弹窗中可见 2026-04-26
-const GETBOT_SYNTHETIC = {
+// export: 连接弹窗(dialog-connect-provider)直连 getbot 时也用它兜底,避免 provider() 为 undefined 崩溃
+export const GETBOT_SYNTHETIC = {
   id: GETBOT_PROVIDER_ID,
   name: GETBOT_PROVIDER_NAME,
   source: "custom" as const,
