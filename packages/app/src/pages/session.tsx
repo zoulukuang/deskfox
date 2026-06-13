@@ -1801,7 +1801,10 @@ export default function Page() {
         <div
           classList={{
             "@container relative shrink-0 flex flex-col min-h-0 h-full flex-1 md:flex-none transition-[width]": true,
-            "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+            // FORK: 文件查看区开/收动画放慢 240→360ms —— 查看区跟随聊天区宽度动画,但其位移(~505px)
+            //   远大于文件树(~265px),同样 240ms 下视觉速度偏快;360ms 让单位像素速度与其他面板看齐,更从容
+            //   [feat: titlebar-icons-rearrange] 2026-06-13
+            "duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
               !size.active() && !ui.reviewSnap,
           }}
           style={{

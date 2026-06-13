@@ -285,7 +285,7 @@ export function SessionSidePanel(props: {
           //   的 width 动画反向驱动 → 聊天区收窄查看区就展开(从左向右)、聊天区变宽查看区收起(从右向左),
           //   与文件树/侧边栏等其他栏目一致;flex-grow 仅在整面板全开/全关时 0↔1 切换,这一过渡也加上动画兜底
           //   [feat: titlebar-icons-rearrange] 2026-06-13
-          "transition-[flex-grow,flex-basis] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[flex-grow,flex-basis] motion-reduce:transition-none":
+          "transition-[flex-grow,flex-basis] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[flex-grow,flex-basis] motion-reduce:transition-none":
             !props.size.active() && !props.reviewSnap,
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
         }}

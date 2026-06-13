@@ -7,6 +7,9 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 
 import { useCommand } from "@/context/command"
 import { DESKTOP_MENU, desktopMenuVisible, type DesktopMenuAction, type DesktopMenuEntry } from "@/desktop-menu"
+// FORK: 菜单标签按当前语言本地化(user 要求菜单跟随语言设置)[feat: titlebar-icons-rearrange] 2026-06-13
+import { translateMenuLabel } from "@/desktop-menu-i18n"
+import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 
 export function WindowsAppMenu(props: {
@@ -15,6 +18,8 @@ export function WindowsAppMenu(props: {
   variant?: "legacy" | "v2"
 }) {
   let lastFocused: HTMLElement | undefined
+  // FORK: 取当前 locale 用于菜单标签本地化 [feat: titlebar-icons-rearrange] 2026-06-13
+  const language = useLanguage()
 
   const rememberFocus = () => {
     const active = document.activeElement
@@ -79,7 +84,7 @@ export function WindowsAppMenu(props: {
           <DropdownMenu.Group>
             <DropdownMenu.GroupLabel class="desktop-app-menu-heading">OpenCode</DropdownMenu.GroupLabel>
             {DESKTOP_MENU.filter((menu) => desktopMenuVisible(menu, "windows")).map((menu) => (
-              <DesktopMenuSubmenu label={menu.label}>
+              <DesktopMenuSubmenu label={translateMenuLabel(menu.label, language.locale())}>
                 {menu.items
                   ?.filter((entry) => desktopMenuVisible(entry, "windows"))
                   .map((entry) =>
@@ -87,7 +92,7 @@ export function WindowsAppMenu(props: {
                       <DropdownMenu.Separator />
                     ) : (
                       <DesktopMenuItem
-                        label={entry.label ?? ""}
+                        label={translateMenuLabel(entry.label ?? "", language.locale())}
                         keybind={entry.command ? props.command.keybind(entry.command) : entry.accelerator?.windows}
                         disabled={entry.command ? commandDisabled(entry.command) : false}
                         onSelect={() => runEntry(entry)}

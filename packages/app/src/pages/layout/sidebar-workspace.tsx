@@ -329,7 +329,8 @@ export const SortableWorkspace = (props: {
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
-    setWorkspaceStore("limit", (limit) => (limit ?? 0) + 5)
+    // FORK: 加载更多每次 +15(user 要求)[feat: titlebar-icons-rearrange] 2026-06-13
+    setWorkspaceStore("limit", (limit) => (limit ?? 0) + 15)
     await serverSync.project.loadSessions(props.directory)
   }
 
@@ -465,7 +466,8 @@ export const LocalWorkspace = (props: {
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
   const loading = () => fetching() > 0 && count() === 0
   const loadMore = async () => {
-    workspace().setStore("limit", (limit) => (limit ?? 0) + 5)
+    // FORK: 加载更多每次 +15(user 要求)[feat: titlebar-icons-rearrange] 2026-06-13
+    workspace().setStore("limit", (limit) => (limit ?? 0) + 15)
     await serverSync.project.loadSessions(props.project.worktree)
   }
 

@@ -234,7 +234,8 @@ export function createChildStoreManager(input: {
               return lspQuery.isLoading ? [] : (lspQuery.data ?? [])
             },
             vcs: vcsStore.value,
-            limit: 5,
+            // FORK: 右侧会话列表默认展示条数 5→20(user 要求"默认最近 20 条")[feat: titlebar-icons-rearrange] 2026-06-13
+            limit: 20,
             message: {},
             part: {},
             part_text_accum_delta: {},

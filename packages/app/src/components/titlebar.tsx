@@ -591,7 +591,10 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               <div class="flex items-center gap-1 shrink-0">
                 {/* FORK: 切换侧边栏 + 前进/后退 从左移到右侧,与新建会话同组(导航/视图类)
                     左侧只留控制左侧面板的工具组 portal [feat: titlebar-icons-rearrange] 2026-06-13 */}
-                <div class="hidden xl:flex items-center shrink-0">
+                {/* FORK: 去掉 `hidden xl:flex` —— 原来窗口宽度 <1280px(xl)时,左侧三图标(状态·文件树·审查)
+                    +DEV 徽标整组消失,只剩重复的 ☰ 菜单按钮。改成始终 flex,窗口缩小也不消失
+                    [feat: titlebar-icons-rearrange] 2026-06-13 */}
+                <div class="flex items-center shrink-0">
                   <div class="flex items-center shrink-0">
                     <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
                     <ChannelIndicator />
@@ -617,8 +620,11 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
             >
               {/* FORK: 右侧图标组顺序 返回·前进·新建会话·切换侧边栏(前进后退在两个操作图标左侧)
                   [feat: titlebar-icons-rearrange] 2026-06-13 */}
+              {/* FORK: 右侧组拉开间距(原 gap-0 + 无间隔太挤,Image#24)— 后退/前进成对 gap-0.5,
+                  组间 mr-2 ≈ 左侧图标间距;末图标(切换侧边栏)不留右边距,保持整组贴齐窗口控件
+                  [feat: titlebar-icons-rearrange] 2026-06-13 */}
               <Show when={hasProjects() && nav()}>
-                <div class="flex items-center gap-0 shrink-0 [app-region:no-drag]">
+                <div class="flex items-center gap-0.5 shrink-0 mr-2 [app-region:no-drag]">
                   <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
                     <Button
                       variant="ghost"
@@ -651,7 +657,7 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   <Button
                     variant="ghost"
                     icon={creating() ? "new-session-active" : "new-session"}
-                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0 [app-region:no-drag]"
+                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0 mr-2 [app-region:no-drag]"
                     onClick={() => {
                       if (!params.dir) return
                       navigate(`/${params.dir}/session`)
@@ -668,7 +674,7 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               >
                 <Button
                   variant="ghost"
-                  class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0 mr-1 [app-region:no-drag]"
+                  class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0 [app-region:no-drag]"
                   onClick={layout.sidebar.toggle}
                   aria-label={language.t("command.sidebar.toggle")}
                   aria-expanded={layout.sidebar.opened()}
