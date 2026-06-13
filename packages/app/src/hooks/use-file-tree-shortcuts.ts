@@ -30,9 +30,14 @@ export type ShortcutHandlers = {
   // FORK: file-tree-ux-polish 2026-05-04
   onArrowUp?: () => void
   onArrowDown?: () => void
+  // FORK: 左右键展开/折叠/跳父子(树控件标准)[feat: file-tree-arrow-lr] 2026-06-13
+  onArrowLeft?: () => void
+  onArrowRight?: () => void
   onEnter?: () => void
   onRename?: () => void
   onDelete?: () => void
+  // FORK: Ctrl+A 全选 [feat: file-tree-select-all] 2026-06-13
+  onSelectAll?: () => void
   /** 当前 selection 是否非空 — 用于 B 路径判定 */
   hasSelection?: () => boolean
 }
@@ -95,6 +100,18 @@ export function useFileTreeShortcuts(handlers: ShortcutHandlers) {
             handlers.onArrowDown()
           }
           return
+        case "ArrowLeft":
+          if (handlers.onArrowLeft) {
+            event.preventDefault()
+            handlers.onArrowLeft()
+          }
+          return
+        case "ArrowRight":
+          if (handlers.onArrowRight) {
+            event.preventDefault()
+            handlers.onArrowRight()
+          }
+          return
         case "Enter":
           if (handlers.onEnter) {
             event.preventDefault()
@@ -146,6 +163,14 @@ export function useFileTreeShortcuts(handlers: ShortcutHandlers) {
         if (handlers.onUndo) {
           event.preventDefault()
           void handlers.onUndo()
+        }
+        return
+      case "a":
+        // FORK: Ctrl+A 全选(仅焦点在文件树内时;中性区有文本选区时上面的 B 路径已 return)
+        //   [feat: file-tree-select-all] 2026-06-13
+        if (handlers.onSelectAll && activeInFileTree()) {
+          event.preventDefault()
+          handlers.onSelectAll()
         }
         return
     }

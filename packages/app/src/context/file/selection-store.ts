@@ -64,6 +64,12 @@ export function createSelectionStore() {
     anchor = path
   }
 
+  /** FORK: 全选(Ctrl+A)— 选中传入的所有可见 path [feat: file-tree-select-all] 2026-06-13 */
+  const selectAll = (allVisible: readonly string[]) => {
+    setPaths([...allVisible])
+    anchor = allVisible[0] ?? null
+  }
+
   return {
     paths,
     add,
@@ -74,6 +80,7 @@ export function createSelectionStore() {
     setAnchor,
     rangeSelect,
     replace,
+    selectAll,
   }
 }
 

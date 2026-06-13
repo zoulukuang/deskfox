@@ -734,6 +734,31 @@ export default function FileTree(props: {
     }
   }
 
+  // FORK: ← 展开的目录→折叠;否则(文件/已折叠目录)→ 选父级。[feat: file-tree-arrow-lr] 2026-06-13
+  const onArrowLeftAction = () => {
+    const node = singleSelectedNode()
+    if (!node) return
+    if (node.type === "directory" && file.tree.state(node.path)?.expanded) {
+      file.tree.collapse(node.path)
+      return
+    }
+    const parentRel = dirname(node.path)
+    if (!parentRel) return // 已在根层
+    const parent = buildFlatVisible(props.path).find((n) => n.path === parentRel)
+    if (parent) selection.replace(parent.absolute)
+  }
+  // FORK: → 折叠目录→展开;已展开目录→选首个子;文件→无操作。
+  const onArrowRightAction = () => {
+    const node = singleSelectedNode()
+    if (!node || node.type !== "directory") return
+    if (!file.tree.state(node.path)?.expanded) {
+      file.tree.expand(node.path)
+      return
+    }
+    const children = file.tree.children(node.path)
+    if (children.length > 0) selection.replace(children[0].absolute)
+  }
+
   const onRenameAction = () => {
     const node = singleSelectedNode()
     if (node) promptRename(node)
@@ -758,6 +783,10 @@ export default function FileTree(props: {
       // FORK: 键盘导航 [feat: file-tree-ux-polish] 2026-05-04
       onArrowUp: () => navigateRelative(-1),
       onArrowDown: () => navigateRelative(1),
+      onArrowLeft: onArrowLeftAction,
+      onArrowRight: onArrowRightAction,
+      // FORK: Ctrl+A 全选当前所有可见行 [feat: file-tree-select-all] 2026-06-13
+      onSelectAll: () => selection.selectAll(buildFlatVisible(props.path).map((n) => n.absolute)),
       onEnter: onEnterAction,
       onRename: onRenameAction,
       onDelete: onDeleteAction,
