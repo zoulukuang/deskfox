@@ -1,5 +1,7 @@
 import * as http from "node:http"
 import * as tls from "node:tls"
+// FORK: 国内 npm 镜像注入(从 Tauri npm_registry.rs 平移)[feat: npm-registry-cn-mirror] 2026-06-13
+import { decideNpmRegistry } from "./deskfox/npm-registry"
 
 type NodeHttpWithEnvProxy = typeof http & {
   setGlobalProxyFromEnv: () => void
@@ -86,6 +88,12 @@ function prepareSidecarEnv(password: string, userDataPath: string) {
     OPENCODE_SERVER_PASSWORD: password,
     XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? userDataPath,
   })
+  // FORK: 国内用户装插件走国内镜像(npm_config_registry 由 @npmcli/config 读),官方用户不注入
+  //   [feat: npm-registry-cn-mirror] 2026-06-13。用户已显式设了 registry 则尊重不覆盖。
+  if (!process.env.npm_config_registry) {
+    const registry = decideNpmRegistry(userDataPath)
+    if (registry) process.env.npm_config_registry = registry
+  }
 }
 
 function ensureLoopbackNoProxy() {
