@@ -51,7 +51,16 @@ export async function renamePath(args: { from: string; to: string }): Promise<vo
 }
 
 export async function trashPath(args: { path: string }): Promise<void> {
-  await shell.trashItem(args.path)
+  // FORK: shell.trashItem 在 Windows 只认原生反斜杠路径,传 forward slash 报 "Failed to parse path"
+  //   → path.resolve 归一成 OS 原生分隔符。再先 stat,不存在给可理解错误(典型:UI 陈旧条目)。
+  //   [bug-repro: 删除报 trash_path Failed to parse path] 2026-06-13
+  const native = path.resolve(args.path)
+  try {
+    await fs.stat(native)
+  } catch {
+    throw new Error(`path not found(可能已被移动或删除): ${native}`)
+  }
+  await shell.trashItem(native)
 }
 
 export async function openPath(args: { path: string; appName: string | null }): Promise<void> {
