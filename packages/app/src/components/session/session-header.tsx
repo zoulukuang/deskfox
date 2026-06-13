@@ -574,7 +574,12 @@ type SessionHeaderV2ActionsState = {
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
   return (
     <div class="flex items-center gap-2">
-      {/* FORK: 文件树开关置最左,贴近左侧文件树模块 [feat: titlebar-icons-mirror] 2026-06-13 */}
+      {/* FORK: 顺序 状态→文件树→审查(user 指定 2,1,3)[feat: titlebar-icons-rearrange] 2026-06-13 */}
+      <Show when={props.state.statusVisible}>
+        <Tooltip placement="bottom" value={props.state.statusLabel}>
+          <StatusPopoverV2 />
+        </Tooltip>
+      </Show>
       <Show when={props.state.fileTreeVisible}>
         <TooltipKeybind title={props.state.fileTreeLabel} keybind={props.state.fileTreeKeybind}>
           <IconButtonV2
@@ -590,11 +595,6 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
             icon={<Icon size="small" name={props.state.fileTreeOpened ? "file-tree-active" : "file-tree"} />}
           />
         </TooltipKeybind>
-      </Show>
-      <Show when={props.state.statusVisible}>
-        <Tooltip placement="bottom" value={props.state.statusLabel}>
-          <StatusPopoverV2 />
-        </Tooltip>
       </Show>
       <TooltipKeybind title={props.state.reviewLabel} keybind={props.state.reviewKeybind}>
         <IconButtonV2

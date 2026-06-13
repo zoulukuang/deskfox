@@ -589,55 +589,10 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                 </div>
               </Show>
               <div class="flex items-center gap-1 shrink-0">
-                <TooltipKeybind
-                  class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
-                  placement="bottom"
-                  title={language.t("command.sidebar.toggle")}
-                  keybind={command.keybind("sidebar.toggle")}
-                >
-                  <Button
-                    variant="ghost"
-                    class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
-                    onClick={layout.sidebar.toggle}
-                    aria-label={language.t("command.sidebar.toggle")}
-                    aria-expanded={layout.sidebar.opened()}
-                  >
-                    <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
-                  </Button>
-                </TooltipKeybind>
+                {/* FORK: 切换侧边栏 + 前进/后退 从左移到右侧,与新建会话同组(导航/视图类)
+                    左侧只留控制左侧面板的工具组 portal [feat: titlebar-icons-rearrange] 2026-06-13 */}
                 <div class="hidden xl:flex items-center shrink-0">
-                  {/* FORK: 新建会话(创作)图标移到右侧贴近聊天模块 [feat: titlebar-icons-mirror] 2026-06-13 */}
-                  <div
-                    class="flex items-center shrink-0"
-                    classList={{
-                      "duration-180 ease-out": !layout.sidebar.opened(),
-                      "duration-180 ease-in": layout.sidebar.opened(),
-                    }}
-                  >
-                    <Show when={hasProjects() && nav()}>
-                      <div class="flex items-center gap-0 transition-transform">
-                        <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
-                          <Button
-                            variant="ghost"
-                            icon="chevron-left"
-                            class="titlebar-icon w-6 h-6 p-0 box-border"
-                            disabled={!canBack()}
-                            onClick={back}
-                            aria-label={language.t("common.goBack")}
-                          />
-                        </Tooltip>
-                        <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
-                          <Button
-                            variant="ghost"
-                            icon="chevron-right"
-                            class="titlebar-icon w-6 h-6 p-0 box-border"
-                            disabled={!canForward()}
-                            onClick={forward}
-                            aria-label={language.t("common.goForward")}
-                          />
-                        </Tooltip>
-                      </div>
-                    </Show>
+                  <div class="flex items-center shrink-0">
                     <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
                     <ChannelIndicator />
                   </div>
@@ -680,6 +635,46 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                     aria-current={creating() ? "page" : undefined}
                   />
                 </TooltipKeybind>
+              </Show>
+              {/* FORK: 切换侧边栏 + 前进/后退 从左移到右,与新建会话同组 [feat: titlebar-icons-rearrange] 2026-06-13 */}
+              <TooltipKeybind
+                placement="bottom"
+                title={language.t("command.sidebar.toggle")}
+                keybind={command.keybind("sidebar.toggle")}
+              >
+                <Button
+                  variant="ghost"
+                  class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0 [app-region:no-drag]"
+                  onClick={layout.sidebar.toggle}
+                  aria-label={language.t("command.sidebar.toggle")}
+                  aria-expanded={layout.sidebar.opened()}
+                >
+                  <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
+                </Button>
+              </TooltipKeybind>
+              <Show when={hasProjects() && nav()}>
+                <div class="flex items-center gap-0 shrink-0 [app-region:no-drag]">
+                  <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
+                    <Button
+                      variant="ghost"
+                      icon="chevron-left"
+                      class="titlebar-icon w-6 h-6 p-0 box-border"
+                      disabled={!canBack()}
+                      onClick={back}
+                      aria-label={language.t("common.goBack")}
+                    />
+                  </Tooltip>
+                  <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
+                    <Button
+                      variant="ghost"
+                      icon="chevron-right"
+                      class="titlebar-icon w-6 h-6 p-0 box-border"
+                      disabled={!canForward()}
+                      onClick={forward}
+                      aria-label={language.t("common.goForward")}
+                    />
+                  </Tooltip>
+                </div>
               </Show>
               <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
               <Show when={windows()}>
