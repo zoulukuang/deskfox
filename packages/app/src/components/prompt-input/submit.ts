@@ -200,8 +200,10 @@ type CommentItem = {
   selection?: FileSelection
   comment?: string
   commentID?: string
-  commentOrigin?: "review" | "file"
+  // FORK: 从 Tauri 迁回 quote 子分类 [feat: 聊天选区-卡片化-换行] 2026-06-14
+  commentOrigin?: "review" | "file" | "quote"
   preview?: string
+  kind?: "chat" | "file"
 }
 
 export function createPromptSubmit(input: PromptSubmitInput) {

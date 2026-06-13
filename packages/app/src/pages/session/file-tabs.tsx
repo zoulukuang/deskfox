@@ -677,8 +677,8 @@ export function FileTabContent(props: {
     selection: SelectedLineRange
     comment: string
     preview?: string
-    // FORK-TODO[electron-replatform]: "quote" origin 暂去掉(quote 特性随 deferred prompt-input 一起延后,上游 commentOrigin 仅 review|file)
-    origin?: "review" | "file"
+    // FORK: quote 特性已从 Tauri 迁回(原 deferred TODO 完成)[feat: 聊天选区-卡片化-换行] 2026-06-14
+    origin?: "review" | "file" | "quote"
   }) => {
     const selection = selectionFromLines(input.selection)
     const preview = input.preview ?? buildPreview(input.file, selection)

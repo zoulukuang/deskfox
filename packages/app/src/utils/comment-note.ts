@@ -5,7 +5,10 @@ export type PromptComment = {
   selection?: FileSelection
   comment: string
   preview?: string
-  origin?: "review" | "file"
+  origin?: "review" | "file" | "quote"
+  // FORK: quote 子分类 — "chat" = 聊天引用走 LLM 模板分流;"file" / undefined = 文件引用
+  // [feat: 聊天选区-卡片化-换行] 2026-05-25
+  kind?: "chat" | "file"
 }
 
 function selection(selection: unknown) {
@@ -31,6 +34,7 @@ export function createCommentMetadata(input: PromptComment) {
       comment: input.comment,
       preview: input.preview,
       origin: input.origin,
+      kind: input.kind,
     },
   }
 }
@@ -44,16 +48,34 @@ export function readCommentMetadata(value: unknown) {
   if (typeof path !== "string" || typeof comment !== "string") return
   const preview = (meta as { preview?: unknown }).preview
   const origin = (meta as { origin?: unknown }).origin
+  const kind = (meta as { kind?: unknown }).kind
   return {
     path,
     selection: selection((meta as { selection?: unknown }).selection),
     comment,
     preview: typeof preview === "string" ? preview : undefined,
-    origin: origin === "review" || origin === "file" ? origin : undefined,
+    origin: origin === "review" || origin === "file" || origin === "quote" ? origin : undefined,
+    kind: kind === "chat" || kind === "file" ? kind : undefined,
   } satisfies PromptComment
 }
 
-export function formatCommentNote(input: { path: string; selection?: FileSelection; comment: string }) {
+export function formatCommentNote(input: {
+  path: string
+  selection?: FileSelection
+  comment: string
+  preview?: string
+  kind?: "chat" | "file"
+}) {
+  // FORK: kind="chat" 走聊天引用模板,让 LLM 明白引文来自同一对话历史(继承上下文)
+  // [feat: 聊天选区-卡片化-换行] 2026-05-25
+  if (input.kind === "chat") {
+    const preview = input.preview?.trim()
+    const quoteSection = preview
+      ? `The user is quoting text from earlier in this conversation:\n"""\n${preview}\n"""\n\n`
+      : ""
+    return `${quoteSection}Their follow-up question/comment: ${input.comment}`
+  }
+
   const start = input.selection ? Math.min(input.selection.startLine, input.selection.endLine) : undefined
   const end = input.selection ? Math.max(input.selection.startLine, input.selection.endLine) : undefined
   const range =
@@ -62,12 +84,15 @@ export function formatCommentNote(input: { path: string; selection?: FileSelecti
       : start === end
         ? `line ${start}`
         : `lines ${start} through ${end}`
-  return `The user made the following comment regarding ${range} of ${input.path}: ${input.comment}`
+  const head = `The user made the following comment regarding ${range} of ${input.path}: ${input.comment}`
+  const preview = input.preview?.trim()
+  if (!preview) return head
+  return `${head}\n\nSelected text:\n"""\n${preview}\n"""`
 }
 
 export function parseCommentNote(text: string) {
   const match = text.match(
-    /^The user made the following comment regarding (this file|line (\d+)|lines (\d+) through (\d+)) of (.+?): ([\s\S]+)$/,
+    /^The user made the following comment regarding (this file|line (\d+)|lines (\d+) through (\d+)) of (.+?): ([\s\S]+?)(?:\n\nSelected text:\n"""\n[\s\S]*?\n""")?$/,
   )
   if (!match) return
   const start = match[2] ? Number(match[2]) : match[3] ? Number(match[3]) : undefined

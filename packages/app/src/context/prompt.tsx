@@ -46,8 +46,11 @@ export type FileContextItem = {
   selection?: FileSelection
   comment?: string
   commentID?: string
-  commentOrigin?: "review" | "file"
+  // FORK: 从 Tauri 迁回 quote 子分类(electron 迁移时 deferred 成了 "file")[feat: 聊天选区-卡片化-换行] 2026-06-14
+  commentOrigin?: "review" | "file" | "quote"
   preview?: string
+  // FORK: "chat"=聊天引用(走 LLM 引用模板 + 气泡卡片);"file"/undefined=文件引用
+  kind?: "chat" | "file"
 }
 
 export type ContextItem = FileContextItem

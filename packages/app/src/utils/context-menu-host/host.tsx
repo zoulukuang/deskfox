@@ -379,8 +379,9 @@ export function ContextMenuHost(props: {
         comment: effectiveComment,
         preview: m.text,
         commentID,
-        // FORK-TODO[electron-replatform]: quote 特性随 deferred prompt-input 延后,暂用 "file"(上游 commentOrigin 无 quote/kind)
-        commentOrigin: "file",
+        // FORK: quote 特性已从 Tauri 迁回(原 deferred TODO 完成)[feat: 聊天选区-卡片化-换行] 2026-06-14
+        commentOrigin: "quote",
+        kind: m.sourceKind,
       })
       requestAnimationFrame(focusChatInput)
       showToast({

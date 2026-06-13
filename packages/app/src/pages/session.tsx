@@ -787,7 +787,8 @@ export default function Page() {
     selection: SelectedLineRange
     comment: string
     preview?: string
-    origin?: "review" | "file"
+    // FORK: quote 子分类(从 Tauri 迁回)[feat: 聊天选区-卡片化-换行] 2026-06-14
+    origin?: "review" | "file" | "quote"
   }) => {
     const selection = selectionFromLines(input.selection)
     const preview = input.preview ?? selectionPreview(input.file, selection)

@@ -15,8 +15,10 @@ type ContextFile = {
   selection?: FileSelection
   comment?: string
   commentID?: string
-  commentOrigin?: "review" | "file"
+  // FORK: 从 Tauri 迁回 quote 子分类 + chat 引用 kind [feat: 聊天选区-卡片化-换行] 2026-06-14
+  commentOrigin?: "review" | "file" | "quote"
   preview?: string
+  kind?: "chat" | "file"
 }
 
 type BuildRequestPartsInput = {
@@ -167,7 +169,14 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
       {
         id: Identifier.ascending("part"),
         type: "text",
-        text: formatCommentNote({ path: item.path, selection: item.selection, comment }),
+        // FORK: 传 preview + kind,kind="chat" 走聊天引用模板(从 Tauri 迁回)[feat: 聊天选区-卡片化-换行] 2026-06-14
+        text: formatCommentNote({
+          path: item.path,
+          selection: item.selection,
+          comment,
+          preview: item.preview,
+          kind: item.kind,
+        }),
         synthetic: true,
         metadata: createCommentMetadata({
           path: item.path,
@@ -175,6 +184,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
           comment,
           preview: item.preview,
           origin: item.commentOrigin,
+          kind: item.kind,
         }),
       } satisfies PromptRequestPart,
       filePart,
