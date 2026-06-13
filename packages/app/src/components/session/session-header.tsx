@@ -240,6 +240,12 @@ export function SessionHeader() {
     reviewKeybind: command.keybind("review.toggle"),
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
+    // FORK: 文件树显隐开关(贴近左侧文件树模块)[feat: titlebar-icons-mirror] 2026-06-13
+    fileTreeVisible: tree(),
+    fileTreeLabel: language.t("command.fileTree.toggle"),
+    fileTreeKeybind: command.keybind("fileTree.toggle"),
+    fileTreeOpened: layout.fileTree.opened(),
+    onFileTreeToggle: () => layout.fileTree.toggle(),
   }))
 
   const selectApp = (app: OpenApp) => {
@@ -280,10 +286,12 @@ export function SessionHeader() {
   }
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)
-  const [rightMount, setRightMount] = createSignal<HTMLElement | null>(null)
+  // FORK: 镜像布局下文件树/预览/状态面板在左,工具组图标也挂左 portal(贴近各自模块)
+  //   原挂 right portal 是非镜像残留,迁移时未跟随镜像翻转 [feat: titlebar-icons-mirror] 2026-06-13
+  const [toolbarMount, setToolbarMount] = createSignal<HTMLElement | null>(null)
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
-    setRightMount(document.getElementById("opencode-titlebar-right"))
+    setToolbarMount(document.getElementById("opencode-titlebar-left"))
   })
 
   return (
@@ -318,7 +326,7 @@ export function SessionHeader() {
           </Portal>
         )}
       </Show>
-      <Show when={rightMount()}>
+      <Show when={toolbarMount()}>
         {(mount) => (
           <Portal mount={mount()}>
             <Show
@@ -555,11 +563,34 @@ type SessionHeaderV2ActionsState = {
   reviewKeybind: string
   reviewOpened: boolean
   onReviewToggle: () => void
+  // FORK: 文件树显隐开关 [feat: titlebar-icons-mirror] 2026-06-13
+  fileTreeVisible: boolean
+  fileTreeLabel: string
+  fileTreeKeybind: string
+  fileTreeOpened: boolean
+  onFileTreeToggle: () => void
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
   return (
     <div class="flex items-center gap-2">
+      {/* FORK: 文件树开关置最左,贴近左侧文件树模块 [feat: titlebar-icons-mirror] 2026-06-13 */}
+      <Show when={props.state.fileTreeVisible}>
+        <TooltipKeybind title={props.state.fileTreeLabel} keybind={props.state.fileTreeKeybind}>
+          <IconButtonV2
+            type="button"
+            variant="ghost-muted"
+            size="large"
+            class="!w-9 shrink-0"
+            state={props.state.fileTreeOpened ? "pressed" : undefined}
+            onClick={props.state.onFileTreeToggle}
+            aria-label={props.state.fileTreeLabel}
+            aria-expanded={props.state.fileTreeOpened}
+            aria-controls="file-tree-panel"
+            icon={<Icon size="small" name={props.state.fileTreeOpened ? "file-tree-active" : "file-tree"} />}
+          />
+        </TooltipKeybind>
+      </Show>
       <Show when={props.state.statusVisible}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />

@@ -606,45 +606,10 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                   </Button>
                 </TooltipKeybind>
                 <div class="hidden xl:flex items-center shrink-0">
-                  <Show when={params.dir}>
-                    <div
-                      class="flex items-center shrink-0 w-8 mr-1"
-                      aria-hidden={layout.sidebar.opened() ? "true" : undefined}
-                    >
-                      <div
-                        class="transition-opacity"
-                        classList={{
-                          "opacity-100 duration-120 ease-out": !layout.sidebar.opened(),
-                          "opacity-0 duration-120 ease-in delay-0 pointer-events-none": layout.sidebar.opened(),
-                        }}
-                      >
-                        <TooltipKeybind
-                          placement="bottom"
-                          title={language.t("command.session.new")}
-                          keybind={command.keybind("session.new")}
-                          openDelay={2000}
-                        >
-                          <Button
-                            variant="ghost"
-                            icon={creating() ? "new-session-active" : "new-session"}
-                            class="titlebar-icon w-8 h-6 p-0 box-border"
-                            disabled={layout.sidebar.opened()}
-                            tabIndex={layout.sidebar.opened() ? -1 : undefined}
-                            onClick={() => {
-                              if (!params.dir) return
-                              navigate(`/${params.dir}/session`)
-                            }}
-                            aria-label={language.t("command.session.new")}
-                            aria-current={creating() ? "page" : undefined}
-                          />
-                        </TooltipKeybind>
-                      </div>
-                    </div>
-                  </Show>
+                  {/* FORK: 新建会话(创作)图标移到右侧贴近聊天模块 [feat: titlebar-icons-mirror] 2026-06-13 */}
                   <div
                     class="flex items-center shrink-0"
                     classList={{
-                      "-translate-x-[36px]": layout.sidebar.opened() && !!params.dir,
                       "duration-180 ease-out": !layout.sidebar.opened(),
                       "duration-180 ease-in": layout.sidebar.opened(),
                     }}
@@ -695,6 +660,27 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
               data-tauri-drag-region
               onMouseDown={drag}
             >
+              {/* FORK: 新建会话(创作)移到右侧,贴近聊天/创作模块 [feat: titlebar-icons-mirror] 2026-06-13 */}
+              <Show when={params.dir}>
+                <TooltipKeybind
+                  placement="bottom"
+                  title={language.t("command.session.new")}
+                  keybind={command.keybind("session.new")}
+                  openDelay={2000}
+                >
+                  <Button
+                    variant="ghost"
+                    icon={creating() ? "new-session-active" : "new-session"}
+                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0 mr-1 [app-region:no-drag]"
+                    onClick={() => {
+                      if (!params.dir) return
+                      navigate(`/${params.dir}/session`)
+                    }}
+                    aria-label={language.t("command.session.new")}
+                    aria-current={creating() ? "page" : undefined}
+                  />
+                </TooltipKeybind>
+              </Show>
               <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
               <Show when={windows()}>
                 {!tauriApi() && <div class="shrink-0" style={{ width: windowsControlsWidth() }} />}
