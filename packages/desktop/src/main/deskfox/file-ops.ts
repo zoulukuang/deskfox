@@ -65,12 +65,15 @@ export async function trashPath(args: { path: string }): Promise<void> {
 
 export async function openPath(args: { path: string; appName: string | null }): Promise<void> {
   // appName 暂忽略(默认应用打开);Rust 版支持指定 app,后续按需补 OPEN_APPS 映射
-  const err = await shell.openPath(args.path)
-  if (err) throw new Error(`open failed: ${args.path}: ${err}`)
+  // FORK: 同 trashItem — shell.* 在 Windows 认原生路径,path.resolve 归一 forward slash 2026-06-13
+  const native = path.resolve(args.path)
+  const err = await shell.openPath(native)
+  if (err) throw new Error(`open failed: ${native}: ${err}`)
 }
 
 export function revealInFolder(args: { path: string }): void {
-  shell.showItemInFolder(args.path)
+  // FORK: shell.showItemInFolder 同样认原生路径,归一防 Windows 下静默失效 2026-06-13
+  shell.showItemInFolder(path.resolve(args.path))
 }
 
 export async function getFileMtime(args: { root: string; path: string }): Promise<number> {
