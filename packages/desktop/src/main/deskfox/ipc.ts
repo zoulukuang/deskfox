@@ -8,6 +8,7 @@ import { ipcMain, type IpcMainInvokeEvent } from "electron"
 import * as fileOps from "./file-ops"
 import * as preventSleep from "./prevent-sleep"
 import * as feishu from "./feishu"
+import * as telemetry from "./telemetry"
 import { registerLocalAssetProtocol } from "./local-asset"
 
 export function registerDeskfoxIpc() {
@@ -37,6 +38,11 @@ export function registerDeskfoxIpc() {
   // ── 防休眠(powerSaveBlocker)──
   h("get_prevent_sleep", preventSleep.getPreventSleep)
   h("set_prevent_sleep", preventSleep.setPreventSleep)
+
+  // ── 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] ──
+  h("get_telemetry_enabled", () => telemetry.getTelemetryStatus())
+  h("set_telemetry_enabled", (args: { enabled: boolean }) => telemetry.setTelemetryEnabled(args.enabled))
+  h("track_event_cmd", (args: { name: string; blocking?: boolean }) => telemetry.trackEventCmd(args))
 
   // ── 飞书桥接(转发到 ~/.opencode/feishu-plugin-server.json 指向的插件 server)──
   h("feishu_adapter_status", feishu.feishuAdapterStatus)

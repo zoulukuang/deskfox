@@ -17,6 +17,8 @@ import { CHANNEL } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
 import { registerDeskfoxIpc } from "./deskfox/ipc"
+// FORK: 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] 2026-06-13
+import { initTelemetry, emitAppOpen } from "./deskfox/telemetry"
 import { createTray, attachCloseToTray, setQuitting, isQuitting } from "./deskfox/tray"
 import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 import { forwardInitializationFailure } from "./initialization"
@@ -137,6 +139,8 @@ const main = Effect.gen(function* () {
   })()
   app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "DeskFox Dev") // FORK: DeskFox 品牌 [feat: electron-replatform]
   app.setAppUserModelId(appId)
+  // FORK: 统计客户端注入 version + bundle identifier(按 channel 选 Plausible site)[feat: telemetry-usage-stats]
+  initTelemetry({ version: app.getVersion(), identifier: appId })
   app.setPath(
     "userData",
     onboardingTestRoot ? join(onboardingTestRoot, "desktop") : join(app.getPath("appData"), appId),
@@ -261,6 +265,8 @@ const main = Effect.gen(function* () {
   const updater = setupAutoUpdater(stopSidecars)
   // FORK: DeskFox 原生 IPC(文件操作等) [feat: electron-replatform]
   registerDeskfoxIpc()
+  // FORK: 启动即发 app_open(pageview 注册当日活跃);opt-out/白名单/IO 全在后台,不阻塞 [feat: telemetry-usage-stats]
+  emitAppOpen()
   // FORK: 插件注入 + 自愈(必须在 sidecar 启动前,sidecar 读 opencode.jsonc)[feat: electron-replatform]
   ensureDeskfoxPlugins()
   registerIpcHandlers({

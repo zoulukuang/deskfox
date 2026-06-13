@@ -4,6 +4,11 @@ import { UPDATER_ENABLED } from "./constants"
 import { createUpdaterController, type UpdaterReadyRecord } from "./updater-controller"
 import { getLogger } from "./logging"
 import { getStore } from "./store"
+// FORK: 升级漏斗统计(update_downloaded / update_applied)[feat: telemetry-usage-stats] 2026-06-13
+import { track, trackBlocking } from "./deskfox/telemetry"
+
+// 每版本只发一次 update_downloaded(check 每 10 分钟跑,status=ready 会反复命中)
+const downloadedReported = new Set<string>()
 
 const { autoUpdater } = pkg
 const key = "ready"
@@ -56,6 +61,12 @@ export async function showUpdaterDialog(controller: ReturnType<typeof setupAutoU
   }
   if (state.status !== "ready") return
 
+  // FORK: 更新已下载就绪 → 发 update_downloaded(每版本一次)[feat: telemetry-usage-stats]
+  if (state.version && !downloadedReported.has(state.version)) {
+    downloadedReported.add(state.version)
+    track("update_downloaded")
+  }
+
   const response = await dialog.showMessageBox({
     type: "info",
     message: `Update ${state.version} downloaded. Restart now?`,
@@ -64,5 +75,9 @@ export async function showUpdaterDialog(controller: ReturnType<typeof setupAutoU
     defaultId: 0,
     cancelId: 1,
   })
-  if (response.response === 0) await controller.install()
+  if (response.response === 0) {
+    // FORK: relaunch 前阻塞发 update_applied(否则进程重启杀掉 fire-and-forget 请求)[feat: telemetry-usage-stats]
+    await trackBlocking("update_applied")
+    await controller.install()
+  }
 }

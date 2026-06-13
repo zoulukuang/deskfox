@@ -246,6 +246,22 @@ const createPlatform = (): Platform => {
 
     parseMarkdown: (markdown: string) => window.api.parseMarkdownCommand(markdown),
 
+    // FORK: 匿名使用统计开关 — 经 window.deskfox 桥调主进程 telemetry IPC [feat: telemetry-usage-stats] 2026-06-13
+    getTelemetryEnabled: async () => {
+      const bridge = (window as unknown as { deskfox?: { invoke: <T>(c: string, a?: Record<string, unknown>) => Promise<T> } })
+        .deskfox
+      if (!bridge) return { enabled: true, locked: false }
+      return bridge
+        .invoke<{ enabled: boolean; locked: boolean }>("get_telemetry_enabled")
+        .catch(() => ({ enabled: true, locked: false }))
+    },
+    setTelemetryEnabled: async (enabled: boolean) => {
+      const bridge = (window as unknown as { deskfox?: { invoke: <T>(c: string, a?: Record<string, unknown>) => Promise<T> } })
+        .deskfox
+      if (!bridge) return
+      await bridge.invoke("set_telemetry_enabled", { enabled })
+    },
+
     webviewZoom,
 
     getPinchZoomEnabled: () => window.api.getPinchZoomEnabled(),

@@ -395,6 +395,7 @@
         "electron-store": "11.0.2",
         "electron-updater": "6.8.9",
         "electron-window-state": "^5.0.3",
+        "jsonc-parser": "3.3.1",
         "marked": "^15",
       },
       "devDependencies": {
@@ -872,7 +873,7 @@
         "@opencode-ai/ui": "workspace:*",
         "@opentui/core": "catalog:",
         "@opentui/keymap": "catalog:",
-        "@opentui/solid": "catalog:",
+        "@opentui/solid": "0.3.4",
         "clipboardy": "4.0.0",
         "diff": "catalog:",
         "effect": "catalog:",
