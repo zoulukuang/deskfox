@@ -539,7 +539,8 @@ export function SessionSidePanel(props: {
                   <div onPointerDown={() => props.size.start()}>
                     <ResizeHandle
                       direction="horizontal"
-                      edge="start"
+                      // FORK: 经典布局文件树锚左(flex-row-reverse),拖其右缘 = end 语义;v2 树在右维持 start 2026-06-13
+                      edge={settings.general.newLayoutDesigns() ? "start" : "end"}
                       size={layout.fileTree.width()}
                       min={200}
                       max={480}

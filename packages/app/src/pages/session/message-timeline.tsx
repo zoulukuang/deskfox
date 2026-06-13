@@ -643,6 +643,9 @@ export function MessageTimeline(props: {
 
     props.setScrollRef(root)
     measuredBottomAnchored = isMeasuredBottom(root)
+    // FORK: 选区右键菜单管辖锚点 — dom-provider 按 closest('[data-slot="session-turn-list"]') 认
+    //   chat 区;上游重构丢了该锚点 → 菜单不触发。挂滚动根(祖先匹配即可)。[feat: chat-selection-menu] 2026-06-13
+    root.setAttribute("data-slot", "session-turn-list")
     setScrollRoot(root)
     scheduleContentRoot(root)
   }

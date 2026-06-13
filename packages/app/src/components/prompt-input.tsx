@@ -1877,8 +1877,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </div>
           </DockShellForm>
           <Show when={store.mode === "normal" || store.mode === "shell"}>
-            <DockTray attach="top">
-              <div class="px-1.75 pt-5.5 pb-2 flex items-center gap-2 min-w-0">
+            {/* FORK: 底部控制单行化 — DockTray 改 flex 行,模式菜单(Chat)与 agent/model 同行靠右,
+                前段选择器可压缩(min-w-0 truncate),不再折行 [feat: composer-single-row] 2026-06-13 */}
+            <DockTray attach="top" class="flex items-center min-w-0">
+              <div class="px-1.75 pt-5.5 pb-2 flex items-center gap-2 min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 min-w-0 flex-1 relative">
                   <div
                     class="h-7 flex items-center gap-1.5 min-w-0 absolute inset-0"
@@ -2046,8 +2048,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   </div>
                 </div>
               </div>
-              {/* FORK: 创作模式统一模式菜单(最右)[feat: media-creation-mode] */}
-              <MediaModeMenu />
+              {/* FORK: 创作模式统一模式菜单(最右,与 agent/model 同行)[feat: media-creation-mode] */}
+              <div class="shrink-0 pr-2 pt-3.5 pb-2 flex items-center">
+                <MediaModeMenu />
+              </div>
             </DockTray>
           </Show>
         </Match>

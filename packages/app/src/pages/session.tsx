@@ -1870,6 +1870,8 @@ export default function Page() {
                   "-right-1": settings.general.newLayoutDesigns(),
                 }}
                 direction="horizontal"
+                // FORK: 经典布局镜像后聊天区在右,拖左缘增宽 = start 语义(上游默认 end 拖不动)2026-06-13
+                edge={settings.general.newLayoutDesigns() ? undefined : "start"}
                 size={layout.session.width()}
                 min={450}
                 max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}
