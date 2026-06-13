@@ -1,7 +1,7 @@
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { encodeFilePath } from "@/context/file/path"
-import { DialogFileTreeConfirm } from "@/components/dialog-file-tree"
+import { DialogFileTreeConfirm, DialogFileTreeConflict, type ConflictAction } from "@/components/dialog-file-tree"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -521,6 +521,71 @@ export default function FileTree(props: {
     clipboard.setCopy(paths)
   }
 
+  // FORK-BEGIN: #6 同名冲突解决 — 替换 / 保留两者 / 跳过(+ 应用到后续全部)[feat: file-tree-ux-polish-p2] 2026-06-13
+  /** 弹冲突对话框,返回用户选择;Escape/关闭视为 skip(仅当前项)。 */
+  const resolveConflict = (name: string): Promise<{ action: ConflictAction; applyToAll: boolean }> =>
+    new Promise((resolve) => {
+      let done = false
+      const finish = (action: ConflictAction, applyToAll: boolean) => {
+        if (done) return
+        done = true
+        resolve({ action, applyToAll })
+      }
+      dialog.show(
+        () => <DialogFileTreeConflict name={name} onResolve={finish} />,
+        () => finish("skip", false),
+      )
+    })
+
+  type MoveOp = { src: string; target: string; overwrite: boolean }
+  /** 对每个源算目标:无冲突直接用;冲突则按用户选择(替换=覆盖原名 / 保留两者=加后缀 / 跳过=丢弃)。
+   *  next_available_path 返回的 basename 与原名不同 = 存在冲突(无需额外 IPC 探测)。 */
+  const resolveConflicts = async (targetDirAbs: string, sources: readonly string[]): Promise<MoveOp[]> => {
+    const ops: MoveOp[] = []
+    let blanket: ConflictAction | null = null
+    for (const src of sources) {
+      const name = basename(src)
+      const free = await computeAvailableTarget(targetDirAbs, name)
+      if (basename(free) === name) {
+        ops.push({ src, target: free, overwrite: false })
+        continue
+      }
+      let action: ConflictAction | null = blanket
+      if (!action) {
+        const choice = await resolveConflict(name)
+        action = choice.action
+        if (choice.applyToAll) blanket = action
+      }
+      if (action === "skip") continue
+      if (action === "keepBoth") ops.push({ src, target: free, overwrite: false })
+      else ops.push({ src, target: joinAbs(targetDirAbs, name), overwrite: true })
+    }
+    return ops
+  }
+
+  /** 执行一批移动 op(替换时先 trash 旧目标再 rename),返回成功对 + 错误。 */
+  const runMoveOps = async (ops: MoveOp[]) => {
+    const movedPairs: { from: string; to: string }[] = []
+    const errors: string[] = []
+    for (const op of ops) {
+      try {
+        if (op.overwrite) {
+          try {
+            await invoke("trash_path", { path: op.target })
+          } catch {
+            // 旧目标可能已不存在 — 忽略,直接尝试 rename
+          }
+        }
+        await invoke("rename_path", { from: op.src, to: op.target })
+        movedPairs.push({ from: op.src, to: op.target })
+      } catch (e) {
+        errors.push(`${basename(op.src)}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    return { movedPairs, errors }
+  }
+  // FORK-END
+
   /** 把 clipboard 内容粘贴到 targetDirAbs。cut → rename_path 后清 clipboard;copy → copy_path 保留 clipboard */
   const pasteTo = async (targetDirAbs: string, targetDirRel: string) => {
     if (!clipboard.hasContent()) return
@@ -535,20 +600,24 @@ export default function FileTree(props: {
     if (valid.length === 0) return
 
     const errors: string[] = []
-    const movedPairs: { from: string; to: string }[] = []
+    let movedPairs: { from: string; to: string }[] = []
     const created: string[] = []
-    for (const src of valid) {
-      try {
-        const target = await computeAvailableTarget(targetDirAbs, basename(src))
-        if (mode === "cut") {
-          await invoke("rename_path", { from: src, to: target })
-          movedPairs.push({ from: src, to: target })
-        } else {
+    if (mode === "cut") {
+      // FORK: #6 cut 粘贴走同名冲突对话框(替换/保留两者/跳过)2026-06-13
+      const ops = await resolveConflicts(targetDirAbs, valid)
+      const res = await runMoveOps(ops)
+      movedPairs = res.movedPairs
+      errors.push(...res.errors)
+    } else {
+      // copy 模式保留静默"保留两者"语义(显式复制 = 自然生成副本,不打断问)
+      for (const src of valid) {
+        try {
+          const target = await computeAvailableTarget(targetDirAbs, basename(src))
           await invoke("copy_path", { from: src, to: target })
           created.push(target)
+        } catch (e) {
+          errors.push(`${basename(src)}: ${e instanceof Error ? e.message : String(e)}`)
         }
-      } catch (e) {
-        errors.push(`${basename(src)}: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
 
@@ -979,17 +1048,9 @@ export default function FileTree(props: {
     const valid = sources.filter((s) => isValidMoveTarget(s, { absolute: targetAbs, type: "directory" }))
     if (valid.length === 0) return // 全部无效(拖父进子 / 拖到自身 / 已在目标),静默 no-op
 
-    const errors: string[] = []
-    const movedPairs: { from: string; to: string }[] = []
-    for (const src of valid) {
-      try {
-        const targetPath = await computeAvailableTarget(targetAbs, basename(src))
-        await invoke("rename_path", { from: src, to: targetPath })
-        movedPairs.push({ from: src, to: targetPath })
-      } catch (e) {
-        errors.push(`${basename(src)}: ${e instanceof Error ? e.message : String(e)}`)
-      }
-    }
+    // FORK: #6 拖放移动走同名冲突对话框(替换/保留两者/跳过)2026-06-13
+    const ops = await resolveConflicts(targetAbs, valid)
+    const { movedPairs, errors } = await runMoveOps(ops)
 
     // 刷新源父目录(去重)+ 目标目录
     const refreshTargets = new Set<string>([targetRel])

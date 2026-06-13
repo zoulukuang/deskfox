@@ -1137,6 +1137,13 @@ export const dict = {
   "fileTree.toast.terminalFailed": "Failed to open terminal",
   "fileTree.placeholder.error": "Failed to load file tree",
   "fileTree.placeholder.retry": "Retry",
+  "fileTree.conflict.title": "Name conflict",
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination",
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.",
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts",
+  "fileTree.conflict.replace": "Replace",
+  "fileTree.conflict.keepBoth": "Keep both",
+  "fileTree.conflict.skip": "Skip",
   // FORK: md-export-pdf-word — viewer 右键导出 Word 菜单 i18n(PDF v1 drop)2026-05-05
   "fileViewer.menu.exportDocx": "Export as Word",
   "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word",

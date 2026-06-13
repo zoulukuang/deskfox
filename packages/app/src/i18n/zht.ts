@@ -1007,6 +1007,13 @@ export const dict = {
   "fileTree.toast.terminalFailed": "開啟終端機失敗",
   "fileTree.placeholder.error": "載入檔案樹失敗",
   "fileTree.placeholder.retry": "重試",
+  "fileTree.conflict.title": "名稱衝突",
+  "fileTree.conflict.message": "目標位置已存在「{{name}}」",
+  "fileTree.conflict.detail": "選擇如何處理:替換會把原檔案移入資源回收筒。",
+  "fileTree.conflict.applyToAll": "套用到後續所有衝突",
+  "fileTree.conflict.replace": "替換",
+  "fileTree.conflict.keepBoth": "保留兩者",
+  "fileTree.conflict.skip": "跳過",
   // FORK: md-export-pdf-word — viewer 右鍵匯出 Word 選單 i18n(PDF v1 drop)2026-05-05
   "fileViewer.menu.exportDocx": "匯出為 Word",
   "fileViewer.menu.exportDocxOnlyMd": "僅支援 Markdown(.md / .markdown)檔案匯出為 Word",

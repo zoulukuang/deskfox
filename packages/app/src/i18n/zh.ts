@@ -1023,6 +1023,13 @@ export const dict = {
   "fileTree.toast.terminalFailed": "打开终端失败",
   "fileTree.placeholder.error": "加载文件树失败",
   "fileTree.placeholder.retry": "重试",
+  "fileTree.conflict.title": "名称冲突",
+  "fileTree.conflict.message": "目标位置已存在「{{name}}」",
+  "fileTree.conflict.detail": "选择如何处理:替换会把原文件移入回收站。",
+  "fileTree.conflict.applyToAll": "应用到后续所有冲突",
+  "fileTree.conflict.replace": "替换",
+  "fileTree.conflict.keepBoth": "保留两者",
+  "fileTree.conflict.skip": "跳过",
   // FORK: md-export-pdf-word — viewer 右键导出 Word 菜单 i18n(PDF v1 drop)2026-05-05
   "fileViewer.menu.exportDocx": "导出为 Word",
   "fileViewer.menu.exportDocxOnlyMd": "仅支持 Markdown(.md / .markdown)文件导出为 Word",
