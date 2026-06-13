@@ -41,7 +41,7 @@ import {
 // FORK: 大文件预览统一防护 — L1 size pre-check [feat: large-file-preview-guard] 2026-05-21
 import { invoke } from "@/utils/native"
 import { categoryOf, SIZE_LIMITS } from "@/utils/file-size-guard"
-import { isBackendUnreachableError } from "@/utils/server-errors"
+import { isBackendUnreachableError, isRetryableListError } from "@/utils/server-errors"
 
 export type { FileSelection, SelectedLineRange, FileViewState, FileState }
 export { selectionFromLines }
@@ -85,13 +85,33 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       file: {},
     })
 
+    // FORK: 冷启动 file.list 瞬时错误重试 [feat: coldstart-list-500-retry] 2026-06-13
+    //   sidecar HTTP 已起但内部未热时,首个 file.list 可能返回 500「Unexpected server error」/
+    //   连接级不可达。这类瞬时错短延迟后自愈,故有限次重试后再 surface,消除启动一闪而过的红 toast。
+    //   非可重试错(真实业务错)立即抛,不延迟。
+    //   退避覆盖 ~3.6s,给慢冷启(LibreOffice/索引/instance 初始化)足够热身窗口。
+    const LIST_RETRY_BACKOFF_MS = [150, 350, 600, 900, 1500]
+    const listWithRetry = async (dir: string) => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const res = await sdk.client.file.list({ path: dir })
+          return res.data ?? []
+        } catch (e) {
+          if (attempt >= LIST_RETRY_BACKOFF_MS.length || !isRetryableListError(e)) throw e
+          await new Promise((r) => setTimeout(r, LIST_RETRY_BACKOFF_MS[attempt]))
+        }
+      }
+    }
+
     const tree = createFileTreeStore({
       scope,
       normalizeDir: path.normalizeDir,
-      list: (dir) => sdk.client.file.list({ path: dir }).then((x) => x.data ?? []),
+      list: (dir) => listWithRetry(dir),
       onError: (message) => {
-        // FORK: 后端不可达不弹 toast — 看门狗统管恢复 UX [feat: coldstart-toast-race] 2026-06-08
-        if (isBackendUnreachableError(message)) return
+        // FORK: 瞬时错(后端不可达 / 冷启动 500「Unexpected server error」)不弹红 toast —
+        //   listWithRetry 已尽力重试,仍失败则交后续 list/看门狗自愈,避免启动一闪而过的红条
+        //   [feat: coldstart-toast-race / coldstart-list-500-retry] 2026-06-08 / 2026-06-13
+        if (isRetryableListError(message)) return
         showToast({
           variant: "error",
           title: language.t("toast.file.listFailed.title"),

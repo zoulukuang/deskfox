@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import type { ConfigInvalidError, ProviderModelNotFoundError } from "./server-errors"
-import { formatServerError, parseReadableConfigInvalidError } from "./server-errors"
+import {
+  formatServerError,
+  parseReadableConfigInvalidError,
+  isTransientServerError,
+  isRetryableListError,
+  isBackendUnreachableError,
+} from "./server-errors"
 
 function fill(text: string, vars?: Record<string, string | number>) {
   if (!vars) return text
@@ -140,5 +146,33 @@ describe("formatServerError", () => {
     const wrapped = new Error("ConfigInvalidError", { cause: { body, status: 400 } })
 
     expect(formatServerError(wrapped, language.t)).toBe("Arquivo de config em config invalido: Missing host")
+  })
+})
+
+// [bug-repro: 启动时 file.list 返回 500「Unexpected server error」弹红 toast(冷启动时序)] 2026-06-13
+describe("cold-start file.list transient error classification", () => {
+  test("冷启动通用 500 文案被识别为瞬时(应重试,不弹 toast)", () => {
+    const err = new Error("Unexpected server error. Check server logs for details.")
+    expect(isTransientServerError(err)).toBe(true)
+    expect(isRetryableListError(err)).toBe(true)
+  })
+
+  test("连接级不可达仍可重试", () => {
+    const err = new Error("error sending request for url (http://127.0.0.1:4096/file)")
+    expect(isBackendUnreachableError(err)).toBe(true)
+    expect(isRetryableListError(err)).toBe(true)
+  })
+
+  test("真实业务 5xx(带具体信息)不误判为瞬时 → 正常 surface", () => {
+    const err = new Error("ripgrep exited with code 2: invalid glob pattern")
+    expect(isTransientServerError(err)).toBe(false)
+    expect(isRetryableListError(err)).toBe(false)
+  })
+
+  test("纯字符串 / 空错误安全处理", () => {
+    expect(isTransientServerError("Unexpected server error. Check server logs for details.")).toBe(true)
+    expect(isTransientServerError("")).toBe(false)
+    expect(isTransientServerError(null)).toBe(false)
+    expect(isRetryableListError(undefined)).toBe(false)
   })
 })
