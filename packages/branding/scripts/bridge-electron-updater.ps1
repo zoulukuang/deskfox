@@ -7,8 +7,15 @@
 #   指向该 Electron 安装包 → 部署到老端点后,老 Tauri 更新器下载 + 验签通过 + 运行 → 装上 Electron 版。
 #   (Electron NSIS 同时静默卸旧 Tauri,见 electron-builder.deskfox.config.ts 的 nsis.include。)
 #
+# 🔴 切换日必看 — 版本号坑(2026-06-13 运行时验证挖到):
+#   摆渡 manifest 的 -Version **必须 > 已装老 Tauri 版的版本号**,否则 Tauri 更新器判"无更新/降级"不推送。
+#   老 Tauri DeskFox 用**日历版本号** `YYYY.M.D`(如 2026.7.1);新 Electron 实际版本是上游 semver `1.17.x`
+#   —— `1.17.4 < 2026.x`!所以这里**绝不能填 Electron 的真实版本 1.17.x**,要填一个 **> 最高已发 Tauri 版**
+#   的值(沿用日历号即可,如 `2026.12.1` 或更高;脚本会拦截明显的 semver 误填)。
+#   (这只影响 Tauri 更新器的版本比较;装上后 Electron 自己的 electron-updater 用它自己的 1.17.x 版本线,互不干扰。)
+#
 # 用法:
-#   ./bridge-electron-updater.ps1 -Exe <electron-nsis-setup.exe> -Version <YYYY.M.D> -Url <CDN下载URL> -Env <prod|beta|dev> -Out <输出目录>
+#   ./bridge-electron-updater.ps1 -Exe <electron-nsis-setup.exe> -Version <必须>老Tauri日历版,如 2026.12.1> -Url <CDN下载URL> -Env <prod|beta|dev> -Out <输出目录>
 # 产出:<Out>/<exe>.sig(Tauri minisign 签名)+ <Out>/latest.json(摆渡 manifest)
 # 部署:把 latest.json 放到 updates.deskfox.ai/v1/latest/desktop[-<env>]/windows/latest.json(同 /ship 步骤 7.5 通道)。
 
@@ -23,6 +30,14 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot))  # packages/branding/scripts → repo root
 
 if (-not (Test-Path $Exe)) { throw "Electron 安装包不存在: $Exe" }
+
+# 🔴 版本号防呆:老 Tauri 用日历版 YYYY.M.D,首段是年份(>=2026)。若首段 < 2000 几乎肯定是误填了
+#   Electron 的 semver(如 1.17.4)→ 老 Tauri 会判降级不推送。拦下,逼用户填 > 老 Tauri 版的日历号。
+$firstSeg = ($Version -split '[.\-]')[0] -as [int]
+if ($null -eq $firstSeg -or $firstSeg -lt 2000) {
+  throw "版本号 '$Version' 看起来是 Electron semver,但老 Tauri 用日历版 YYYY.M.D,会把它判成降级不推送。" +
+        "请填一个 > 最高已发 Tauri 版的日历号(如 2026.12.1)。详见脚本头部「版本号坑」。"
+}
 
 # 1) 载入 Tauri minisign 私钥(与 Tauri ship 同源:~/.deskfox-signing/config.env)
 $configEnv = Join-Path $HOME ".deskfox-signing\config.env"
