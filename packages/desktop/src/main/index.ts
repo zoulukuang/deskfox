@@ -30,8 +30,11 @@ import {
   preferAppEnv,
   setDefaultServerUrl,
   spawnLocalServer,
+  checkHealth,
   type SidecarListener,
 } from "./server"
+// FORK: sidecar 看门狗自动重启(从 Tauri server.rs spawn_watchdog 平移)[feat: sidecar-watchdog-respawn] 2026-06-13
+import { createSidecarWatchdog } from "./deskfox/sidecar-watchdog"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
 import {
   createMainWindow,
@@ -65,6 +68,8 @@ const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 let logger: ReturnType<typeof initLogging>
 let mainWindow: BrowserWindow | null = null
 let server: SidecarListener | null = null
+// FORK: sidecar 看门狗句柄(stopSidecars 主动停时先 stop,防误重启)[feat: sidecar-watchdog-respawn]
+let sidecarWatchdog: { start: () => void; stop: () => void } | null = null
 
 const pendingDeepLinks: string[] = []
 
@@ -165,6 +170,9 @@ const main = Effect.gen(function* () {
     },
   )
   const stopSidecars = async () => {
+    // FORK: 先停看门狗,避免主动停 sidecar 被误判死亡触发重启 [feat: sidecar-watchdog-respawn]
+    sidecarWatchdog?.stop()
+    sidecarWatchdog = null
     await killSidecar()
     wslServers.stopAll()
   }
@@ -351,6 +359,35 @@ const main = Effect.gen(function* () {
       }),
     )
     server = listener
+    // FORK: 启动 sidecar 看门狗 — 崩溃/假死时同 port+pw 自动重启,前台请求自动恢复
+    //   [feat: sidecar-watchdog-respawn] 2026-06-13
+    const spawnOptions = {
+      userDataPath: app.getPath("userData"),
+      onStdout: (message: string) => writeLog("server", "stdout", { message }),
+      onStderr: (message: string) => writeLog("server", "stderr", { message }, "warn"),
+      onExit: (code: number) => writeLog("utility", "sidecar exited", { code }, "warn"),
+    }
+    const respawnSidecar = async () => {
+      if (server) {
+        const old = server
+        server = null
+        await old.stop().catch(() => undefined)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500)) // 等端口释放
+      const next = await spawnLocalServer(hostname, port, password, spawnOptions)
+      server = next.listener
+      // 等新实例 healthy(最多 30s);失败不放弃,下一轮 poll 受熔断保护会再判定
+      await Promise.race([next.health.wait, new Promise((resolve) => setTimeout(resolve, 30_000))])
+    }
+    sidecarWatchdog?.stop()
+    sidecarWatchdog = createSidecarWatchdog({
+      checkHealth: () => checkHealth(url, password),
+      isShuttingDown: () => isQuitting(),
+      respawn: respawnSidecar,
+      emit: (status) => mainWindow?.webContents.send("sidecar-watchdog", status),
+      log: (message, data) => writeLog("utility", message, data ?? {}, "warn"),
+    })
+    sidecarWatchdog.start()
     yield* Deferred.succeed(serverReady, {
       url,
       username: "opencode",

@@ -56,5 +56,6 @@ export function registerDeskfoxIpc() {
   h("feishu_pick_workspace_dir", feishu.feishuPickWorkspaceDir)
   h("feishu_list_providers", feishu.feishuListProviders)
 
-  // TODO[electron-replatform]: 托盘、事件(flush-before-close/sidecar-watchdog)逐模块补
+  // 注:托盘/flush/sidecar-watchdog 均已在各自模块落地(tray.ts / index.ts);sidecar-watchdog
+  //   事件经 mainWindow.webContents.send 广播,renderer 消费方待 deferred layout.tsx 一起接。
 }
