@@ -1,6 +1,8 @@
 # Tray icons — DeskFox 系统托盘图标
 
-四个状态变体(template 模板模式,macOS menu bar 自动适配深浅色):
+四个状态变体(**品牌蓝 #7295C4 固定色**,与 logo 同色;亮/暗托盘都清晰):
+
+> 2026-06-13 起改为品牌蓝固定色 —— 原纯黑 macOS template 模式在 **Windows 托盘不反色**,浅色托盘上发暗/看不清(user 反馈)。现统一 #7295C4,不再依赖系统反色。Electron 端 tray.ts 内联 `default.png` 的 base64(非 template,蓝色直显)。
 
 | 文件 | 状态 | 触发 |
 |---|---|---|
@@ -11,7 +13,7 @@
 
 ## v2 fox silhouette(2026-05-09)
 
-四张 PNG 当前都是 fox 头廓形(双耳 + 脸三角)的同一图 — 32x32 纯黑 + alpha,macOS template 模式自动反色适配深浅菜单栏。源 SVG 在 `source/icon-tray-template.svg`,从 `OPENCODE-PLAN/品牌设计/SVG/icon-naked.svg` 派生。
+四张 PNG 当前都是 fox 头廓形(双耳 + 脸三角)的同一图 — 32x32 **品牌蓝 #7295C4** + alpha(2026-06-13 前为纯黑 template)。源 SVG 在 `source/icon-tray-template.svg`(`fill=#7295C4`),从 `OPENCODE-PLAN/品牌设计/SVG/icon-naked.svg` 派生。改 SVG 后用 PIL 按其几何重画即可(本机无 resvg);Electron tray.ts 的内联 base64 需同步 `default.png`。
 
 Phase 4 接飞书状态联动时再做 4 张差异化(加 dot / 边框等),代码不需要改动。
 
