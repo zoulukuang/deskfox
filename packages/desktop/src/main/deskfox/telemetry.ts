@@ -14,7 +14,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import crypto from "crypto"
-import { parse as parseJsonc } from "jsonc-parser"
+import { parse as parseJsonc, modify as modifyJsonc, applyEdits as applyJsoncEdits } from "jsonc-parser"
 
 /** 事件白名单 —— 任何不在此列的事件名一律丢弃(前端 command 也受此约束)。 */
 const ALLOWED_EVENTS = ["app_open", "update_downloaded", "update_applied"] as const
@@ -31,6 +31,12 @@ let appIdentifier = "ai.deskfox.app.dev"
 export function initTelemetry(info: { version: string; identifier: string }): void {
   appVersion = info.version
   appIdentifier = info.identifier
+  // 一次性自愈:把历史写进 opencode config 的 telemetry 字段剥除迁走(否则新 base 严格校验炸配置)
+  try {
+    migrateLegacyTelemetry()
+  } catch {
+    // 迁移失败不阻塞启动
+  }
 }
 
 /** 按 channel 选 Plausible site —— 防 dev/beta 流量污染 prod。未知 identifier 一律归 dev(fail-safe)。 */
@@ -56,9 +62,15 @@ function configDir(): string {
   // 注:Win 上 opencode 配置也在 ~/.config/opencode(非 %APPDATA%),对齐 Rust home_base+.config
   return path.join(homeBase(), ".config", "opencode")
 }
-function configPath(): string {
-  return path.join(configDir(), "config.json")
+// FORK: opt-out 存到**独立**文件 deskfox-telemetry.json,**不**写 opencode 的 config.json —
+//   新上游 base(+1898 commit)config schema 严格拒未知 key,写 telemetry 进去会 ConfigInvalidError
+//   让整个 sidecar 配置失效(文件树/会话全炸)。opt-out 是桌面端关切,本就该用桌面自有存储。
+//   [feat: telemetry-usage-stats] 2026-06-13(集成冷启动健康检查抓到的回归修复)
+function optOutPath(): string {
+  return path.join(configDir(), "deskfox-telemetry.json")
 }
+// opencode 会合并加载的配置文件(历史上 Tauri 版把 opt-out 写进 config.json)
+const OPENCODE_CONFIG_FILES = ["config.json", "opencode.json", "opencode.jsonc"] as const
 
 // ── install_id —— 本地随机匿名 UUID,首次生成落盘,后续复用 ──
 export function getOrCreateInstallId(): string {
@@ -130,38 +142,58 @@ export function parseTelemetryField(raw: string): boolean | undefined {
   }
   return undefined
 }
-/** 按 opencode 合并优先级逐文件读(config.json < opencode.json < opencode.jsonc),返回最后命中。 */
-function readConfigTelemetry(): boolean | undefined {
-  const dir = configDir()
-  let value: boolean | undefined
-  for (const file of ["config.json", "opencode.json", "opencode.jsonc"]) {
+/** 读独立 opt-out 文件 deskfox-telemetry.json 的 enabled 字段。 */
+function readOptOut(): boolean | undefined {
+  try {
+    const raw = JSON.parse(fs.readFileSync(optOutPath(), "utf-8"))
+    if (raw && typeof raw === "object" && typeof raw.enabled === "boolean") return raw.enabled
+  } catch {
+    // 缺失/坏 → undefined
+  }
+  return undefined
+}
+/** 一次性迁移 + 自愈:把历史写进 opencode 配置文件的 `telemetry` 字段值搬到独立 opt-out 文件,
+ *  并从 opencode 配置里**剥除**该 key(否则新 base 严格校验拒绝 → ConfigInvalidError 让配置全失效)。
+ *  jsonc 文件用 modify/applyEdits 剥除,保留用户注释/格式。幂等:已无 telemetry key 则 no-op。 */
+export function migrateLegacyTelemetry(): void {
+  let migrated: boolean | undefined
+  for (const file of OPENCODE_CONFIG_FILES) {
+    const full = path.join(configDir(), file)
+    let raw: string
     try {
-      const raw = fs.readFileSync(path.join(dir, file), "utf-8")
-      const b = parseTelemetryField(raw)
-      if (b !== undefined) value = b
+      raw = fs.readFileSync(full, "utf-8")
     } catch {
-      // 文件缺失/读失败跳过
+      continue // 文件不存在
+    }
+    const value = parseTelemetryField(raw)
+    if (value === undefined) continue // 无 telemetry key,跳过
+    migrated = value // 后命中覆盖(对齐 opencode 合并优先级)
+    try {
+      const edits = modifyJsonc(raw, ["telemetry"], undefined, {})
+      const cleaned = applyJsoncEdits(raw, edits)
+      const tmp = full + `.tmp${process.pid}`
+      fs.writeFileSync(tmp, cleaned)
+      fs.renameSync(tmp, full)
+    } catch {
+      // 剥除失败不致命(下次再试);但留着会继续 ConfigInvalidError — 已尽力
     }
   }
-  return value
+  // 把迁移出的值落到独立文件(仅当独立文件还没有值,不覆盖用户后续在新文件里的设置)
+  if (migrated !== undefined && readOptOut() === undefined) {
+    try {
+      writeOptOut(migrated)
+    } catch {
+      // 落盘失败静默
+    }
+  }
 }
 export function isEnabled(): boolean {
-  return resolveEnabled(process.env.OPENCODE_TELEMETRY, readConfigTelemetry())
+  return resolveEnabled(process.env.OPENCODE_TELEMETRY, readOptOut())
 }
-/** 有效值是否被 config.json 之外来源(env / opencode.json / opencode.jsonc)决定 → UI 写 config 改不动 → 锁。 */
+/** 有效值是否被 env 锁定(env 优先级最高,UI 写文件也改不动 → 开关禁用 + 提示)。 */
 function isLocked(): boolean {
   const env = process.env.OPENCODE_TELEMETRY
-  if (env !== undefined && parseEnvTelemetry(env) !== undefined) return true
-  const dir = configDir()
-  for (const file of ["opencode.json", "opencode.jsonc"]) {
-    try {
-      const raw = fs.readFileSync(path.join(dir, file), "utf-8")
-      if (parseTelemetryField(raw) !== undefined) return true
-    } catch {
-      // 跳过
-    }
-  }
-  return false
+  return env !== undefined && parseEnvTelemetry(env) !== undefined
 }
 
 // ── 字段大类(os/arch 粗粒度,对齐 Rust std consts 的字符串以保持 Plausible 历史数据一致)──
@@ -254,22 +286,14 @@ export type TelemetryStatus = { enabled: boolean; locked: boolean }
 export function getTelemetryStatus(): TelemetryStatus {
   return { enabled: isEnabled(), locked: isLocked() }
 }
-/** 写 config.json 的 telemetry 字段(保留其余字段,原子写)。失败抛错让前端可提示。 */
-export function setTelemetryEnabledIn(file: string | null, enabled: boolean): void {
+/** 写独立 opt-out 文件 deskfox-telemetry.json(原子写)。失败抛错让前端可提示。 */
+export function writeOptOutIn(file: string | null, enabled: boolean): void {
   if (!file) return
-  let json: Record<string, unknown> = {}
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf-8"))
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) json = parsed as Record<string, unknown>
-  } catch {
-    // 不存在/坏 → 用空对象起
-  }
-  json.telemetry = enabled
   const dir = path.dirname(file)
   fs.mkdirSync(dir, { recursive: true })
-  // 原子写:写同目录临时文件(带 pid)→ rename 覆盖,避免并发/半截写截断共用 config.json。
+  // 原子写:写同目录临时文件(带 pid)→ rename 覆盖。
   const tmp = path.join(dir, `${path.basename(file)}.tmp${process.pid}`)
-  fs.writeFileSync(tmp, JSON.stringify(json, null, 2) + "\n")
+  fs.writeFileSync(tmp, JSON.stringify({ enabled }, null, 2) + "\n")
   try {
     fs.renameSync(tmp, file)
   } catch (e) {
@@ -281,8 +305,11 @@ export function setTelemetryEnabledIn(file: string | null, enabled: boolean): vo
     throw e
   }
 }
+function writeOptOut(enabled: boolean): void {
+  writeOptOutIn(optOutPath(), enabled)
+}
 export function setTelemetryEnabled(enabled: boolean): void {
-  setTelemetryEnabledIn(configPath(), enabled)
+  writeOptOut(enabled)
 }
 
 // ── IPC 入口(deskfox/ipc.ts 注册)──

@@ -12,7 +12,8 @@ import {
   osClass,
   archClass,
   getOrCreateInstallIdIn,
-  setTelemetryEnabledIn,
+  writeOptOutIn,
+  migrateLegacyTelemetry,
 } from "./telemetry"
 
 function tempDir(tag: string): string {
@@ -120,29 +121,75 @@ test("T6b user_agent 用短码不暴露完整 install_id", () => {
   expect(ua).not.toContain("abcdefgh-1234")
 })
 
-// T7 — config 写读 roundtrip + 保留其余字段
-describe("setTelemetryEnabledIn", () => {
-  test("T7 写 telemetry + 保留其余字段 + roundtrip", () => {
+// T7 — 独立 opt-out 文件写读 roundtrip(不再污染 opencode config.json)
+describe("writeOptOutIn", () => {
+  test("T7 写 {enabled} roundtrip", () => {
     const home = tempDir("t7")
-    const cfg = path.join(home, ".config", "opencode")
-    fs.mkdirSync(cfg, { recursive: true })
-    const file = path.join(cfg, "config.json")
-    fs.writeFileSync(file, `{"theme":"dark","telemetry":true}`)
-    setTelemetryEnabledIn(file, false)
-    let v = JSON.parse(fs.readFileSync(file, "utf-8"))
-    expect(v.telemetry).toBe(false)
-    expect(v.theme).toBe("dark")
-    setTelemetryEnabledIn(file, true)
-    v = JSON.parse(fs.readFileSync(file, "utf-8"))
-    expect(v.telemetry).toBe(true)
+    const file = path.join(home, ".config", "opencode", "deskfox-telemetry.json")
+    writeOptOutIn(file, false)
+    expect(JSON.parse(fs.readFileSync(file, "utf-8")).enabled).toBe(false)
+    writeOptOutIn(file, true)
+    expect(JSON.parse(fs.readFileSync(file, "utf-8")).enabled).toBe(true)
     fs.rmSync(home, { recursive: true, force: true })
   })
-  test("T7b config 不存在时新建", () => {
+  test("T7b 文件不存在时新建", () => {
     const home = tempDir("t7b")
-    const file = path.join(home, ".config", "opencode", "config.json")
+    const file = path.join(home, ".config", "opencode", "deskfox-telemetry.json")
     expect(fs.existsSync(file)).toBe(false)
-    setTelemetryEnabledIn(file, false)
-    expect(JSON.parse(fs.readFileSync(file, "utf-8")).telemetry).toBe(false)
+    writeOptOutIn(file, false)
+    expect(JSON.parse(fs.readFileSync(file, "utf-8")).enabled).toBe(false)
     fs.rmSync(home, { recursive: true, force: true })
+  })
+})
+
+// T10 — 迁移自愈:从 opencode config 剥除 telemetry(否则新 base ConfigInvalidError)+ 迁到独立文件
+describe("migrateLegacyTelemetry (回归修复:config 严格校验拒 telemetry key)", () => {
+  test("T10 config.json 含 telemetry → 剥除 + 迁到 deskfox-telemetry.json + 保留其余字段", () => {
+    const home = tempDir("t10")
+    const cfg = path.join(home, ".config", "opencode")
+    fs.mkdirSync(cfg, { recursive: true })
+    fs.writeFileSync(path.join(cfg, "config.json"), `{"theme":"dark","telemetry":false}`)
+    process.env.OPENCODE_TEST_HOME = home
+    try {
+      migrateLegacyTelemetry()
+      const cleaned = JSON.parse(fs.readFileSync(path.join(cfg, "config.json"), "utf-8"))
+      expect(cleaned.telemetry).toBeUndefined() // 已剥除
+      expect(cleaned.theme).toBe("dark") // 其余保留
+      expect(JSON.parse(fs.readFileSync(path.join(cfg, "deskfox-telemetry.json"), "utf-8")).enabled).toBe(false) // 值已迁
+    } finally {
+      delete process.env.OPENCODE_TEST_HOME
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  })
+  test("T10b opencode.jsonc 含 telemetry + 注释 → 剥除保留注释", () => {
+    const home = tempDir("t10b")
+    const cfg = path.join(home, ".config", "opencode")
+    fs.mkdirSync(cfg, { recursive: true })
+    fs.writeFileSync(path.join(cfg, "opencode.jsonc"), '{\n  // 主题\n  "theme": "dark",\n  "telemetry": true\n}')
+    process.env.OPENCODE_TEST_HOME = home
+    try {
+      migrateLegacyTelemetry()
+      const raw = fs.readFileSync(path.join(cfg, "opencode.jsonc"), "utf-8")
+      expect(raw).toContain("// 主题") // 注释保留
+      expect(parseTelemetryField(raw)).toBeUndefined() // telemetry 已剥除
+    } finally {
+      delete process.env.OPENCODE_TEST_HOME
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  })
+  test("T10c 无 telemetry key → 幂等 no-op", () => {
+    const home = tempDir("t10c")
+    const cfg = path.join(home, ".config", "opencode")
+    fs.mkdirSync(cfg, { recursive: true })
+    fs.writeFileSync(path.join(cfg, "config.json"), `{"theme":"dark"}`)
+    process.env.OPENCODE_TEST_HOME = home
+    try {
+      migrateLegacyTelemetry()
+      expect(JSON.parse(fs.readFileSync(path.join(cfg, "config.json"), "utf-8")).theme).toBe("dark")
+      expect(fs.existsSync(path.join(cfg, "deskfox-telemetry.json"))).toBe(false) // 没迁就不建
+    } finally {
+      delete process.env.OPENCODE_TEST_HOME
+      fs.rmSync(home, { recursive: true, force: true })
+    }
   })
 })
