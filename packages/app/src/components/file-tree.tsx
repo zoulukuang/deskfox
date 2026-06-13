@@ -563,7 +563,10 @@ export default function FileTree(props: {
     await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
 
     // FORK: push undo 栈(commit #4 of file-tree-dnd)2026-04-28
-    if (movedPairs.length > 0) file.undoStack.push({ kind: "move", pairs: movedPairs })
+    if (movedPairs.length > 0) {
+      file.undoStack.push({ kind: "move", pairs: movedPairs })
+      showMoveUndoToast(movedPairs.length) // #10 撤销 Toast 2026-06-13
+    }
     if (created.length > 0) file.undoStack.push({ kind: "copy", created })
 
     // cut 用完即弃,copy 保留供多次粘贴
@@ -674,6 +677,18 @@ export default function FileTree(props: {
       if (rel !== null) refreshRels.add(rel)
     }
     await Promise.all([...refreshRels].map((r) => file.tree.refresh(r)))
+  }
+
+  // FORK: 移动后 Gmail 式 Toast — "已移动 N 项 [撤销]"(#10/#13)2026-06-13
+  const showMoveUndoToast = (count: number) => {
+    showToast({
+      variant: "default",
+      title:
+        count === 1
+          ? language.t("fileTree.toast.moved.single")
+          : language.t("fileTree.toast.moved.bulk", { count }),
+      actions: [{ label: language.t("fileTree.toast.undo"), onClick: () => void undoLast() }],
+    })
   }
 
   // FORK-BEGIN: 键盘导航 — buildFlatVisible 全局递归扫(尊重 expanded 状态)
@@ -915,6 +930,7 @@ export default function FileTree(props: {
     // FORK: 入 undo 栈(commit #4 of file-tree-dnd)— 至少有一对成功才 push 2026-04-28
     if (movedPairs.length > 0) {
       file.undoStack.push({ kind: "move", pairs: movedPairs })
+      showMoveUndoToast(movedPairs.length) // #10 Gmail 式撤销 Toast 2026-06-13
     }
 
     if (errors.length > 0) {
@@ -1024,60 +1040,48 @@ export default function FileTree(props: {
   })
   // FORK-END
 
-  const promptDelete = (target: FileNode) => {
-    // FORK: 批量删除 — 右键的 target 在 selection 中就删整组,否则只删 target(同 sourcesFor 规约)2026-04-27
+  // FORK: 删除 = 直接进回收站(对齐 Explorer/VSCode:Delete → 回收站不弹确认,可恢复)+ 结果 Toast。
+  //   去掉重确认弹窗(每次删都弹太烦);trash 可在系统回收站恢复,故信息提示而非拦截。
+  //   [feat: file-tree-delete-trash-toast] 2026-06-13
+  const promptDelete = async (target: FileNode) => {
     const targets = sourcesFor(target)
     const single = targets.length === 1
-    const onlyName = single
-      ? basename(targets[0])
-      : language.t("fileTree.dialog.confirmDelete.bulkName", { count: targets.length })
-    dialog.show(() => (
-      <DialogFileTreeConfirm
-        title={
-          single
-            ? target.type === "directory"
-              ? language.t("fileTree.dialog.confirmDelete.folderTitle")
-              : language.t("fileTree.dialog.confirmDelete.fileTitle")
-            : language.t("fileTree.dialog.confirmDelete.bulkTitle")
-        }
-        message={
-          single
-            ? language.t("fileTree.dialog.confirmDelete.messageSingle", { name: onlyName })
-            : language.t("fileTree.dialog.confirmDelete.messageBulk", { name: onlyName })
-        }
-        detail={language.t("fileTree.dialog.confirmDelete.detail")}
-        confirmLabel={language.t("fileTree.dialog.confirmDelete.confirm")}
-        onConfirm={async () => {
-          const errors: string[] = []
-          for (const path of targets) {
-            try {
-              await invoke("trash_path", { path })
-            } catch (e) {
-              errors.push(`${basename(path)}: ${e instanceof Error ? e.message : String(e)}`)
-            }
-          }
-          // 刷新所有源父目录(去重)
-          const refreshTargets = new Set<string>()
-          for (const parent of uniqueParents(targets)) {
-            const rel = absoluteToRelative(parent, sdk.directory)
-            if (rel !== null) refreshTargets.add(rel)
-          }
-          await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
-          // 删完清 selection
-          selection.clear()
-          if (errors.length > 0) {
-            showToast({
-              variant: "error",
-              title:
-                errors.length === 1
-                  ? language.t("fileTree.toast.deleteFailedSingle")
-                  : language.t("fileTree.toast.deleteFailedBulk", { count: errors.length }),
-              description: errors[0],
-            })
-          }
-        }}
-      />
-    ))
+    const errors: string[] = []
+    for (const path of targets) {
+      try {
+        await invoke("trash_path", { path })
+      } catch (e) {
+        errors.push(`${basename(path)}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    const refreshTargets = new Set<string>()
+    for (const parent of uniqueParents(targets)) {
+      const rel = absoluteToRelative(parent, sdk.directory)
+      if (rel !== null) refreshTargets.add(rel)
+    }
+    await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
+    selection.clear()
+    const okCount = targets.length - errors.length
+    if (errors.length > 0) {
+      showToast({
+        variant: "error",
+        title:
+          errors.length === 1
+            ? language.t("fileTree.toast.deleteFailedSingle")
+            : language.t("fileTree.toast.deleteFailedBulk", { count: errors.length }),
+        description: errors[0],
+      })
+    }
+    if (okCount > 0) {
+      // #13 批量反馈 + 回收站可恢复说明(trash 无 API 级 undo,提示去回收站)
+      showToast({
+        variant: "default",
+        title: single
+          ? language.t("fileTree.toast.deleted.single", { name: basename(targets[0]) })
+          : language.t("fileTree.toast.deleted.bulk", { count: okCount }),
+        description: language.t("fileTree.toast.deleted.hint"),
+      })
+    }
   }
 
   const revealInFolder = (target: FileNode) => {
