@@ -35,6 +35,8 @@ import { markdownEditorExtensions } from "@/utils/markdown-editor-extensions"
 import { isBinary, isOfficeDocument, tooLarge } from "@/utils/file-limits"
 // FORK: CSV/TSV 表格查看器(新功能,user 拍板)[feat: csv-table-viewer] 2026-06-14
 import { CsvTable } from "@/components/csv-table"
+// FORK: 选区 overlay 几何工具(CSV 裁剪 + iframe 投影)[feat: viewer-selection-tray-style]
+import { clampRectsToBounds, projectIframeRects } from "./selection-overlay"
 // FORK: 本地资源 protocol(.md 内 <img>/<video>/<audio> 重写 + HTML 预览 iframe)2026-05-05
 import { localAssetUrl, resolveAbsolute, rewriteAssetSrc } from "@/utils/local-asset"
 // FORK: 大文件预览统一防护 — L4 UX 兜底组件 [feat: large-file-preview-guard] 2026-05-21
@@ -978,20 +980,24 @@ export function FileTabContent(props: {
   //   - 清除:setHighlightRects(null) → Solid 信号驱动 unmount,WebKit 没机会缓存
   //   - 滚动:绑 scroll capture 监听,滚动时直接清(用户在菜单生命周期内极少滚)
   //
-  // 颜色:Microsoft Fluent 系统红 #d13438 半透明 0.5 alpha,与 Windows 同款操作色一致。
-  // md / 代码文件 / Pierre shadow DOM 都走同一渲染路径,视觉天然一致。
+  // 颜色:GitHub 蓝 rgba(56,139,253,0.4) —— 与原生 ::selection(index.css 统一蓝)同系,
+  //   拖选(原生蓝)↔ 右键(overlay 蓝)视觉无缝。md / 代码 / PDF / CSV / HTML iframe 都走此 overlay,统一一致。
+  //   [feat: viewer-selection-tray-style] 2026-06-14(原 Microsoft Fluent 红 #d13438,user 反馈各格式不统一)
   type HighlightRect = { left: number; top: number; width: number; height: number }
   const [highlightRects, setHighlightRects] = createSignal<HighlightRect[] | null>(null)
 
-  const setSelectionHighlight = (range: Range | null) => {
+  // clipRect:把高亮矩形裁到容器边界(CSV grid 选区会横跨整行/横向滚出可视区,overlay fixed 定位会
+  // 溢出到文件树/聊天 → 传 CSV 容器矩形裁剪)。其余格式不传,行为不变。[feat: viewer-selection-tray-style]
+  const setSelectionHighlight = (range: Range | null, clipRect?: DOMRect | null) => {
     if (!range) {
       setHighlightRects(null)
       return
     }
     try {
-      const rects = Array.from(range.getClientRects())
+      const raw = Array.from(range.getClientRects())
         .filter((r) => r.width > 0 && r.height > 0)
         .map((r) => ({ left: r.left, top: r.top, width: r.width, height: r.height }))
+      const rects = clipRect ? clampRectsToBounds(raw, clipRect) : raw
       setHighlightRects(rects.length > 0 ? rects : null)
     } catch {
       setHighlightRects(null)
@@ -1245,6 +1251,25 @@ export function FileTabContent(props: {
         const y = rect.top + (Number((data as { y?: unknown }).y) || 0)
         const txt = (data as { text?: unknown }).text
         const text = typeof txt === "string" ? txt : ""
+        // FORK: 把 iframe 内选区 rects(桥接脚本传来,相对 iframe viewport)投影到父文档 → 画 overlay 蓝。
+        //   iframe 失焦(父菜单获焦)后浏览器把 iframe 内原生选区渲染成灰,overlay 蓝补偿 → 与其他格式统一。
+        //   [feat: viewer-selection-tray-style]
+        const rawRects = (data as { rects?: unknown }).rects
+        if (Array.isArray(rawRects)) {
+          const rects = (rawRects as unknown[])
+            .map((r) => r as { left?: unknown; top?: unknown; width?: unknown; height?: unknown })
+            .filter(
+              (r) =>
+                typeof r.left === "number" &&
+                typeof r.top === "number" &&
+                typeof r.width === "number" &&
+                typeof r.height === "number",
+            )
+            .map((r) => ({ left: r.left as number, top: r.top as number, width: r.width as number, height: r.height as number }))
+          setHighlightRects(rects.length > 0 ? projectIframeRects(rects, { left: rect.left, top: rect.top }) : null)
+        } else {
+          setHighlightRects(null)
+        }
         setMdComment("")
         setMdMenu({ open: true, x, y, text, mode: "menu" })
       } else if (t === "mousedown") {
@@ -1661,10 +1686,11 @@ export function FileTabContent(props: {
     )
   }
 
-  // FORK: CSV 右键 —— 复用 md/html 的选区菜单(添加到聊天/复制),但**不画 setSelectionHighlight 高亮**:
-  //   CSV 是 CSS grid,range.getClientRects() 会横跨整行 → 高亮 overlay(viewport-fixed)溢出到文件树/
-  //   聊天区(user 报 Image#34/#35)。native 单元格选区已足够指示,菜单用捕获的 text 工作,不依赖该 overlay。
-  //   [feat: csv-table-viewer] 2026-06-14
+  // FORK: CSV 右键 —— 复用 md/html 的选区菜单(添加到聊天/复制)。
+  //   原先**不画 overlay**(CSS grid 选区 getClientRects 横跨整行 → viewport-fixed overlay 溢出文件树/聊天,
+  //   Image#34/#35),只靠 native 选区;但右键 collapse + grid 几何使 native 高亮常消失(user 报"右键底色消失")。
+  //   现改为:画 overlay 蓝 + **裁到 CSV 容器矩形**(clampRectsToBounds)防溢出 → 与其他格式统一蓝、不再消失。
+  //   [feat: viewer-selection-tray-style] 2026-06-14(原 [feat: csv-table-viewer])
   const handleCsvContextMenu = (event: MouseEvent) => {
     if (editing()) return
     event.preventDefault()
@@ -1674,8 +1700,8 @@ export function FileTabContent(props: {
     //   假设对 CSS grid 不成立,user 报 Image#36/#37)。两步兜底,对齐 Pierre 路径 handleSelectionContextMenu:
     //   ① 用 history.pickBestRecent()(selectionchange 已把选区入栈,免疫右键 collapse)拿回文本+range;
     //   ② 程序化恢复原生选区(sel.addRange)→ 蓝色高亮重新可见,user 不再觉得"失去选区"。
-    //   不走 setSelectionHighlight overlay(grid getClientRects 会整行铺满 → 溢出到文件树/聊天,Image#34/#35);
-    //   原生选区高亮按文本逐段绘制,无溢出。
+    //   ③ 画 setSelectionHighlight overlay 蓝并**裁到 CSV 容器矩形**(clampRectsToBounds 防 grid getClientRects
+    //   整行铺满溢出文件树/聊天,Image#34/#35)→ 与其他格式统一蓝、右键后不再消失。
     const best = viewerHistory?.pickBestRecent() ?? null
     if (best && best.text.trim()) {
       text = best.text
@@ -1691,7 +1717,9 @@ export function FileTabContent(props: {
         }
       }
     }
-    setSelectionHighlight(null)
+    // 画 overlay 蓝 + 裁到 CSV 容器矩形(防 grid 矩形溢出);range 为 null 时内部自动清空
+    const csvBounds = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect() ?? null
+    setSelectionHighlight(range, csvBounds)
     if (range) {
       // 恢复 collapse 掉的原生选区,让 OS 蓝色高亮重新覆盖原文本范围。
       try {
@@ -1825,7 +1853,7 @@ export function FileTabContent(props: {
                   top: `${rect.top}px`,
                   width: `${rect.width}px`,
                   height: `${rect.height}px`,
-                  "background-color": "rgba(209, 52, 56, 0.5)",
+                  "background-color": "rgba(56, 139, 253, 0.4)", // FORK: 统一选区蓝(原 #d13438 红)→ 与原生 ::selection 同系,各格式视觉一致 [feat: viewer-selection-tray-style]
                 }}
               />
             )}
