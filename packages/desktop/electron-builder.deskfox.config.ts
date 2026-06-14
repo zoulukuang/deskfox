@@ -72,12 +72,10 @@ const config: Configuration = {
   },
   files: ["out/**/*", "resources/**/*"],
   extraResources: [
-    // 上游 native(mac window 等)
-    {
-      from: "native/",
-      to: "native/",
-      filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
-    },
+    // FORK: 删除上游 native/(mac_window.node + swift-build)extraResources 条目 —— 该 native 模块
+    // 在 fork 两分支均无源码、src/main 零 import,electron-builder 每次构建报 "file source doesn't
+    // exist from=.../native" warning。功能未接,YAGNI 移除以消除噪声;后续若接 mac 原生窗口能力再补回。
+    // [feat: electron-replatform-macos] 2026-06-14
     // DeskFox 插件(Node 版 dist;装机后由 main/deskfox/plugin-install.ts 注入+自愈)
     { from: path.join(brandingDir, "plugin", "feishu-bridge"), to: "plugin/feishu-bridge", filter: ["dist/**", "package.json"] },
     { from: mediaGenDir, to: "plugin/media-gen", filter: ["dist/**"] },
