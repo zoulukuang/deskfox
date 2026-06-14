@@ -46,11 +46,34 @@ mac 段保持 `extraResources`(.app 进 `Contents/Resources`)不变。
 > A1/A2 跑在 `extraFiles` 反转**之前**的等价产物上;反转后 `extraFiles` 空数组对无 LO 的 `-NoBundle`
 > 路径是 no-op,行为不变,typecheck 复验通过,无需重跑。
 
-### 运行时·native 风险点(待真机 QA,CDP 自测不可替代)
+## 阶段 2 — 本地完整 DEV 安装包 + Office 预览端到端验证(2026-06-14)
 
-- 防睡眠开关托盘↔设置双向同步、HTML 预览右键"加入聊天":单测覆盖逻辑,视觉/native 交互须真机验。
-- LO 全量注入端到端:需先 `prepare-lo-bundle.ps1` 生成 bundle(本地未生成,~636MB);本轮验了落点路径
-  (`extraFiles` → app 根 `libreoffice/`)与后端现有探测路径一致性 + §5.5 门槛逻辑,真机端到端待补。
+按 user 决策"先本地出带 Office 预览的完整安装包(DEV),不碰服务器/不发版"推进:
+
+1. **生成 Win LO bundle**:`prepare-lo-bundle.ps1`(TEMP 重定向到 D 盘防 C 盘 7GB 爆)→ 下载 LibreOffice
+   25.8.7 MSI(349MB)→ msiexec /a 解压 → 剥皮(extensions 内容 460MB / resource 语言 264MB / config
+   图标 71MB 等)→ **[3.5/4] 冷启动 smoke 通过**(剥皮后能建 profile + 转换)→ 输出
+   `libreoffice-bundle/windows`(647MB,soffice.exe + presets 13 文件)。
+2. **完整 build**:`build-deskfox-electron.ps1 -Env dev`(无 -NoBundle)→ §3.5b LO 门槛放行
+   ("LO bundle 健康 636MB,presets 非空")→ electron-vite build → electron-builder `--win` NSIS
+   (LZMA 压 636MB LO)→ **§5.5 post-build verify:最终包含 soffice.exe + 非空 presets ✓** → 产物
+   `dist-deskfox\DeskFox-Dev-2026.7.0-win-x64.exe`(**276MB**,signtool 已签 + blockmap)。
+3. **Office 预览端到端**(用**打包后** win-unpacked 的 soffice,全新冷 profile):
+   - `.txt → PDF` ✅(引擎二进制完整 + presets bootstrap + PDF 导出)
+   - `.rtf → PDF` ✅(Writer RTF 导入滤镜)
+   - `.xlsx → PDF` ✅(Calc OOXML 导入滤镜;fflate 造合规 zip)
+   - 全部输出 `%PDF-` 文件头。落点 `win-unpacked\libreoffice\program\soffice.exe` = 后端现有探测路径,精确吻合。
+4. **完整包冷启动健康**:启动 win-unpacked\DeskFox Dev.exe,内嵌 Node 后端监听 127.0.0.1,两端点
+   HTTP 401(鉴权=健康),6 进程正常。
+
+> 全程 0 代码改动(LO bundle / 安装包均 gitignored 产物);仅本文档记录。
+
+### 仍待真机 QA(CDP/headless 不可替代)
+
+- **应用内** Office 预览 UI(双击文件 → DeskFox 内嵌 PDF 预览渲染):引擎链已证可用,但"在 app 界面里
+  点开 office 文件看到预览"的视觉/交互须真机验。
+- 防睡眠开关托盘↔设置双向同步、HTML 预览右键"加入聊天":单测覆盖逻辑,视觉/native 须真机验。
+- NSIS 安装包真机安装一遍(装到 `AppData\Local\Programs\deskfox-dev`)再走一遍上述,属阶段2 收尾真机 QA。
 
 ## 回退方法
 
