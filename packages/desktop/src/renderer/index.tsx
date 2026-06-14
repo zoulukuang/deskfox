@@ -13,6 +13,8 @@ import {
   ServerConnection,
   useCommand,
   useWslServers,
+  // FORK: DeskFox 本地通知图标(替换上游外网 favicon URL)[feat: electron-brand-cleanup]
+  NOTIFICATION_ICON,
 } from "@opencode-ai/app"
 import type { UpdaterState } from "@opencode-ai/app/updater"
 import * as Sentry from "@sentry/solid"
@@ -26,7 +28,11 @@ import { initializationData, initializationReady } from "./initialization"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
 import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
-import { Splash } from "@opencode-ai/ui/logo"
+// FORK: 启动画面 Splash 换源到 DeskFox branding(狐狸 Splash 同名 export),替换上游 □ logo。
+// fork 既有约定 = 直接改 import 换源(非 bundler alias),参 app/src/components/session/session-new-view.tsx
+// 的 Mark 换源先例 + docs/governance/UPSTREAM-MERGE-GUIDE.md。--logo-* 主题色 var 已由 app.tsx →
+// index.css → @opencode-ai/branding/theme.css 注入,无需在此另 import theme。[feat: electron-brand-cleanup]
+import { Splash } from "@opencode-ai/branding/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 
 const root = document.getElementById("root")
@@ -209,7 +215,8 @@ const createPlatform = (): Platform => {
 
       const notification = new Notification(title, {
         body: description ?? "",
-        icon: "https://opencode.ai/favicon-96x96-v3.png",
+        // FORK: 本地 DeskFox 图标(去外网 opencode favicon,墙内/离线可显示)[feat: electron-brand-cleanup]
+        icon: NOTIFICATION_ICON,
       })
       notification.onclick = () => {
         void window.api.showWindow()

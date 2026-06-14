@@ -13,7 +13,7 @@ import contextMenu from "electron-context-menu"
 
 import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
-import { CHANNEL } from "./constants"
+import { CHANNEL, PRODUCT_NAMES } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
 import { registerDeskfoxIpc } from "./deskfox/ipc"
@@ -52,11 +52,8 @@ import { migrate } from "./migrate"
 // FORK-BEGIN: DeskFox 应用身份 — 继承 Tauri 版三档 identifier(ai.deskfox.app,治理规则 R3/应用身份-命名规则)
 //   userData 与旧 Tauri 版同目录(Roaming/<id>):前端偏好迁移同目录原地完成,Win 任务栏固定/通知
 //   身份(AppUserModelId)延续,升级无感。[feat: electron-replatform] 2026-06-13
-const APP_NAMES: Record<string, string> = {
-  dev: "DeskFox Dev",
-  beta: "DeskFox Beta",
-  prod: "DeskFox",
-}
+// FORK: app 名复用 constants 的 PRODUCT_NAMES 单一事实源(原本地 APP_NAMES 与之重复)[feat: electron-brand-cleanup]
+const APP_NAMES = PRODUCT_NAMES
 const APP_IDS: Record<string, string> = {
   dev: "ai.deskfox.app.dev",
   beta: "ai.deskfox.app.beta",

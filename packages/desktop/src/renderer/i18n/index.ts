@@ -1,5 +1,9 @@
 import * as i18n from "@solid-primitives/i18n"
 
+// FORK: desktop renderer 的 i18n 是独立于 app 的第 2 套出口 —— 统一在此 flatten 出口套 app 侧
+// 既有的 rebrandDict(品牌替换 + 白名单单一事实源),否则桌面文案露 "OpenCode"。[feat: electron-brand-cleanup]
+import { rebrandDict } from "../../../../app/src/i18n/rebrand"
+
 import { dict as desktopEn } from "./en"
 import { dict as desktopZh } from "./zh"
 import { dict as desktopZht } from "./zht"
@@ -142,7 +146,13 @@ function pickLocale(value: unknown): Locale | null {
 
 const base = i18n.flatten({ ...appEn, ...desktopEn })
 
+// FORK: 在 flatten 出口统一套 rebrandDict —— 一处令 desktop renderer 全语言品牌一致(含 en),
+// 与 app 侧 language.tsx 复用同一替换层/白名单。[feat: electron-brand-cleanup]
 function build(locale: Locale): Dictionary {
+  return rebrandDict(buildRaw(locale))
+}
+
+function buildRaw(locale: Locale): Dictionary {
   if (locale === "en") return base
   if (locale === "zh") return { ...base, ...i18n.flatten(appZh), ...i18n.flatten(desktopZh) }
   if (locale === "zht") return { ...base, ...i18n.flatten(appZht), ...i18n.flatten(desktopZht) }

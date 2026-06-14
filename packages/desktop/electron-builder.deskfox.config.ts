@@ -99,6 +99,11 @@ const config: Configuration = {
     name: channel === "prod" ? "deskfox" : `deskfox-${channel}`,
     // FORK: 覆盖 version 为 DeskFox 日历号(否则用 package.json 上游 semver 1.17.4,见上 appVersion 注释)
     version: appVersion,
+    // FORK: 覆盖 author.name —— NSIS 卸载列表「发布者」取 metadata.author.name(见 app-builder-lib
+    // appInfo.companyName → installer.nsh 写 Publisher),package.json 原为 "OpenCode";改为 DeskFox。
+    // (win.publisherName 仅用于代码签名校验,且本 electron-builder JSON schema 对未签名构建拒绝该字段。)D1
+    // [feat: electron-brand-cleanup]
+    author: { name: PRODUCT_NAMES[channel], email: "hello@deskfox.ai" },
   },
   artifactName: `${ARTIFACT_PREFIX[channel]}-\${version}-\${os}-\${arch}.\${ext}`,
   directories: {

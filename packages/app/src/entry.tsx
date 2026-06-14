@@ -7,6 +7,8 @@ import { type Platform, PlatformProvider } from "@/context/platform"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { handleNotificationClick } from "@/utils/notification-click"
+// FORK: DeskFox 本地通知图标(替换上游外网 favicon URL)[feat: electron-brand-cleanup]
+import { NOTIFICATION_ICON } from "@/utils/notification-icon"
 import { authFromToken } from "@/utils/server"
 import pkg from "../package.json"
 import { ServerConnection } from "./context/server"
@@ -69,7 +71,8 @@ const notify: Platform["notify"] = async (title, description, href) => {
 
   const notification = new Notification(title, {
     body: description ?? "",
-    icon: "https://opencode.ai/favicon-96x96-v3.png",
+    // FORK: 本地 DeskFox 图标(去外网 opencode favicon,墙内/离线可显示)[feat: electron-brand-cleanup]
+    icon: NOTIFICATION_ICON,
   })
 
   notification.onclick = () => {

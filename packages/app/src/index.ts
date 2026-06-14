@@ -21,3 +21,5 @@ export {
 } from "./wsl/types"
 export { ServerConnection } from "./context/server"
 export { handleNotificationClick } from "./utils/notification-click"
+// FORK: DeskFox 通知图标(本地 data URL,desktop renderer 复用)[feat: electron-brand-cleanup]
+export { NOTIFICATION_ICON } from "./utils/notification-icon"

@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, net, nativeImage, nativeTheme, protocol } f
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type { TitlebarTheme } from "../preload/types"
+import { CHANNEL, PRODUCT_NAMES } from "./constants"
 import { exportDebugLogs, write as writeLog } from "./logging"
 import { getStore } from "./store"
 import { PINCH_ZOOM_ENABLED_KEY } from "./store-keys"
@@ -136,7 +137,7 @@ export function createMainWindow() {
     height: state.height,
     show: false,
     autoHideMenuBar: true,
-    title: "DeskFox", // FORK: DeskFox 品牌 [feat: electron-replatform]
+    title: PRODUCT_NAMES[CHANNEL], // FORK: DeskFox 品牌(三档名,B1)[feat: electron-brand-cleanup]
     icon: iconPath(),
     backgroundColor: backgroundColor ?? defaultBackgroundColor(),
     ...(process.platform === "darwin"
@@ -158,6 +159,14 @@ export function createMainWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
+  })
+
+  // FORK: 锁定窗口标题为 DeskFox 三档名 —— renderer 的 index.html <title>OpenCode</title> 会在加载后
+  // 触发 page-title-updated 覆盖 BrowserWindow.title;preventDefault 拦截,任务栏悬停始终显示 DeskFox。(B1)
+  // [feat: electron-brand-cleanup]
+  win.webContents.on("page-title-updated", (event) => {
+    event.preventDefault()
+    win.setTitle(PRODUCT_NAMES[CHANNEL])
   })
 
   allowRendererPermissions(win)
