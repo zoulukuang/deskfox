@@ -6,7 +6,9 @@ import { FileComponentProvider } from "@opencode-ai/ui/context/file"
 import { MarkedProvider } from "@opencode-ai/ui/context/marked"
 import { File } from "@opencode-ai/ui/file"
 import { Font } from "@opencode-ai/ui/font"
-import { Splash } from "@opencode-ai/ui/logo"
+// FORK: 启动/连接 loading 用 DeskFox branding 三角 loader,替换上游 □ 占位(与 desktop renderer 同源)。
+// app.tsx 的 Splash 用于 blocking 健康检查 + 连接错误两处加载态;桌面启动可见的就是它。[feat: electron-brand-cleanup]
+import { Splash } from "@opencode-ai/branding/logo"
 import { ThemeProvider } from "@opencode-ai/ui/theme/context"
 import { MetaProvider } from "@solidjs/meta"
 import { type BaseRouterProps, Navigate, Route, Router, useParams, useSearchParams } from "@solidjs/router"

@@ -101,9 +101,10 @@ const config: Configuration = {
     version: appVersion,
     // FORK: 覆盖 author.name —— NSIS 卸载列表「发布者」取 metadata.author.name(见 app-builder-lib
     // appInfo.companyName → installer.nsh 写 Publisher),package.json 原为 "OpenCode";改为 DeskFox。
+    // 发布者=厂商,三档统一「DeskFox」(不带 Dev/Beta —— 渠道由「名称」列的 productName 区分,发布者不重复)。
     // (win.publisherName 仅用于代码签名校验,且本 electron-builder JSON schema 对未签名构建拒绝该字段。)D1
     // [feat: electron-brand-cleanup]
-    author: { name: PRODUCT_NAMES[channel], email: "hello@deskfox.ai" },
+    author: { name: "DeskFox", email: "hello@deskfox.ai" },
   },
   artifactName: `${ARTIFACT_PREFIX[channel]}-\${version}-\${os}-\${arch}.\${ext}`,
   directories: {

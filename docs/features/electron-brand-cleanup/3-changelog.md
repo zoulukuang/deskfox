@@ -25,6 +25,21 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | `packages/app/src/i18n/rebrand.test.ts` | 新增 fork-only | rebrand 单测 + app 出口(appEn+uiEn)无 OpenCode 回潮断言(10 用例) | R5 |
 | `packages/desktop/src/renderer/i18n/rebrand-regression.test.ts` | 新增 fork-only | desktop 出口(appEn+desktopEn)回潮断言 + 升级 toast 替换断言(2 用例) | R5 |
 
+## 跟进改动(2026-06-14,真机安装版核对后补)
+
+user 装 dev 安装版逐项核对,发现 3 处补强,均已真机验证:
+
+| 文件 | 类型 | 说明 | 触点 |
+|---|---|---|---|
+| `packages/app/src/app.tsx` | 改上游(FORK marker) | **第 2 处 Splash 漏接**:AppInterface 的「阻塞式健康检查加载」+「连接错误」两态用上游 `@opencode-ai/ui/logo` 的 □ Splash(桌面启动那一下可见的灰 □ 就是它);import 换源 `@opencode-ai/branding/logo` → 品牌三角 loader(与 `品牌设计/SVG/loading.svg` 同款三角,组件版自带深/浅色适配) | A1 补 |
+| `packages/app/src/components/windows-app-menu.tsx` | 改上游(FORK marker) | Windows ≡ 菜单顶部硬编码 `<GroupLabel>OpenCode` + 2 处 `aria-label`,改走 `rebrandValue("OpenCode")`→"DeskFox"(单一源,不新增硬编码品牌串) | 菜单品牌 |
+| `packages/desktop/electron-builder.deskfox.config.ts` | 改 fork-only | D1 发布者文字定为厂商名 `DeskFox`(原 `PRODUCT_NAMES[channel]` 会出「DeskFox Dev」与名称列重复);三档统一 | D1 细化 |
+
+真机验证(dev NSIS 安装版,装到 `%LOCALAPPDATA%\Programs\deskfox-dev`):
+- 卸载列表发布者注册表实测 = `DeskFox`(原 OpenCode);窗口标题 = `DeskFox Dev`。
+- 启动 loader = 品牌三角;≡ 菜单顶部 = DeskFox。
+- electron-vite build + electron-builder NSIS 出 `DeskFox-Dev-2026.7.0-win-x64.exe`,静默安装 exit 0、GUI 子系统(正常快捷方式启动无终端)。
+
 ## 不动工 / 保留项(均按需求池 §五白名单 + §二取舍)
 
 - **保留 OpenCode**:`OpenCode Zen`/`OpenCode Go`、`wsl.*`(真实 CLI 名)、`error.chain.mcpFailed`(研发向)、`dialog.model.unpaid.freeModels.title`(提供方归属)、菜单 "OpenCode Documentation"(硬编码 label,天然不经 rebrand)。

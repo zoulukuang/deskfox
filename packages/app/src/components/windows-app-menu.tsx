@@ -11,6 +11,11 @@ import { DESKTOP_MENU, desktopMenuVisible, type DesktopMenuAction, type DesktopM
 import { translateMenuLabel } from "@/desktop-menu-i18n"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
+// FORK: 菜单顶部品牌标题 + aria-label 走品牌替换单一源(rebrand.ts),"OpenCode"→"DeskFox";
+// 不新增硬编码品牌串,品牌改一处即跟随。[feat: electron-brand-cleanup]
+import { rebrandValue } from "@/i18n/rebrand"
+
+const BRAND = rebrandValue("OpenCode")
 
 export function WindowsAppMenu(props: {
   command: ReturnType<typeof useCommand>
@@ -63,7 +68,7 @@ export function WindowsAppMenu(props: {
             variant="ghost-muted"
             size="large"
             icon={<IconV2 name="menu" />}
-            aria-label="OpenCode menu"
+            aria-label={`${BRAND} menu`}
             onPointerDown={rememberFocus}
             onKeyDown={rememberFocus}
           />
@@ -74,7 +79,7 @@ export function WindowsAppMenu(props: {
           icon="menu"
           variant="ghost"
           class="titlebar-icon rounded-md shrink-0"
-          aria-label="OpenCode menu"
+          aria-label={`${BRAND} menu`}
           onPointerDown={rememberFocus}
           onKeyDown={rememberFocus}
         />
@@ -82,7 +87,7 @@ export function WindowsAppMenu(props: {
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="desktop-app-menu">
           <DropdownMenu.Group>
-            <DropdownMenu.GroupLabel class="desktop-app-menu-heading">OpenCode</DropdownMenu.GroupLabel>
+            <DropdownMenu.GroupLabel class="desktop-app-menu-heading">{BRAND}</DropdownMenu.GroupLabel>
             {DESKTOP_MENU.filter((menu) => desktopMenuVisible(menu, "windows")).map((menu) => (
               <DesktopMenuSubmenu label={translateMenuLabel(menu.label, language.locale())}>
                 {menu.items
