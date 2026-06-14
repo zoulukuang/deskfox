@@ -17,4 +17,20 @@ if (process.versions.bun !== expectedBunVersion) {
   console.warn(`Warning: Bun version ${process.versions.bun} differs from expected ${expectedBunVersion}`);
 }
 '
-bun typecheck
+# FORK-BEGIN: pre-push 闸按 fork 范围重做 [feat: fork-pre-push-gate] 2026-06-15
+#   起源:换基座到 electron 仓后,本仓 pre-push 还是上游原版(只 `bun typecheck` 全仓 + 0 单测),
+#   闸两头歪 —— ① 拿 §七 划走、DeskFox 不发布、无人依赖的 console 包 typecheck 卡我们的 push
+#   (绑架);② Tauri 仓的「fork 包单测 backstop」(R5/R9)没迁过来,真正发布的逻辑反而没护。
+#   修法:typecheck 收到 fork 范围(排除 console),并补回 fork 包单测 backstop。
+#   注:过滤器内联在此(不走 root package.json script —— 它是 pre-commit 黑名单,免 R4 override);
+#   需要全仓覆盖(含 console)直接跑 `bun typecheck`。console 若将来纳管再收回闸内。
+
+# ① fork 范围 typecheck(排除 §七 console;非发布、无发布包依赖)
+bun turbo typecheck --filter='!./packages/console/*'
+
+# ② fork 包单测 backstop(媒体生成 / 飞书适配 / app —— 我们发布并维护的逻辑)
+echo "[pre-push] fork 包单测 backstop…"
+(cd packages/app && bun run test)
+(cd packages/media-gen && bun test)
+(cd packages/adapter-feishu-lark && bun test)
+# FORK-END
