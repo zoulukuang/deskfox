@@ -1669,18 +1669,41 @@ export function FileTabContent(props: {
     if (editing()) return
     event.preventDefault()
     let text = ""
-    // FORK: CSV 网格右键会 collapse 选区(原"light DOM 无 collapse"假设对 grid 不成立,user 报 Image#36)→
-    //   先用 history.pickBestRecent()(selectionchange 已把选区入栈,免疫右键 collapse),再回退 live 选区。
+    let range: Range | null = null
+    // FORK: CSV 网格右键点"选区外的表格线"时,Chromium 把原生选区 collapse 成空(原"light DOM 无 collapse"
+    //   假设对 CSS grid 不成立,user 报 Image#36/#37)。两步兜底,对齐 Pierre 路径 handleSelectionContextMenu:
+    //   ① 用 history.pickBestRecent()(selectionchange 已把选区入栈,免疫右键 collapse)拿回文本+range;
+    //   ② 程序化恢复原生选区(sel.addRange)→ 蓝色高亮重新可见,user 不再觉得"失去选区"。
+    //   不走 setSelectionHighlight overlay(grid getClientRects 会整行铺满 → 溢出到文件树/聊天,Image#34/#35);
+    //   原生选区高亮按文本逐段绘制,无溢出。
     const best = viewerHistory?.pickBestRecent() ?? null
-    if (best && best.text.trim()) text = best.text
+    if (best && best.text.trim()) {
+      text = best.text
+      range = best.range
+    }
     if (!text) {
       const sel = typeof window !== "undefined" ? window.getSelection() : null
       if (sel && sel.rangeCount > 0) {
         const t = sel.toString()
-        if (t.trim()) text = t
+        if (t.trim()) {
+          text = t
+          range = sel.getRangeAt(0).cloneRange()
+        }
       }
     }
     setSelectionHighlight(null)
+    if (range) {
+      // 恢复 collapse 掉的原生选区,让 OS 蓝色高亮重新覆盖原文本范围。
+      try {
+        const sel = typeof window !== "undefined" ? window.getSelection() : null
+        if (sel) {
+          sel.removeAllRanges()
+          sel.addRange(range.cloneRange())
+        }
+      } catch {
+        // 恢复失败不影响菜单功能
+      }
+    }
     setMdComment("")
     setMdMenu({ open: true, x: event.clientX, y: event.clientY, text, mode: "menu" })
   }
