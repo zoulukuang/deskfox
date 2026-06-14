@@ -30,11 +30,13 @@ function mimeFor(p: string): string {
 
 // FORK: html-viewer-ux-polish — text/html 预览注入 contextmenu 桥接 JS,恢复 HTML 预览内
 // 右键"加入聊天"/点击关菜单(平移自 Tauri local_asset.rs;Electron 首版漏了注入)。
-//   - contextmenu: 阻止默认,postMessage 父窗口当前选区文本 → 父弹自家 mdMenu
+//   - contextmenu: 阻止默认,postMessage 父窗口当前选区文本 + **选区矩形 rects**(相对 iframe viewport)
+//     → 父弹自家 mdMenu,并用 rects 投影成父文档 overlay 蓝(治"iframe 失焦后原生选区变灰")
 //   - mousedown:   postMessage 通知父 → 父收到时若 mdMenu 开着就关掉
-// 脚本极小、命名空间 __deskfox,与用户页脚本冲突风险低。[feat: electron-replatform-macos]
+//   - <style>:     iframe 内 ::selection 统一蓝(rgba(56,139,253,.35)),拖选阶段与其他格式一致
+// 脚本极小、命名空间 __deskfox,与用户页脚本冲突风险低。[feat: viewer-selection-tray-style]
 const CONTEXTMENU_BRIDGE_SCRIPT =
-  "<script>(function(){document.addEventListener('contextmenu',function(e){e.preventDefault();var s=window.getSelection();var t=s?s.toString():'';try{window.parent.postMessage({__deskfox:true,type:'contextmenu',x:e.clientX,y:e.clientY,text:t},'*');}catch(err){}},true);document.addEventListener('mousedown',function(e){try{window.parent.postMessage({__deskfox:true,type:'mousedown'},'*');}catch(err){}},true);})();</script>"
+  "<script>(function(){document.addEventListener('contextmenu',function(e){e.preventDefault();var s=window.getSelection();var t=s?s.toString():'';var rects=[];if(s&&s.rangeCount>0){try{var rl=s.getRangeAt(0).getClientRects();for(var i=0;i<rl.length;i++){var r=rl[i];if(r.width>0&&r.height>0)rects.push({left:r.left,top:r.top,width:r.width,height:r.height});}}catch(e2){}}try{window.parent.postMessage({__deskfox:true,type:'contextmenu',x:e.clientX,y:e.clientY,text:t,rects:rects},'*');}catch(err){}},true);document.addEventListener('mousedown',function(e){try{window.parent.postMessage({__deskfox:true,type:'mousedown'},'*');}catch(err){}},true);})();</script><style>::selection{background:rgba(56,139,253,0.35)}::-moz-selection{background:rgba(56,139,253,0.35)}</style>"
 
 /**
  * 往 HTML 注入 contextmenu 桥接脚本。锚点优先级:`</head>` > `</HEAD>` > `<body` > `<BODY` > 前置兜底
