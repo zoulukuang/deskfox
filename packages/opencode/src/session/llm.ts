@@ -112,6 +112,20 @@ const live: Layer.Layer<
         isWorkflow,
       })
 
+      // FORK-BEGIN: plugin-cwd-channel — 把 session 工作目录暴露给 spawn-based plugin(claude-code 等)
+      // 通用 _opencode namespace:任何 spawn-based plugin 从 providerOptions._opencode.cwd 取项目目录,
+      // 无需各自定义协议。原 main(41817499d)用 Instance.directory;electron 上游重构成 InstanceRef,
+      // 用动态 import 读(避循环依赖,与 cli/cmd/agent.ts 同款)。standard provider 不消费 _opencode,0 影响。
+      const { InstanceRef: _InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
+      const _opencodeCtx = yield* _InstanceRef
+      const _opencodeNamespace = {
+        _opencode: {
+          cwd: _opencodeCtx?.directory,
+          project: _opencodeCtx?.project.id,
+        },
+      }
+      // FORK-END
+
       // Wire up toolExecutor for DWS workflow models so that tool calls
       // from the workflow service are executed via opencode's tool system
       // and results sent back over the WebSocket.
@@ -313,7 +327,11 @@ const live: Layer.Layer<
           temperature: prepared.params.temperature,
           topP: prepared.params.topP,
           topK: prepared.params.topK,
-          providerOptions: ProviderTransform.providerOptions(input.model, prepared.params.options),
+          // FORK: plugin-cwd-channel — 前置 spread 注入 _opencode namespace,不替换原 providerOptions(可单独 revert)
+          providerOptions: {
+            ...ProviderTransform.providerOptions(input.model, prepared.params.options),
+            ..._opencodeNamespace,
+          },
           activeTools: Object.keys(prepared.tools).filter((x) => x !== "invalid"),
           tools: prepared.tools,
           toolChoice: input.toolChoice,
