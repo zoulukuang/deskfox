@@ -1,0 +1,6 @@
+# [fork-only] desktop 包测试配置。[feat: electron-replatform-macos] 2026-06-14
+# 根 bunfig.toml 设 root="./do-not-run-tests-from-root"(上游防呆,禁从仓库根跑全量);desktop 测试
+# 从本目录 `bun test` 跑,用此就近配置。preload 全局 mock electron(原生模块,bun 下无法真实加载)——
+# 详见 test/electron-mock.ts。
+[test]
+preload = ["./test/electron-mock.ts"]
