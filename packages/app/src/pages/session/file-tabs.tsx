@@ -1662,18 +1662,22 @@ export function FileTabContent(props: {
   }
 
   // FORK: CSV/TSV 表格视图 [feat: csv-table-viewer] 2026-06-14
+  //   外层挂 handleLightDomContextMenu —— 单元格是 light DOM 可选文字,右键走与 md/html 同一套
+  //   选区菜单(添加到聊天 / 复制),和其他格式文件对齐 [feat: csv-table-viewer] 2026-06-14
   const renderCsv = (source: string) => (
-    <CsvTable
-      text={source}
-      onOpenExternal={() => {
-        const root = sdk.directory
-        const p = path()
-        if (!root || !p) return
-        invoke("open_path", { path: `${root}/${p}`.replace(/\\/g, "/"), appName: null }).catch((e) => {
-          showToast({ variant: "error", title: "无法用本机软件打开", description: String(e) })
-        })
-      }}
-    />
+    <div class="h-full min-h-0" onContextMenu={handleLightDomContextMenu}>
+      <CsvTable
+        text={source}
+        onOpenExternal={() => {
+          const root = sdk.directory
+          const p = path()
+          if (!root || !p) return
+          invoke("open_path", { path: `${root}/${p}`.replace(/\\/g, "/"), appName: null }).catch((e) => {
+            showToast({ variant: "error", title: "无法用本机软件打开", description: String(e) })
+          })
+        }}
+      />
+    </div>
   )
 
   const renderFile = (source: string) => {
