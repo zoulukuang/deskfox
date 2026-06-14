@@ -55,6 +55,14 @@ user 装 dev 安装版逐项核对,发现 3 处补强,均已真机验证:
 - 真机 boot smoke:6 进程无崩溃;**OS 窗口标题 = "DeskFox Dev"**(B1 直证)。
 - 产物核验:`resources/icons/icon.ico` == branding dev icon.ico(md5 `56e338…`);`out/renderer` 运行时无外网 opencode favicon、含 DeskFox 通知 data URL;`out/main` 含 page-title-updated 锁定。
 
+## R4 黑名单 override — bun.lock(2026-06-14)
+
+desktop 显式声明 `@opencode-ai/branding`(renderer/index.tsx、app.tsx 直接 import `@opencode-ai/branding/logo`)→ `bun.lock` 必更新 1 行(desktop → branding 的 `workspace:*` 链接)。`bun.lock` 是 pre-commit 黑名单文件,走 R4 override 落库。
+
+- **wrapper 不可行性**:`bun.lock` 是 bun 自动生成的 lockfile,非可手写逻辑,无新文件/wrapper 可替代;声明依赖则 lockfile 必记录解析。唯一绕过 = 不声明、靠 workspace hoisting 隐式解析,但那是脆弱依赖(app 去掉 branding 依赖即断 desktop 的 import),违背显式依赖原则(与 desktop 已显式声明 `@opencode-ai/app`/`@opencode-ai/ui` 一致)。
+- **风险评估**:仅 1 行 workspace 内部链接;无外部版本/网络解析变化;`bun install` 幂等可再生;只动 lockfile、不碰代码逻辑;不影响 main 与其它包。blast radius 极小。
+- **commit**:`--no-verify`(pre-commit 钩子指定路径)+ message 标 `[override-blacklist: ...]`。本季度 override 计入 1 笔。
+
 ## 治理
 
 - 改上游文件均加 FORK marker(R2);文本只动 `rebrand.ts` + 出口套用,资产只用 `branding/`(不另起并行机制)。
