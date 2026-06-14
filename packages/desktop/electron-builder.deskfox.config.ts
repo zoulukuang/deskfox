@@ -66,16 +66,28 @@ const extraResources: Array<{ from: string; to: string; filter?: string[] }> = [
   { from: mediaGenDir, to: "plugin/media-gen", filter: ["dist/**"] },
 ]
 
-// FORK: macOS 专属 — 注入内置 LibreOffice bundle 到 Contents/Resources/libreoffice(office 预览/转换依赖)。
-// 对齐后端 office-installer.ts bundledSofficePath:Resources/libreoffice/Contents/MacOS/soffice。
-// Win 的 LO 走独立打包流程(program/soffice.exe 结构),不在此注入。
-// 仅在 bundle 存在时注入 —— 否则 electron-builder 报 "file source doesn't exist" 中断本地无 LO 的自测构建;
-// "发布物必须含健康 LO"的硬门槛由 build-deskfox-electron.sh 把守(对齐 main build-deskfox.sh §1.9 分层)。
-// [feat: electron-replatform-macos] 2026-06-14
+// FORK: 注入内置 LibreOffice bundle(office 预览/转换依赖),按平台结构 + 后端探测路径区分落点:
+//   - macOS:   libreoffice-bundle/macos/LibreOffice.app → extraResources → Contents/Resources/libreoffice;
+//              对齐后端 office-installer.ts:dirname(execPath)/../Resources/libreoffice/Contents/MacOS/soffice。
+//   - Windows: libreoffice-bundle/windows(program/soffice.exe 结构)→ extraFiles → app 根 {app}\libreoffice
+//              (与 DeskFox.exe 同级,非 resources/ 下);对齐后端**现有**路径
+//              dirname(execPath)\libreoffice\program\soffice.exe → 后端零改动(R1 三级跳:配置层适配,不动黑名单
+//              office-installer.ts;与 Tauri 旧布局一致)。extraFiles 落 app 根、extraResources 落 resources/,这是两端
+//              结构差异(mac .app 必须进 Contents/Resources,Win 无此约束)。
+// 两端均"仅在 bundle 存在时注入" —— 否则 electron-builder 报 "file source doesn't exist" 中断本地无 LO 的自测构建;
+// "发布物必须含健康 LO"的硬门槛由 build-deskfox-electron.{sh,ps1} 把守(对齐 main build-deskfox §1.9 分层)。
+// [feat: electron-replatform-macos / electron-replatform-windows] 2026-06-14
+const extraFiles: Array<{ from: string; to: string; filter?: string[] }> = []
 if (targetPlat === "macos") {
   const loApp = path.join(brandingDir, "libreoffice-bundle", "macos", "LibreOffice.app")
   if (fs.existsSync(loApp)) {
     extraResources.push({ from: loApp, to: "libreoffice" })
+  }
+} else if (targetPlat === "windows") {
+  const loWin = path.join(brandingDir, "libreoffice-bundle", "windows")
+  // soffice.exe 存在性为准(目录可能残留空壳),命中才注入到 app 根 libreoffice/。
+  if (fs.existsSync(path.join(loWin, "program", "soffice.exe"))) {
+    extraFiles.push({ from: loWin, to: "libreoffice" })
   }
 }
 
@@ -95,6 +107,8 @@ const config: Configuration = {
   },
   files: ["out/**/*", "resources/**/*"],
   extraResources,
+  // FORK: Windows LO bundle 注入到 app 根(与 exe 同级),对齐后端现有探测路径;mac 为空。[feat: electron-replatform-windows]
+  extraFiles,
   protocols: {
     name: "DeskFox",
     schemes: ["opencode"], // 深链 scheme 沿用上游 contract(R3:binary 标识不改)
