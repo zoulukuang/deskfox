@@ -80,6 +80,13 @@ export default defineConfig({
     },
   },
   renderer: {
+    // FORK: 渲染层 channel 确定注入 — titlebar DEV/BETA 徽标 + dialog-settings 版本号读
+    // import.meta.env.VITE_OPENCODE_CHANNEL。原先渲染层无 define,只靠 Vite 自动暴露 process.env.VITE_*,
+    // build 时漏设该 env → 徽标消失 + 版本号回落 prod 号线。此处从单一源 OPENCODE_CHANNEL 派生确定注入,
+    // 与 main 进程 define / electron-builder OPENCODE_CHANNEL 同源。版本/渠道规则见 docs/governance/版本号与发布渠道规范.md。
+    define: {
+      "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(channel),
+    },
     plugins: [appPlugin, sentry],
     publicDir: "../../../app/public",
     root: "src/renderer",

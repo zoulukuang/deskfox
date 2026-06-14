@@ -168,6 +168,17 @@ grep `[feat: <id>]` 能反查到对应文档。
 **不是** "OpenCode"(那是上游) / "OpenCode Desktop" / "OpenCode Dev"。
 源码内部 package 名 / binary 标识仍可保留 `opencode-*`(那是上游 contract,改了上游会冲突,品牌通过 tauri-overrides 注入)。
 
+## 版本号规则(速查 — 改任何版本/渠道/打包前必读)
+
+**唯一权威**:[`docs/governance/版本号与发布渠道规范.md`](docs/governance/版本号与发布渠道规范.md)(§3.10 有**代码触点地图**,列全所有相关文件)。下面只是速查,细则以该文档为准。
+
+- **格式**:`YYYY.次.补` 纯 3 段 semver(如 `2026.7.0`),**不加任何后缀**(updater 比较 + Mac CFBundleShortVersionString 限制)。
+- **三维度正交,绝不混入同一字段**:**版本号** × **渠道**(prod/dev/beta)× **架构**(arm64/x64)。
+  - 渠道靠**文件名前缀**(`DeskFox-` / `DeskFox-Dev-` / `DeskFox-Beta-`)+ **顶部徽标**(prod 无 / `DEV` / `BETA`)+ app id(`.dev`/`.beta`)区分,**不进版本号**。
+  - 架构靠**文件名**(`...-mac-arm64` / `-mac-x64` / `-win-x64`)区分,**不进版本号**;同次发布的不同芯片**共享同一版本号**。Mac 出 arm64/x64 **两个独立包**(不出 universal)。
+- **号线**:prod/dev/beta **各走独立号线**(`installer-versions.json` 的 `<plat>` / `dev-<plat>` / `beta-<plat>` key);平台(win/mac/linux)也各独立;**Dev 领先**(dev号 ≥ beta号 ≥ prod号)。本地测试版(Tier 3)不建号线,沿用 dev 线。
+- **两个唯一源**:渠道唯一源 = env `OPENCODE_CHANNEL`(派生 main define / renderer `VITE_OPENCODE_CHANNEL` define / electron-builder);版本号唯一源 = `installer-versions.json`(UI 牌 / 打包 / updater 全读它)。**别在别处硬编码版本号或渠道。** 改号走 `bump-installer-version.{ps1,sh}`,勿手编。
+
 ## 验证约定
 
 - **typecheck**:`bun run typecheck`(monorepo 全量,turbo 缓存)
