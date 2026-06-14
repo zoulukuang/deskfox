@@ -19,7 +19,7 @@ import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 import { registerDeskfoxIpc } from "./deskfox/ipc"
 // FORK: 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] 2026-06-13
 import { initTelemetry, emitAppOpen } from "./deskfox/telemetry"
-import { createTray, attachCloseToTray, setQuitting, isQuitting } from "./deskfox/tray"
+import { createTray, attachCloseToTray, setQuitting, isQuitting, showMainWindow } from "./deskfox/tray"
 import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 import { restorePreventSleep } from "./deskfox/prevent-sleep"
 import { forwardInitializationFailure } from "./initialization"
@@ -217,6 +217,15 @@ const main = Effect.gen(function* () {
       mainWindow.show()
       mainWindow.focus()
     }
+  })
+
+  // FORK: macOS Dock 图标点击(app 已运行、主窗口 hide 到托盘)→ 重现主窗口。
+  //   平移 Tauri RunEvent::Reopen 漏网路径(macos-dock-reopen-show-window):关窗后点 Dock,
+  //   Electron 发 "activate"(macOS 专有,Win 不触发,无需平台 gate),复用 showMainWindow
+  //   同一恢复入口(restore→show→focus),与托盘左键 / second-instance 行为一致。
+  //   [feat: electron-replatform-macos]
+  app.on("activate", () => {
+    showMainWindow()
   })
 
   app.on("open-url", (event: Event, url: string) => {
