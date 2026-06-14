@@ -33,6 +33,8 @@ import { langFromExt } from "@/utils/lang-from-ext"
 // FORK: .md 编辑增强(列表续延 / Ctrl+B/I/K / 拖图 / 智能粘贴 / Ctrl+F 等)2026-05-05
 import { markdownEditorExtensions } from "@/utils/markdown-editor-extensions"
 import { isBinary, isOfficeDocument, tooLarge } from "@/utils/file-limits"
+// FORK: CSV/TSV 表格查看器(新功能,user 拍板)[feat: csv-table-viewer] 2026-06-14
+import { CsvTable } from "@/components/csv-table"
 // FORK: 本地资源 protocol(.md 内 <img>/<video>/<audio> 重写 + HTML 预览 iframe)2026-05-05
 import { localAssetUrl, resolveAbsolute, rewriteAssetSrc } from "@/utils/local-asset"
 // FORK: 大文件预览统一防护 — L4 UX 兜底组件 [feat: large-file-preview-guard] 2026-05-21
@@ -69,6 +71,13 @@ function isHtmlPath(p: string | undefined): boolean {
   if (!p) return false
   const lower = p.toLowerCase()
   return lower.endsWith(".html") || lower.endsWith(".htm")
+}
+
+// FORK: CSV/TSV 表格视图 [feat: csv-table-viewer] 2026-06-14
+function isCsvPath(p: string | undefined): boolean {
+  if (!p) return false
+  const lower = p.toLowerCase()
+  return lower.endsWith(".csv") || lower.endsWith(".tsv")
 }
 
 // HTML 预览大文件阈值 — 对齐 file-limits.ts MAX_EDITABLE_BYTES(预览与编辑同卡 10MB)
@@ -1652,6 +1661,21 @@ export function FileTabContent(props: {
     )
   }
 
+  // FORK: CSV/TSV 表格视图 [feat: csv-table-viewer] 2026-06-14
+  const renderCsv = (source: string) => (
+    <CsvTable
+      text={source}
+      onOpenExternal={() => {
+        const root = sdk.directory
+        const p = path()
+        if (!root || !p) return
+        invoke("open_path", { path: `${root}/${p}`.replace(/\\/g, "/"), appName: null }).catch((e) => {
+          showToast({ variant: "error", title: "无法用本机软件打开", description: String(e) })
+        })
+      }}
+    />
+  )
+
   const renderFile = (source: string) => {
     const p = path()
     // FORK: 大文件预览统一防护 — L1 闸门已在 context/file.tsx load() 命中,UI 渲染 FileTooLarge
@@ -1675,6 +1699,8 @@ export function FileTabContent(props: {
     if (isPdfLikePath(p)) return renderDefault(source)
     if (mediaKindFromPath(p)) return renderMedia()
     if (isHtmlPath(p)) return renderHtml(source)
+    // FORK: csv/tsv 走表格视图 [feat: csv-table-viewer] 2026-06-14
+    if (isCsvPath(p)) return renderCsv(source)
     return renderDefault(source)
   }
 
