@@ -133,7 +133,8 @@ describe("createChildStoreManager", () => {
       const [store] = manager.child("/project")
 
       expect(store.status).toBe("loading")
-      expect(store.limit).toBe(5)
+      // FORK: 默认会话列表条数 5→20([feat: titlebar-icons-rearrange],child-store.ts:238);同步更新过期断言 2026-06-14
+      expect(store.limit).toBe(20)
       expect(bootstraps).toEqual(["/project"])
     } finally {
       dispose()
