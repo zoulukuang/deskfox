@@ -66,6 +66,38 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 - `git revert <commit>`:改动全 fork-only(脚本是新增文件;config 仅删 native 一处),无上游侵入。
 
+## 运行时功能平移补全 + 测试基础设施(2026-06-14)
+
+阶段0/1 跑通构建链后,补齐一批 Tauri→Electron 平移时遗漏的 macOS 运行时功能 + 打包资源,
+并修复 desktop 单测基础设施。本批 4 笔 commit:
+
+| commit | 主题 | 改动 |
+|---|---|---|
+| `11f37b182a` | 测试基础设施 | `bunfig.toml` + `test/electron-mock.ts`:全局 electron mock preload(根因见下) |
+| `0da9235870` | HTML 预览右键加聊天 | `local-asset.ts` injectContextmenuBridge(text/html 注入 `__deskfox` 桥接脚本)+ 5 例单测 |
+| `653807db07` | 防睡眠持久化+恢复 | `prevent-sleep.ts`(persist/restore/enabledFromStoreValue + 修事件名缺 `deskfox-` 前缀致托盘/设置不同步)+ `store-keys.ts`/`index.ts` + 5 例单测 |
+| (本笔) | macOS 内置 LibreOffice 注入 | `electron-builder.deskfox.config.ts`(mac 段注入 LO bundle 到 `Contents/Resources/libreoffice`)+ `build-deskfox-electron.sh`(plugin/LO 资源就绪门槛 + post-build soffice 存在校验) |
+
+### 测试基础设施根因(沉淀)
+
+desktop 多个被测源文件顶层 `import ... from "electron"`(local-asset→protocol、prevent-sleep→
+powerSaveBlocker/BrowserWindow、store→default.app)。bun:test 同进程跑全量时,ESM linker 用
+**最先加载 electron 的文件**固化其导出名集合,后续文件再 `mock.module("electron")` 也无法新增
+名字 → 缺名的 named/default import 直接 link 失败。表现为**单独跑各测试文件全绿、合跑炸**
+(`Export named 'powerSaveBlocker'/'protocol' not found` / `Missing 'default' export`),且报错
+文件随执行顺序漂移。修法:`bunfig.toml [test].preload` 全局 mock,在任何测试体执行前把 electron
+定死成超集 → 对任意执行顺序鲁棒。验收:`bun test src` **81 pass** / 单文件跑亦绿 / typecheck 通过。
+
+### LibreOffice 注入要点
+
+- config mac 段:仅在 `branding/libreoffice-bundle/macos/LibreOffice.app` 存在时注入(否则本地
+  无 LO 的自测构建不中断);"发布物必须含健康 LO"的硬门槛由 build 脚本把守(对齐 main §1.9 分层)。
+- build 脚本 §3.5:发布物(非 `--no-bundle`)构建前校验 plugin dist + LO bundle 的
+  `presets`/`extensions` 齐全(过度剥皮的 LO 必致干净机 "User installation could not be completed",
+  历史教训);§5.5 post-build 验证最终 `.app` 内含可执行 soffice(挡"LO 没被 electron-builder 收进最终包")。
+- 注:soffice 此处尚未 Developer ID 签名(嵌套 bundle 签名属阶段2,当前 config `identity=null`),
+  仅做结构性存在检查;冷启动健康由 `prepare-lo-bundle` 的 smoke 闸保证。
+
 ## 后续(阶段 2/3,见 1-spec.md)
 
 - 阶段 2:签名 + 公证(mac 段接 Developer ID + `@electron/notarize`)

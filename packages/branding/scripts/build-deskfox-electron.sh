@@ -72,6 +72,47 @@ fi
 # === 3. 杀运行中的 DeskFox(避免 dist-deskfox 输出目录被运行中的 .app 锁)===
 pkill -9 -f "DeskFox" 2>/dev/null || true
 
+# === 3.5 打包资源就绪校验(对齐 main build-deskfox.sh §1.9 分层:脚本管"发布物必须有",config 管注入)===
+# [feat: electron-replatform-macos] 发布物(非 --no-bundle)= 发布给用户,资源缺了 = 功能在用户机上直接没有。
+IS_RELEASE=1; [[ "$NO_BUNDLE" -eq 1 ]] && IS_RELEASE=0
+
+# 3.5a plugin dist —— extraResources 直接拷 dist/plugin.js(gitignored 现场产物),缺了用户机上飞书/media-gen 直接没有。
+FEISHU_PLUGIN="$BRANDING_ROOT/plugin/feishu-bridge/dist/plugin.js"
+MEDIA_PLUGIN="$REPO_ROOT/packages/media-gen/dist/plugin.js"
+for _p in "$FEISHU_PLUGIN" "$MEDIA_PLUGIN"; do
+    if [[ ! -f "$_p" ]]; then
+        if [[ "$IS_RELEASE" -eq 1 ]]; then
+            echo "[deskfox] ❌ plugin dist 缺失: $_p" >&2
+            echo "[deskfox]   extraResources 会拷空 → 用户机上飞书/media-gen 直接没有。先 build 出该 plugin dist 再打发布物。" >&2
+            exit 1
+        fi
+        echo "[deskfox] ⚠️  plugin dist 缺失(--no-bundle 自测放行,装机后飞书/media-gen 不可用): $_p" >&2
+    fi
+done
+
+# 3.5b LibreOffice bundle —— office 预览/转换依赖。presets/+extensions/ 是 LO 冷启动建 user profile 的硬依赖,
+# 缺任一 = 过度剥皮的损坏 bundle,打包必致干净机器 "User installation could not be completed"(历史教训)。
+LO_BUNDLE_APP="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
+if [[ -d "$LO_BUNDLE_APP" ]]; then
+    LO_RES="$LO_BUNDLE_APP/Contents/Resources"
+    for _req in presets extensions; do
+        if [[ ! -d "$LO_RES/$_req" ]]; then
+            echo "[deskfox] ❌ LO bundle 缺 Contents/Resources/$_req — 过期/过度剥皮的 bundle,打包必致干净机器 LO fatal error。" >&2
+            echo "[deskfox]   重跑 prepare-lo-bundle.sh 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。" >&2
+            exit 1
+        fi
+    done
+    LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
+    echo "[deskfox] LO bundle 健康(${LO_SIZE}MB,presets/extensions 齐)→ deskfox config 注入 Contents/Resources/libreoffice"
+elif [[ "$IS_RELEASE" -eq 1 ]]; then
+    echo "[deskfox] ❌ 发布物构建但 LO bundle 不存在: $LO_BUNDLE_APP" >&2
+    echo "[deskfox]   绝不静默出不含 LibreOffice 的发布包(office 预览/导出会失效)。先跑 prepare-lo-bundle.sh 做健康 bundle。" >&2
+    echo "[deskfox]   (仅本机 .app 自测可加 --no-bundle 跳过 LO)" >&2
+    exit 1
+else
+    echo "[deskfox] ⚠️  LO bundle 不存在(--no-bundle 自测放行,本机 office 功能不可用): $LO_BUNDLE_APP" >&2
+fi
+
 # === 4. electron-vite build(自动跑 predev:编译 opencode Node 后端 + copy-icons)===
 export OPENCODE_CHANNEL="$ENV"
 export ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
@@ -96,6 +137,23 @@ echo "[deskfox] electron-builder ${EB_ARGS[*]}  (绕 Clash 代理直连 npmmirro
     env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
         ./node_modules/.bin/electron-builder "${EB_ARGS[@]}"
 )
+
+# === 5.5 post-build 验证:最终 .app 真含可执行 soffice(挡"LO 没被 electron-builder 收进最终包")===
+# [feat: electron-replatform-macos] 对齐 main §2.4。LO 源健康但仍可能因 config/打包意外没注入 .app。
+# 注:此处 soffice 尚未 Developer ID 签名 —— 嵌套 bundle 签名是阶段2(当前 config identity=null 出未签名包),
+#     故只做结构性存在检查;冷启动健康由 prepare-lo-bundle 的 smoke 闸已保证。
+if [[ -d "$LO_BUNDLE_APP" ]]; then
+    APP_PATH="$(ls -d "$DESKTOP/dist-deskfox"/mac*/*.app 2>/dev/null | head -1)"
+    if [[ -n "$APP_PATH" ]]; then
+        VERIFY_SOFFICE="$APP_PATH/Contents/Resources/libreoffice/Contents/MacOS/soffice"
+        if [[ ! -x "$VERIFY_SOFFICE" ]]; then
+            echo "[deskfox] ❌ 打包后最终 .app 内未找到可执行 soffice: $VERIFY_SOFFICE" >&2
+            echo "[deskfox]   LO 源健康但没注入最终包(疑 extraResources/打包问题)。绝不发布不含 LibreOffice 的包。" >&2
+            exit 1
+        fi
+        echo "[deskfox] post-build verify: 最终 .app 含可执行 soffice ✓"
+    fi
+fi
 
 # === 6. 产物路径 ===
 OUT="$DESKTOP/dist-deskfox"

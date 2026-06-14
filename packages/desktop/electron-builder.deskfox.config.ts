@@ -56,6 +56,29 @@ const ARTIFACT_PREFIX = { dev: "DeskFox-Dev", beta: "DeskFox-Beta", prod: "DeskF
 const iconEnv = channel === "prod" ? "prod" : "dev"
 const iconIco = path.join(brandingDir, "src", "assets", "icons", iconEnv, "icon.ico")
 
+// FORK: 删除上游 native/(mac_window.node + swift-build)extraResources 条目 —— 该 native 模块在 fork
+// 两分支均无源码、src/main 零 import,electron-builder 每次构建报 "file source doesn't exist from=.../native"
+// warning。功能未接,YAGNI 移除;后续若接 mac 原生窗口能力再补回。[feat: electron-replatform-macos]
+const extraResources: Array<{ from: string; to: string; filter?: string[] }> = [
+  // DeskFox 插件(Node 版 dist;装机后由 main/deskfox/plugin-install.ts 注入+自愈)。
+  // dist/plugin.js 是 gitignored 现场产物 → build 脚本打包前断言其存在,防 extraResources 拷空。
+  { from: path.join(brandingDir, "plugin", "feishu-bridge"), to: "plugin/feishu-bridge", filter: ["dist/**", "package.json"] },
+  { from: mediaGenDir, to: "plugin/media-gen", filter: ["dist/**"] },
+]
+
+// FORK: macOS 专属 — 注入内置 LibreOffice bundle 到 Contents/Resources/libreoffice(office 预览/转换依赖)。
+// 对齐后端 office-installer.ts bundledSofficePath:Resources/libreoffice/Contents/MacOS/soffice。
+// Win 的 LO 走独立打包流程(program/soffice.exe 结构),不在此注入。
+// 仅在 bundle 存在时注入 —— 否则 electron-builder 报 "file source doesn't exist" 中断本地无 LO 的自测构建;
+// "发布物必须含健康 LO"的硬门槛由 build-deskfox-electron.sh 把守(对齐 main build-deskfox.sh §1.9 分层)。
+// [feat: electron-replatform-macos] 2026-06-14
+if (targetPlat === "macos") {
+  const loApp = path.join(brandingDir, "libreoffice-bundle", "macos", "LibreOffice.app")
+  if (fs.existsSync(loApp)) {
+    extraResources.push({ from: loApp, to: "libreoffice" })
+  }
+}
+
 const config: Configuration = {
   appId: APP_IDS[channel],
   productName: PRODUCT_NAMES[channel],
@@ -71,15 +94,7 @@ const config: Configuration = {
     buildResources: "resources",
   },
   files: ["out/**/*", "resources/**/*"],
-  extraResources: [
-    // FORK: 删除上游 native/(mac_window.node + swift-build)extraResources 条目 —— 该 native 模块
-    // 在 fork 两分支均无源码、src/main 零 import,electron-builder 每次构建报 "file source doesn't
-    // exist from=.../native" warning。功能未接,YAGNI 移除以消除噪声;后续若接 mac 原生窗口能力再补回。
-    // [feat: electron-replatform-macos] 2026-06-14
-    // DeskFox 插件(Node 版 dist;装机后由 main/deskfox/plugin-install.ts 注入+自愈)
-    { from: path.join(brandingDir, "plugin", "feishu-bridge"), to: "plugin/feishu-bridge", filter: ["dist/**", "package.json"] },
-    { from: mediaGenDir, to: "plugin/media-gen", filter: ["dist/**"] },
-  ],
+  extraResources,
   protocols: {
     name: "DeskFox",
     schemes: ["opencode"], // 深链 scheme 沿用上游 contract(R3:binary 标识不改)

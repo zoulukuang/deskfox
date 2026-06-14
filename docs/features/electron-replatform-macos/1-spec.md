@@ -30,6 +30,11 @@ Electron 应用结构(`packages/desktop/src/{main,preload,renderer}`)平台中�
 | 2 | 签名 + 公证(deskfox config mac 段接 Developer ID + notarize) | ⏳ 待启动 |
 | 3 | 发布 + 自动更新(`latest-mac.yml` 部署 + 老 Tauri→Electron 升级桥 mac 侧) | ⏳ 待启动 |
 
+> **补充(2026-06-14)**:除上述 4 阶段(构建/签名/发布流水线)外,本 feat 并行承接一批
+> **Tauri→Electron 运行时功能平移补全**(首版迁移遗漏):防睡眠开关持久化+启动恢复、HTML 预览
+> 右键"加入聊天"、macOS 内置 LibreOffice 注入+构建资源就绪门槛,以及 desktop 单测全局 electron
+> mock 基础设施。详见 3-changelog.md「运行时功能平移补全」段。
+
 ## 验收标准(阶段 0+1)
 
 - [x] `electron-vite build` 在 macOS 完整产出 `out/{main,preload,renderer}` + opencode Node 后端 + wasm
