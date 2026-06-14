@@ -28,6 +28,38 @@ function mimeFor(p: string): string {
   return MIME[path.extname(p).slice(1).toLowerCase()] ?? "application/octet-stream"
 }
 
+// FORK: html-viewer-ux-polish — text/html 预览注入 contextmenu 桥接 JS,恢复 HTML 预览内
+// 右键"加入聊天"/点击关菜单(平移自 Tauri local_asset.rs;Electron 首版漏了注入)。
+//   - contextmenu: 阻止默认,postMessage 父窗口当前选区文本 → 父弹自家 mdMenu
+//   - mousedown:   postMessage 通知父 → 父收到时若 mdMenu 开着就关掉
+// 脚本极小、命名空间 __deskfox,与用户页脚本冲突风险低。[feat: electron-replatform-macos]
+const CONTEXTMENU_BRIDGE_SCRIPT =
+  "<script>(function(){document.addEventListener('contextmenu',function(e){e.preventDefault();var s=window.getSelection();var t=s?s.toString():'';try{window.parent.postMessage({__deskfox:true,type:'contextmenu',x:e.clientX,y:e.clientY,text:t},'*');}catch(err){}},true);document.addEventListener('mousedown',function(e){try{window.parent.postMessage({__deskfox:true,type:'mousedown'},'*');}catch(err){}},true);})();</script>"
+
+/**
+ * 往 HTML 注入 contextmenu 桥接脚本。锚点优先级:`</head>` > `</HEAD>` > `<body` > `<BODY` > 前置兜底
+ * (在 `<body` 标签前注,确保 DOM ready 前注册 listener)。非 UTF-8(罕见,HTML5 推 UTF-8 且我们
+ * Content-Type 强 charset=utf-8)原样返回 → 右键回退到 native 菜单(可接受降级)。对齐 Rust 同名函数 + 单测。
+ */
+export function injectContextmenuBridge(htmlBytes: Buffer): Buffer {
+  let html: string
+  try {
+    html = new TextDecoder("utf-8", { fatal: true }).decode(htmlBytes)
+  } catch {
+    return htmlBytes
+  }
+  let pos = -1
+  for (const anchor of ["</head>", "</HEAD>", "<body", "<BODY"]) {
+    pos = html.indexOf(anchor)
+    if (pos >= 0) break
+  }
+  const injected =
+    pos >= 0
+      ? html.slice(0, pos) + CONTEXTMENU_BRIDGE_SCRIPT + html.slice(pos)
+      : CONTEXTMENU_BRIDGE_SCRIPT + html
+  return Buffer.from(injected, "utf-8")
+}
+
 function b64urlDecode(s: string): string | null {
   try {
     return Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8")
@@ -102,8 +134,10 @@ async function handle(request: Request): Promise<Response> {
       },
     })
   }
-  // 全量:走 net.fetch file:// 流式(避免大文件全读进内存)
-  const data = await fsp.readFile(file)
+  // 全量读取
+  const raw = await fsp.readFile(file)
+  // FORK: text/html 注入 contextmenu 桥接 JS(恢复 HTML 预览右键加聊天)[feat: electron-replatform-macos]
+  const data = mime.startsWith("text/html") ? injectContextmenuBridge(raw) : raw
   return new Response(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer, {
     headers: { "content-type": mime, "accept-ranges": "bytes", "access-control-allow-origin": "*", "content-length": String(data.length) },
   })
