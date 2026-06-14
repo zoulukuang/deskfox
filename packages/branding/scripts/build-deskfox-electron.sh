@@ -90,20 +90,22 @@ for _p in "$FEISHU_PLUGIN" "$MEDIA_PLUGIN"; do
     fi
 done
 
-# 3.5b LibreOffice bundle —— office 预览/转换依赖。presets/+extensions/ 是 LO 冷启动建 user profile 的硬依赖,
-# 缺任一 = 过度剥皮的损坏 bundle,打包必致干净机器 "User installation could not be completed"(历史教训)。
+# 3.5b LibreOffice bundle —— office 预览/转换依赖。
+# 实测(2026-06-14 mac 全新 profile 冷启动转换):presets/ 是【硬依赖】—— 删之后 office 转换直接失败
+#   (profile 虽建成但 convert 无输出);extensions/ 在 LO bundle 里通常是【空目录】,electron-builder
+#   打包必丢弃空目录(实测最终 .app 无 extensions),但缺它冷启动转换完全正常 → 不作硬门槛,仅作完整性提示。
+# 故此处只硬卡 presets 非空;extensions 仅警告。最终包是否真含 presets 由 §5.5 post-build 复验(堵打包漏拷)。
 LO_BUNDLE_APP="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
 if [[ -d "$LO_BUNDLE_APP" ]]; then
     LO_RES="$LO_BUNDLE_APP/Contents/Resources"
-    for _req in presets extensions; do
-        if [[ ! -d "$LO_RES/$_req" ]]; then
-            echo "[deskfox] ❌ LO bundle 缺 Contents/Resources/$_req — 过期/过度剥皮的 bundle,打包必致干净机器 LO fatal error。" >&2
-            echo "[deskfox]   重跑 prepare-lo-bundle.sh 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。" >&2
-            exit 1
-        fi
-    done
+    if [[ ! -d "$LO_RES/presets" ]] || [[ -z "$(ls -A "$LO_RES/presets" 2>/dev/null)" ]]; then
+        echo "[deskfox] ❌ LO bundle 缺 Contents/Resources/presets(或为空)— office 转换硬依赖,打包必致干净机器功能失效。" >&2
+        echo "[deskfox]   重跑 prepare-lo-bundle.sh 重做 bundle(内置冷启动 smoke 闸,保证产出健康 bundle)。" >&2
+        exit 1
+    fi
+    [[ -d "$LO_RES/extensions" ]] || echo "[deskfox] ⚠️  LO bundle 无 Contents/Resources/extensions(LO 习惯空目录,缺之冷启动转换实测无害,仅提示)" >&2
     LO_SIZE=$(du -sm "$LO_BUNDLE_APP" 2>/dev/null | awk '{print $1}')
-    echo "[deskfox] LO bundle 健康(${LO_SIZE}MB,presets/extensions 齐)→ deskfox config 注入 Contents/Resources/libreoffice"
+    echo "[deskfox] LO bundle 健康(${LO_SIZE}MB,presets 非空)→ deskfox config 注入 Contents/Resources/libreoffice"
 elif [[ "$IS_RELEASE" -eq 1 ]]; then
     echo "[deskfox] ❌ 发布物构建但 LO bundle 不存在: $LO_BUNDLE_APP" >&2
     echo "[deskfox]   绝不静默出不含 LibreOffice 的发布包(office 预览/导出会失效)。先跑 prepare-lo-bundle.sh 做健康 bundle。" >&2
@@ -145,13 +147,22 @@ echo "[deskfox] electron-builder ${EB_ARGS[*]}  (绕 Clash 代理直连 npmmirro
 if [[ -d "$LO_BUNDLE_APP" ]]; then
     APP_PATH="$(ls -d "$DESKTOP/dist-deskfox"/mac*/*.app 2>/dev/null | head -1)"
     if [[ -n "$APP_PATH" ]]; then
-        VERIFY_SOFFICE="$APP_PATH/Contents/Resources/libreoffice/Contents/MacOS/soffice"
+        LO_DST="$APP_PATH/Contents/Resources/libreoffice"
+        VERIFY_SOFFICE="$LO_DST/Contents/MacOS/soffice"
         if [[ ! -x "$VERIFY_SOFFICE" ]]; then
             echo "[deskfox] ❌ 打包后最终 .app 内未找到可执行 soffice: $VERIFY_SOFFICE" >&2
             echo "[deskfox]   LO 源健康但没注入最终包(疑 extraResources/打包问题)。绝不发布不含 LibreOffice 的包。" >&2
             exit 1
         fi
-        echo "[deskfox] post-build verify: 最终 .app 含可执行 soffice ✓"
+        # presets 是 office 转换硬依赖(实测删之转换失败)。源健康 ≠ 进了最终包 —— electron-builder 可能漏拷,
+        # 必须复验进了最终包,否则 office 功能在用户机静默失效。(空目录 extensions 打包必丢且无害,不验。)
+        VERIFY_PRESETS="$LO_DST/Contents/Resources/presets"
+        if [[ ! -d "$VERIFY_PRESETS" ]] || [[ -z "$(ls -A "$VERIFY_PRESETS" 2>/dev/null)" ]]; then
+            echo "[deskfox] ❌ 打包后最终 .app 内 LO presets 缺失/为空: $VERIFY_PRESETS" >&2
+            echo "[deskfox]   presets 是 office 转换硬依赖,源健康但没进最终包 → office 功能在用户机静默失效。" >&2
+            exit 1
+        fi
+        echo "[deskfox] post-build verify: 最终 .app 含可执行 soffice + 非空 presets ✓"
     fi
 fi
 

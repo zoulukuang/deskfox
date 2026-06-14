@@ -98,6 +98,25 @@ powerSaveBlocker/BrowserWindow、store→default.app)。bun:test 同进程跑全
 - 注:soffice 此处尚未 Developer ID 签名(嵌套 bundle 签名属阶段2,当前 config `identity=null`),
   仅做结构性存在检查;冷启动健康由 `prepare-lo-bundle` 的 smoke 闸保证。
 
+### 门槛精修 + 运行时验证(完整构建实测,2026-06-14)
+
+跑完整 `build-deskfox-electron.sh -Env dev`(出 dmg+zip+app)后独立深验产物,发现并修复门槛盲区:
+
+- **发现**:首次构建 §5.5 post-build 报 ✓,但最终 .app 实际缺 `libreoffice/Contents/Resources/extensions`,
+  且 §5.5 只验了 soffice、没验 presets。
+- **根因实测**(mac 全新 profile 冷启动转换):
+  - `presets/` 是 office 转换【硬依赖】—— 删之转换直接失败(profile 建成但 convert 无输出)。
+  - `extensions/` 在 LO bundle 里是【空目录】,electron-builder 打包必丢弃空目录 → 最终 .app 无之;
+    但缺它冷启动转换完全正常 → 非硬依赖。**修正了既往"presets/extensions 都是硬依赖"的笼统认知**。
+- **修复**(`build-deskfox-electron.sh`):§3.5 presets 改"存在且非空"硬卡、extensions 降警告;
+  §5.5 post-build 新增复验最终 .app 的 presets 非空(堵"electron-builder 漏拷 presets → 用户机 office 静默失效")。
+- **重建验证**:§5.5 打印"含可执行 soffice + 非空 presets ✓";最终 .app presets 13 文件在位;
+  版本 `2026.6.0` / 身份 `ai.deskfox.app.dev`。
+- **运行时健康**:启动 .app,opencode 内嵌 Node 后端(utilityProcess `node.mojom.NodeService`)4s 起,
+  监听 `127.0.0.1:59811`,`/`·`/app`·`/config`·`/global/health` 全 **HTTP 401**(鉴权=健康)。
+- **已知限制**:dev 未签名包的嵌套 soffice 完全未签名 → arm64 直接执行被 SIGKILL(office 转换在 dev 包
+  不可用);正式可用须阶段2 Developer ID deep-sign(electron-builder 自动 deep-sign 含嵌套 bundle)。
+
 ## 后续(阶段 2/3,见 1-spec.md)
 
 - 阶段 2:签名 + 公证(mac 段接 Developer ID + `@electron/notarize`)
