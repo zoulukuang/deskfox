@@ -5,6 +5,7 @@
 // 用法:OPENCODE_CHANNEL=dev|beta|prod bunx electron-builder --win --config electron-builder.deskfox.config.ts
 // 前置:packages/branding/scripts 先生成 icon.ico(apply-icons 流程;icon.ico gitignored 现场生成)。
 
+import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Configuration } from "electron-builder"
@@ -17,6 +18,26 @@ const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
   return "dev"
+})()
+
+// FORK: 版本号按 channel × platform 独立号线注入(规范 §3.2bis Dev 领先模式)。
+// 换基座漏迁 build-deskfox.ps1 的版本注入逻辑 → electron-builder 默认用了 package.json 的上游 semver
+// (1.17.4),与 DeskFox 日历号 YYYY.次.补 + updater 比较脱节。此处补回:从 installer-versions.json
+// 按目标平台 + channel 读独立号线(prod 读裸 <plat>;dev/beta 读 dev-<plat>/beta-<plat>),覆盖 version。
+const targetPlat = (() => {
+  const argv = process.argv.join(" ")
+  if (argv.includes("--mac")) return "macos"
+  if (argv.includes("--linux")) return "linux"
+  return "windows"
+})()
+const appVersion = (() => {
+  const versions = JSON.parse(
+    fs.readFileSync(path.join(brandingDir, "installer-versions.json"), "utf8"),
+  ) as Record<string, string>
+  const verKey = channel === "prod" ? targetPlat : `${channel}-${targetPlat}`
+  const v = versions[verKey] ?? versions[targetPlat]
+  if (!v) throw new Error(`[deskfox] installer-versions.json missing version (key=${verKey})`)
+  return v
 })()
 
 const APP_IDS = {
@@ -36,6 +57,8 @@ const config: Configuration = {
   // 安装目录独立(默认取 package.json name "@opencode-ai/desktop" → 与上游官方版同目录互踩,实测踩坑)
   extraMetadata: {
     name: channel === "prod" ? "deskfox" : `deskfox-${channel}`,
+    // FORK: 覆盖 version 为 DeskFox 日历号(否则用 package.json 上游 semver 1.17.4,见上 appVersion 注释)
+    version: appVersion,
   },
   artifactName: `${ARTIFACT_PREFIX[channel]}-\${version}-\${os}-\${arch}.\${ext}`,
   directories: {
