@@ -1,0 +1,228 @@
+# [fork-only] DeskFox release 元数据镜像到 Gitee(metadata-only)
+#
+# 触发:GitHub Release 从 draft 转 publish 时(user 手动 publish 才触发)
+#       OR:workflow_dispatch + tag 输入(补镜像 / 失败 re-run)
+#
+# 行为:
+#   1. 在 Gitee zoulukuang/deskfox 创建对应 Release(同 tag/name/body/prerelease)
+#   2. body 末尾追加 "GitHub Release 下载链接",兜底:Gitee 用户也能找到 .exe
+#   3. 附件 .exe / .dmg **不在本 workflow 上传**(GitHub US runner 上行 Gitee CN
+#      被 GFW 节流,实测 50MB 30 min 都跑不完);改由本地脚本上传:
+#        packages/branding/scripts/mirror-asset-to-gitee.ps1 (Windows)
+#        packages/branding/scripts/mirror-asset-to-gitee.sh  (Mac,待补)
+#      user 在国内本地网络上 Gitee 是秒传级别,~5 秒。
+#
+# 依赖 secret:
+#   GITEE_TOKEN — Gitee Personal Access Token,scope `projects` 即可
+#   配置位置:GitHub repo Settings → Secrets and variables → Actions → New repository secret
+#   获取方式:Gitee → 设置 → 私人令牌 → 生成新令牌
+#
+# 设计文档:docs/features/gitee-release-mirror/1-spec.md
+#
+# 文件名规则(强制):*-deskfox.yml,跟上游 0 重名,pre-commit hook 自动豁免
+
+name: release-mirror-gitee-deskfox
+
+# ─── 🚫 OFFICIALLY ABANDONED 2026-05-21 ─────────────────────────────────
+# 本 workflow 永久废止,不再恢复。详 docs/governance/版本号与发布渠道规范.md。
+#
+# 历史:
+#   2026-05-11 DISABLED,原因双层:
+#     (1) 本 workflow 长期 silent fail — 5.5.1 / 5.9.1 GH 显示 success 但 Gitee
+#         实际没建 release(根因待查)
+#     (2) Win 端 release-deskfox.yml 已 disabled,GitHub Release 改本地手动 publish,
+#         这条 mirror workflow 也无需自动化
+#   2026-05-21 user 拍板:跟 release-deskfox.yml 一并永久废止。本地 ship 流程已实战
+#     跑顺:Gitee release 元数据用 Gitee API 手动建,附件用 mirror-asset-to-gitee.ps1
+#     上传(国内 IP 秒传)。
+#
+# 本地 Gitee mirror 流程(对齐 GitHub Release 后):
+#   1. Invoke-RestMethod POST https://gitee.com/api/v5/repos/<owner>/<repo>/releases
+#      body: tag_name / name / body / prerelease / target_commitish=main
+#   2. .\packages\branding\scripts\mirror-asset-to-gitee.ps1 -Tag <tag>
+#      (本地 IP 秒传,国内网络 ~5s 完成 50MB+ .exe 上传)
+#   完整 SOP 见 docs/governance/版本号与发布渠道规范.md §五
+#
+# 本 yml 保留作历史快照(Gitee API 调用 / curl 上传 / 兼容 release event +
+# workflow_dispatch 双触发等代码片段有参考价值)。`on:` 已剥光不会误触发。
+# ──────────────────────────────────────────────────────────────────────
+
+# on:  # DISABLED 2026-05-11 — 见上方注释
+#   release:
+#     types: [published]
+#   workflow_dispatch:
+#     inputs:
+#       tag:
+#         description: 'Release tag to mirror (e.g. ship-prod-2026.5.3.1). 用于补镜像 / 失败 re-run。'
+#         required: true
+#         type: string
+on:
+  workflow_dispatch:
+    inputs:
+      _disabled_notice:
+        description: 'DISABLED — 本 workflow 暂停,见文件头部注释'
+        required: false
+        default: 'disabled-since-2026-05-11'
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    name: Mirror release metadata to Gitee
+    runs-on: ubuntu-latest
+    timeout-minutes: 5  # metadata-only,API 调用极快
+
+    env:
+      GITEE_OWNER: zoulukuang
+      GITEE_REPO: deskfox
+      GITEE_API: https://gitee.com/api/v5
+      TARGET_BRANCH: main
+      # tag 来源:release 事件用 release.tag_name;dispatch 用 inputs.tag
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+    steps:
+      - name: Validate GITEE_TOKEN secret
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::error::GITEE_TOKEN secret not configured."
+            echo "::error::Configure at: Settings → Secrets and variables → Actions → New repository secret"
+            echo "::error::Token scope required: projects (Gitee → 设置 → 私人令牌)"
+            exit 1
+          fi
+          # 探测 token 有效性(查 user info)
+          status=$(curl -sf -o /dev/null -w "%{http_code}" \
+            "$GITEE_API/user?access_token=$GITEE_TOKEN" || echo "fail")
+          if [ "$status" != "200" ]; then
+            echo "::error::GITEE_TOKEN invalid or expired (status=$status)"
+            exit 1
+          fi
+          echo "[ok] GITEE_TOKEN valid"
+
+      - name: Resolve release metadata + augment body
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag resolved (release event missing tag_name AND no dispatch input)"
+            exit 1
+          fi
+          echo "[tag] $TAG"
+          # 从 GitHub API 拉 release 元数据(兼容 release / workflow_dispatch 两种触发)
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,name,body,isPrerelease,assets > /tmp/release.json
+          name=$(jq -r '.name // .tagName' /tmp/release.json)
+          prerelease=$(jq -r '.isPrerelease' /tmp/release.json)
+          # body + 末尾追加 GitHub Release 下载链接(Gitee 上无附件时的兜底)
+          gh_url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          asset_count=$(jq '.assets | length' /tmp/release.json)
+          {
+            jq -r '.body // ""' /tmp/release.json
+            echo ""
+            echo "---"
+            echo ""
+            echo "## 📦 安装包下载"
+            echo ""
+            echo "本镜像页面**仅同步 Release 文本元数据**,安装包附件可能滞后或缺失(GitHub 跨境上行 Gitee 不稳)。"
+            echo ""
+            echo "**最稳的下载源**:[GitHub Release]($gh_url)(GitHub 上有 $asset_count 个附件)"
+            echo ""
+            echo "若你正在 Gitee 看到此 Release 且本页**已有**附件 → 由 user 本地脚本同步上传完成,可直接下。"
+          } > /tmp/release-body.md
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "[meta] name=$name prerelease=$prerelease body_bytes=$(wc -c < /tmp/release-body.md) assets_on_gh=$asset_count"
+
+      - name: Find or create Gitee release
+        id: gitee_release
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          TAG: ${{ env.RELEASE_TAG }}
+          NAME: ${{ steps.meta.outputs.name }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          # 策略:always-try-create + on-fail-fallback-list
+          # 原因:Gitee `GET /releases/tags/<tag>` 在 release 不存在时返 200/null(非 404),
+          # 不能仅凭 status code 判断 release 是否已存在。改用"先创建,失败再查列表"。
+
+          # 1. 构造 payload(body 走 --rawfile 防特殊字符破坏 JSON)
+          payload=$(jq -nc \
+            --arg token "$GITEE_TOKEN" \
+            --arg tag "$TAG" \
+            --arg name "${NAME:-$TAG}" \
+            --rawfile body /tmp/release-body.md \
+            --arg branch "$TARGET_BRANCH" \
+            --argjson prerelease "${PRERELEASE:-false}" \
+            '{
+              access_token: $token,
+              tag_name: $tag,
+              name: $name,
+              body: (if ($body | length) > 0 then $body else "Mirrored from GitHub Release." end),
+              prerelease: $prerelease,
+              target_commitish: $branch
+            }')
+
+          # 2. 尝试创建
+          echo "[create attempt] POST Gitee release for tag=$TAG"
+          create_status=$(curl -s -o /tmp/create-resp.json -w "%{http_code}" \
+            --connect-timeout 30 --max-time 60 -X POST \
+            "$GITEE_API/repos/$GITEE_OWNER/$GITEE_REPO/releases" \
+            -H "Content-Type: application/json;charset=UTF-8" \
+            -d "$payload")
+          echo "[create status] $create_status"
+
+          if [ "$create_status" = "200" ] || [ "$create_status" = "201" ]; then
+            release_id=$(jq -r '.id // empty' /tmp/create-resp.json)
+            if [ -n "$release_id" ]; then
+              echo "[created] Gitee release id=$release_id"
+            fi
+          fi
+
+          # 3. fallback:create 失败(可能是 release 已存在)→ 列表里找
+          if [ -z "${release_id:-}" ] || [ "${release_id:-}" = "null" ]; then
+            echo "[fallback] create returned status=$create_status,response:"
+            cat /tmp/create-resp.json || true
+            echo ""
+            echo "[fallback] listing releases to find tag=$TAG..."
+            list_status=$(curl -s -o /tmp/list-resp.json -w "%{http_code}" \
+              --connect-timeout 30 --max-time 60 \
+              "$GITEE_API/repos/$GITEE_OWNER/$GITEE_REPO/releases?access_token=$GITEE_TOKEN&per_page=100")
+            if [ "$list_status" != "200" ]; then
+              echo "::error::list releases failed (status=$list_status)"
+              cat /tmp/list-resp.json || true
+              exit 1
+            fi
+            release_id=$(jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag) | .id' /tmp/list-resp.json | head -n1)
+            if [ -z "$release_id" ] || [ "$release_id" = "null" ]; then
+              echo "::error::release not found in list AND create failed — abort"
+              exit 1
+            fi
+            echo "[found via list] Gitee release id=$release_id"
+          fi
+
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+          RELEASE_ID: ${{ steps.gitee_release.outputs.release_id }}
+        run: |
+          echo ""
+          echo "==============================================="
+          echo "✅ Gitee release metadata mirrored."
+          echo ""
+          echo "  Tag:        $TAG"
+          echo "  Release ID: $RELEASE_ID"
+          echo "  URL:        https://gitee.com/$GITEE_OWNER/$GITEE_REPO/releases/tag/$TAG"
+          echo ""
+          echo "📌 NEXT STEP — user 本地上传安装包附件:"
+          echo "  Win:  packages/branding/scripts/mirror-asset-to-gitee.ps1 -Tag $TAG"
+          echo "  Mac:  bash packages/branding/scripts/mirror-asset-to-gitee.sh $TAG"
+          echo "==============================================="

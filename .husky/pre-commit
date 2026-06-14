@@ -1,0 +1,111 @@
+#!/bin/sh
+# ============================================================
+# opencode-fork pre-commit hook（fork 自加，upstream 不存在此文件）
+# 实现 09-改动规则.md 节 4 的 3 道自动化护栏：
+#   4.1 文件路径白名单/黑名单（含注册型扩展点豁免）
+#   4.2 diff 体量阈值（>500 行警告，规范 v2 由 200 调整为 500）
+#   4.4 大小写冲突检查（防 Windows/macOS 端崩）
+#
+# 跳过方式: git commit --no-verify（必须在 commit 信息或 改动日志.md 显式说明）
+# ============================================================
+
+set -e
+
+# ------------------------------------------------------------
+# 4.1 白名单/黑名单
+# ------------------------------------------------------------
+BLACKLIST_REGEX='^(packages/(console|containers|core|desktop-electron|docs|enterprise|extensions|function|identity|opencode|plugin|script|sdk|shared|slack|storybook|ui|web)/|packages/desktop/src-tauri/(tauri\..+\.conf\.json|build\.rs|capabilities/|icons/|entitlements\.plist)|\.github/|bunfig\.toml$|.*\.config\.(ts|js|mjs)$|^package\.json$|^bun\.lock$|^tsconfig\.json$|^flake\.lock$|^LICENSE$)'
+# 规范 v2(2026-04-27)豁免:注册型扩展点(provider-icons sprite/types)从黑名单豁免。
+# 理由:这俩本就是上游设计的"加新 provider"append-only 注册表,每次加 provider 必改,误报率太高。
+# 2026-05-01 加 .github/workflows/*-deskfox.yml 豁免:fork-only CI workflow,文件名后缀强制
+# 必带 -deskfox(跟上游 workflow 0 重名),不存在"偷改上游 workflow"的风险。
+EXCEPTION_REGEX='^packages/ui/src/components/provider-icons/(sprite\.svg|types\.ts)$|^\.github/workflows/.*-deskfox\.yml$'
+SCRIPTS_ALLOWED='^scripts/install-hooks\.sh$'
+
+violations=$(git diff --cached --name-only | grep -E "$BLACKLIST_REGEX" | grep -vE "$EXCEPTION_REGEX" || true)
+scripts_violations=$(git diff --cached --name-only | grep -E "^scripts/" | grep -vE "$SCRIPTS_ALLOWED" || true)
+
+if [ -n "$violations" ] || [ -n "$scripts_violations" ]; then
+  echo "❌ pre-commit (4.1): 黑名单文件，禁止 commit:"
+  [ -n "$violations" ] && echo "$violations"
+  [ -n "$scripts_violations" ] && echo "$scripts_violations"
+  echo ""
+  echo "如果确认要改: git commit --no-verify -m '... [override-blacklist: 理由]'"
+  echo "且必须在 改动日志.md 显式记录 override 理由。"
+  exit 1
+fi
+
+# ------------------------------------------------------------
+# 4.2 diff 体量阈值
+# ------------------------------------------------------------
+# 规范 v2(2026-04-27):200 → 500。理由:实际 feature commit 普遍 200-400 行,200 阈值导致 [large-diff] 频繁覆盖等于规则失效。500 是真实"该停下想想"的体量。
+THRESHOLD=500
+DIFF_LINES=$(git diff --cached --shortstat 2>/dev/null | awk '{print ($4+0)+($6+0)}')
+DIFF_LINES=${DIFF_LINES:-0}
+
+if [ "$DIFF_LINES" -gt "$THRESHOLD" ]; then
+  echo "⚠️  pre-commit (4.2): staged diff = ${DIFF_LINES} 行，超过 ${THRESHOLD} 行阈值"
+  echo "请考虑拆 commit。如确实必要: git commit --no-verify -m '... [large-diff: 理由]'"
+  exit 1
+fi
+
+# ------------------------------------------------------------
+# 4.4 大小写冲突检查
+# ------------------------------------------------------------
+dups=$(git ls-files | sort -fu | uniq -di || true)
+if [ -n "$dups" ]; then
+  echo "❌ pre-commit (4.4): 大小写冲突文件名（Windows/macOS 上会冲突）:"
+  echo "$dups"
+  echo "请 git mv 改成统一大小写后再 commit"
+  exit 1
+fi
+
+# ------------------------------------------------------------
+# 4.5 网络监听安全(2026-05-10 立,2026-05-25 扩 vite/astro host 覆盖)
+# ------------------------------------------------------------
+# 防止 dev server / Bun.serve / *.listen 默认绑 0.0.0.0 暴露端口到 LAN/公网。
+# 覆盖三类:
+#   (a) Bun.serve( — fork 自家 server / plugin
+#   (b) *.listen(port, ...) — node http / express 类
+#   (c) host: "0.0.0.0" — vite / astro / rollup 类 dev server 配置
+# 触发:staged 新增行命中上述任一,且**对应文件**没有 loopback 安全标记
+#       (hostname / .listen(...,"127.0.0.1") / host: "127.0.0.1"|"localhost")。
+# 豁免:commit message 标 [network-bind-public: <理由>] (走 --no-verify 或后续放宽)。
+# 例外路径:测试文件 (__tests__/, .test., .spec.) 不查(测试有时绑 ephemeral port localhost)。
+#
+# 起源 (c): 2026-05-25 user 装 prod 2026.5.25.1 + R6 audit 时发现
+# packages/{app,enterprise}/vite.config.ts + packages/web/astro.config.mjs
+# 三处 dev server 长期默认 0.0.0.0 暴露 :3000 / :4321 类端口到 LAN,
+# pre-push 自动起 e2e-mock dev server 时撞 R6 违规。把 vite/astro 配置
+# 也纳入 §4.5 扫描,防再回归。
+
+unsafe_bind_files=""
+STAGED_TS=$(git diff --cached --name-only --diff-filter=AM | grep -E '\.(ts|tsx|js|mjs)$' | grep -vE '__tests__|\.test\.|\.spec\.' || true)
+
+for f in $STAGED_TS; do
+  [ -f "$f" ] || continue
+  # 取本次 commit 新增行(过 +++ header)
+  added=$(git diff --cached -- "$f" | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+  # 是否新增了 bind 站点?(三类:Bun.serve / *.listen(port,...) / host: "0.0.0.0")
+  if echo "$added" | grep -qE 'Bun\.serve\(|\.listen\(\s*[0-9a-zA-Z_$]|host\s*:\s*["'"'"']0\.0\.0\.0["'"'"']'; then
+    # 该文件全文是否含 loopback 安全标记?(三种形式都接受)
+    if ! grep -qE 'hostname\s*:\s*["'"'"']?(127\.0\.0\.1|localhost)["'"'"']?|\.listen\([^)]+,\s*["'"'"'](127\.0\.0\.1|localhost)["'"'"']|host\s*:\s*["'"'"'](127\.0\.0\.1|localhost)["'"'"']' "$f"; then
+      unsafe_bind_files="$unsafe_bind_files\n  $f"
+    fi
+  fi
+done
+
+if [ -n "$unsafe_bind_files" ]; then
+  echo "❌ pre-commit (4.5 网络绑定安全): 检测到新增 server bind 未显式指定 loopback:"
+  printf "%b\n" "$unsafe_bind_files"
+  echo ""
+  echo "默认绑 0.0.0.0 = 暴露端口到所有网卡(LAN/公网)= Win Firewall 弹窗 + 安全风险"
+  echo "请加 (任一):"
+  echo "  hostname: \"127.0.0.1\"                  (Bun.serve)"
+  echo "  .listen(port, \"127.0.0.1\")              (node http)"
+  echo "  host: \"127.0.0.1\"                       (vite/astro/rollup server 配置)"
+  echo "若确实需要公网监听: git commit --no-verify -m '... [network-bind-public: <理由>]'"
+  exit 1
+fi
+
+echo "✅ pre-commit: 白名单 / diff 阈值 / 大小写 / 网络绑定 四项检查通过"
