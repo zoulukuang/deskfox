@@ -2,6 +2,8 @@ import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { encodeFilePath } from "@/context/file/path"
 import { DialogFileTreeConfirm, DialogFileTreeConflict, type ConflictAction } from "@/components/dialog-file-tree"
+// FORK: 纯逻辑 helper 抽出(test-isolation;原定义见 file-tree-helpers.ts)[feat: test-isolation-file-tree] 2026-06-14
+import { shouldListRoot, dirsToExpand } from "@/components/file-tree-helpers"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -80,33 +82,8 @@ type Filter = {
   dirs: Set<string>
 }
 
-export function shouldListRoot(input: { level: number; dir?: { loaded?: boolean; loading?: boolean } }) {
-  if (input.level !== 0) return false
-  if (input.dir?.loaded) return false
-  if (input.dir?.loading) return false
-  return true
-}
-
-export function shouldListExpanded(input: {
-  level: number
-  dir?: { expanded?: boolean; loaded?: boolean; loading?: boolean }
-}) {
-  if (input.level === 0) return false
-  if (!input.dir?.expanded) return false
-  if (input.dir.loaded) return false
-  if (input.dir.loading) return false
-  return true
-}
-
-export function dirsToExpand(input: {
-  level: number
-  filter?: { dirs: Set<string> }
-  expanded: (dir: string) => boolean
-}) {
-  if (input.level !== 0) return []
-  if (!input.filter) return []
-  return [...input.filter.dirs].filter((dir) => !input.expanded(dir))
-}
+// FORK: shouldListRoot / shouldListExpanded / dirsToExpand 已抽到 ./file-tree-helpers
+// (纯逻辑,供单测直接 import 免加载 @kobalte;见顶部 import)[feat: test-isolation-file-tree] 2026-06-14
 
 const kindLabel = (kind: Kind) => {
   if (kind === "add") return "A"
