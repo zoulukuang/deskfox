@@ -21,6 +21,7 @@ import { registerDeskfoxIpc } from "./deskfox/ipc"
 import { initTelemetry, emitAppOpen } from "./deskfox/telemetry"
 import { createTray, attachCloseToTray, setQuitting, isQuitting } from "./deskfox/tray"
 import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
+import { restorePreventSleep } from "./deskfox/prevent-sleep"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { parseMarkdown } from "./markdown"
@@ -273,6 +274,8 @@ const main = Effect.gen(function* () {
   const updater = setupAutoUpdater(stopSidecars)
   // FORK: DeskFox 原生 IPC(文件操作等) [feat: electron-replatform]
   registerDeskfoxIpc()
+  // FORK: 防休眠 — 启动恢复上次开关状态(开着则立即重新生效 + 同步托盘勾选)[feat: electron-replatform-macos]
+  restorePreventSleep()
   // FORK: 启动即发 app_open(pageview 注册当日活跃);opt-out/白名单/IO 全在后台,不阻塞 [feat: telemetry-usage-stats]
   emitAppOpen()
   // FORK: 插件注入 + 自愈(必须在 sidecar 启动前,sidecar 读 opencode.jsonc)[feat: electron-replatform]
