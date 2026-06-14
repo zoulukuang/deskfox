@@ -19,7 +19,10 @@ BLACKLIST_REGEX='^(packages/(console|containers|core|desktop-electron|docs|enter
 # 理由:这俩本就是上游设计的"加新 provider"append-only 注册表,每次加 provider 必改,误报率太高。
 # 2026-05-01 加 .github/workflows/*-deskfox.yml 豁免:fork-only CI workflow,文件名后缀强制
 # 必带 -deskfox(跟上游 workflow 0 重名),不存在"偷改上游 workflow"的风险。
-EXCEPTION_REGEX='^packages/ui/src/components/provider-icons/(sprite\.svg|types\.ts)$|^\.github/workflows/.*-deskfox\.yml$'
+# 2026-06-14 加 *.deskfox.config.* 豁免:fork 自建打包配置(如 electron-builder.deskfox.config.ts),
+# 命名强制带 .deskfox 跟上游 config 0 重名,黑名单 *.config.ts 本意是护上游配置,误伤了 fork 自有配置
+# (本 session 3 次同文件误伤)。上游 config(vite.config.ts / electron.vite.config.ts 等)仍受保护。
+EXCEPTION_REGEX='^packages/ui/src/components/provider-icons/(sprite\.svg|types\.ts)$|^\.github/workflows/.*-deskfox\.yml$|.*\.deskfox\.config\.(ts|js|mjs)$'
 SCRIPTS_ALLOWED='^scripts/install-hooks\.sh$'
 
 violations=$(git diff --cached --name-only | grep -E "$BLACKLIST_REGEX" | grep -vE "$EXCEPTION_REGEX" || true)

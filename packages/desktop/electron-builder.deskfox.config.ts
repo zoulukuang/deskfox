@@ -27,7 +27,12 @@ const channel = (() => {
 const targetPlat = (() => {
   const argv = process.argv.join(" ")
   if (argv.includes("--mac")) return "macos"
+  if (argv.includes("--win")) return "windows"
   if (argv.includes("--linux")) return "linux"
+  // 无显式 --mac/--win/--linux flag 时,electron-builder 默认构建本机平台 → 按 process.platform 回落,
+  // 避免在 Mac 上漏传 --mac 时错读 windows 号线(静默出错版本号)。
+  if (process.platform === "darwin") return "macos"
+  if (process.platform === "linux") return "linux"
   return "windows"
 })()
 const appVersion = (() => {
