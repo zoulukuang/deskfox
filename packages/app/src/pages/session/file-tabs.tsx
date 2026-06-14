@@ -1661,11 +1661,27 @@ export function FileTabContent(props: {
     )
   }
 
+  // FORK: CSV 右键 —— 复用 md/html 的选区菜单(添加到聊天/复制),但**不画 setSelectionHighlight 高亮**:
+  //   CSV 是 CSS grid,range.getClientRects() 会横跨整行 → 高亮 overlay(viewport-fixed)溢出到文件树/
+  //   聊天区(user 报 Image#34/#35)。native 单元格选区已足够指示,菜单用捕获的 text 工作,不依赖该 overlay。
+  //   [feat: csv-table-viewer] 2026-06-14
+  const handleCsvContextMenu = (event: MouseEvent) => {
+    if (editing()) return
+    event.preventDefault()
+    let text = ""
+    const sel = typeof window !== "undefined" ? window.getSelection() : null
+    if (sel && sel.rangeCount > 0) {
+      const t = sel.toString()
+      if (t.trim()) text = t
+    }
+    setSelectionHighlight(null)
+    setMdComment("")
+    setMdMenu({ open: true, x: event.clientX, y: event.clientY, text, mode: "menu" })
+  }
+
   // FORK: CSV/TSV 表格视图 [feat: csv-table-viewer] 2026-06-14
-  //   外层挂 handleLightDomContextMenu —— 单元格是 light DOM 可选文字,右键走与 md/html 同一套
-  //   选区菜单(添加到聊天 / 复制),和其他格式文件对齐 [feat: csv-table-viewer] 2026-06-14
   const renderCsv = (source: string) => (
-    <div class="h-full min-h-0" onContextMenu={handleLightDomContextMenu}>
+    <div class="h-full min-h-0" onContextMenu={handleCsvContextMenu}>
       <CsvTable
         text={source}
         onOpenExternal={() => {
