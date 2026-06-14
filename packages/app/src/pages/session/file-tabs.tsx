@@ -1669,10 +1669,16 @@ export function FileTabContent(props: {
     if (editing()) return
     event.preventDefault()
     let text = ""
-    const sel = typeof window !== "undefined" ? window.getSelection() : null
-    if (sel && sel.rangeCount > 0) {
-      const t = sel.toString()
-      if (t.trim()) text = t
+    // FORK: CSV 网格右键会 collapse 选区(原"light DOM 无 collapse"假设对 grid 不成立,user 报 Image#36)→
+    //   先用 history.pickBestRecent()(selectionchange 已把选区入栈,免疫右键 collapse),再回退 live 选区。
+    const best = viewerHistory?.pickBestRecent() ?? null
+    if (best && best.text.trim()) text = best.text
+    if (!text) {
+      const sel = typeof window !== "undefined" ? window.getSelection() : null
+      if (sel && sel.rangeCount > 0) {
+        const t = sel.toString()
+        if (t.trim()) text = t
+      }
     }
     setSelectionHighlight(null)
     setMdComment("")
