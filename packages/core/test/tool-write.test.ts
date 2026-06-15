@@ -278,8 +278,9 @@ test("keeps the locked write schema, semantics docstring, and deferred UX TODOs 
   const schema = definition[0]?.inputSchema as { readonly properties?: Record<string, unknown> }
 
   expect(Object.keys(schema.properties ?? {}).sort()).toEqual(["content", "path"])
+  // FORK: 上游 lock 测试断言的 docstring 与上游自己 reworded 的 write.ts docstring 不一致(upstream/dev 同样红),对齐到实际源码语义 docstring 2026-06-15
   expect(source).toContain(
-    "Named project references\n * are read-oriented and deliberately are not accepted by mutation tools.",
+    "absolute external paths retain mutation capability through a separate\n * external_directory approval before edit approval.",
   )
   for (const todo of [
     "Revisit whether model-facing mutation schemas should prefer absolute `filePath` naming for trained-in compatibility after evaluating model behavior.",

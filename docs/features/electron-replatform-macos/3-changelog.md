@@ -117,6 +117,25 @@ powerSaveBlocker/BrowserWindow、store→default.app)。bun:test 同进程跑全
 - **已知限制**:dev 未签名包的嵌套 soffice 完全未签名 → arm64 直接执行被 SIGKILL(office 转换在 dev 包
   不可用);正式可用须阶段2 Developer ID deep-sign(electron-builder 自动 deep-sign 含嵌套 bundle)。
 
+### 合 main 前全量测试验收 + lock 测试修复(2026-06-15)
+
+合 main 前按 R9 跑全量测试,逐一定根因(详见 memory `reference_local_test_env_false_failures.md`):
+
+- **fork 自有代码 + R9 门控套件全绿**:typecheck 26/26、media-gen 140/0、adapter-feishu-lark 740/0、app 438/0、ui 27/0。
+- **opencode 14 个失败 = 纯本地环境**,清代理 / 英文 locale 后全绿、CI 必过(已实证):
+  - httpapi-sdk(12)+ lsp interop(1):本地 Clash 代理(`ALL_PROXY=socks5://127.0.0.1:7898`,`NO_PROXY` 盖不住 socks 层)拦截 localhost 测试流量 → `global.health()` 502(`UpstreamError`)+ SSE event stream 30~35s 挂死。清代理重跑 httpapi-sdk 18/18、lsp 12/12,耗时 199s→5.7s。
+  - help 快照(1):yargs 跟中文 locale 输出中文(`选项:`/`[布尔]`)vs 英文 `.snap`;`LANG=en_US.UTF-8` 下 1/0 过。
+- **core 8 个失败全在上游 effect v2 新核**(fork 只动 28 行、未碰失败文件):5 个 `@ff-labs/fff-bun` native 在 macOS `/private/var` 临时路径 init 失败(上游 v2 全新测试)+ 1 个 watcher `.git/HEAD` FSEvents flaky + **2 个 lock 注释守卫**(本次修复)。
+- **结论:无一个失败是 Electron replatform 引入的 regression。**
+
+**lock 测试修复**(本次 commit,Tiny / R4 override):
+- 文件:`packages/core/test/tool-write.test.ts` + `tool-edit.test.ts`(各 +1 docstring 期望 +1 FORK marker)。
+- 根因:上游把 `src/tool/{write,edit}.ts` 顶部语义 docstring **reworded**(旧"Named project references are read-oriented and deliberately not accepted by mutation tools" → 新"absolute external paths retain mutation capability through external_directory approval"),但配套 lock 测试的期望字符串忘了同步。**`upstream/dev` 自己同样红**(源码 count=0、测试 count=1),是上游自带测试债,fork 忠实 sync 后继承。
+- 修法:把两测试的 docstring 期望对齐到上游**实际现存**的 docstring(`"absolute external paths retain mutation capability through a separate\n * external_directory approval before edit approval."`),lock 守卫意图(语义 docstring 可见)完整保留,零运行时影响。
+- **R4 override 论证**:断言写在上游 test 文件内部,无法从外部新文件覆盖修正,无 wrapper 路径;改源码加回旧句会让 docstring 自相矛盾、风险更高。两文件均加 FORK marker。
+- 验证:tool-write 7/7、tool-edit 10/10;core 全量 8→6 fail(剩 5 fff-bun + 1 watcher flaky,均环境/上游)。
+- 回退:`git revert` 本 commit 即恢复上游原状(代价是 lock 测试复红)。
+
 ## 后续(阶段 2/3,见 1-spec.md)
 
 - 阶段 2:签名 + 公证(mac 段接 Developer ID + `@electron/notarize`)

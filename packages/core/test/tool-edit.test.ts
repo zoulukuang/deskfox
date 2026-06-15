@@ -403,8 +403,9 @@ test("keeps the locked edit schema, semantics docstring, and deferred TODOs visi
   const schema = definition[0]?.inputSchema as { readonly properties?: Record<string, unknown> }
 
   expect(Object.keys(schema.properties ?? {}).sort()).toEqual(["newString", "oldString", "path", "replaceAll"])
+  // FORK: 上游 lock 测试断言的 docstring 与上游自己 reworded 的 edit.ts docstring 不一致(upstream/dev 同样红),对齐到实际源码语义 docstring 2026-06-15
   expect(source).toContain(
-    "Named project references\n * are read-oriented and deliberately are not accepted by mutation tools.",
+    "absolute external paths retain mutation capability through a separate\n * external_directory approval before edit approval.",
   )
   for (const todo of [
     "Port V1 fuzzy correction strategies only after exact-edit behavior is established: line-trimmed matching, block-anchor fallback, indentation correction, and similarity-threshold review.",
