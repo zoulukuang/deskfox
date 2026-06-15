@@ -10,6 +10,20 @@
 
 
 
+## [macOS] 2026.8.0 - 2026-06-15
+
+**主题**:换基座 Tauri → Electron 首个 macOS 稳定版。大更新进"次"位(2026.7.x → 2026.8.0)。
+
+**本次内容**:Electron 基座(替换验证 + Developer ID 签名/公证 + electron-updater 自更新 + Tauri→Electron 迁移桥)。
+
+**Release**:GitHub `ship-mac-prod-2026.8.0`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.0-mac-arm64.dmg`(Electron;含 LibreOffice,~310 MB;Developer ID 签名 + 公证 + staple,.app 与 .dmg 均 Notarized)
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.8.0-mac-arm64.dmg`
+**升级源**:① Electron 自更新 `updates.deskfox.ai/electron/prod/latest-mac.yml`(2026.8.0)② Tauri→Electron 迁移桥 `…/v1/latest/desktop/darwin/latest.json`(2026.8.0,存量 Tauri 用户迁移)
+**官网**:deskfox.ai Mac 下载链接已更新(`-mac-arm64.dmg`,deskfox-site `0785772`)
+
+---
+
 ## [macOS] 2026.7.2 - 2026-06-13 09:52
 
 (to be filled: commits / plugin / installer path after ship)

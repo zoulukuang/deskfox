@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# [DEPRECATED] 还原 Tauri src-tauri/icons/ 专用,换 Electron 后(2026-06-15)作废(Electron 无此目录)。勿运行。
 # [fork-only] 把 packages/desktop/src-tauri/icons/ 还原到 git HEAD 状态
 #
 # build 完成后调,保证工作树干净不污染上游 icons/ 文件。

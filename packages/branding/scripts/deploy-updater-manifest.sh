@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# [DEPRECATED] Tauri updater 专用(latest.json + minisign),换 Electron 后(2026-06-15)作废。Electron updater 改走 deploy-electron-updater.sh。勿运行。
 # [fork-only] DeskFox updater manifest 一站式发布(macOS)
 # [feat: 启用自动升级] 2026-06-06 — /ship 步骤 7.5
 #

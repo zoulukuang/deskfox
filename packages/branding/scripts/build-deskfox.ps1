@@ -1,4 +1,5 @@
-﻿# [fork-only] DeskFox 一键构建 wrapper
+﻿# [DEPRECATED] Tauri 基座专用,换 Electron 后(2026-06-15)作废 — /ship 不再调用。构建改用 build-deskfox-electron.ps1。保留仅因休眠 CI / 测试历史引用,勿运行。
+# [fork-only] DeskFox 一键构建 wrapper
 #
 # 流程:
 #   1. apply-icons.ps1   把 DeskFox PNG/.ico 临时拷到 src-tauri/icons/{env}/

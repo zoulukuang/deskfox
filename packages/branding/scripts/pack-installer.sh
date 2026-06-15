@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# [DEPRECATED] Tauri 基座专用,换 Electron 后(2026-06-15)作废 — /ship 不再调用。发版改走 /ship(bump-installer-version.sh + build-deskfox-electron.sh)。保留仅因休眠 CI / 测试历史引用,勿运行。
 # [fork-only] DeskFox one-shot installer pipeline (macOS)
 #
 # 发布渠道与版本号规则完整 doc:docs/governance/版本号与发布渠道规范.md
