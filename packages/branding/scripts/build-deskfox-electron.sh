@@ -76,19 +76,32 @@ pkill -9 -f "DeskFox" 2>/dev/null || true
 # [feat: electron-replatform-macos] 发布物(非 --no-bundle)= 发布给用户,资源缺了 = 功能在用户机上直接没有。
 IS_RELEASE=1; [[ "$NO_BUNDLE" -eq 1 ]] && IS_RELEASE=0
 
-# 3.5a plugin dist —— extraResources 直接拷 dist/plugin.js(gitignored 现场产物),缺了用户机上飞书/media-gen 直接没有。
+# 3.5a plugin dist —— 打包前【从最新源码重建】feishu-bridge / media-gen,再校验。
+# 根治"陈旧 dist 静默混入"(2026-06-15 dev-feishu-binding-missing):源码 2026-06-12 把 Bun.serve
+#   适配成 node:http(Electron 边车跑 Node 不再是 Bun),但 dist 没人重建仍是旧产物 → 打进包的
+#   plugin.js 仍调 Bun.serve → Node 下抛 "Bun is not defined" → 飞书/media-gen 插件 server 起不来
+#   → 飞书账号列不出(UI 显示"未绑定")。把"只检查存在"改为"先重建":build-*-plugin.sh 自带时间戳
+#   判断,无源码变更则秒跳过,不拖慢迭代;--no-bundle 自测也重建(自测包也含插件,必须新鲜)。
+echo "[deskfox] 重建插件 dist(feishu-bridge / media-gen,源码无变更则跳过)…"
+bash "$SCRIPT_DIR/build-feishu-plugin.sh"
+bash "$SCRIPT_DIR/build-media-gen-plugin.sh"
+
 FEISHU_PLUGIN="$BRANDING_ROOT/plugin/feishu-bridge/dist/plugin.js"
 MEDIA_PLUGIN="$REPO_ROOT/packages/media-gen/dist/plugin.js"
 for _p in "$FEISHU_PLUGIN" "$MEDIA_PLUGIN"; do
     if [[ ! -f "$_p" ]]; then
-        if [[ "$IS_RELEASE" -eq 1 ]]; then
-            echo "[deskfox] ❌ plugin dist 缺失: $_p" >&2
-            echo "[deskfox]   extraResources 会拷空 → 用户机上飞书/media-gen 直接没有。先 build 出该 plugin dist 再打发布物。" >&2
-            exit 1
-        fi
-        echo "[deskfox] ⚠️  plugin dist 缺失(--no-bundle 自测放行,装机后飞书/media-gen 不可用): $_p" >&2
+        echo "[deskfox] ❌ plugin dist 重建后仍缺失: $_p" >&2
+        exit 1
+    fi
+    # Electron 边车跑 Node:plugin bundle 不得残留 Bun.serve 等 Bun.* 直调(否则插件 server 启动即
+    # "Bun is not defined")。源码应已走 node-serve shim(node:http);残留 = 源码没适配/构建目标错。
+    if grep -q "Bun\.serve" "$_p"; then
+        echo "[deskfox] ❌ plugin dist 仍含 Bun.serve → Node 边车下插件 server 起不来: $_p" >&2
+        echo "[deskfox]   确认对应 src 已用 node-serve(node:http)替换 Bun.serve 后重试。" >&2
+        exit 1
     fi
 done
+echo "[deskfox] plugin dist 就绪且无 Bun.serve 残留 ✓"
 
 # 3.5b LibreOffice bundle —— office 预览/转换依赖。
 # 实测(2026-06-14 mac 全新 profile 冷启动转换):presets/ 是【硬依赖】—— 删之后 office 转换直接失败
