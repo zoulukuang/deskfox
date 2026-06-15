@@ -45,3 +45,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## 回退方法
 
 `git revert` 对应三笔 commit,或删 `packages/branding/smoke/verify.ts` + `cold-start.py` + 回滚 `自动化测试规范.md` 的 v7 段。无运行时行为,回退零风险。
+
+## 后续:Logic 清单单测补齐(2026-06-15,feat: verify-core-tests)
+
+初版 `verify.ts`(Medium)合入时纯逻辑全埋在脚本里、无单测(R5 Logic 清单缺口)。补齐:
+
+- **helper-extract**:把 4 个纯函数抽到新 `packages/branding/smoke/verify-core.ts`(`probesFromChangedFiles` / `selectProbes` / `classifyVerdict` / `evaluateReleaseChecks`,零 IO/零 console/零进程),`verify.ts` 改为 import 委托(行为逐字不变,git/CDP/文件 IO 仍留外壳)。
+- **单测** `packages/branding/__tests__/verify-core.test.ts`:**29 用例**覆盖 git→probe 映射(各规则 + 无 desktop/无命中两档全量回退 + 并集)、probe 选择优先级(only>changed>scope>全量 + 未知抛错 + scope 映射)、冒烟判定(crash→1🔴/fail→2🟡/全过→0🟢)、L3 发布物(sha512 一致性「升级命门」+ size + 版本号 0.0.0/不符 + 缺 yml + blockmap/LO)。
+- 验证:branding typecheck 0 错 / verify-core 29 pass / branding 全量无回归(预存的 updater-config minisign.pub ENOENT 与本次无关)。纯 fork-only;0 改上游 / 0 R4 / 0 黑名单。
