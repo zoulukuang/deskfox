@@ -12,6 +12,8 @@ import { getStore } from "./store"
 import { getPinchZoomEnabled, setPinchZoomEnabled, setTitlebar, updateTitlebar } from "./windows"
 import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
+// FORK: 原生菜单跟随应用内语言 [feat: settings-panel-cleanup] 2026-06-15
+import { setMenuLocale } from "./menu"
 
 const pickerFilters = (ext?: string[]) => {
   if (!ext || ext.length === 0) return undefined
@@ -208,6 +210,12 @@ export function registerIpcHandlers(deps: Deps) {
   ipcMain.on("relaunch", () => {
     deps.relaunch()
   })
+
+  // FORK: 渲染进程把当前界面语言推回主进程,重建 macOS 原生菜单使其跟随全局语言设置
+  // [feat: settings-panel-cleanup] 2026-06-15
+  ipcMain.on("set-menu-locale", (_event: IpcMainEvent, locale: string | null) =>
+    setMenuLocale(locale ?? undefined),
+  )
 
   ipcMain.handle("get-zoom-factor", (event: IpcMainInvokeEvent) => event.sender.getZoomFactor())
   ipcMain.handle("set-zoom-factor", (event: IpcMainInvokeEvent, factor: number) => {

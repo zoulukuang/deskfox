@@ -600,6 +600,25 @@ export function Titlebar(props: { update?: TitlebarUpdate }) {
                 <div class="flex items-center shrink-0">
                   <div class="flex items-center shrink-0">
                     <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
+                    {/* FORK: DEV 徽标前加「打开终端」图标,为习惯终端的用户提供快捷入口
+                        点击切换集成终端(terminal.toggle);仅项目已打开时显示 [feat: settings-panel-cleanup] 2026-06-15 */}
+                    <Show when={params.dir}>
+                      <TooltipKeybind
+                        placement="bottom"
+                        title={language.t("command.terminal.toggle")}
+                        keybind={command.keybind("terminal.toggle")}
+                        openDelay={2000}
+                      >
+                        <Button
+                          variant="ghost"
+                          class="titlebar-icon w-8 h-6 p-0 box-border shrink-0 mr-1 [app-region:no-drag]"
+                          onClick={() => command.trigger("terminal.toggle")}
+                          aria-label={language.t("command.terminal.toggle")}
+                        >
+                          <Icon size="small" name="terminal" />
+                        </Button>
+                      </TooltipKeybind>
+                    </Show>
                     <ChannelIndicator />
                   </div>
                 </div>

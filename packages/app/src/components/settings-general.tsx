@@ -7,7 +7,6 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
@@ -87,7 +86,6 @@ export const SettingsGeneral: Component = () => {
   const language = useLanguage()
   const permission = usePermission()
   const platform = usePlatform()
-  const dialog = useDialog()
   const params = useParams()
   const settings = useSettings()
 
@@ -376,23 +374,8 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
-        <SettingsRow
-          title={language.t("settings.general.row.newLayoutDesigns.title")}
-          description={language.t("settings.general.row.newLayoutDesigns.description")}
-        >
-          <div data-action="settings-new-layout-designs">
-            <Switch
-              checked={settings.general.newLayoutDesigns()}
-              onChange={(checked) => {
-                settings.general.setNewLayoutDesigns(checked)
-                if (!checked) return
-                void import("@/components/settings-v2").then((module) => {
-                  dialog.show(() => <module.DialogSettings />)
-                })
-              }}
-            />
-          </div>
-        </SettingsRow>
+        {/* FORK: 隐藏上游「New layout and designs」实验开关 — DeskFox 默认经典布局(newLayoutDesignsDefault=false),
+            v2 布局与既有交互差异大,不对用户暴露切换入口;保留底层字段 + 默认值不变 [feat: settings-panel-cleanup] 2026-06-15 */}
         {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
         <Show when={platform.getTelemetryEnabled}>
           <SettingsRow
@@ -417,73 +400,7 @@ export const SettingsGeneral: Component = () => {
     </div>
   )
 
-  const AdvancedSection = () => (
-    <div class="flex flex-col gap-1">
-      <h3 class="text-14-medium text-text-strong pb-2">{language.t("settings.general.section.advanced")}</h3>
-
-      <SettingsList>
-        <SettingsRow
-          title={language.t("settings.general.row.showFileTree.title")}
-          description={language.t("settings.general.row.showFileTree.description")}
-        >
-          <div data-action="settings-show-file-tree">
-            <Switch
-              checked={settings.general.showFileTree()}
-              onChange={(checked) => settings.general.setShowFileTree(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showNavigation.title")}
-          description={language.t("settings.general.row.showNavigation.description")}
-        >
-          <div data-action="settings-show-navigation">
-            <Switch
-              checked={settings.general.showNavigation()}
-              onChange={(checked) => settings.general.setShowNavigation(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showSearch.title")}
-          description={language.t("settings.general.row.showSearch.description")}
-        >
-          <div data-action="settings-show-search">
-            <Switch
-              checked={settings.general.showSearch()}
-              onChange={(checked) => settings.general.setShowSearch(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showStatus.title")}
-          description={language.t("settings.general.row.showStatus.description")}
-        >
-          <div data-action="settings-show-status">
-            <Switch
-              checked={settings.general.showStatus()}
-              onChange={(checked) => settings.general.setShowStatus(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showCustomAgents.title")}
-          description={language.t("settings.general.row.showCustomAgents.description")}
-        >
-          <div data-action="settings-show-custom-agents">
-            <Switch
-              checked={settings.general.showCustomAgents()}
-              onChange={(checked) => settings.general.setShowCustomAgents(checked)}
-            />
-          </div>
-        </SettingsRow>
-      </SettingsList>
-    </div>
-  )
+  // FORK: AdvancedSection(文件树/导航控件/命令面板/服务器状态/Custom agents)已移除,不对用户暴露 [feat: settings-panel-cleanup] 2026-06-15
 
   const AppearanceSection = () => (
     <div class="flex flex-col gap-1">
@@ -800,10 +717,8 @@ export const SettingsGeneral: Component = () => {
         <UpdatesSection />
 
         <DisplaySection />
-
-        <Show when={desktop()}>
-          <AdvancedSection />
-        </Show>
+        {/* FORK: 移除「高级」分组(文件树/导航控件/命令面板/服务器状态/Custom agents)
+            — 这些标题栏控件可见性开关不对用户暴露;底层 setting 字段 + 默认值保持不变 [feat: settings-panel-cleanup] 2026-06-15 */}
       </div>
     </div>
   )
