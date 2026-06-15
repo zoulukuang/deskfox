@@ -127,6 +127,7 @@ grep `[feat: <id>]` 能反查到对应文档。
 | **双端协作 SOP** | `docs/governance/双端协作-SOP.md` | feat 分支生命周期(短命,合 main 即销毁,新项目新名字)+ Win/Mac 同时开发流程(rebase / merge / 删分支)+ 协作约定 |
 | **imbot 定制指南** | `docs/governance/imbot-定制指南.md` | DeskFox 用户怎么编辑 `~/.opencode/imbot-workspace/.opencode/agent/imbot.md` 定制 IM 桥接 bot 能力(2026-05-25 ADR 落地后的 user-facing 配套教程);架构决策详 `OPENCODE-PLAN/架构决策/im桥接-imbot单一架构.md` |
 | 跨平台协作 | `docs/governance/跨平台协作.md` | 三端环境(目前已收口 Win) |
+| **Fork 主题制作指南** | `docs/governance/fork-主题制作指南.md` | 增加/修改自有主题(如 Fox Blue)的 SOP:glob 自动发现机制 / 颜色走 fork CSS scope `html[data-theme]` / token vs 选择器决策 / 稳定选择器锚点 / 黑名单注册扩展点豁免 / CDP 实算验证。范例 `docs/features/fox-blue-theme/` |
 | 数字签名问题 | `docs/governance/数字签名问题.md` | installer 不签名决策 |
 | 改动索引 | `本仓 改动日志.md` | feature 索引(规范 v2 起,详细在 docs/features/) |
 | 项目概览 | `docs/PLANNING-OVERVIEW.md` | 立项 + 路线 + 当前快照 |
