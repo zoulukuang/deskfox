@@ -57,24 +57,28 @@ if ([string]::IsNullOrWhiteSpace($appVersion)) {
 }
 Write-Host "[deskfox] channel=$Env  version=$appVersion  (key=$versionKey,实际注入由 deskfox config 自读)"
 
-# === 2. 确保 icon.ico 存在(deskfox config win.icon 引用;通常已现场生成,缺则用 png-to-ico 生成)===
+# === 2. 重新生成 icon.ico(deskfox config win.icon 引用)===
 # 注:不调 Tauri 时代的 apply-icons.ps1(它拷到 src-tauri/,electron 不需要),只生成 config 直接引用的那个 ico。
+# ⚠️ icon.ico 是 gitignored 现场产物。历史上这里是"仅缺失时生成",一旦磁盘残留旧版(尺寸不全)就被
+#    静默复用 → electron-builder NSIS 要求 icon >=256x256,陈旧 128 ico 直接打包失败(同飞书 dist 陈旧教训:
+#    只查存在不查新鲜度)。改为【每次从 ico-source 全量重生成】+ 校验含 >=256,杜绝陈旧/缺尺寸 ico 混入。
 $iconEnv = if ($Env -eq "prod") { "prod" } else { "dev" }
 $envAssets = Join-Path $brandingDir "src/assets/icons/$iconEnv"
 $icoOut = Join-Path $envAssets "icon.ico"
-if (-not (Test-Path $icoOut)) {
-    Write-Host "[deskfox] icon.ico 缺失,png-to-ico 现场生成 ($iconEnv)…"
-    $icoSrc = Join-Path $envAssets "ico-source"
-    $pngs = Get-ChildItem -Path $icoSrc -Filter "*.png" |
-        Where-Object { $_.BaseName -match '^\d+$' } |
-        Sort-Object @{ Expression = { [int]$_.BaseName } }
-    if ($pngs.Count -eq 0) { throw "[deskfox] ico-source 下无 <size>.png: $icoSrc" }
-    Push-Location $repoRoot
-    try {
-        bun packages/branding/scripts/png-to-ico.ts $icoOut @($pngs.FullName)
-        if ($LASTEXITCODE -ne 0) { throw "[deskfox] png-to-ico.ts 失败 (env=$iconEnv)" }
-    } finally { Pop-Location }
+$icoSrc = Join-Path $envAssets "ico-source"
+$pngs = Get-ChildItem -Path $icoSrc -Filter "*.png" |
+    Where-Object { $_.BaseName -match '^\d+$' } |
+    Sort-Object @{ Expression = { [int]$_.BaseName } }
+if ($pngs.Count -eq 0) { throw "[deskfox] ico-source 下无 <size>.png: $icoSrc" }
+if (-not ($pngs | Where-Object { [int]$_.BaseName -ge 256 })) {
+    throw "[deskfox] ico-source 缺 >=256 的 <size>.png(electron-builder NSIS 要求 icon >=256x256): $icoSrc"
 }
+Write-Host "[deskfox] 重新生成 icon.ico ($iconEnv,$($pngs.Count) 尺寸: $(($pngs.BaseName) -join ','))…"
+Push-Location $repoRoot
+try {
+    bun packages/branding/scripts/png-to-ico.ts $icoOut @($pngs.FullName)
+    if ($LASTEXITCODE -ne 0) { throw "[deskfox] png-to-ico.ts 失败 (env=$iconEnv)" }
+} finally { Pop-Location }
 
 # === 3. 杀运行中的 DeskFox(避免 dist-deskfox 输出目录被运行中的 .exe 锁)===
 Get-Process -ErrorAction SilentlyContinue |
