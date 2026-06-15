@@ -139,6 +139,10 @@ const config: Configuration = {
     gatekeeperAssess: false,
     entitlements: "resources/entitlements.plist",
     entitlementsInherit: "resources/entitlements.plist",
+    // 跳过嵌套 LibreOffice:osx-sign 逐文件签搞不定 LO 的多可执行结构(soffice 主可执行需兄弟 uno 先签,
+    // 顺序无保证 → "subcomponent not signed" 失败)。改由 build 脚本 codesign --deep 预签 LO(正确处理顺序),
+    // electron-builder 在此跳过它、只签外壳+后端,最后外层 seal 覆盖已签好的 LO。详见 docs/features/electron-macos-sign-notarize/。
+    signIgnore: ["Resources/libreoffice"],
     // 签名/公证 env 驱动(密钥不入开源仓,见 docs/features/electron-macos-sign-notarize/):
     //   source ~/.deskfox-signing/config.env → 设 APPLE_SIGNING_IDENTITY → 自动 Developer ID 深签(含嵌套 LO/soffice)。
     //   DESKFOX_NOTARIZE=1 才公证(慢 5-15min);都不设 → identity:null 未签名快速本地包(阶段0 行为不变)。

@@ -159,7 +159,7 @@ if [[ "$SIGN" -eq 1 ]]; then
     source "$SIGN_ENV"
     [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]] || { echo "[deskfox] ❌ config.env 未提供 APPLE_SIGNING_IDENTITY" >&2; exit 1; }
     export APPLE_SIGNING_IDENTITY
-    echo "[deskfox] 🔏 签名身份已加载(Developer ID;electron-builder 深签含嵌套 LibreOffice/soffice)"
+    echo "[deskfox] 🔏 签名身份已加载(Developer ID)"
     if [[ "$NOTARIZE" -eq 1 ]]; then
         # @electron/notarize 走 App Store Connect API key:映射 DESKFOX_NOTARY_* → APPLE_API_*
         export APPLE_API_KEY="${DESKFOX_NOTARY_KEY:?config.env 缺 DESKFOX_NOTARY_KEY}"
@@ -167,6 +167,25 @@ if [[ "$SIGN" -eq 1 ]]; then
         export APPLE_API_ISSUER="${DESKFOX_NOTARY_ISSUER:?config.env 缺 DESKFOX_NOTARY_ISSUER}"
         export DESKFOX_NOTARIZE=1
         echo "[deskfox] 📜 公证已启用(App Store Connect API key;上传 Apple notary,5-15min)"
+    fi
+
+    # 预签嵌套 LibreOffice.app:electron-builder 的 osx-sign 逐文件签搞不定 LO 多可执行结构
+    # (soffice 主可执行需兄弟 uno 先签,顺序无保证 → "subcomponent not signed" 失败)。
+    # codesign --deep 正确按由内到外签整个 bundle;config 的 mac.signIgnore 让 electron-builder 跳过 LO,
+    # 故必须这里先把【源】LO 签好(electron-builder extraResources 拷贝保留签名,外层 seal 覆盖之)。
+    LO_SRC="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
+    if [[ -d "$LO_SRC" ]]; then
+        TS_ARG="--timestamp=none"                       # dev 签名免时间戳(快);公证才需安全时间戳
+        [[ "$NOTARIZE" -eq 1 ]] && TS_ARG="--timestamp"
+        echo "[deskfox] 🔏 预签 LibreOffice.app(codesign --deep ${TS_ARG};首次/重签约 4min,带时间戳约 28min)…"
+        codesign --deep --force --options runtime \
+            --entitlements "$DESKTOP/resources/entitlements.plist" $TS_ARG \
+            --sign "$APPLE_SIGNING_IDENTITY" "$LO_SRC"
+        codesign --verify --deep --strict "$LO_SRC" \
+            || { echo "[deskfox] ❌ LibreOffice 预签校验失败" >&2; exit 1; }
+        echo "[deskfox]   LibreOffice 预签 + 校验通过 ✓"
+    else
+        echo "[deskfox] ⚠️  未找到 $LO_SRC,跳过 LO 预签(office 转换将不可用)" >&2
     fi
 fi
 
