@@ -88,18 +88,32 @@ Get-Process -ErrorAction SilentlyContinue |
 # === 3.5 打包资源就绪校验(对齐 main build-deskfox §1.9 分层:脚本管"发布物必须有",config 管注入)===
 # 发布物(非 -NoBundle)= 发布给用户,资源缺了 = 功能在用户机上直接没有。
 
-# 3.5a plugin dist —— extraResources 直接拷 dist/plugin.js(gitignored 现场产物),缺了用户机上飞书/media-gen 直接没有。
+# 3.5a plugin dist —— 打包前【从最新源码重建】feishu-bridge / media-gen,再校验(对称 .sh §3.5a)。
+# 根治"陈旧 dist 静默混入"(2026-06-15 dev-feishu-binding-missing + media-gen 同病):源码 2026-06-12 把
+#   Bun.serve 适配成 node:http(Electron 边车跑 Node 不再是 Bun),但 dist 没人重建仍是旧产物 → 打进包的
+#   plugin.js 仍调 Bun.serve → Node 下抛 "Bun is not defined" → 飞书/media-gen 插件 server 起不来。
+#   原 Windows .ps1 只"检查存在不重建"(.sh 已修但 .ps1 漏了)→ 本次镜像过来:改为"先重建 + Bun 守卫"。
+#   build-*-plugin.ps1 自带时间戳判断,无源码变更则秒跳过,不拖慢迭代;-NoBundle 自测也重建(自测包也含插件)。
+Write-Host "[deskfox] 重建插件 dist(feishu-bridge / media-gen,源码无变更则跳过)…"
+& "$scriptDir/build-feishu-plugin.ps1"
+if ($LASTEXITCODE -ne 0) { throw "[deskfox] build-feishu-plugin.ps1 失败" }
+& "$scriptDir/build-media-gen-plugin.ps1"
+if ($LASTEXITCODE -ne 0) { throw "[deskfox] build-media-gen-plugin.ps1 失败" }
+
 $feishuPlugin = Join-Path $brandingDir "plugin/feishu-bridge/dist/plugin.js"
 $mediaPlugin  = Join-Path $repoRoot "packages/media-gen/dist/plugin.js"
 foreach ($p in @($feishuPlugin, $mediaPlugin)) {
     if (-not (Test-Path $p)) {
-        if ($isRelease) {
-            Write-Host "[deskfox] X plugin dist 缺失: $p" -ForegroundColor Red
-            throw "[deskfox] extraResources 会拷空 → 用户机上飞书/media-gen 直接没有。先 build 出该 plugin dist 再打发布物。"
-        }
-        Write-Warning "[deskfox] plugin dist 缺失(-NoBundle 自测放行,装机后飞书/media-gen 不可用): $p"
+        throw "[deskfox] plugin dist 重建后仍缺失: $p"
+    }
+    # Electron 边车跑 Node:plugin bundle 不得残留 Bun.serve(否则插件 server 启动即 "Bun is not defined")。
+    # 源码应已走 node-serve shim(node:http);残留 = 源码没适配/构建目标错。
+    if (Select-String -Path $p -Pattern 'Bun\.serve' -Quiet) {
+        Write-Host "[deskfox] X plugin dist 仍含 Bun.serve → Node 边车下插件 server 起不来: $p" -ForegroundColor Red
+        throw "[deskfox] 确认对应 src 已用 node-serve(node:http)替换 Bun.serve 后重试。"
     }
 }
+Write-Host "[deskfox] plugin dist 就绪且无 Bun.serve 残留 ✓"
 
 # 3.5b LibreOffice bundle —— office 预览/转换依赖(Windows program/soffice.exe 结构)。
 # presets/ 是 office 转换【硬依赖】(实测删之 profile 建成但 convert 无输出)→ 硬卡非空。
