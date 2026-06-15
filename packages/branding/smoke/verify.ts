@@ -31,8 +31,16 @@
 import { parseArgs } from "node:util"
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
-import { createHash } from "node:crypto"
 import { $ } from "bun"
+import {
+  ALL_PROBES,
+  type Probe,
+  type SmokeReport,
+  probesFromChangedFiles,
+  selectProbes,
+  classifyVerdict,
+  evaluateReleaseChecks,
+} from "./verify-core"
 
 const HERE = import.meta.dir // packages/branding/smoke
 const REPO = join(HERE, "..", "..", "..") // opencode-fork/
@@ -40,9 +48,6 @@ const SMOKE_PY = join(HERE, "smoke.py")
 const REPORT_JSON = join(HERE, "smoke-report.json")
 const REPORT_MD = join(HERE, "smoke-report.md")
 const CDP = "http://127.0.0.1:9222/json"
-
-const ALL_PROBES = ["boot", "providers", "panels", "settings", "files"] as const
-type Probe = (typeof ALL_PROBES)[number]
 
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -59,31 +64,17 @@ const { values } = parseArgs({
   },
 })
 
-// ── probe 选择 ────────────────────────────────────────────────────────────────
-// 优先级:--only > --changed > --scope > 全量
+// ── probe 选择(纯逻辑在 verify-core.selectProbes;此处只接 git)────────────────────
 function pickProbes(): { probes: Probe[]; how: string } {
-  if (values.only) {
-    const p = values.only.split(",").map((s) => s.trim()).filter(Boolean) as Probe[]
-    const bad = p.filter((x) => !ALL_PROBES.includes(x))
-    if (bad.length) throw new Error(`未知 probe: ${bad.join(",")}(可选:${ALL_PROBES.join(",")})`)
-    return { probes: p, how: "--only" }
-  }
-  if (values.changed) return { probes: probesFromGit(), how: "--changed" }
-  if (values.scope) {
-    const map: Record<string, Probe[]> = {
-      ui: ["boot", "panels", "settings"],
-      provider: ["providers"],
-      viewer: ["files"],
-      all: [...ALL_PROBES],
-    }
-    const p = map[values.scope]
-    if (!p) throw new Error(`未知 scope: ${values.scope}(可选:ui|provider|viewer|all)`)
-    return { probes: p, how: `--scope ${values.scope}` }
-  }
-  return { probes: [...ALL_PROBES], how: "全量(默认)" }
+  return selectProbes({
+    only: values.only,
+    changed: values.changed,
+    scope: values.scope,
+    changedProbes: values.changed && !values.only ? probesFromGit() : undefined,
+  })
 }
 
-// git 改动 → probe 映射(实现"每次都跑得起"的关键:只跑被碰到的面)
+// git 改动 → probe(映射纯逻辑在 verify-core.probesFromChangedFiles;此处只取 git 文件 + 日志)
 function probesFromGit(): Probe[] {
   let files: string[] = []
   try {
@@ -94,24 +85,10 @@ function probesFromGit(): Probe[] {
   } catch {
     /* git 不可用 → 退回全量 */
   }
-  const desktop = files.filter((f) => f.startsWith("packages/desktop/"))
-  if (!desktop.length) {
-    console.log("· 无 desktop 改动 → 退回全量")
-    return [...ALL_PROBES]
-  }
-  const set = new Set<Probe>()
-  for (const f of desktop) {
-    if (/renderer\/.*(file-viewer|viewer|csv|pdf|document|office)/i.test(f)) set.add("files")
-    if (/provider/i.test(f)) set.add("providers")
-    if (/setting/i.test(f)) set.add("settings")
-    if (/titlebar|panel|sidebar/i.test(f)) set.add("panels")
-    if (/(^|\/)src\/main\/|preload|startup|plugin/i.test(f)) set.add("boot")
-  }
-  if (!set.size) {
-    console.log("· desktop 有改动但未命中映射规则 → 退回全量(保守)")
-    return [...ALL_PROBES]
-  }
-  return [...set]
+  const { probes, reason } = probesFromChangedFiles(files)
+  if (reason === "no-desktop") console.log("· 无 desktop 改动 → 退回全量")
+  else if (reason === "no-match") console.log("· desktop 有改动但未命中映射规则 → 退回全量(保守)")
+  return probes
 }
 
 // ── L0 静态 ───────────────────────────────────────────────────────────────────
@@ -247,20 +224,13 @@ async function runSmoke(probes: Probe[], reuse: boolean): Promise<number> {
     console.error("🔴 smoke.py 没产出 smoke-report.json — 见上方它的输出(多半 websocket-client 没装或 CDP 断了)")
     return 1
   }
-  const report = JSON.parse(readFileSync(REPORT_JSON, "utf-8")) as {
-    summary: Partial<Record<"pass" | "fail" | "crash" | "skip", number>>
-    results: Array<{ group: string; name: string; status: string; detail: string }>
-  }
+  const report = JSON.parse(readFileSync(REPORT_JSON, "utf-8")) as SmokeReport
   return verdict(report)
 }
 
-function verdict(report: {
-  summary: Partial<Record<string, number>>
-  results: Array<{ group: string; name: string; status: string; detail: string }>
-}): number {
+function verdict(report: SmokeReport): number {
   const s = report.summary
-  const crash = report.results.filter((r) => r.status === "crash")
-  const fail = report.results.filter((r) => r.status === "fail")
+  const { code, crash, fail } = classifyVerdict(report)
   console.log(
     `\n━━ 判定 ━━  通过 ${s.pass ?? 0} / 警告 ${s.fail ?? 0} / 崩溃 ${s.crash ?? 0} / 跳过 ${s.skip ?? 0}`,
   )
@@ -273,10 +243,8 @@ function verdict(report: {
     for (const r of fail) console.log(`   [${r.group}] ${r.name} — ${r.detail}`)
   }
   console.log(`\n详单:${REPORT_MD}`)
-  if (crash.length) return 1
-  if (fail.length) return 2
-  console.log("🟢 全过")
-  return 0
+  if (code === 0) console.log("🟢 全过")
+  return code
 }
 
 // ── L3 发布物校验(electron-updater 口径)─────────────────────────────────────
@@ -310,51 +278,23 @@ async function runRelease(): Promise<number> {
 
   console.log(`\n━━ L3 发布物校验:dist-deskfox(env=${env},期望版本 ${expectVer})━━`)
   const dist = join(REPO, "packages", "desktop", "dist-deskfox")
-  const checks: Array<{ name: string; ok: boolean; detail: string }> = []
-  const add = (name: string, ok: boolean, detail = "") => checks.push({ name, ok, detail })
-
-  // 1. 安装包 .exe
   let exe = ""
   if (existsSync(dist)) {
     const found = readdirSync(dist).find((f) => /^DeskFox.*win-x64\.exe$/i.test(f))
     if (found) exe = join(dist, found)
   }
-  add("安装包 .exe 存在", !!exe, exe ? exe.split(/[\\/]/).pop()! : "dist-deskfox 下没找到 DeskFox-*-win-x64.exe(先 --build)")
-
-  // 2/3/4/6. latest.yml + sha512 完整性 + size + 版本号
   const ymlPath = join(dist, "latest.yml")
-  if (exe && existsSync(ymlPath)) {
-    add("latest.yml 存在", true)
-    const yml = readFileSync(ymlPath, "utf-8")
-    const ymlVer = yml.match(/^version:\s*(.+)$/m)?.[1]?.trim()
-    const ymlSha = yml.match(/^sha512:\s*(.+)$/m)?.[1]?.trim() // 顶格 sha512(files 下那条有缩进,不匹配 ^)
-    const ymlSize = yml.match(/^\s+size:\s*(\d+)/m)?.[1]
-    const buf = readFileSync(exe)
-    const realSha = createHash("sha512").update(buf).digest("base64")
-    add(
-      "sha512 与 latest.yml 一致(自动升级命门)",
-      !!ymlSha && ymlSha === realSha,
-      ymlSha === realSha ? "" : `yml=${(ymlSha || "").slice(0, 16)}… 实算=${realSha.slice(0, 16)}…(不一致=客户端升级下载后校验失败、装不上)`,
-    )
-    add("size 与 latest.yml 一致", String(buf.length) === ymlSize, String(buf.length) === ymlSize ? "" : `yml=${ymlSize} 实际=${buf.length}`)
-    add(
-      `版本号正确(期望 ${expectVer},非 0.0.0)`,
-      !!ymlVer && ymlVer === expectVer && ymlVer !== "0.0.0",
-      ymlVer === expectVer ? "" : `yml=${ymlVer} 期望=${expectVer}(0.0.0 = 版本号没注入,升级判断失效)`,
-    )
-  } else if (exe) {
-    add("latest.yml 存在", false, "缺 latest.yml — electron-updater 升级清单,没它客户端不知有新版")
-  }
-
-  // 5. .blockmap(差量更新依赖)
-  add(".blockmap 存在(差量更新)", !!exe && existsSync(exe + ".blockmap"), "")
-
-  // 7. LibreOffice 真进包(build §5.5 已查,L3 独立复验做纵深防御)
-  const lo = join(dist, "win-unpacked", "libreoffice", "program", "soffice.exe")
-  add("LibreOffice 进包(win-unpacked/.../soffice.exe)", existsSync(lo), existsSync(lo) ? "" : "office 预览/转换在用户机静默失效")
+  const ymlExists = !!exe && existsSync(ymlPath)
+  const { checks, failed } = evaluateReleaseChecks({
+    exeName: exe ? exe.split(/[\\/]/).pop()! : null,
+    ymlText: ymlExists ? readFileSync(ymlPath, "utf-8") : null,
+    exeBuf: ymlExists ? readFileSync(exe) : null, // 仅在要比对 sha512 时才读 ~276MB
+    expectVer,
+    hasBlockmap: !!exe && existsSync(exe + ".blockmap"),
+    hasLO: existsSync(join(dist, "win-unpacked", "libreoffice", "program", "soffice.exe")),
+  })
 
   for (const c of checks) console.log(`   ${c.ok ? "✓" : "✗"} ${c.name}${c.detail ? " — " + c.detail : ""}`)
-  const failed = checks.filter((c) => !c.ok)
   console.log("\n━━ L3 判定 ━━")
   if (failed.length) {
     console.log(`🔴 ${failed.length} 项不过 — 绝不发布残缺 / 升级链断的包`)
