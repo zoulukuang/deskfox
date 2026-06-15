@@ -81,13 +81,13 @@
 
 | 类别 | 反例(禁) | 正例(推荐) |
 |---|---|---|
-| 品牌字符串(产品名/identifier) | 改 `tauri.conf.json` 的 `productName` 硬编码 | `process.env.OPENCODE_PRODUCT_NAME ?? "OpenCode"` + 自己的 `.env.fork` |
-| 主题色 / 字号 | 改 `packages/ui/` 内部 token | 自己入口 CSS `:root { --primary: ... }` 覆盖 |
-| icon / 启动图资源 | 直接覆盖 `packages/desktop/src-tauri/icons/*.png` | 自己目录放新资源 + build 脚本替换 |
+| 品牌字符串(产品名/identifier) | 改上游 `electron-builder.config.ts` 的 `productName` 硬编码 | 走 `packages/desktop/electron-builder.deskfox.config.ts`(appId/productName 三档 override) |
+| 主题色 / 字号 | 改 `packages/ui/` 内部 token | 自己入口 CSS / `@opencode-ai/branding/theme.css` 的 `:root { --... }` 覆盖 |
+| icon / 启动图资源 | 直接覆盖上游 `packages/desktop/icons/*` | 自己目录(`branding/src/assets/icons/<channel>`)放新资源 + `copy-icons` 叠加到 `resources/icons` |
 
 **存放位置**:统一 `packages/branding/`(新建),fork 特化集中一处,sync 时一目了然。
 
-> **R3 与 09 黑名单的关系**:R3 推荐路径触动的 `tauri.conf.json` / `packages/ui/` / `packages/desktop/src-tauri/icons/` 等都在 09 节 4.1 黑名单内 — 这不是冲突,是**机制嵌套**。R3 告诉你"该怎么改",R4 告诉你"改时要走 override 流程"。两者叠加生效,不绕过任何一道。
+> **R3 与 09 黑名单的关系**:R3 推荐路径触动的 `electron-builder.config.ts` / `packages/ui/` / `packages/desktop/icons/` 等都在 09 节 4.1 黑名单内 — 这不是冲突,是**机制嵌套**。R3 告诉你"该怎么改",R4 告诉你"改时要走 override 流程"。两者叠加生效,不绕过任何一道。
 
 ### R4. 黑名单 override(团队场景双签 / single-person 场景 AI 二次确认)
 
@@ -154,7 +154,7 @@ git checkout feat/editable-file-viewer && git rebase main
 
 # 4. 静态验证 + release build + 抽样冒烟(改动日志的 R 矩阵抽几条)
 bun run typecheck
-bun run --cwd packages/desktop tauri build
+packages/branding/scripts/build-deskfox-electron.ps1 -Env dev -NoBundle   # Electron release build(换基座后;原 tauri build 作废)
 
 # 5. 推送(rebase 改写历史,需 force-with-lease)
 git push origin main --force-with-lease

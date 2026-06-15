@@ -179,7 +179,7 @@ export const Content = Schema.Struct({...}).pipe(withStatics((s) => ({ zod: zod(
 6. 类型 5 一个个解 — 接受上游骨架 + fork 字段补回 + 加/更新 FORK marker
 7. 检查 .zod 访问改写(类型 5 之后必跟):grep `Content.parse` 等改 `.zod.parse`
 8. typecheck:bun run typecheck(必清 *.tsbuildinfo + .ts-dist + .turbo/cache 后重跑,避免增量缓存假装通过 — 详见 features/post-sync-build-fix/3-changelog.md)
-9. release build:.\packages\branding\scripts\build-deskfox.ps1 -Env dev -NoBundle 端到端通
+9. release build:.\packages\branding\scripts\build-deskfox-electron.ps1 -Env dev -NoBundle 端到端通(换基座后;原 tauri build-deskfox.ps1 作废)
 10. 8 + 9 全过 → git commit merge → §5 后续 checklist
 11. 任何一步炸 → git reset --hard pre-rebase-<日期>(或 merge 阶段炸用 git merge --abort),退回出发点重新规划
 ```
@@ -219,7 +219,7 @@ bun install
 bun run typecheck
 
 # 5.2 build 一个 release exe 看能不能起
-.\packages\branding\scripts\build-deskfox.ps1 -Env prod -NoBundle
+.\packages\branding\scripts\build-deskfox-electron.ps1 -Env prod -NoBundle
 # DeskFox.exe 起得来,核心功能(file viewer / chat)能用
 
 # 5.3 重打 installer 看 icon 是否正确
@@ -268,7 +268,7 @@ git reset --hard pre-rebase-<日期>
 | **`merge --abort` 后 typecheck 突然几百错** | **sync 分支 install 升过依赖版本(catalog),abort 后 git checkout 回 lock,但 node_modules symlinks 物理状态没 rollback,同一个 codebase 看到两份不同版本的 effect/library** | **`bun install` 一次,bun 检测到 symlinks 跟 lock 不一致会重新对齐;再跑 typecheck 验证 0 错。2026-05-03 dev-typecheck-fix 验证过(555 错 → 0 错,无代码改动)** |
 | **删 bun.lock 重 install 后 SDK regen 神秘报 module 加载错** | **`*` / `^x.y.z` 风格的依赖约束自由 resolve 到最新,可能拉到带 bug 的 transitive dep(2026-05-03 `poe-oauth: *` 自动升到 0.0.7 → 带坏的 `mcp-oauth@1.0.0` → "Export named 'X' not found"阻断 SDK 生成)** | **不要删 lock,take 任一边 lock 再 `bun install` 增量更新。详 §4.7。已踩坑必看** |
 | **`OPENCODE_SDK_OPENAPI=httpapi`(默认)生成的 SDK 缺 fork 的 Hono routes** | **上游 `--httpapi` 走 Effect HttpApi 的 PublicApi,fork 用 Hono 加的 routes(/file/office-pdf 等)不在 PublicApi 里 → SDK 缺这些 method** | **要么把 fork routes 迁到 PublicApi(参 features/office-routes-effect-httpapi/),要么 fork build 改用 `OPENCODE_SDK_OPENAPI=hono`(但会丢上游 Effect-only 的新 type 如 SessionMessageData) → 双轨互斥,只能选一边** |
-| installer build 失败 | 上游改了 tauri 配置 / 依赖,品牌注入路径漂了 | 看 packages/branding/scripts/build-deskfox.ps1 + tauri-overrides;必要时同步更新 override |
+| installer build 失败 | 上游改了 electron-builder 配置 / 依赖,品牌注入路径漂了 | 看 packages/branding/scripts/build-deskfox-electron.{ps1,sh} + packages/desktop/electron-builder.deskfox.config.ts;必要时同步更新 override |
 | 桌面快捷方式 icon 还是老的 | Windows iconcache 卡 | 见 features/installer-打包/3-changelog.md 弯路 5(也存为 memory) |
 | main 分支 push 拒收(non-fast-forward)| 双端 origin 一端有 force push 历史不一致 | `git push origin main --force-with-lease`(谨慎);先 ls-remote 对比两端 HEAD |
 

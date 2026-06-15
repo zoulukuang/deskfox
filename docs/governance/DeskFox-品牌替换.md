@@ -1,5 +1,8 @@
 # 13 — DeskFox 品牌替换(最小可见档)
 
+> **⚠️ 历史快照(Tauri 时代)**:本文记录的是 **Tauri 基座**下的品牌替换实现(`tauri.conf.json` × 3 / `src-tauri/icons/` / `apply-icons.ps1` / `cargo check` / `tauri build`),作为历史记录保留、不回填。
+> **换基座到 Electron 后(2026-06)品牌注入已变**:productName/appId 走 `packages/desktop/electron-builder.deskfox.config.ts`;图标走 `copy-icons` 叠加 `branding/src/assets/icons/<channel>` 到 `resources/icons` + electron-builder `win.icon`;主题色走 `@opencode-ai/branding/theme.css`。**现行机制见 `CLAUDE.md` R3 + `docs/features/electron-brand-cleanup/`。**
+
 ## Context
 
 opencode-fork 一直叫 "OpenCode"(继承自 anomalyco/opencode 上游)。User 已为本项目定名 **DeskFox** 并产出完整品牌设计手册(Tangram 几何风格,8 个 light SVG + 5 个 dark SVG + 多尺寸 PNG + 8 色板 + 双主题色映射 + 字体 + slogan,在 `D:\Kbase\奇思妙想\opencode\品牌设计\`)。本次目标:**让 user 双击启动后第一眼看到的视觉就是 DeskFox**,且**正确支持 light / dark 双主题**(按 user 第十节色映射精确实现,**严禁 `filter: invert(1)`**),但**不动**底层 identifier / CLI / deep-link / Rust 路径(全量替换 ~5-6 小时,有 settings 数据迁移风险,等品牌走稳再做)。
