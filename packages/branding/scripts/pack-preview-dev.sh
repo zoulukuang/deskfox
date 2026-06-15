@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# [DEPRECATED] Tauri 基座专用,换 Electron 后(2026-06-15)作废。本地预览改用 build-deskfox-electron.sh -Env dev -NoBundle。勿运行。
 # [fork-only] DeskFox「打包预览版」固定任务流(macOS,Tier 2 dev channel)
 #
 # 用途:一条命令完成本地预览版(dev)打包,仅本地、不碰版本号 bump / 不重命名 / 不发布。

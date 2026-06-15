@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+// [DEPRECATED] Tauri updater 产物校验(.sig/minisign),换 Electron 后(2026-06-15)作废。Electron updater 校验由 deploy-electron-updater.sh 回读 latest.yml 完成。勿运行。
 // [fork-only] DeskFox updater 构建产物断言（TC-5 / TC-8 / TC-9）
 // [feat: 启用自动升级] 2026-06-06
 //

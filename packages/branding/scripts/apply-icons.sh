@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# [DEPRECATED] Tauri 时代 icon 流(拷到 src-tauri/),换 Electron 后(2026-06-15)作废。Electron build 自动生成 icon.ico(png-to-ico.ts),无需本脚本。
 # [fork-only] DeskFox icon 拷贝脚本(macOS / Linux 版,对称 apply-icons.ps1)
 #
 # 把 packages/branding/src/assets/icons/<env>/ 下的 PNG + 现场生成的 .ico/.icns
