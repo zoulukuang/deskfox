@@ -43,9 +43,18 @@ OSS_BUCKET="${OSS_BUCKET:-downloadbot}"
 OSS_CDN_BASE="${OSS_CDN_BASE:-https://dl.clawtray.com}"
 OSS_CDN_BASE="${OSS_CDN_BASE%/}"   # strip trailing slash
 
-# ossutil 装到 ExtSSD（内置盘空间不足，全部装外置盘）
-OSSUTIL_DIR="${OSSUTIL_DIR:-/Volumes/ExtSSD/.ossutil}"
-OSSUTIL_VER="1.7.18"  # v1 mac 单文件二进制存在的版本(1.7.19 只有 Windows exe,mac 404)
+# ossutil 跨平台:OS 检测 → 对应单文件二进制 + v1 下载版本(各平台可用版本不同)。
+case "$(uname -s)" in
+  Darwin)               OSS_OS=mac;   OSSUTIL_NAME=ossutilmac64;  OSSUTIL_VER="${OSSUTIL_VER:-1.7.18}" ;;
+  MINGW*|MSYS*|CYGWIN*) OSS_OS=win;   OSSUTIL_NAME=ossutil64.exe; OSSUTIL_VER="${OSSUTIL_VER:-1.7.16}" ;;
+  *)                    OSS_OS=linux; OSSUTIL_NAME=ossutil64;     OSSUTIL_VER="${OSSUTIL_VER:-1.7.18}" ;;
+esac
+# 安装目录:mac 历史装 ExtSSD,其它平台 ~/.ossutil(均可被 OSSUTIL_DIR 覆盖)。
+if [[ "$OSS_OS" == "mac" ]]; then
+  OSSUTIL_DIR="${OSSUTIL_DIR:-/Volumes/ExtSSD/.ossutil}"
+else
+  OSSUTIL_DIR="${OSSUTIL_DIR:-$HOME/.ossutil}"
+fi
 
 # ─── parse args ────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -114,27 +123,34 @@ ASSET_SIZE=$(stat -f%z "$ASSET" 2>/dev/null || stat -c%s "$ASSET" 2>/dev/null ||
 ASSET_SIZE_MB=$(awk "BEGIN { printf \"%.2f\", $ASSET_SIZE / 1048576 }")
 echo "[asset] $(basename "$ASSET") (${ASSET_SIZE_MB} MB) → oss://$OSS_BUCKET/$OBJECT_NAME"
 
-# ─── 3. 准备 ossutil（不存在则下载到 ExtSSD）─────────────────────────
-# 优先用 PATH 里已有的 ossutil；否则用/下载本地副本
-OSSUTIL_BIN=""
-for c in ossutil ossutilmac64 ossutil64; do
-  if command -v "$c" >/dev/null 2>&1; then OSSUTIL_BIN=$(command -v "$c"); break; fi
-done
-if [[ -z "$OSSUTIL_BIN" ]]; then
-  OSSUTIL_BIN="$OSSUTIL_DIR/ossutilmac64"
-  if [[ ! -x "$OSSUTIL_BIN" ]]; then
-    echo -e "${YELLOW}[INFO] 未发现 ossutil，下载 v$OSSUTIL_VER 到 $OSSUTIL_DIR ...${RESET}"
+# ─── 3. 准备 ossutil（跨平台:OSSUTIL_BIN 覆盖 > PATH > OSSUTIL_DIR > 下载）──────────
+# v1 语法固定(cp -e -i -k --force);mac 单文件 ossutilmac64(arm64 走 Rosetta,v1 无原生 arm64),
+# win=ossutil64.exe,linux=ossutil64。各平台二进制名/版本见上面 case。
+OSSUTIL_BIN="${OSSUTIL_BIN:-}"
+if [[ -n "$OSSUTIL_BIN" && ( -x "$OSSUTIL_BIN" || -f "$OSSUTIL_BIN" ) ]]; then
+  : # 显式覆盖,直接用
+else
+  OSSUTIL_BIN=""
+  # 1) PATH 里已有(含 win 的 ossutil64.exe / mac 的 ossutilmac64)
+  for c in ossutil "$OSSUTIL_NAME" ossutil64 ossutilmac64; do
+    if command -v "$c" >/dev/null 2>&1; then OSSUTIL_BIN=$(command -v "$c"); break; fi
+  done
+  # 2) OSSUTIL_DIR 下已有本地副本(win 的 .exe 不一定带可执行位,故 -f 兜底)
+  if [[ -z "$OSSUTIL_BIN" && ( -x "$OSSUTIL_DIR/$OSSUTIL_NAME" || -f "$OSSUTIL_DIR/$OSSUTIL_NAME" ) ]]; then
+    OSSUTIL_BIN="$OSSUTIL_DIR/$OSSUTIL_NAME"
+  fi
+  # 3) 都没有 → 下载平台对应包到 OSSUTIL_DIR
+  if [[ -z "$OSSUTIL_BIN" ]]; then
+    OSSUTIL_BIN="$OSSUTIL_DIR/$OSSUTIL_NAME"
+    echo -e "${YELLOW}[INFO] 未发现 ossutil($OSS_OS),下载 v$OSSUTIL_VER 到 $OSSUTIL_DIR ...${RESET}"
     mkdir -p "$OSSUTIL_DIR"
-    # ossutil v1 的 mac 包是单文件 x86_64 二进制(ossutilmac64),Apple Silicon 走 Rosetta 可跑;
-    # v1 无独立 arm64 包(ossutilmac-arm64 404)。原生 arm64 在 ossutil v2(zip 包 + 不同 CLI),
-    # 本脚本用 v1 语法故固定 v1。
-    DL="https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VER}/ossutilmac64"
+    DL="https://gosspublic.alicdn.com/ossutil/${OSSUTIL_VER}/${OSSUTIL_NAME}"
     curl -fsSL "$DL" -o "$OSSUTIL_BIN" \
       || { echo -e "${RED}[ERROR] ossutil 下载失败:$DL${RESET}" >&2; exit 1; }
-    chmod +x "$OSSUTIL_BIN"
+    chmod +x "$OSSUTIL_BIN" 2>/dev/null || true
   fi
 fi
-echo "[ossutil] $OSSUTIL_BIN"
+echo "[ossutil] $OSSUTIL_BIN ($OSS_OS)"
 
 # ─── 4. 上传（--force 覆盖同名；大文件自动分片+断点续传）──────────────
 echo "[upload] 上传到 oss://$OSS_BUCKET/$OBJECT_NAME ..."
