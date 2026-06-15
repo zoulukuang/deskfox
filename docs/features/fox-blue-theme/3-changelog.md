@@ -30,7 +30,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## commit
 
-- `<待填>` on `feat/fox-blue-theme`:`feat(theme): Fox Blue 主题 — OC-2 克隆 + 选中态/开关/文件树 logo 蓝 + hover 三档 [feat: fox-blue-theme]`
+- `367f8b2dd` on `feat/fox-blue-theme`:`feat(theme): Fox Blue 主题 — OC-2 克隆 + 选中态/开关/文件树 logo 蓝 + hover 三档 [feat: fox-blue-theme] [large-diff: fox-blue.json 为 OC-2 数据克隆 468 行]`
 
 ## 影响范围
 
