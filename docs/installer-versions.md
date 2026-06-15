@@ -10,6 +10,19 @@
 
 
 
+## [Windows] 2026.8.0 - 2026-06-16
+
+**主题**:换基座 Tauri → Electron 首个 Windows 稳定版(补齐 8.0 波次,与 macOS 8.0 对齐;`[Windows] 2026.7.2` 是最后一个 Tauri Windows prod)。SkipBump 发当前号 2026.8.0(不进补位)。
+
+**本次内容**:Electron 基座 Windows 包(electron-vite build + electron-builder NSIS,内置 LibreOffice + 飞书/media-gen 插件 + electron-updater 自更新;signtool 代码签名)。自 `ship-prod-2026.7.2` 以来累积:Electron 换基座 Windows 打包链 + DeskFox verify 验收链(L0 静态 / L1 冷启动健康 / L2 CDP 交互 / L3 发布物编排器)+ verify-core Logic 清单单测(29 例)+ Tauri 作废脚本 DEPRECATED 横幅(防误用)+ electron 阶段2/3/4 与各 feature 文档收尾。**发版前验收**:L0 绿(typecheck + lint 0 error)/ L1 冷启动 CLEAN / L2 交互 24/24 PASS。
+
+**Release**:GitHub `ship-prod-2026.8.0`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.0-win-x64.exe`(Electron;含 LibreOffice,~263 MB;signtool 代码签名)
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.8.0-win-x64.exe`
+**升级源**:Electron 自更新 `updates.deskfox.ai/electron/prod/latest.yml`(2026.8.0)
+
+---
+
 ## [macOS] 2026.8.0 - 2026-06-15
 
 **主题**:换基座 Tauri → Electron 首个 macOS 稳定版。大更新进"次"位(2026.7.x → 2026.8.0)。
