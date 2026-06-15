@@ -21,7 +21,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ### 验证(R8 TC)
 - ✅ **A-1**(dry-run,0 碰线上):完整未签名 dev bundle 出 `latest-mac.yml` + zip(337MB)+ dmg(324MB)。`--platform mac --env dev --version 2026.6.0 --dry-run` → 改好的 yml 内 **3 处 url/path 全改 OSS 绝对地址**、sha512/size 保留、version 对、自检过、资产枚举正确、Gitee 选 dmg、SSH key 命中。
-- ⏳ **A-2**(dev 真部署 + 回读):需 user 点头(660MB OSS 上传 + 部署线上 dev channel);验后按 2026-06-06 先例回滚 dev manifest 占位避免污染 dev 用户。
+- ✅ **A-2**(dev 真部署 + 回读,user 点头后执行):OSS 上传 zip 337MB + dmg 324MB + 2 blockmap 全成功;SCP latest-mac.yml → 服务器;**回读校验线上 version=2026.6.0 == 发布版本**;独立 `curl` 复验线上 manifest + zip CDN HTTP 200。**验后已回滚**(SSH 移除 dev latest-mac.yml → HTTP 404,恢复部署前态;OSS 资产留存无害)。
+  - **顺手修 pre-existing bug**:`mirror-asset-to-gitee.sh` 首参是 release tag(位置参数),原 deploy 脚本(含 Win 路径)只传 `--asset` 漏 tag → Gitee 镜像必失败(非致命,主下载走 OSS)。修:传 `electron-<env>-<ver>` 做 tag。
 - ⏳ **A-3**(Electron→Electron 升级):发版后真验。
 
 ## Part B:Tauri→Electron mac 桥(下个 commit)

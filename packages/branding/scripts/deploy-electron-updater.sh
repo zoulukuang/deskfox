@@ -150,11 +150,13 @@ else
 fi
 
 # 5. Gitee 镜像(国内备用下载;mac=.dmg / win=.exe)
+#    mirror-asset-to-gitee.sh 首个参数是 release tag(位置参数,原脚本漏传致 Gitee 镜像必失败)→ 用 electron-<env>-<ver>。
+GITEE_TAG="electron-${ENV}-${VERSION}"
 if [[ "$NO_GITEE" -eq 0 ]]; then
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "[el-updater] (dry-run) 将 Gitee 镜像: mirror-asset-to-gitee.sh $GITEE_ASSET"
+    echo "[el-updater] (dry-run) 将 Gitee 镜像: mirror-asset-to-gitee.sh $GITEE_TAG --asset $GITEE_ASSET"
   else
-    bash "$SCRIPT_DIR/mirror-asset-to-gitee.sh" --asset "$GITEE_ASSET" 2>&1 | tail -3 || echo "[el-updater] ⚠️ Gitee 镜像失败(非致命,主下载走 OSS)"
+    bash "$SCRIPT_DIR/mirror-asset-to-gitee.sh" "$GITEE_TAG" --asset "$GITEE_ASSET" 2>&1 | tail -3 || echo "[el-updater] ⚠️ Gitee 镜像失败(非致命,主下载走 OSS)"
   fi
 fi
 
