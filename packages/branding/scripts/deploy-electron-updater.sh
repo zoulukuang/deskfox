@@ -38,6 +38,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 DIST_DIR="$REPO_ROOT/packages/desktop/dist-deskfox"
 
+# 自加载密钥(OSS 凭据 / 签名私钥)—— set -a 让赋值自动 export,子进程(upload-asset-to-oss.sh)继承。
+# 健壮性:不再依赖调用方先 `source config.env`;config.env 需含 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET。
+if [[ -f "$HOME/.deskfox-signing/config.env" ]]; then
+  set -a; source "$HOME/.deskfox-signing/config.env"; set +a
+fi
+
 ENV="beta"; VERSION=""; DRY_RUN=0; NO_GITEE=0; ASSET=""; PLATFORM=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
