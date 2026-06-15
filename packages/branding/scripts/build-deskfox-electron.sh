@@ -18,20 +18,28 @@
 #      electron SHASUMS256.txt 校验请求超时(大 zip 侥幸过、小 checksum 必挂)。
 #
 # 用法:
-#   bash packages/branding/scripts/build-deskfox-electron.sh -Env dev               # 完整出 dmg+zip+app
-#   bash packages/branding/scripts/build-deskfox-electron.sh -Env dev --no-bundle   # 只出 .app(最快,本地测)
-#   bash packages/branding/scripts/build-deskfox-electron.sh -Env prod
+#   bash .../build-deskfox-electron.sh -Env dev                       # 完整出 dmg+zip+app(未签名)
+#   bash .../build-deskfox-electron.sh -Env dev --no-bundle           # 只出 .app(最快,本地测,未签名)
+#   bash .../build-deskfox-electron.sh -Env dev --sign --no-bundle    # 签名 .app(深签含 soffice;不公证,快)
+#   bash .../build-deskfox-electron.sh -Env prod --sign --notarize    # 正式分发:深签 + Apple 公证 + staple
 #
-# 注:本脚本阶段1只产【未签名】包(deskfox config mac.identity=null)。签名+公证是阶段2,另接。
+# 签名/公证(阶段2,2026-06-15):--sign source ~/.deskfox-signing/config.env 注入 Developer ID 身份,
+#   electron-builder 深签 .app/.dmg(含嵌套 LibreOffice/soffice,修未签名 soffice 被 SIGKILL → office 导出不可用)。
+#   --notarize 额外上传 Apple 公证 + staple(慢 5-15min,正式分发用)。都不传 → 未签名快速本地包(行为不变)。
+#   密钥全在仓库外 ~/.deskfox-signing/,不入开源仓。详见 docs/features/electron-macos-sign-notarize/。
 
 set -euo pipefail
 
 ENV=""
 NO_BUNDLE=0
+SIGN=0
+NOTARIZE=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -Env|--env|-e) ENV="$2"; shift 2 ;;
         --no-bundle|-NoBundle) NO_BUNDLE=1; shift ;;
+        --sign|-Sign) SIGN=1; shift ;;
+        --notarize|-Notarize) NOTARIZE=1; SIGN=1; shift ;;  # 公证隐含签名
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -142,15 +150,44 @@ fi
 echo "[deskfox] electron-vite build…"
 ( cd "$DESKTOP" && bun run build )
 
-# === 5. electron-builder 打包(绕代理 + --publish never;--no-bundle → --dir 只出 .app)===
+# === 4.6 签名/公证 env 注入(--sign / --notarize;密钥全在仓库外 ~/.deskfox-signing)===
+# config.deskfox.ts 的 mac.identity / mac.notarize 是 env 驱动:这里 source 后 electron-builder 自动深签+公证。
+if [[ "$SIGN" -eq 1 ]]; then
+    SIGN_ENV="$HOME/.deskfox-signing/config.env"
+    [[ -f "$SIGN_ENV" ]] || { echo "[deskfox] ❌ --sign 需要 $SIGN_ENV(签名身份+公证凭据,仓库外私密)" >&2; exit 1; }
+    # shellcheck disable=SC1090
+    source "$SIGN_ENV"
+    [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]] || { echo "[deskfox] ❌ config.env 未提供 APPLE_SIGNING_IDENTITY" >&2; exit 1; }
+    export APPLE_SIGNING_IDENTITY
+    echo "[deskfox] 🔏 签名身份已加载(Developer ID;electron-builder 深签含嵌套 LibreOffice/soffice)"
+    if [[ "$NOTARIZE" -eq 1 ]]; then
+        # @electron/notarize 走 App Store Connect API key:映射 DESKFOX_NOTARY_* → APPLE_API_*
+        export APPLE_API_KEY="${DESKFOX_NOTARY_KEY:?config.env 缺 DESKFOX_NOTARY_KEY}"
+        export APPLE_API_KEY_ID="${DESKFOX_NOTARY_KEY_ID:?config.env 缺 DESKFOX_NOTARY_KEY_ID}"
+        export APPLE_API_ISSUER="${DESKFOX_NOTARY_ISSUER:?config.env 缺 DESKFOX_NOTARY_ISSUER}"
+        export DESKFOX_NOTARIZE=1
+        echo "[deskfox] 📜 公证已启用(App Store Connect API key;上传 Apple notary,5-15min)"
+    fi
+fi
+
+# === 5. electron-builder 打包(--publish never;--no-bundle → --dir 只出 .app)===
 EB_ARGS=(--mac --publish never --config electron-builder.deskfox.config.ts)
 [[ "$NO_BUNDLE" -eq 1 ]] && EB_ARGS=(--dir "${EB_ARGS[@]}")
 
-echo "[deskfox] electron-builder ${EB_ARGS[*]}  (绕 Clash 代理直连 npmmirror)…"
+echo "[deskfox] electron-builder ${EB_ARGS[*]}…"
 (
     cd "$DESKTOP"
-    env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+    if [[ "$NOTARIZE" -eq 1 ]]; then
+        # 公证须够到 Apple notary(Tauri 时代经代理可达):保留代理,仅把 npmmirror 加 NO_PROXY 走直连,
+        # 避免「全量绕代理」把 Apple 也断了。
+        export NO_PROXY="${NO_PROXY:-},npmmirror.com,.npmmirror.com" no_proxy="${no_proxy:-},npmmirror.com,.npmmirror.com"
         ./node_modules/.bin/electron-builder "${EB_ARGS[@]}"
+    else
+        # 不公证:沿用全量绕 Clash 代理(npmmirror 直连,避 electron checksum 经国外节点超时)。
+        # 签名 env(APPLE_SIGNING_IDENTITY)经 export 已被子环境继承,env -u 只摘代理变量不影响签名。
+        env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+            ./node_modules/.bin/electron-builder "${EB_ARGS[@]}"
+    fi
 )
 
 # === 5.5 post-build 验证:最终 .app 真含可执行 soffice(挡"LO 没被 electron-builder 收进最终包")===
