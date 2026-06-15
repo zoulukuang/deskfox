@@ -87,6 +87,8 @@ export type ElectronAPI = {
   setWindowFocus: () => Promise<void>
   showWindow: () => Promise<void>
   relaunch: () => void
+  // FORK: 原生菜单跟随应用内语言 [feat: settings-panel-cleanup] 2026-06-15
+  setMenuLocale: (locale: string) => void
   getZoomFactor: () => Promise<number>
   setZoomFactor: (factor: number) => Promise<void>
   getPinchZoomEnabled: () => Promise<boolean>

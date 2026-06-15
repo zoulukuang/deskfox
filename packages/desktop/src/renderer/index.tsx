@@ -12,6 +12,8 @@ import {
   PlatformProvider,
   ServerConnection,
   useCommand,
+  // FORK: 监听界面语言变化,同步原生菜单语言 [feat: settings-panel-cleanup]
+  useLanguage,
   useWslServers,
   // FORK: DeskFox 本地通知图标(替换上游外网 favicon URL)[feat: electron-brand-cleanup]
   NOTIFICATION_ICON,
@@ -331,6 +333,13 @@ render(() => {
   function Inner() {
     const cmd = useCommand()
     menuTrigger = (id) => cmd.trigger(id)
+
+    // FORK: 界面语言变化时推回主进程,重建 macOS 原生菜单使其跟随全局语言设置
+    // [feat: settings-panel-cleanup] 2026-06-15
+    const language = useLanguage()
+    createEffect(() => {
+      window.api.setMenuLocale(language.locale())
+    })
 
     const theme = useTheme()
 

@@ -99,6 +99,8 @@ const api: ElectronAPI = {
   setWindowFocus: () => ipcRenderer.invoke("set-window-focus"),
   showWindow: () => ipcRenderer.invoke("show-window"),
   relaunch: () => ipcRenderer.send("relaunch"),
+  // FORK: 推送当前界面语言给主进程,使原生菜单跟随全局语言 [feat: settings-panel-cleanup] 2026-06-15
+  setMenuLocale: (locale: string) => ipcRenderer.send("set-menu-locale", locale),
   getZoomFactor: () => ipcRenderer.invoke("get-zoom-factor"),
   setZoomFactor: (factor) => ipcRenderer.invoke("set-zoom-factor", factor),
   getPinchZoomEnabled: () => ipcRenderer.invoke("get-pinch-zoom-enabled"),
