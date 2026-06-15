@@ -22,7 +22,11 @@ BLACKLIST_REGEX='^(packages/(console|containers|core|desktop-electron|docs|enter
 # 2026-06-14 加 *.deskfox.config.* 豁免:fork 自建打包配置(如 electron-builder.deskfox.config.ts),
 # 命名强制带 .deskfox 跟上游 config 0 重名,黑名单 *.config.ts 本意是护上游配置,误伤了 fork 自有配置
 # (本 session 3 次同文件误伤)。上游 config(vite.config.ts / electron.vite.config.ts 等)仍受保护。
-EXCEPTION_REGEX='^packages/ui/src/components/provider-icons/(sprite\.svg|types\.ts)$|^\.github/workflows/.*-deskfox\.yml$|.*\.deskfox\.config\.(ts|js|mjs)$'
+# 2026-06-15 加 fork 主题文件豁免(注册型扩展点,同 provider-icons 道理 — user 拍板):主题靠
+# context.tsx 的 import.meta.glob("./themes/*.json") 自动发现,加 fork 主题=往该目录丢一个 json。
+# 精确列出 fork 自有主题文件(命名跟上游主题 0 重名),上游主题 json(oc-2/dracula 等)仍受保护。
+# 加新 fork 主题时在此追加文件名(同 provider-icons 的精确豁免风格)。详见 docs/features/fox-blue-theme/。
+EXCEPTION_REGEX='^packages/ui/src/components/provider-icons/(sprite\.svg|types\.ts)$|^\.github/workflows/.*-deskfox\.yml$|.*\.deskfox\.config\.(ts|js|mjs)$|^packages/ui/src/theme/themes/fox-blue\.(json|test\.ts)$'
 SCRIPTS_ALLOWED='^scripts/install-hooks\.sh$'
 
 violations=$(git diff --cached --name-only | grep -E "$BLACKLIST_REGEX" | grep -vE "$EXCEPTION_REGEX" || true)

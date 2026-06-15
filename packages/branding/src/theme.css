@@ -42,6 +42,65 @@
 }
 
 /* ========================================================================
+ * [fork-only] Fox Blue 主题 — 选中态底色覆盖(scope = html[data-theme="fox-blue"])
+ *
+ * 主题本体 = packages/ui/src/theme/themes/fox-blue.json(OC-2 的忠实克隆,仅 name/id 不同)。
+ * 本块只把「选中/激活态底色」从 OC-2 的灰/黑改成品牌 logo 蓝(Cool Blue #7295c4),其余全部继承 OC-2。
+ *
+ * scope 钩子:packages/ui/src/theme/context.tsx applyThemeCss 运行时在 <html> 上设
+ *   data-theme="fox-blue" + data-color-scheme="light|dark"。只 scope light → 深色暂与 OC-2 一致(user 指定)。
+ *
+ * 覆盖两处机制:
+ *  ① --surface-base-active(语义 = 激活态底色 token)→ 文件树 / 会话列表 / 设置左导航 三处选中行共用此 token
+ *     (sidebar-items.tsx / file-tree.tsx / tabs.css[variant=settings]:has([data-selected]) 均读它),
+ *     改 token 一处覆盖三处;hover 走 --surface-base-hover 不受影响。附带:若干 data-[expanded] 小按钮的
+ *     激活态也用此 token → 一并变 logo 蓝,语义一致(active=品牌蓝),非回归。
+ *  ② 开关(switch)ON 态原读 --icon-strong-base(近黑,且该 token 共享给图标/正文)→ 不能改 token,
+ *     走选择器精确覆盖,只动开关控件,实心 logo 蓝。
+ * ======================================================================== */
+html[data-theme="fox-blue"][data-color-scheme="light"] {
+  /* ① 文件树 + 会话列表 + 设置左导航 选中行底色 → logo 蓝浅调(保留 alpha 以便叠在不同 surface 上) */
+  --surface-base-active: rgba(114, 149, 196, 0.32);
+}
+
+/* ② 开关 ON 态 → 实心 logo 蓝(选择器特异度 html[2 attr] + 3 attr 高于上游 switch.css,稳赢) */
+html[data-theme="fox-blue"][data-color-scheme="light"]
+  [data-component="switch"][data-checked]
+  [data-slot="switch-control"] {
+  background-color: #7295c4;
+  border-color: #7295c4;
+}
+
+/* ③ 文件树「所有文件」列表文字色 → 与右侧会话列表一致(--text-strong 深色)。
+ *   文件树普通文件原用 .text-text-weak(#8F8F8F 浅灰),会话列表用 .text-text-strong(#171717)。
+ *   scope 锚点 [data-tree-path](file-tree.tsx 每行节点的 FORK 属性)→ 只命中文件树,不波及其他 .text-text-weak。
+ *   只改颜色,字号/字重(text-12-medium)保留;有 git 差异的文件走 inline 诊断色不受影响;
+ *   ignored 文件(.text-text-weaker)保留刻意的淡化,不动。 */
+html[data-theme="fox-blue"][data-color-scheme="light"]
+  [data-tree-path] .text-text-weak {
+  color: var(--text-strong);
+}
+
+/* ④ 三档 hover/选中 蓝色反馈(文件树 / 会话列表 / 设置左导航 三个列表项):
+ *     · hover 未选中  → 较浅蓝 0.12(鼠标划过的反馈,让用户感知定位)
+ *     · 选中          → 较重蓝 0.32(= 上面 ① --surface-base-active,非 hover 态由 token 给)
+ *     · 选中再 hover  → 更重蓝 0.44(选中项也给鼠标反馈,且比 hover 浅蓝明显更重 → 层级清晰)
+ *   三个列表行的稳定锚点:文件树 [data-tree-path] / 会话列表 [data-session-id] / 设置导航 tabs[settings]。
+ *   本组 hover 规则与上游各自的 hover:bg-* 命中同一元素同一时机,仅换成蓝 → 不引入新 hover 行为。 */
+html[data-theme="fox-blue"][data-color-scheme="light"] [data-tree-path]:hover,
+html[data-theme="fox-blue"][data-color-scheme="light"] [data-session-id]:hover,
+html[data-theme="fox-blue"][data-color-scheme="light"]
+  [data-component="tabs"][data-variant="settings"] [data-slot="tabs-trigger-wrapper"]:hover {
+  background-color: rgba(114, 149, 196, 0.12);
+}
+html[data-theme="fox-blue"][data-color-scheme="light"] [data-tree-path].bg-surface-base-active:hover,
+html[data-theme="fox-blue"][data-color-scheme="light"] [data-session-id]:has(.active):hover,
+html[data-theme="fox-blue"][data-color-scheme="light"]
+  [data-component="tabs"][data-variant="settings"] [data-slot="tabs-trigger-wrapper"]:has([data-selected]):hover {
+  background-color: rgba(114, 149, 196, 0.44);
+}
+
+/* ========================================================================
  * [fork-only] 文件查看器 markdown 排版升级(scope = data-context="file-viewer")
  *
  * 触发原因:上游 packages/ui/.../markdown.css 把 h1-h6 全部统一 14px/medium,
