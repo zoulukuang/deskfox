@@ -1,8 +1,8 @@
 <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-  <!-- DeskFox tray template icon — macOS 模板模式专用(纯黑 + alpha,系统反色适配) -->
+  <!-- DeskFox tray icon — 品牌蓝 #3D63A0(与 logo 同色,固定色不再用 macOS 反色模板;亮/暗托盘都清晰) -->
   <!-- scale 1.7(放大占 PNG ~85%)+ fill-rule=evenodd 让眼/嘴在脸内部"挖洞" -->
   <!-- 覆盖区域 = 脸三角 ∩ (眼/嘴) → evenodd 视为 hole(透明) -->
-  <g transform="translate(128, 128) scale(1.7)" fill="#000000">
+  <g transform="translate(128, 128) scale(1.7)" fill="#3D63A0">
     <path fill-rule="evenodd" d="
       M -68,-10 L -36,-72 L -18,-12 Z
       M 68,-10 L 36,-72 L 18,-12 Z

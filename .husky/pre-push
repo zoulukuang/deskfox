@@ -1,8 +1,5 @@
 #!/bin/sh
 set -e
-# FORK: bun 安装在外置 SSD,系统 PATH 里找不到,显式补进来
-# ship 过程多次因 "bun: command not found" 被 pre-push 卡住 2026-06-03
-export PATH="/Volumes/ExtSSD/.bun/bin:$PATH"
 # Check if bun version matches package.json
 # keep in sync with packages/script/src/index.ts semver qualifier
 bun -e '
@@ -20,69 +17,20 @@ if (process.versions.bun !== expectedBunVersion) {
   console.warn(`Warning: Bun version ${process.versions.bun} differs from expected ${expectedBunVersion}`);
 }
 '
-bun typecheck
+# FORK-BEGIN: pre-push 闸按 fork 范围重做 [feat: fork-pre-push-gate] 2026-06-15
+#   起源:换基座到 electron 仓后,本仓 pre-push 还是上游原版(只 `bun typecheck` 全仓 + 0 单测),
+#   闸两头歪 —— ① 拿 §七 划走、DeskFox 不发布、无人依赖的 console 包 typecheck 卡我们的 push
+#   (绑架);② Tauri 仓的「fork 包单测 backstop」(R5/R9)没迁过来,真正发布的逻辑反而没护。
+#   修法:typecheck 收到 fork 范围(排除 console),并补回 fork 包单测 backstop。
+#   注:过滤器内联在此(不走 root package.json script —— 它是 pre-commit 黑名单,免 R4 override);
+#   需要全仓覆盖(含 console)直接跑 `bun typecheck`。console 若将来纳管再收回闸内。
 
-# ============================================================
-# FORK: Phase 1 e2e gate(fork 自加)
-# [feat: e2e-pre-push-gate] 2026-05-23
-#
-# 只在 push 目标含 main 时触发(feat 分支 push 不卡 — 日常迭代 / 备份不付 e2e 成本)。
-# vite mock 必须已跑在 :3000(开发时通常在另一终端 `bun run dev:e2e-mock` 常驻)。
-# 不自动 spawn vite:跨平台 pid 管理 / 子进程清理在 Git Bash on Win 不可靠,简单失败 + 清楚指引更稳。
-# 跳过:`git push --no-verify` + commit / 改动日志加 [override-pre-push: 理由]。
-# ============================================================
-push_to_main=0
-while read -r local_ref local_sha remote_ref remote_sha; do
-  case "$remote_ref" in
-    refs/heads/main) push_to_main=1 ;;
-  esac
-done
+# ① fork 范围 typecheck(排除 §七 console;非发布、无发布包依赖)
+bun turbo typecheck --filter='!./packages/console/*'
 
-if [ "$push_to_main" = "1" ] || [ "$FORCE_E2E_GATE" = "1" ]; then
-  echo ""
-  echo "[pre-push] main gate — push 目标含 main(或 FORCE_E2E_GATE=1)"
-
-  # ----------------------------------------------------------
-  # FORK: fork 自家包单元测试闸(R5 决策 2「绿了再 merge」的自动 backstop)
-  # [feat: test-gate-and-spec-cases] 2026-06-01
-  #
-  # 只跑 fork 自家维护、且有 test script 的包(media-gen / adapter-feishu-lark / app),
-  # 不跑上游包(根 test 被故意禁;上游测试非我们维护,不该卡我们的 push)。
-  # 主闸是 agent 在 feat 分支按 spec 测试用例清单跑全绿才问 merge;这里是 push-main 的兜底。
-  # 实测耗时:media-gen ~1s / adapter-feishu-lark ~12s / app ~12s,合计 ~25s,可接受。
-  # 跳过:git push --no-verify(需 commit/改动日志加 [override-pre-push: 理由])。
-  # ----------------------------------------------------------
-  echo "[pre-push] 跑 fork 自家包单元测试(media-gen / adapter-feishu-lark / app)..."
-  fork_unit_fail=0
-  (cd packages/media-gen && bun test) || fork_unit_fail=1
-  (cd packages/adapter-feishu-lark && bun test) || fork_unit_fail=1
-  (cd packages/app && bun run test:unit) || fork_unit_fail=1
-  if [ "$fork_unit_fail" = "1" ]; then
-    echo ""
-    echo "❌ [pre-push] fork 单元测试 fail — push 被拦截"
-    echo "(在分支内修绿,或 git push --no-verify [override-pre-push: 理由] 跳过)"
-    exit 1
-  fi
-  echo "✅ [pre-push] fork 单元测试 all pass"
-
-  if ! curl -s -o /dev/null --connect-timeout 2 http://127.0.0.1:3000/; then
-    echo ""
-    echo "❌ [pre-push] e2e gate 失败:vite mock dev server 没在 :3000 跑"
-    echo ""
-    echo "请在另一终端启动:"
-    echo "    cd packages/app && bun run dev:e2e-mock"
-    echo ""
-    echo "或跳过 gate(需 commit/改动日志加 [override-pre-push: 理由]):"
-    echo "    git push --no-verify"
-    exit 1
-  fi
-
-  echo "[pre-push] vite mock OK,跑 Phase 1 e2e..."
-  if ! (cd packages/app && bunx playwright test --reporter=line); then
-    echo ""
-    echo "❌ [pre-push] e2e fail — push 被拦截"
-    echo "(修 fail 测试,或 git push --no-verify [override-pre-push: 理由] 跳过)"
-    exit 1
-  fi
-  echo "✅ [pre-push] e2e all pass"
-fi
+# ② fork 包单测 backstop(媒体生成 / 飞书适配 / app —— 我们发布并维护的逻辑)
+echo "[pre-push] fork 包单测 backstop…"
+(cd packages/app && bun run test)
+(cd packages/media-gen && bun test)
+(cd packages/adapter-feishu-lark && bun test)
+# FORK-END

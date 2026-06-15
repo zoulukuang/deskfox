@@ -8,7 +8,7 @@ import type { Command } from "@codemirror/view"
 import { HighlightStyle, foldGutter, foldKeymap, syntaxHighlighting } from "@codemirror/language"
 import { tags as t } from "@lezer/highlight"
 import { search, searchKeymap } from "@codemirror/search"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 
 // ============================================================
 // 编辑态语义高亮(md-editing-iter-3,2026-05-25)

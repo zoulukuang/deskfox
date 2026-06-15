@@ -2,10 +2,15 @@ import { readFileSync } from "node:fs"
 import solidPlugin from "vite-plugin-solid"
 import tailwindcss from "@tailwindcss/vite"
 import { fileURLToPath } from "url"
-// FORK: Phase 1 e2e mock plugin [feat: e2e-phase1-mock-mode] 2026-05-23
-import e2eMockPlugin from "./vite/e2e-mock.js"
 
 const theme = fileURLToPath(new URL("./public/oc-theme-preload.js", import.meta.url))
+
+const channel = (() => {
+  const raw = process.env.OPENCODE_CHANNEL
+  if (raw === "dev" || raw === "beta" || raw === "prod") return raw
+  if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
+  return "dev"
+})()
 
 /**
  * @type {import("vite").PluginOption}
@@ -18,11 +23,10 @@ export default [
         resolve: {
           alias: {
             "@": fileURLToPath(new URL("./src", import.meta.url)),
-            // FORK: DeskFox logo overlay 2026-04-26 — 把 ui 的 logo 重定向到 branding 包
-            "@opencode-ai/ui/logo": fileURLToPath(
-              new URL("../branding/src/logo.tsx", import.meta.url),
-            ),
           },
+        },
+        define: {
+          "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(channel),
         },
         worker: {
           format: "es",
@@ -41,7 +45,4 @@ export default [
   },
   tailwindcss(),
   solidPlugin(),
-  // FORK: Phase 1 e2e mock — 仅在 `--mode e2e-mock` / `VITE_E2E_MOCK=true` 时激活
-  // [feat: e2e-phase1-mock-mode] 2026-05-23
-  e2eMockPlugin(),
 ]

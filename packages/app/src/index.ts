@@ -1,7 +1,26 @@
 export { AppBaseProviders, AppInterface } from "./app"
 export { ACCEPTED_FILE_EXTENSIONS, ACCEPTED_FILE_TYPES, filePickerFilters } from "./constants/file-picker"
 export { useCommand } from "./context/command"
-export { loadLocaleDict, normalizeLocale, type Locale } from "./context/language"
-export { type DisplayBackend, type Platform, PlatformProvider } from "./context/platform"
+// FORK: 导出 useLanguage 供桌面端监听 locale 变化、同步原生菜单语言 [feat: settings-panel-cleanup] 2026-06-15
+export { loadLocaleDict, normalizeLocale, useLanguage, type Locale } from "./context/language"
+export { useWslServers } from "./wsl/context"
+export { type DisplayBackend, type FatalRendererErrorLog, type Platform, PlatformProvider } from "./context/platform"
+export { type UpdaterPlatform, type UpdaterState } from "./updater"
+export {
+  type WslDistroProbe,
+  type WslInstalledDistro,
+  type WslJob,
+  type WslOnlineDistro,
+  type WslOpencodeCheck,
+  type WslRuntimeCheck,
+  type WslServerConfig,
+  type WslServerItem,
+  type WslServerRuntime,
+  type WslServersEvent,
+  type WslServersPlatform,
+  type WslServersState,
+} from "./wsl/types"
 export { ServerConnection } from "./context/server"
 export { handleNotificationClick } from "./utils/notification-click"
+// FORK: DeskFox 通知图标(本地 data URL,desktop renderer 复用)[feat: electron-brand-cleanup]
+export { NOTIFICATION_ICON } from "./utils/notification-icon"

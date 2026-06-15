@@ -11,15 +11,16 @@
 import { Effect } from "effect"
 import { Session } from "./session"
 import { SessionStatus } from "./status"
-import { MessageV2 } from "./message-v2"
+// FORK: 上游 #30473 把 v1 消息 schema 迁入 core,WithParts/Assistant 不再是 MessageV2 命名空间成员 [feat: electron-replatform]
+import { Assistant, WithParts } from "@opencode-ai/core/v1/session"
 import { SessionID } from "./schema"
 
 /**
  * 纯函数:从一批消息里挑出"未完成的 assistant 残骸"——role 为 assistant 且 time.completed
  * 不是有效数字。可单独单测(Logic 清单)。
  */
-export function findInterrupted(messages: MessageV2.WithParts[]): MessageV2.Assistant[] {
-  const result: MessageV2.Assistant[] = []
+export function findInterrupted(messages: WithParts[]): Assistant[] {
+  const result: Assistant[] = []
   for (const msg of messages) {
     const info = msg.info
     if (info.role !== "assistant") continue
@@ -37,13 +38,13 @@ export function findInterrupted(messages: MessageV2.WithParts[]): MessageV2.Assi
  * 把全部判定/映射放纯函数里,Effect 壳只剩持久化,便于单测(Logic 清单)。
  */
 export function planHeal(
-  messages: MessageV2.WithParts[],
+  messages: WithParts[],
   isIdle: boolean,
-): { toUpdate: MessageV2.Assistant[]; messages: MessageV2.WithParts[] } {
+): { toUpdate: Assistant[]; messages: WithParts[] } {
   if (!isIdle) return { toUpdate: [], messages }
   const interrupted = findInterrupted(messages)
   if (interrupted.length === 0) return { toUpdate: [], messages }
-  const healed = new Map<string, MessageV2.Assistant>()
+  const healed = new Map<string, Assistant>()
   for (const info of interrupted) {
     healed.set(info.id, { ...info, time: { ...info.time, completed: info.time.created } })
   }
@@ -62,7 +63,7 @@ export function planHeal(
  */
 export const healInterrupted = Effect.fn("Session.healInterrupted")(function* (input: {
   sessionID: SessionID
-  messages: MessageV2.WithParts[]
+  messages: WithParts[]
 }) {
   const status = yield* SessionStatus.Service
   const current = yield* status.get(input.sessionID)

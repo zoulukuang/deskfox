@@ -462,24 +462,7 @@ if [[ "$NO_BUNDLE" -eq 0 && "$ENV" != "dev" && -n "${TAURI_SIGNING_PRIVATE_KEY:-
         TARBALL="$MACOS_BUNDLE_DIR/$APP_BASE.tar.gz"     # Tauri updater 命名 = <AppName>.app.tar.gz
         rm -f "$TARBALL" "$TARBALL.sig"
         # Tauri macOS updater tarball = gzip tar of .app(相对 bundle 目录,保留 .app 顶层 + 内部 symlink)
-        # FORK: COPYFILE_DISABLE=1 禁止 macOS tar 写 AppleDouble(`._<name>`)元数据成员 —— 否则 .app 的扩展
-        # 属性被打成 tarball 首条 `._DeskFox.app` entry(bsdtar 自己隐藏、GNU/Rust tar 可见),Tauri updater
-        # install_inner 的 `path.iter().skip(1)` 把它折成空路径 → 把普通文件 unpack 到临时目录本身 → EPERM
-        # → 用户点"安装并重启"后解压第 0 步即抛错、升级静默失败(app 完好停在旧版)。复现见 docs/features。
-        # [bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
-        ( cd "$MACOS_BUNDLE_DIR" && COPYFILE_DISABLE=1 tar -czf "$APP_BASE.tar.gz" "$APP_BASE" ) || echo "[deskfox]   ❌ tarball 打包失败"
-        # FORK: 防回归断言 —— 用 python3 看 tarball 的 raw 成员(bsdtar `tar tzf` 会隐藏 `._`,不可靠)。
-        # 一旦混入任何 AppleDouble(`._`)成员,Tauri updater 解压必 EPERM 静默失败 → 删毒产物 + 报错,
-        # 让后续签名/部署拿不到 tarball 而安全失败,绝不把坏升级包发出去。[bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
-        if [[ -f "$TARBALL" ]] && command -v python3 >/dev/null 2>&1; then
-            AD_COUNT=$(python3 -c "import tarfile,sys; t=tarfile.open(sys.argv[1]); print(sum(1 for n in t.getnames() if n.rsplit('/',1)[-1].startswith('._')))" "$TARBALL" 2>/dev/null || echo "?")
-            if [[ "$AD_COUNT" != "0" ]]; then
-                echo "[deskfox]   ❌❌ updater tarball 含 $AD_COUNT 个 AppleDouble(._)成员 → 升级安装会 EPERM 静默失败!删除毒产物,检查 COPYFILE_DISABLE" >&2
-                rm -f "$TARBALL" "$TARBALL.sig"
-            else
-                echo "[deskfox]   ✅ tarball 无 AppleDouble 成员(防回归校验通过)"
-            fi
-        fi
+        ( cd "$MACOS_BUNDLE_DIR" && tar -czf "$APP_BASE.tar.gz" "$APP_BASE" ) || echo "[deskfox]   ❌ tarball 打包失败"
         if [[ -f "$TARBALL" ]]; then
             T_SIZE=$(stat -f%z "$TARBALL" 2>/dev/null || echo "?")
             echo "[deskfox]   tarball: $TARBALL ($T_SIZE bytes)"

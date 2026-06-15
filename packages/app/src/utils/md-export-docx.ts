@@ -8,7 +8,7 @@
 // - 库基于成熟的 docx@9.x(5k stars 主流)
 
 import markdownDocx, { Packer, styles } from "@jinzhongjia/markdown-docx"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 import { showToast } from "@opencode-ai/ui/toast"
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate"
 import { resolveAbsolute } from "@/utils/local-asset"

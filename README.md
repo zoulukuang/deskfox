@@ -1,143 +1,129 @@
 <p align="center">
-  <img src="docs/assets/branding/logo-horizontal.svg" alt="DeskFox.Ai" width="420">
+  <a href="https://opencode.ai">
+    <picture>
+      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
+      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
+      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
+    </picture>
+  </a>
 </p>
-
-<p align="center"><strong>Desktop AI assistant for office users</strong></p>
-
-<p align="center"><sub>CLEVER · CALM · ALWAYS ON YOUR DESK</sub></p>
+<p align="center">The open source AI coding agent.</p>
+<p align="center">
+  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
+  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
+  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+</p>
 
 <p align="center">
-  <a href="https://github.com/zoulukuang/deskfox/releases/latest">📥 Download</a>
-  &nbsp;·&nbsp;
-  <a href="https://deskfox.ai/">🏠 Website</a>
-  &nbsp;·&nbsp;
-  <a href="README.zh.md">🇨🇳 中文</a>
+  <a href="README.md">English</a> |
+  <a href="README.zh.md">简体中文</a> |
+  <a href="README.zht.md">繁體中文</a> |
+  <a href="README.ko.md">한국어</a> |
+  <a href="README.de.md">Deutsch</a> |
+  <a href="README.es.md">Español</a> |
+  <a href="README.fr.md">Français</a> |
+  <a href="README.it.md">Italiano</a> |
+  <a href="README.da.md">Dansk</a> |
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.pl.md">Polski</a> |
+  <a href="README.ru.md">Русский</a> |
+  <a href="README.bs.md">Bosanski</a> |
+  <a href="README.ar.md">العربية</a> |
+  <a href="README.no.md">Norsk</a> |
+  <a href="README.br.md">Português (Brasil)</a> |
+  <a href="README.th.md">ไทย</a> |
+  <a href="README.tr.md">Türkçe</a> |
+  <a href="README.uk.md">Українська</a> |
+  <a href="README.bn.md">বাংলা</a> |
+  <a href="README.gr.md">Ελληνικά</a> |
+  <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/zoulukuang/deskfox/releases"><img src="https://img.shields.io/github/v/release/zoulukuang/deskfox?display_name=tag&label=latest&style=flat-square" alt="latest release" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT" /></a>
-  <a href="https://github.com/anomalyco/opencode"><img src="https://img.shields.io/badge/forked%20from-sst%2Fopencode-black?style=flat-square" alt="forked from anomalyco/opencode" /></a>
-</p>
+[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
 
 ---
 
-> Email drafts, report rewrites, Excel formulas, PDF reading, PPT outlines — all the repetitive office work, just talk to DeskFox.
+### Installation
 
-<p align="center">
-  <img src="docs/assets/screenshots/hero.png" alt="DeskFox main UI — three-pane: project sidebar + chat panel + file tree" width="900">
-</p>
+```bash
+# YOLO
+curl -fsSL https://opencode.ai/install | bash
 
-## ✨ Why DeskFox
+# Package managers
+npm i -g opencode-ai@latest        # or bun/pnpm/yarn
+scoop install opencode             # Windows
+choco install opencode             # Windows
+brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
+brew install opencode              # macOS and Linux (official brew formula, updated less)
+sudo pacman -S opencode            # Arch Linux (Stable)
+paru -S opencode-bin               # Arch Linux (Latest from AUR)
+mise use -g opencode               # Any OS
+nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+```
 
-- 🔓 **Open & local-first** — All code public, your data stays on your machine
-- 🌍 **From the anomalyco/opencode community** — Forked from a project audited daily by global developers; our job is to translate it for office users
-- 🎁 **Zero-setup onboarding** — OpenCode Zen free models (MiniMax / Hy3 / Nemotron) bundled — install and chat. No top-up, no API signup
-- 🤖 **One-click model switching** — Claude / GPT / Gemini / Chinese models + Zen gateway, all in one UI; your API keys stay on your machine
+> [!TIP]
+> Remove versions older than 0.1.x before installing.
 
-## 🎯 Use cases
+### Desktop App (BETA)
 
-| Scenario | What you can do |
-|---|---|
-| 📄 **Document companion** | Preview Word / Excel / PDF / Markdown directly, attach to chat, ask AI to rewrite / summarize / answer |
-| ✍️ **Drafting** | Emails / weekly reports / meeting notes / contract drafts — give the gist, AI drafts the full text |
-| 📊 **Data work** | Excel formulas / CSV cleanup / pivot logic / simple visualization |
-| 🔐 **Privacy-sensitive** | Files never leave your machine; chat history stored locally; API keys talk directly to model providers, no third-party relay |
+OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
 
-## 🖼️ File preview
+| Platform              | Download                           |
+| --------------------- | ---------------------------------- |
+| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
+| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
+| Windows               | `opencode-desktop-windows-x64.exe` |
+| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
 
-Beyond chat, DeskFox **previews diverse file formats right in the main UI** — one click to attach to the current conversation:
+```bash
+# macOS (Homebrew)
+brew install --cask opencode-desktop
+# Windows (Scoop)
+scoop bucket add extras; scoop install extras/opencode-desktop
+```
 
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <img src="docs/assets/screenshots/preview-pdf.png" alt="PDF preview" width="280"><br>
-      <sub><b>📄 PDF / Word / Markdown</b><br>Original layout + extracted text</sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="docs/assets/screenshots/preview-pptx.png" alt="PowerPoint preview" width="280"><br>
-      <sub><b>📊 Excel / PowerPoint</b><br>Sheets and slides rendered inline</sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="docs/assets/screenshots/preview-video.png" alt="Video preview" width="280"><br>
-      <sub><b>🎬 Video / Audio / Image</b><br>Built-in media player</sub>
-    </td>
-  </tr>
-</table>
+#### Installation Directory
 
-Right-click any file tab → "Add to chat" to drop its content into the current conversation — ask the AI to explain, rewrite, or summarize.
+The install script respects the following priority order for the installation path:
 
-## 📤 Markdown → Word export
+1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
+2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
+3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
+4. `$HOME/.opencode/bin` - Default fallback
 
-Right-click any `.md` file tab → **"Export to Word"** converts your Markdown notes into a native `.docx` document. The export is **high-fidelity** — formatting, structure, images, and even math formulas all carry over to Word with shareable polish.
+```bash
+# Examples
+OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+```
 
-**What carries over:**
+### Agents
 
-| Markdown source | What you get in Word |
-|---|---|
-| `# Heading 1` ~ `###### Heading 6` | Native heading hierarchy with font-size ladder |
-| `**bold**` `*italic*` `~~strikethrough~~` `<u>underline</u>` | Native inline formatting |
-| `` `inline code` `` | Mint-green pill background, monospace font |
-| ` ```lang ... ``` ` fenced code blocks | Syntax-highlighted box (200+ languages, GitHub-light theme) |
-| `==highlighted text==` | Yellow highlight background |
-| `E = mc<sup>2</sup>`, `H<sub>2</sub>O` | Unicode superscript / subscript |
-| `:rocket:` `:tada:` `:warning:` (80+ shortcodes) | Native color emoji 🚀🎉⚠️ |
-| `> blockquote` (multi-line) | Indented block, gray background, left bar visually unified across paragraphs |
-| `> [!NOTE/TIP/WARNING/CAUTION/IMPORTANT]` GFM Alerts | 5 color-coded callout blocks (blue / green / yellow / red / purple) matching GitHub style |
-| `- unordered`, `1. ordered`, `- [x] task list` | Native Word lists (multi-level nesting supported) |
-| `\| col1 \| col2 \|` tables | Full-grid bordered tables, shaded header row, breathing space above & below |
-| `[text](https://...)` external link | Clickable Word hyperlink |
-| `[Section](#section-anchor)` internal anchor | **Ctrl+click navigation** to the target heading inside Word |
-| `![](./local.png)` local image | Embedded directly in the `.docx` file (no broken paths) |
-| `![](https://...)` remote image | Auto-fetched and embedded as a native Word image |
-| `<img src="...">` HTML image | Same as above |
-| `<p align="center">`, `<div align="center">` | Centered paragraphs |
-| `<details><summary>...` collapsible block | Bold summary + body as plain paragraphs |
-| `<span style="background:#X;color:#Y">badge</span>` | Text with colored background + colored font |
-| ` ```mermaid ... ``` ` flowcharts / sequence / class / Gantt / pie | Rendered as centered images in Word |
-| `$inline math$`, `$$display math$$` LaTeX | **Native Word math objects** — double-click to edit in Word's equation editor; vector quality, font-size aware |
+OpenCode includes two built-in agents you can switch between with the `Tab` key.
 
-**Why it matters** — your AI-generated notes, meeting agendas, draft manuscripts, technical docs, study notes can all be exported and shared with colleagues / clients who only use Word, **without losing formatting**.
+- **build** - Default, full-access agent for development work
+- **plan** - Read-only agent for analysis and code exploration
+  - Denies file edits by default
+  - Asks permission before running bash commands
+  - Ideal for exploring unfamiliar codebases or planning changes
 
-## 📥 Download
+Also included is a **general** subagent for complex searches and multistep tasks.
+This is used internally and can be invoked using `@general` in messages.
 
-| Platform | Global (GitHub) | China mirror (Gitee) |
-|---|---|---|
-| **Windows** | [releases/latest](https://github.com/zoulukuang/deskfox/releases/latest) | [Gitee Release](https://gitee.com/zoulukuang/deskfox/releases/) |
-| **macOS (Apple Silicon)** | [releases/latest](https://github.com/zoulukuang/deskfox/releases/latest) | [Gitee Release](https://gitee.com/zoulukuang/deskfox/releases/) |
+Learn more about [agents](https://opencode.ai/docs/agents).
 
-> **First-launch note** (this fork project does not yet have a code-signing certificate — **not malware**):
-> - **Windows**: SmartScreen warns → "More info" → "Run anyway"
-> - **macOS**: Gatekeeper blocks → right-click app icon → "Open" → confirm once
->
-> Background: [`docs/governance/数字签名问题.md`](docs/governance/数字签名问题.md)
+### Documentation
 
-## 🌱 Project provenance
+For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
 
-**DeskFox.Ai** is a fork of [`anomalyco/opencode`](https://github.com/anomalyco/opencode). The upstream is an AI coding tool for developers; we forked it and **repositioned it as a daily AI work companion for office users**. We've done:
+### Contributing
 
-- 🎨 **UI simplification** — removed coding-specific surfaces, reorganized chat and file operations
-- 🦊 **Brand rebuild** — DeskFox visual identity (Bundle ID / icons / copy), zero namespace overlap with upstream
-- 📄 **Document preview** — Word / Excel / PDF / Markdown previewable in-app, one-click "add to chat" for context
-- 📦 **Engineered packaging** — Windows + macOS triple-env (`prod` stable / `beta` reserved / `dev` preview) builds via local `pack-installer` script + manual upload to GitHub Release / Gitee mirror. See [release channel & versioning rules](docs/governance/版本号与发布渠道规范.md).
+If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
 
-Full change index: [`改动日志.md`](改动日志.md) · Governance: [`docs/governance/`](docs/governance/) · Upstream-merge SOP: [`docs/governance/UPSTREAM-MERGE-GUIDE.md`](docs/governance/UPSTREAM-MERGE-GUIDE.md)
+### Building on OpenCode
 
-## 🌐 Links
-
-| | |
-|---|---|
-| 🏠 Website | [deskfox.ai](https://deskfox.ai/) |
-| 📦 GitHub Release | [releases/latest](https://github.com/zoulukuang/deskfox/releases/latest) |
-| 🇨🇳 Gitee mirror | [zoulukuang/deskfox](https://gitee.com/zoulukuang/deskfox) |
-| 🐛 Issues | [github.com/zoulukuang/deskfox/issues](https://github.com/zoulukuang/deskfox/issues) |
-| 🔒 Privacy policy | [English](docs/legal/PRIVACY.md) · [中文](docs/legal/隐私协议.md) |
-| ⬆️ Upstream | [anomalyco/opencode](https://github.com/anomalyco/opencode) |
-
-## 📄 License
-
-[MIT](LICENSE) — same as upstream [`anomalyco/opencode`](https://github.com/anomalyco/opencode). All changes are public on GitHub, and we follow upstream upgrades.
+If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
 
 ---
 
-<p align="center"><sub>© 2026 DeskFox.Ai · MIT-licensed · forked from anomalyco/opencode</sub></p>
+**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)

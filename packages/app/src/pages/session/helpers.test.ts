@@ -9,7 +9,16 @@ import {
   focusTerminalById,
   getTabReorderIndex,
   shouldFocusTerminalOnKeyDown,
+  shouldShowFileTree,
 } from "./helpers"
+
+describe("shouldShowFileTree", () => {
+  test("does not reserve space for a disabled v2 file tree", () => {
+    expect(shouldShowFileTree({ desktopV2: true, showFileTree: false, opened: true })).toBe(false)
+    expect(shouldShowFileTree({ desktopV2: false, showFileTree: false, opened: true })).toBe(true)
+    expect(shouldShowFileTree({ desktopV2: true, showFileTree: true, opened: true })).toBe(true)
+  })
+})
 
 describe("createOpenReviewFile", () => {
   test("opens and loads selected review file", () => {
@@ -60,7 +69,6 @@ describe("createOpenSessionFileTab", () => {
       "active:file://src/a.ts",
     ])
   })
-
   // FORK: 文件树点击 toggle — 再次点击正在查看的文件收起查看面板 [fix: filetree-toggle] 2026-06-04
   test("toggle: re-clicking the active file while viewer open closes the viewer", () => {
     const calls: string[] = []
@@ -177,38 +185,6 @@ describe("getTabReorderIndex", () => {
   })
 })
 
-describe("closeOtherTabs [feat: file-tab-close-others]", () => {
-  test("closes every tab except the kept one, preserving order", () => {
-    const closed: string[] = []
-    closeOtherTabs(["a", "b", "c", "d"], "b", (t) => closed.push(t))
-    expect(closed).toEqual(["a", "c", "d"])
-  })
-
-  test("keeps the kept tab even if duplicated, never closes it", () => {
-    const closed: string[] = []
-    closeOtherTabs(["a", "b", "b"], "b", (t) => closed.push(t))
-    expect(closed).toEqual(["a"])
-  })
-
-  test("no-op when only the kept tab is open", () => {
-    const closed: string[] = []
-    closeOtherTabs(["solo"], "solo", (t) => closed.push(t))
-    expect(closed).toEqual([])
-  })
-
-  test("no-op on empty list", () => {
-    const closed: string[] = []
-    closeOtherTabs([], "x", (t) => closed.push(t))
-    expect(closed).toEqual([])
-  })
-
-  test("closes all when kept tab is not present", () => {
-    const closed: string[] = []
-    closeOtherTabs(["a", "b"], "missing", (t) => closed.push(t))
-    expect(closed).toEqual(["a", "b"])
-  })
-})
-
 describe("createSessionTabs", () => {
   test("normalizes the effective file tab", () => {
     createRoot((dispose) => {
@@ -269,5 +245,37 @@ describe("createSessionTabs", () => {
       expect(result.closableTab()).toBeUndefined()
       dispose()
     })
+  })
+})
+
+describe("closeOtherTabs [feat: file-tab-close-others]", () => {
+  test("closes every tab except the kept one, preserving order", () => {
+    const closed: string[] = []
+    closeOtherTabs(["a", "b", "c", "d"], "b", (t) => closed.push(t))
+    expect(closed).toEqual(["a", "c", "d"])
+  })
+
+  test("keeps the kept tab even if duplicated, never closes it", () => {
+    const closed: string[] = []
+    closeOtherTabs(["a", "b", "b"], "b", (t) => closed.push(t))
+    expect(closed).toEqual(["a"])
+  })
+
+  test("no-op when only the kept tab is open", () => {
+    const closed: string[] = []
+    closeOtherTabs(["solo"], "solo", (t) => closed.push(t))
+    expect(closed).toEqual([])
+  })
+
+  test("no-op on empty list", () => {
+    const closed: string[] = []
+    closeOtherTabs([], "x", (t) => closed.push(t))
+    expect(closed).toEqual([])
+  })
+
+  test("closes all when kept tab is not present", () => {
+    const closed: string[] = []
+    closeOtherTabs(["a", "b"], "missing", (t) => closed.push(t))
+    expect(closed).toEqual(["a", "b"])
   })
 })

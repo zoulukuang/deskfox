@@ -1,5 +1,5 @@
+import { showToast } from "@/utils/toast"
 import { Component, Show, createMemo, createResource, onMount, type JSX } from "solid-js"
-import { createStore } from "solid-js/store"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Select } from "@opencode-ai/ui/select"
@@ -7,13 +7,13 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
-import { showToast } from "@opencode-ai/ui/toast"
 import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
 import { usePlatform, type DisplayBackend } from "@/context/platform"
-import { useGlobalSync } from "@/context/global-sync"
-import { useGlobalSDK } from "@/context/global-sdk"
+import { useServerSync } from "@/context/server-sync"
+import { useServerSDK } from "@/context/server-sdk"
+import { useUpdaterAction } from "./updater-action"
 import {
   monoDefault,
   monoFontFamily,
@@ -89,9 +89,7 @@ export const SettingsGeneral: Component = () => {
   const params = useParams()
   const settings = useSettings()
 
-  const [store, setStore] = createStore({
-    checking: false,
-  })
+  const updater = useUpdaterAction()
 
   const linux = createMemo(() => platform.platform === "desktop" && platform.os === "linux")
   const dir = createMemo(() => decode64(params.dir))
@@ -121,73 +119,14 @@ export const SettingsGeneral: Component = () => {
   }
   const desktop = createMemo(() => platform.platform === "desktop")
 
-  const check = () => {
-    if (!platform.checkUpdate) return
-    setStore("checking", true)
-
-    void platform
-      .checkUpdate()
-      .then((result) => {
-        if (!result.updateAvailable) {
-          showToast({
-            variant: "success",
-            icon: "circle-check",
-            title: language.t("settings.updates.toast.latest.title"),
-            description: language.t("settings.updates.toast.latest.description", { version: platform.version ?? "" }),
-          })
-          return
-        }
-
-        const actions = platform.updateAndRestart
-          ? [
-              {
-                label: language.t("toast.update.action.installRestart"),
-                onClick: async () => {
-                  // FORK: 捕获 install/relaunch 错误并展示 — 否则失败时 toast action 静默吞,用户"点了没反应"
-                  // [bug-repro: auto-updater 安装/检查静默失败] 2026-06-12
-                  try {
-                    await platform.updateAndRestart!()
-                  } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err)
-                    showToast({ title: language.t("common.requestFailed"), description: message })
-                  }
-                },
-              },
-              {
-                label: language.t("toast.update.action.notYet"),
-                onClick: "dismiss" as const,
-              },
-            ]
-          : [
-              {
-                label: language.t("toast.update.action.notYet"),
-                onClick: "dismiss" as const,
-              },
-            ]
-
-        showToast({
-          persistent: true,
-          icon: "download",
-          title: language.t("toast.update.title"),
-          description: language.t("toast.update.description", { version: result.version ?? "" }),
-          actions,
-        })
-      })
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err)
-        showToast({ title: language.t("common.requestFailed"), description: message })
-      })
-      .finally(() => setStore("checking", false))
-  }
-
   const themeOptions = createMemo<ThemeOption[]>(() => theme.ids().map((id) => ({ id, name: theme.name(id) })))
 
-  const globalSync = useGlobalSync()
-  const globalSdk = useGlobalSDK()
+  const serverSync = useServerSync()
+  const serverSdk = useServerSDK()
 
   const [shells] = createResource(
     () =>
-      globalSdk.client.pty
+      serverSdk.client.pty
         .shells()
         .then((res) => res.data ?? [])
         .catch(() => [] as ShellOption[]),
@@ -200,16 +139,22 @@ export const SettingsGeneral: Component = () => {
     { initialValue: null as DisplayBackend | null },
   )
 
+  const [pinchZoom, { mutate: setPinchZoom }] = createResource(
+    () => (desktop() && platform.getPinchZoomEnabled ? true : false),
+    () => Promise.resolve(platform.getPinchZoomEnabled?.() ?? false).catch(() => false),
+    { initialValue: false },
+  )
+
   onMount(() => {
     void theme.loadThemes()
   })
 
   const autoOption = { id: "auto", value: "", label: language.t("settings.general.row.shell.autoDefault") }
-  const currentShell = createMemo(() => globalSync.data.config.shell ?? "")
+  const currentShell = createMemo(() => serverSync.data.config.shell ?? "")
 
   const shellOptions = createMemo<ShellSelectOption[]>(() => {
     const list = shells.latest
-    const current = globalSync.data.config.shell
+    const current = serverSync.data.config.shell
 
     const nameCounts = new Map<string, number>()
     for (const s of list) {
@@ -246,8 +191,14 @@ export const SettingsGeneral: Component = () => {
     })
   }
 
-  // FORK: 匿名使用统计开关 — 状态来自后端 config(桌面端);仅当平台暴露该能力时加载
-  // [feat: telemetry-usage-stats] 2026-06-06
+  const onPinchZoomChange = (checked: boolean) => {
+    setPinchZoom(checked)
+    const update = platform.setPinchZoomEnabled?.(checked)
+    if (!update) return
+    void update.catch(() => setPinchZoom(!checked))
+  }
+
+  // FORK: 匿名使用统计开关 — 状态来自后端 config(桌面端);仅当平台暴露该能力时加载 [feat: telemetry-usage-stats]
   const [telemetryStatus, { refetch: refetchTelemetry }] = createResource(
     () => (platform.getTelemetryEnabled ? true : false),
     () =>
@@ -366,7 +317,7 @@ export const SettingsGeneral: Component = () => {
             onSelect={(option) => {
               if (!option) return
               if (option.value === currentShell()) return
-              globalSync.updateConfig({ shell: option.value })
+              serverSync.updateConfig({ shell: option.value })
             }}
             variant="secondary"
             size="small"
@@ -423,6 +374,8 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
+        {/* FORK: 隐藏上游「New layout and designs」实验开关 — DeskFox 默认经典布局(newLayoutDesignsDefault=false),
+            v2 布局与既有交互差异大,不对用户暴露切换入口;保留底层字段 + 默认值不变 [feat: settings-panel-cleanup] 2026-06-15 */}
         {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
         <Show when={platform.getTelemetryEnabled}>
           <SettingsRow
@@ -447,73 +400,7 @@ export const SettingsGeneral: Component = () => {
     </div>
   )
 
-  const AdvancedSection = () => (
-    <div class="flex flex-col gap-1">
-      <h3 class="text-14-medium text-text-strong pb-2">{language.t("settings.general.section.advanced")}</h3>
-
-      <SettingsList>
-        <SettingsRow
-          title={language.t("settings.general.row.showFileTree.title")}
-          description={language.t("settings.general.row.showFileTree.description")}
-        >
-          <div data-action="settings-show-file-tree">
-            <Switch
-              checked={settings.general.showFileTree()}
-              onChange={(checked) => settings.general.setShowFileTree(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showNavigation.title")}
-          description={language.t("settings.general.row.showNavigation.description")}
-        >
-          <div data-action="settings-show-navigation">
-            <Switch
-              checked={settings.general.showNavigation()}
-              onChange={(checked) => settings.general.setShowNavigation(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showSearch.title")}
-          description={language.t("settings.general.row.showSearch.description")}
-        >
-          <div data-action="settings-show-search">
-            <Switch
-              checked={settings.general.showSearch()}
-              onChange={(checked) => settings.general.setShowSearch(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showTerminal.title")}
-          description={language.t("settings.general.row.showTerminal.description")}
-        >
-          <div data-action="settings-show-terminal">
-            <Switch
-              checked={settings.general.showTerminal()}
-              onChange={(checked) => settings.general.setShowTerminal(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showStatus.title")}
-          description={language.t("settings.general.row.showStatus.description")}
-        >
-          <div data-action="settings-show-status">
-            <Switch
-              checked={settings.general.showStatus()}
-              onChange={(checked) => settings.general.setShowStatus(checked)}
-            />
-          </div>
-        </SettingsRow>
-      </SettingsList>
-    </div>
-  )
+  // FORK: AdvancedSection(文件树/导航控件/命令面板/服务器状态/Custom agents)已移除,不对用户暴露 [feat: settings-panel-cleanup] 2026-06-15
 
   const AppearanceSection = () => (
     <div class="flex flex-col gap-1">
@@ -748,19 +635,6 @@ export const SettingsGeneral: Component = () => {
 
       <SettingsList>
         <SettingsRow
-          title={language.t("settings.updates.row.startup.title")}
-          description={language.t("settings.updates.row.startup.description")}
-        >
-          <div data-action="settings-updates-startup">
-            <Switch
-              checked={settings.updates.startup()}
-              disabled={!platform.checkUpdate}
-              onChange={(checked) => settings.updates.setStartup(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
           title={language.t("settings.general.row.releaseNotes.title")}
           description={language.t("settings.general.row.releaseNotes.description")}
         >
@@ -776,17 +650,53 @@ export const SettingsGeneral: Component = () => {
           title={language.t("settings.updates.row.check.title")}
           description={language.t("settings.updates.row.check.description")}
         >
-          <Button size="small" variant="secondary" disabled={store.checking || !platform.checkUpdate} onClick={check}>
-            {store.checking
-              ? language.t("settings.updates.action.checking")
-              : language.t("settings.updates.action.checkNow")}
+          <Button size="small" variant="secondary" disabled={!updater.action().run} onClick={updater.run}>
+            {language.t(updater.action().label)}
           </Button>
         </SettingsRow>
       </SettingsList>
     </div>
   )
 
-  console.log(import.meta.env)
+  const DisplaySection = () => (
+    <Show when={desktop()}>
+      <div class="flex flex-col gap-1">
+        <h3 class="text-14-medium text-text-strong pb-2">{language.t("settings.general.section.display")}</h3>
+
+        <SettingsList>
+          <SettingsRow
+            title={language.t("settings.general.row.pinchZoom.title")}
+            description={language.t("settings.general.row.pinchZoom.description")}
+          >
+            <div data-action="settings-pinch-zoom">
+              <Switch checked={pinchZoom.latest} onChange={onPinchZoomChange} />
+            </div>
+          </SettingsRow>
+
+          <Show when={linux()}>
+            <SettingsRow
+              title={
+                <div class="flex items-center gap-2">
+                  <span>{language.t("settings.general.row.wayland.title")}</span>
+                  <Tooltip value={language.t("settings.general.row.wayland.tooltip")} placement="top">
+                    <span class="text-text-weak">
+                      <Icon name="help" size="small" />
+                    </span>
+                  </Tooltip>
+                </div>
+              }
+              description={language.t("settings.general.row.wayland.description")}
+            >
+              <div data-action="settings-wayland">
+                <Switch checked={displayBackend.latest === "wayland"} onChange={onDisplayBackendChange} />
+              </div>
+            </SettingsRow>
+          </Show>
+        </SettingsList>
+      </div>
+    </Show>
+  )
+
   return (
     <div class="flex flex-col h-full overflow-y-auto no-scrollbar px-4 pb-10 sm:px-10 sm:pb-10">
       <div class="sticky top-0 z-10 bg-[linear-gradient(to_bottom,var(--surface-stronger-non-alpha)_calc(100%_-_24px),transparent)]">
@@ -806,35 +716,9 @@ export const SettingsGeneral: Component = () => {
 
         <UpdatesSection />
 
-        <Show when={linux()}>
-          <div class="flex flex-col gap-1">
-            <h3 class="text-14-medium text-text-strong pb-2">{language.t("settings.general.section.display")}</h3>
-
-            <SettingsList>
-              <SettingsRow
-                title={
-                  <div class="flex items-center gap-2">
-                    <span>{language.t("settings.general.row.wayland.title")}</span>
-                    <Tooltip value={language.t("settings.general.row.wayland.tooltip")} placement="top">
-                      <span class="text-text-weak">
-                        <Icon name="help" size="small" />
-                      </span>
-                    </Tooltip>
-                  </div>
-                }
-                description={language.t("settings.general.row.wayland.description")}
-              >
-                <div data-action="settings-wayland">
-                  <Switch checked={displayBackend.latest === "wayland"} onChange={onDisplayBackendChange} />
-                </div>
-              </SettingsRow>
-            </SettingsList>
-          </div>
-        </Show>
-
-        <Show when={desktop() && import.meta.env.VITE_OPENCODE_CHANNEL === "beta"}>
-          <AdvancedSection />
-        </Show>
+        <DisplaySection />
+        {/* FORK: 移除「高级」分组(文件树/导航控件/命令面板/服务器状态/Custom agents)
+            — 这些标题栏控件可见性开关不对用户暴露;底层 setting 字段 + 默认值保持不变 [feat: settings-panel-cleanup] 2026-06-15 */}
       </div>
     </div>
   )

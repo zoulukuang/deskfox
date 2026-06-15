@@ -4,7 +4,7 @@
 // 直接手写类型(不依赖 bindings.ts 自动生成,等 release build 才更新),
 // 与 Rust 端 feishu_adapter.rs 中的 OauthStartResponse / OauthPollResponse 严格对齐。
 
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 
 export type FeishuDomain = "feishu" | "lark"
 

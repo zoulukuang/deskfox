@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test"
 import type { ConfigInvalidError, ProviderModelNotFoundError } from "./server-errors"
 import {
   formatServerError,
-  isBackendUnreachableError,
-  isTransientStartupError,
   parseReadableConfigInvalidError,
+  isTransientServerError,
+  isRetryableListError,
+  isBackendUnreachableError,
 } from "./server-errors"
 
 function fill(text: string, vars?: Record<string, string | number>) {
@@ -133,69 +134,45 @@ describe("formatServerError", () => {
       ["Modelo nao encontrado: x/y", "Voce quis dizer: x/y2, x/y3", "Revise provider/model no config"].join("\n"),
     )
   })
-})
 
-describe("isBackendUnreachableError [feat: coldstart-toast-race]", () => {
-  test("识别实测 reqwest 连接错(Error 形态)", () => {
-    const e = new Error("error sending request for url (http://127.0.0.1:64796/session?directory=%2FUsers%2Fx)")
-    expect(isBackendUnreachableError(e)).toBe(true)
-  })
+  test("unwraps SDK-wrapped errors from cause.body", () => {
+    const body = {
+      name: "ConfigInvalidError",
+      data: {
+        message: "Missing host",
+      },
+    } satisfies ConfigInvalidError
 
-  test("识别同样信息的 string 形态(setLoadError/tree onError 传 message 字符串)", () => {
-    const msg = "error sending request for url (http://127.0.0.1:64796/file/content?path=a.md)"
-    expect(isBackendUnreachableError(msg)).toBe(true)
-  })
+    const wrapped = new Error("ConfigInvalidError", { cause: { body, status: 400 } })
 
-  test("识别 web fetch 网络错变体", () => {
-    expect(isBackendUnreachableError(new Error("Failed to fetch"))).toBe(true)
-    expect(isBackendUnreachableError(new Error("NetworkError when attempting to fetch resource"))).toBe(true)
-    expect(isBackendUnreachableError("Connection refused (os error 61)")).toBe(true)
-    expect(isBackendUnreachableError(new Error("tcp connect error: Connection refused"))).toBe(true)
-  })
-
-  test("大小写不敏感", () => {
-    expect(isBackendUnreachableError("ERROR Sending Request for url (...)")).toBe(true)
-  })
-
-  test("HTTP 4xx/5xx 业务/服务故障不视为不可达(应正常 surface)", () => {
-    expect(isBackendUnreachableError(new Error("Server returned 404 with empty body: /session"))).toBe(false)
-    expect(isBackendUnreachableError(new Error("Internal Server Error"))).toBe(false)
-    expect(isBackendUnreachableError(new Error("Unauthorized"))).toBe(false)
-  })
-
-  test("空/非错误输入安全返回 false", () => {
-    expect(isBackendUnreachableError(undefined)).toBe(false)
-    expect(isBackendUnreachableError(null)).toBe(false)
-    expect(isBackendUnreachableError("")).toBe(false)
-    expect(isBackendUnreachableError({})).toBe(false)
-    expect(isBackendUnreachableError(new Error("something unrelated broke"))).toBe(false)
+    expect(formatServerError(wrapped, language.t)).toBe("Arquivo de config em config invalido: Missing host")
   })
 })
 
-describe("isTransientStartupError [feat: coldstart-project-reload-toast]", () => {
-  test("继承连接级不可达(复用 isBackendUnreachableError)", () => {
-    expect(isTransientStartupError(new Error("error sending request for url (http://127.0.0.1:53890/agent)"))).toBe(true)
-    expect(isTransientStartupError("Failed to fetch")).toBe(true)
+// [bug-repro: 启动时 file.list 返回 500「Unexpected server error」弹红 toast(冷启动时序)] 2026-06-13
+describe("cold-start file.list transient error classification", () => {
+  test("冷启动通用 500 文案被识别为瞬时(应重试,不弹 toast)", () => {
+    const err = new Error("Unexpected server error. Check server logs for details.")
+    expect(isTransientServerError(err)).toBe(true)
+    expect(isRetryableListError(err)).toBe(true)
   })
 
-  test("识别 tanstack Missing queryFn(sdk 未 ready 的冷启动瞬时态)", () => {
-    expect(isTransientStartupError(new Error('Missing queryFn: \'["/Volumes/ExtSSD/OPENCODE-PLAN","providers"]\''))).toBe(
-      true,
-    )
-    expect(isTransientStartupError('Missing queryFn: \'["/x","providers"]\'')).toBe(true)
-    expect(isTransientStartupError("missing queryfn")).toBe(true)
+  test("连接级不可达仍可重试", () => {
+    const err = new Error("error sending request for url (http://127.0.0.1:4096/file)")
+    expect(isBackendUnreachableError(err)).toBe(true)
+    expect(isRetryableListError(err)).toBe(true)
   })
 
-  test("真错不误判(应 surface)", () => {
-    expect(isTransientStartupError(new Error("Server returned 500"))).toBe(false)
-    expect(isTransientStartupError(new Error("Unauthorized"))).toBe(false)
-    expect(isTransientStartupError(new Error("something unrelated broke"))).toBe(false)
+  test("真实业务 5xx(带具体信息)不误判为瞬时 → 正常 surface", () => {
+    const err = new Error("ripgrep exited with code 2: invalid glob pattern")
+    expect(isTransientServerError(err)).toBe(false)
+    expect(isRetryableListError(err)).toBe(false)
   })
 
-  test("空/非错误输入安全返回 false", () => {
-    expect(isTransientStartupError(undefined)).toBe(false)
-    expect(isTransientStartupError(null)).toBe(false)
-    expect(isTransientStartupError("")).toBe(false)
-    expect(isTransientStartupError({})).toBe(false)
+  test("纯字符串 / 空错误安全处理", () => {
+    expect(isTransientServerError("Unexpected server error. Check server logs for details.")).toBe(true)
+    expect(isTransientServerError("")).toBe(false)
+    expect(isTransientServerError(null)).toBe(false)
+    expect(isRetryableListError(undefined)).toBe(false)
   })
 })

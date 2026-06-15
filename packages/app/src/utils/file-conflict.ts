@@ -4,7 +4,7 @@
 // v2(2026-04-27):整体下沉到 Rust 端 `next_available_path` Tauri 命令,
 // 一次往返 + OS 原生 Path normalize,避免 JS 端 `/` vs `\` 拼接歧义导致 exists 误判。
 
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 
 /** 把文件名拆成 base + ext,目录或无扩展名时 ext = ""(给可能复用此逻辑的 JS 调用方,与 Rust 端 split_name_ext 同语义) */
 export function splitNameExt(name: string): { base: string; ext: string } {

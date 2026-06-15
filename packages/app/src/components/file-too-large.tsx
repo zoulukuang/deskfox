@@ -5,7 +5,7 @@
 // 不放在 file-tabs.tsx 内是为了 ① 减小巨石 file-tabs.tsx 文件 ② 复用给未来其他 viewer 入口
 
 import { Component } from "solid-js"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 import { showToast } from "@opencode-ai/ui/toast"
 import { formatSize, type SizeCategory } from "@/utils/file-size-guard"
 

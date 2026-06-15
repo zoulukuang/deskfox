@@ -3,8 +3,9 @@
 // 对齐 feishu-config.ts 的类型化封装惯例:命令名 / 事件名集中此处,组件不裸用 invoke,
 // Rust 端重命名时这里集中改、不散落魔法字符串。
 
-import { invoke } from "@tauri-apps/api/core"
-import { listen } from "@tauri-apps/api/event"
+// FORK: Tauri invoke → Electron 原生桥 [feat: electron-replatform]
+import { invoke } from "./native"
+import { listen } from "./native"
 
 /** 与 Rust prevent_sleep::PREVENT_SLEEP_CHANGED_EVENT 对齐 */
 export const PREVENT_SLEEP_CHANGED_EVENT = "deskfox-prevent-sleep-changed"

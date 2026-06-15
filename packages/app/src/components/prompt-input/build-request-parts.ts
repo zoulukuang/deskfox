@@ -15,6 +15,7 @@ type ContextFile = {
   selection?: FileSelection
   comment?: string
   commentID?: string
+  // FORK: 从 Tauri 迁回 quote 子分类 + chat 引用 kind [feat: 聊天选区-卡片化-换行] 2026-06-14
   commentOrigin?: "review" | "file" | "quote"
   preview?: string
   kind?: "chat" | "file"
@@ -136,40 +137,6 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
     const path = absolute(input.sessionDirectory, item.path)
     const url = `file://${encodeFilePath(path)}${fileQuery(item.selection)}`
     const comment = item.comment?.trim()
-    const isQuote = item.commentOrigin === "quote"
-
-    // FORK: quote origin(PDF/office 选区卡片)只送 user 选中的文字 + 来源路径,
-    //       绝不附整个二进制文件。原因详 docs/features/office-选中加聊天/3-changelog.md
-    //       § QA 跟进 #4。
-    //       — origin=quote 必须有 comment(submitToChat 兜底"(see selected text)"),
-    //         否则下面 formatCommentNote 收不到 preview 段。
-    // [feat: office-选中加聊天] 2026-05-25
-    if (isQuote) {
-      if (!comment) return []
-      return [
-        {
-          id: Identifier.ascending("part"),
-          type: "text",
-          text: formatCommentNote({
-            path: item.path,
-            selection: item.selection,
-            comment,
-            preview: item.preview,
-            kind: item.kind,
-          }),
-          synthetic: true,
-          metadata: createCommentMetadata({
-            path: item.path,
-            selection: item.selection,
-            comment,
-            preview: item.preview,
-            origin: item.commentOrigin,
-            kind: item.kind,
-          }),
-        } satisfies PromptRequestPart,
-      ]
-    }
-
     if (!comment && used.has(url)) return []
     used.add(url)
 
@@ -202,7 +169,14 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
       {
         id: Identifier.ascending("part"),
         type: "text",
-        text: formatCommentNote({ path: item.path, selection: item.selection, comment, preview: item.preview }),
+        // FORK: 传 preview + kind,kind="chat" 走聊天引用模板(从 Tauri 迁回)[feat: 聊天选区-卡片化-换行] 2026-06-14
+        text: formatCommentNote({
+          path: item.path,
+          selection: item.selection,
+          comment,
+          preview: item.preview,
+          kind: item.kind,
+        }),
         synthetic: true,
         metadata: createCommentMetadata({
           path: item.path,
@@ -210,6 +184,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
           comment,
           preview: item.preview,
           origin: item.commentOrigin,
+          kind: item.kind,
         }),
       } satisfies PromptRequestPart,
       filePart,

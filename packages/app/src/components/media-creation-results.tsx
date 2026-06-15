@@ -3,7 +3,7 @@
 // 重构:不再用占满屏的大播放器;文件已落盘到本地分类文件夹,这里只给轻量提示 + 打开入口。
 
 import { For, Show } from "solid-js"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 import { creation } from "./media-creation-store"
 import { creationMediaSrc } from "@/utils/media-creation"
 

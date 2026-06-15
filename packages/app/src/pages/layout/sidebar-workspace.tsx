@@ -14,14 +14,14 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { type Session } from "@opencode-ai/sdk/v2/client"
 import { type LocalProject } from "@/context/layout"
-import { loadSessionsQuery, useGlobalSync } from "@/context/global-sync"
+import { useServerSync, useQueryOptions } from "@/context/server-sync"
 // FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
 import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
 import { pathKey } from "@/utils/path-key"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { sortedRootSessions } from "./helpers"
-import { useQuery } from "@tanstack/solid-query"
+import { useIsFetching } from "@tanstack/solid-query"
 
 type InlineEditorComponent = (props: {
   id: string
@@ -62,7 +62,7 @@ export const WorkspaceDragOverlay = (props: {
   activeWorkspace: Accessor<string | undefined>
   workspaceLabel: (directory: string, branch?: string, projectId?: string) => string
 }): JSX.Element => {
-  const globalSync = useGlobalSync()
+  const serverSync = useServerSync()
   const language = useLanguage()
   const label = createMemo(() => {
     const project = props.sidebarProject()
@@ -70,7 +70,7 @@ export const WorkspaceDragOverlay = (props: {
     const directory = props.activeWorkspace()
     if (!directory) return
 
-    const [workspaceStore] = globalSync.child(directory, { bootstrap: false })
+    const [workspaceStore] = serverSync.child(directory, { bootstrap: false })
     const kind =
       directory === project.worktree ? language.t("workspace.type.local") : language.t("workspace.type.sandbox")
     const name = props.workspaceLabel(directory, workspaceStore.vcs?.branch, project.id)
@@ -289,6 +289,13 @@ const WorkspaceSessionList = (props: {
         </Button>
       </div>
     </Show>
+    {/* FORK: 列表到底时给「没有更多了」提示 + 底部留白(user 要求 Image#30)。单条提示不值得改 17 个 i18n 文件,
+        按 locale 内联中/英 [feat: titlebar-icons-rearrange] 2026-06-13 */}
+    <Show when={!props.hasMore() && props.sessions().length > 0}>
+      <div class="w-full pt-2 pb-4 text-center text-12-regular text-text-weak select-none">
+        {props.language.locale().startsWith("zh") ? "没有更多了" : "No more"}
+      </div>
+    </Show>
   </nav>
 )
 
@@ -301,10 +308,11 @@ export const SortableWorkspace = (props: {
 }): JSX.Element => {
   const navigate = useNavigate()
   const params = useParams()
-  const globalSync = useGlobalSync()
+  const serverSync = useServerSync()
+  const queryOptions = useQueryOptions()
   const language = useLanguage()
   const sortable = createSortable(props.directory)
-  const [workspaceStore, setWorkspaceStore] = globalSync.child(props.directory, { bootstrap: false })
+  const [workspaceStore, setWorkspaceStore] = serverSync.child(props.directory, { bootstrap: false })
   const [menu, setMenu] = createStore({
     open: false,
     pendingRename: false,
@@ -322,14 +330,15 @@ export const SortableWorkspace = (props: {
   const boot = createMemo(() => open() || active())
   const count = createMemo(() => sessions()?.length ?? 0)
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
-  const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
+  const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.directory)))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
-  const loading = () => query.isLoading && count() === 0
+  const loading = () => fetching() > 0 && count() === 0
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
-    setWorkspaceStore("limit", (limit) => (limit ?? 0) + 5)
-    await globalSync.project.loadSessions(props.directory)
+    // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15)[feat: session-list-load-more-30]
+    setWorkspaceStore("limit", (limit) => (limit ?? 0) + 30)
+    await serverSync.project.loadSessions(props.directory)
   }
 
   const workspaceEditActive = createMemo(() => props.ctx.editorOpen(`workspace:${props.directory}`))
@@ -358,7 +367,7 @@ export const SortableWorkspace = (props: {
 
   createEffect(() => {
     if (!boot()) return
-    globalSync.child(props.directory, { bootstrap: true })
+    serverSync.child(props.directory, { bootstrap: true })
   })
 
   return (
@@ -432,7 +441,7 @@ export const SortableWorkspace = (props: {
             mobile={props.mobile}
             ctx={props.ctx}
             showNew={showNew}
-            loading={() => query.isLoading && count() === 0}
+            loading={loading}
             sessions={sessions}
             hasMore={hasMore}
             loadMore={loadMore}
@@ -450,27 +459,29 @@ export const LocalWorkspace = (props: {
   sortNow: Accessor<number>
   mobile?: boolean
 }): JSX.Element => {
-  const globalSync = useGlobalSync()
+  const serverSync = useServerSync()
+  const queryOptions = useQueryOptions()
   const language = useLanguage()
   const workspace = createMemo(() => {
-    const [store, setStore] = globalSync.child(props.project.worktree)
+    const [store, setStore] = serverSync.child(props.project.worktree)
     return { store, setStore }
   })
   const slug = createMemo(() => base64Encode(props.project.worktree))
   const sessions = createMemo(() => sortedRootSessions(workspace().store, props.sortNow()))
   const count = createMemo(() => sessions()?.length ?? 0)
-  const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
+  const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.project.worktree)))
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
-  const loading = () => query.isLoading && count() === 0
+  const loading = () => fetching() > 0 && count() === 0
   const loadMore = async () => {
-    workspace().setStore("limit", (limit) => (limit ?? 0) + 5)
-    await globalSync.project.loadSessions(props.project.worktree)
+    // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15)[feat: session-list-load-more-30]
+    workspace().setStore("limit", (limit) => (limit ?? 0) + 30)
+    await serverSync.project.loadSessions(props.project.worktree)
   }
 
   return (
     <div
       ref={(el) => props.ctx.setScrollContainerRef(el, props.mobile)}
-      class="size-full flex flex-col py-2 overflow-y-auto no-scrollbar [overflow-anchor:none]"
+      class="size-full flex flex-col py-2 overflow-y-auto [overflow-anchor:none]"
     >
       <WorkspaceSessionList
         slug={slug}

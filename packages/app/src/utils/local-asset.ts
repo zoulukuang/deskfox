@@ -7,14 +7,8 @@
 
 const SCHEME = "localasset"
 
-const BASE_URL = (() => {
-  if (typeof navigator === "undefined") return `${SCHEME}://localhost`
-  const ua = navigator.userAgent.toLowerCase()
-  if (ua.includes("windows") || ua.includes("android")) {
-    return `http://${SCHEME}.localhost`
-  }
-  return `${SCHEME}://localhost`
-})()
+// FORK: Electron/Chromium 全平台支持自定义 scheme(不像 Tauri WebView2 在 Win 要假 http host)→ 统一 localasset:// [feat: electron-replatform]
+const BASE_URL = `${SCHEME}://localhost`
 
 function base64UrlEncode(s: string): string {
   const utf8 = new TextEncoder().encode(s)

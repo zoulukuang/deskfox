@@ -3,6 +3,7 @@ node_modules
 .worktrees
 .sst
 .env
+.env.local
 .idea
 .vscode
 .codex
@@ -14,6 +15,8 @@ ts-dist
 .turbo
 **/.serena
 .serena/
+**/.omo
+.omo/
 /result
 refs
 Session.vim
@@ -29,27 +32,3 @@ UPCOMING_CHANGELOG.md
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
-
-# Secrets — never commit
-*.pem
-*.key
-*.p12
-.env.local
-.env.*.local
-
-# FORK: Obsidian 编辑器本地配置(user 用 Obsidian 浏览 docs/features/) 2026-04-28
-.obsidian/
-
-# FORK: DeskFox installer 编译产物(iscc 输出,binary 不入仓) 2026-04-28
-packages/branding/installer/Output/
-packages/branding/installer/*.lnk
-
-# FORK: Claude Code 会话状态目录(每台机器本地,不入仓) 2026-05-04
-.claude/
-
-# FORK: Installer /LOG=<file> 写出的临时排查日志(每次 ship 产生新名字)2026-05-25
-.install-*.log
-
-# FORK: 运行时创作产物(用户媒体创作输出)+ app 测试报告产物(test:ci 生成的 junit),均可重建不入仓 2026-06-01
-/creations/
-packages/app/.artifacts/

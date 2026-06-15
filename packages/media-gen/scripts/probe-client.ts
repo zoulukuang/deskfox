@@ -6,7 +6,7 @@ import { generateMedia, listMediaModels, mediaServerReady } from "../../app/src/
 import { startMediaServer } from "../src/server"
 
 const base = "http://127.0.0.1:51739"
-const handle = startMediaServer({ port: 51739 })
+const handle = await startMediaServer({ port: 51739 })
 
 console.log("ready:", await mediaServerReady(base))
 

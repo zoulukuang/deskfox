@@ -4,7 +4,7 @@
 
 import { startMediaServer } from "../src/server"
 
-const handle = startMediaServer({ port: 51738 }) // 测试端口,避开默认 51737
+const handle = await startMediaServer({ port: 51738 }) // 测试端口,避开默认 51737
 const base = handle.url
 
 console.log("→ GET /healthz")

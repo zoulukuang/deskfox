@@ -1,5 +1,0 @@
-# [fork-only] Phase 2 Mac e2e 测试产物排除(跟 Win e2e-tauri/.gitignore 对位)
-# [feat: e2e-tauri-phase2-mac] 2026-05-28
-test-results/
-report/
-.last-run.json

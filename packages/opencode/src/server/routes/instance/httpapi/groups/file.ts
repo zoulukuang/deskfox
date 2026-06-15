@@ -1,29 +1,31 @@
-import { File } from "@/file"
-import { Ripgrep } from "@/file/ripgrep"
+import { FileSystem } from "@opencode-ai/core/filesystem"
+import { NonNegativeInt } from "@opencode-ai/core/schema"
 import { LSP } from "@/lsp/lsp"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { Authorization } from "../middleware/authorization"
 import { InstanceContextMiddleware } from "../middleware/instance-context"
-import { WorkspaceRoutingMiddleware } from "../middleware/workspace-routing"
-import { described } from "./metadata"
-// FORK: office routes schema 集中区(office-routes-effect-httpapi 2026-05-03)
 import {
-  OfficePdfQuery,
-  OfficePdfBytes,
-  OfficeInstallProgress,
-  OfficeToolingStatus,
-} from "./file-office"
+  WorkspaceRoutingMiddleware,
+  WorkspaceRoutingQuery,
+  WorkspaceRoutingQueryFields,
+} from "../middleware/workspace-routing"
+import { described } from "./metadata"
+// FORK: office routes schema 集中区(office-routes-effect-httpapi)[feat: electron-replatform]
+import { OfficePdfQuery, OfficePdfBytes, OfficeInstallProgress, OfficeToolingStatus } from "./file-office"
 
 export const FileQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
   path: Schema.String,
 })
 
 export const FindTextQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
   pattern: Schema.String,
 })
 
 export const FindFileQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
   query: Schema.String,
   dirs: Schema.optional(Schema.Literals(["true", "false"])),
   type: Schema.optional(Schema.Literals(["file", "directory"])),
@@ -33,8 +35,64 @@ export const FindFileQuery = Schema.Struct({
 })
 
 export const FindSymbolQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
   query: Schema.String,
 })
+
+export const LegacyMatch = Schema.Struct({
+  path: Schema.Struct({ text: Schema.String }),
+  lines: Schema.Struct({ text: Schema.String }),
+  line_number: NonNegativeInt,
+  absolute_offset: NonNegativeInt,
+  submatches: Schema.Array(
+    Schema.Struct({
+      match: Schema.Struct({ text: Schema.String }),
+      start: NonNegativeInt,
+      end: NonNegativeInt,
+    }),
+  ),
+})
+
+export const LegacyEntry = Schema.Struct({
+  name: Schema.String,
+  path: Schema.String,
+  absolute: Schema.String,
+  type: Schema.Literals(["file", "directory"]),
+  ignored: Schema.Boolean,
+}).annotate({ identifier: "FileNode" })
+
+export const LegacyContent = Schema.Struct({
+  type: Schema.Literals(["text", "binary"]),
+  content: Schema.String,
+  diff: Schema.optional(Schema.String),
+  patch: Schema.optional(
+    Schema.Struct({
+      oldFileName: Schema.String,
+      newFileName: Schema.String,
+      oldHeader: Schema.optional(Schema.String),
+      newHeader: Schema.optional(Schema.String),
+      hunks: Schema.Array(
+        Schema.Struct({
+          oldStart: NonNegativeInt,
+          oldLines: NonNegativeInt,
+          newStart: NonNegativeInt,
+          newLines: NonNegativeInt,
+          lines: Schema.Array(Schema.String),
+        }),
+      ),
+      index: Schema.optional(Schema.String),
+    }),
+  ),
+  encoding: Schema.optional(Schema.Literal("base64")),
+  mimeType: Schema.optional(Schema.String),
+}).annotate({ identifier: "FileContent" })
+
+export const LegacyStatus = Schema.Struct({
+  path: Schema.String,
+  added: NonNegativeInt,
+  removed: NonNegativeInt,
+  status: Schema.Literals(["added", "deleted", "modified"]),
+}).annotate({ identifier: "File" })
 
 export const FilePaths = {
   findText: "/find",
@@ -43,7 +101,7 @@ export const FilePaths = {
   list: "/file",
   content: "/file/content",
   status: "/file/status",
-  // FORK: office routes(office-routes-effect-httpapi 2026-05-03)
+  // FORK: office routes [feat: electron-replatform]
   officePdf: "/file/office-pdf",
   officeToolingStatus: "/office-tooling/status",
   officeToolingInstall: "/office-tooling/install",
@@ -56,7 +114,7 @@ export const FileApi = HttpApi.make("file")
       .add(
         HttpApiEndpoint.get("findText", FilePaths.findText, {
           query: FindTextQuery,
-          success: described(Schema.Array(Ripgrep.SearchMatch), "Matches"),
+          success: described(Schema.Array(LegacyMatch), "Matches"),
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "find.text",
@@ -86,7 +144,7 @@ export const FileApi = HttpApi.make("file")
         ),
         HttpApiEndpoint.get("list", FilePaths.list, {
           query: FileQuery,
-          success: described(Schema.Array(File.Node), "Files and directories"),
+          success: described(Schema.Array(LegacyEntry), "Files and directories"),
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "file.list",
@@ -96,7 +154,7 @@ export const FileApi = HttpApi.make("file")
         ),
         HttpApiEndpoint.get("content", FilePaths.content, {
           query: FileQuery,
-          success: described(File.Content, "File content"),
+          success: described(LegacyContent, "File content"),
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "file.read",
@@ -105,7 +163,8 @@ export const FileApi = HttpApi.make("file")
           }),
         ),
         HttpApiEndpoint.get("status", FilePaths.status, {
-          success: described(Schema.Array(File.Info), "File status"),
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(LegacyStatus), "File status"),
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "file.status",
@@ -113,7 +172,7 @@ export const FileApi = HttpApi.make("file")
             description: "Get the git status of all files in the project.",
           }),
         ),
-        // FORK-BEGIN: office routes — fork Hono routes 迁到 PublicApi(office-routes-effect-httpapi 2026-05-03)
+        // FORK-BEGIN: office routes — fork Hono routes 迁到 PublicApi [feat: electron-replatform]
         HttpApiEndpoint.get("officePdf", FilePaths.officePdf, {
           query: OfficePdfQuery,
           success: OfficePdfBytes,
@@ -134,11 +193,6 @@ export const FileApi = HttpApi.make("file")
             description: "Returns LibreOffice availability + install progress on this machine.",
           }),
         ),
-        // FORK: 删 `payload: Schema.Struct({})` 让 Effect 跟 Hono 一侧对齐 — OfficeInstaller.startInstall()
-        // 不接参数,空 body 才是契约真相;原 `Schema.Struct({})` 生成 `{required:false, content:{application/json:object}}`
-        // body shape,但 Hono `.post("/office-tooling/install", ...)` 没声明 requestBody,httpapi-bridge.test.ts
-        // "matches generated OpenAPI request body shape" 比对双端永远不等 → unit test stable fail。
-        // 上游同 group 内其他无 body POST(initGit / abort / share)都不带 payload,跟齐 idiom。 2026-05-29
         HttpApiEndpoint.post("officeToolingInstall", FilePaths.officeToolingInstall, {
           success: described(OfficeToolingStatus, "Office tooling status (post-install start)"),
         }).annotateMerge(

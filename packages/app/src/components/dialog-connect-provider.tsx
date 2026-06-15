@@ -8,15 +8,15 @@ import { List, type ListRef } from "@opencode-ai/ui/list"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { TextField } from "@opencode-ai/ui/text-field"
-import { showToast } from "@opencode-ai/ui/toast"
+import { showToast } from "@/utils/toast"
 import { createEffect, createMemo, createResource, Match, onCleanup, onMount, Switch } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { Link } from "@/components/link"
-import { useGlobalSDK } from "@/context/global-sdk"
-import { useGlobalSync } from "@/context/global-sync"
+import { useServerSDK } from "@/context/server-sdk"
+import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-import { useProviders } from "@/hooks/use-providers"
+import { useProviders, GETBOT_SYNTHETIC } from "@/hooks/use-providers"
 // FORK: getbot 内置接入流程 2026-04-26
 import {
   buildGetbotProviderConfig,
@@ -29,8 +29,8 @@ import {
 
 export function DialogConnectProvider(props: { provider: string }) {
   const dialog = useDialog()
-  const globalSync = useGlobalSync()
-  const globalSDK = useGlobalSDK()
+  const serverSync = useServerSync()
+  const serverSDK = useServerSDK()
   const language = useLanguage()
   const platform = usePlatform()
   const providers = useProviders()
@@ -51,11 +51,15 @@ export function DialogConnectProvider(props: { provider: string }) {
     timer.current = undefined
   })
 
-  const provider = createMemo(
-    () =>
-      providers.all().find((x) => x.id === props.provider) ??
-      globalSync.data.provider.all.find((x) => x.id === props.provider)!,
-  )
+  const provider = createMemo(() => {
+    const found = providers.all().get(props.provider) ?? serverSync.data.provider.all.get(props.provider)
+    if (found) return found
+    // FORK: getbot 合成项只在 popular() / 选择弹窗里,不在 all();直连 getbot 时 found 为 undefined,
+    //   原 `!` 断言在运行时无效 → provider() 为 undefined → 下方 provider().id/.name 渲染 TypeError 崩溃。
+    //   回退到合成定义(下方已有 provider().id === GETBOT_PROVIDER_ID 分支接管)[feat: getbot-接入] 2026-06-13
+    if (props.provider === GETBOT_PROVIDER_ID) return GETBOT_SYNTHETIC as unknown as NonNullable<typeof found>
+    return found!
+  })
   const fallback = createMemo<ProviderAuthMethod[]>(() => [
     {
       type: "api" as const,
@@ -65,16 +69,16 @@ export function DialogConnectProvider(props: { provider: string }) {
   const [auth] = createResource(
     () => props.provider,
     async () => {
-      const cached = globalSync.data.provider_auth[props.provider]
+      const cached = serverSync.data.provider_auth[props.provider]
       if (cached) return cached
-      const res = await globalSDK.client.provider.auth()
+      const res = await serverSDK.client.provider.auth()
       if (!alive.value) return fallback()
-      globalSync.set("provider_auth", res.data ?? {})
+      serverSync.set("provider_auth", res.data ?? {})
       return res.data?.[props.provider] ?? fallback()
     },
   )
-  const loading = createMemo(() => auth.loading && !globalSync.data.provider_auth[props.provider])
-  const methods = createMemo(() => auth.latest ?? globalSync.data.provider_auth[props.provider] ?? fallback())
+  const loading = createMemo(() => auth.loading && !serverSync.data.provider_auth[props.provider])
+  const methods = createMemo(() => auth.latest ?? serverSync.data.provider_auth[props.provider] ?? fallback())
   const [store, setStore] = createStore({
     methodIndex: undefined as undefined | number,
     authorization: undefined as undefined | ProviderAuthAuthorization,
@@ -171,7 +175,7 @@ export function DialogConnectProvider(props: { provider: string }) {
       }
       dispatch({ type: "auth.pending" })
       const start = Date.now()
-      await globalSDK.client.provider.oauth
+      await serverSDK.client.provider.oauth
         .authorize(
           {
             providerID: props.provider,
@@ -290,6 +294,7 @@ export function DialogConnectProvider(props: { provider: string }) {
               <div class="text-14-regular text-text-base">{select()?.message}</div>
               <div>
                 <List
+                  class="px-3"
                   items={select()?.options ?? []}
                   key={(x) => x.value}
                   current={select()?.options.find((x) => x.value === formStore.value[select()!.key])}
@@ -343,7 +348,7 @@ export function DialogConnectProvider(props: { provider: string }) {
   })
 
   async function complete() {
-    await globalSDK.client.global.dispose()
+    await serverSDK.client.global.dispose()
     dialog.close()
     showToast({
       variant: "success",
@@ -377,6 +382,7 @@ export function DialogConnectProvider(props: { provider: string }) {
         </div>
         <div>
           <List
+            class="px-3"
             ref={(ref) => {
               listRef = ref
             }}
@@ -440,7 +446,7 @@ export function DialogConnectProvider(props: { provider: string }) {
 
       setFormStore("submitting", true)
       try {
-        await globalSDK.client.auth.set({
+        await serverSDK.client.auth.set({
           providerID: props.provider,
           auth: {
             type: "api",
@@ -476,14 +482,14 @@ export function DialogConnectProvider(props: { provider: string }) {
       }
 
       try {
-        await globalSDK.client.auth.set({
+        await serverSDK.client.auth.set({
           providerID: GETBOT_PROVIDER_ID,
           auth: { type: "api", key: apiKey },
         })
         // 关键:把自己从 disabled_providers 清出去（用户之前断开过会留这一行,不清的话连了等于没连）
-        const beforeDisabled = globalSync.data.config.disabled_providers ?? []
+        const beforeDisabled = serverSync.data.config.disabled_providers ?? []
         const nextDisabled = beforeDisabled.filter((id) => id !== GETBOT_PROVIDER_ID)
-        await globalSync.updateConfig({
+        await serverSync.updateConfig({
           provider: { [GETBOT_PROVIDER_ID]: buildGetbotProviderConfig(apiKey, chatIds) },
           ...(nextDisabled.length !== beforeDisabled.length ? { disabled_providers: nextDisabled } : {}),
         })
@@ -499,7 +505,7 @@ export function DialogConnectProvider(props: { provider: string }) {
           title: language.t("provider.connect.toast.connected.title", { provider: provider().name }),
           description: language.t("provider.connect.getbot.fetchModels.failed", { error: fetchError }),
         })
-        await globalSDK.client.global.dispose()
+        await serverSDK.client.global.dispose()
         dialog.close()
         return
       }
@@ -592,7 +598,7 @@ export function DialogConnectProvider(props: { provider: string }) {
       }
 
       setFormStore("error", undefined)
-      const result = await globalSDK.client.provider.oauth
+      const result = await serverSDK.client.provider.oauth
         .callback({
           providerID: props.provider,
           method: store.methodIndex,
@@ -638,14 +644,14 @@ export function DialogConnectProvider(props: { provider: string }) {
     const code = createMemo(() => {
       const instructions = store.authorization?.instructions
       if (instructions?.includes(":")) {
-        return instructions.split(":")[1]?.trim()
+        return instructions.split(":").pop()?.trim()
       }
       return instructions
     })
 
     onMount(() => {
       void (async () => {
-        const result = await globalSDK.client.provider.oauth
+        const result = await serverSDK.client.provider.oauth
           .callback({
             providerID: props.provider,
             method: store.methodIndex,

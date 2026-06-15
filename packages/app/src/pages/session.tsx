@@ -18,6 +18,7 @@ import {
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
+import { debounce } from "@solid-primitives/scheduled"
 import { useLocal } from "@/context/local"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
@@ -27,19 +28,19 @@ import { Tabs } from "@opencode-ai/ui/tabs"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { previewSelectedLines } from "@opencode-ai/ui/pierre/selection-bridge"
 import { Button } from "@opencode-ai/ui/button"
-import { showToast } from "@opencode-ai/ui/toast"
+import { showToast } from "@/utils/toast"
 import { checksum } from "@opencode-ai/core/util/encode"
-import { useSearchParams } from "@solidjs/router"
+import { useLocation, useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
-// FORK: 创作卡作用域随当前 session 切换(隔离 + 首页 draft 过继)[feat: media-creation-mode]
-import { creation, DRAFT_SCOPE } from "@/components/media-creation-store"
 import { useComments } from "@/context/comments"
 import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
-import { useGlobalSync } from "@/context/global-sync"
+import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePrompt } from "@/context/prompt"
+import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
+import { useServerSDK } from "@/context/server-sdk"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
@@ -51,14 +52,17 @@ import {
   createSizing,
   focusTerminalById,
   shouldFocusTerminalOnKeyDown,
+  shouldShowFileTree,
 } from "@/pages/session/helpers"
 import { MessageTimeline } from "@/pages/session/message-timeline"
-// FORK: ChatSelectionMenu / ContextMenuHost 提到 Session 顶层,不受 messagesReady() Show 门控
-// 否则 user 看 PDF/office 时无 chat 会话 → Host 不 mount → 右键无菜单 + 拖拽无 overlay。
-// [feat: office-选中加聊天] 2026-05-25
-import { ChatSelectionMenu } from "@/pages/session/chat-selection-menu"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
+// FORK: ChatSelectionMenu 提到 Session 顶层,不受 messagesReady() Show 门控
+//   确保 user 看 PDF/office 无 chat 会话时也能用右键菜单 [feat: office-选中加聊天] 2026-05-25
+import { ChatSelectionMenu } from "@/pages/session/chat-selection-menu"
+// FORK: 创作卡作用域随当前 session 切换 [feat: media-creation-mode]
+import { creation, DRAFT_SCOPE } from "@/components/media-creation-store"
+import { useServer } from "@/context/server"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
@@ -70,6 +74,7 @@ import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { same } from "@/utils/same"
 import { formatServerError } from "@/utils/server-errors"
+import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
 
 const emptyUserMessages: UserMessage[] = []
 type FollowupItem = FollowupDraft & { id: string }
@@ -81,7 +86,6 @@ type VcsMode = "git" | "branch"
 
 type SessionHistoryWindowInput = {
   sessionID: () => string | undefined
-  messagesReady: () => boolean
   loaded: () => number
   visibleUserMessages: () => UserMessage[]
   historyMore: () => boolean
@@ -91,205 +95,74 @@ type SessionHistoryWindowInput = {
   scroller: () => HTMLDivElement | undefined
 }
 
-/**
- * Maintains the rendered history window for a session timeline.
- *
- * It keeps initial paint bounded to recent turns, reveals cached turns in
- * small batches while scrolling upward, and prefetches older history near top.
- */
-function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
-  const turnInit = 10
-  const turnBatch = 8
-  const turnScrollThreshold = 200
-  const turnPrefetchBuffer = 16
-  const prefetchCooldownMs = 400
-  const prefetchNoGrowthLimit = 2
+function createSessionHistoryLoader(input: SessionHistoryWindowInput) {
+  const historyScrollThreshold = 200
+  let shiftFrame: number | undefined
 
   const [state, setState] = createStore({
-    turnID: undefined as string | undefined,
-    turnStart: 0,
-    prefetchUntil: 0,
-    prefetchNoGrowth: 0,
+    shift: false,
   })
 
-  const initialTurnStart = (len: number) => (len > turnInit ? len - turnInit : 0)
-
-  const turnStart = createMemo(() => {
-    const id = input.sessionID()
-    const len = input.visibleUserMessages().length
-    if (!id || len <= 0) return 0
-    if (state.turnID !== id) return initialTurnStart(len)
-    if (state.turnStart <= 0) return 0
-    if (state.turnStart >= len) return initialTurnStart(len)
-    return state.turnStart
+  const userMessages = createMemo(() => input.visibleUserMessages(), emptyUserMessages, {
+    equals: same,
   })
 
-  const setTurnStart = (start: number) => {
-    const id = input.sessionID()
-    const next = start > 0 ? start : 0
-    if (!id) {
-      setState({ turnID: undefined, turnStart: next })
-      return
-    }
-    setState({ turnID: id, turnStart: next })
+  const cancelShiftReset = () => {
+    if (shiftFrame === undefined) return
+    cancelAnimationFrame(shiftFrame)
+    shiftFrame = undefined
   }
 
-  const renderedUserMessages = createMemo(
-    () => {
-      const msgs = input.visibleUserMessages()
-      const start = turnStart()
-      if (start <= 0) return msgs
-      return msgs.slice(start)
-    },
-    emptyUserMessages,
-    {
-      equals: same,
-    },
-  )
-
-  const preserveScroll = (fn: () => void) => {
-    const el = input.scroller()
-    if (!el) {
-      fn()
-      return
-    }
-    const beforeTop = el.scrollTop
-    const beforeHeight = el.scrollHeight
-    fn()
-    requestAnimationFrame(() => {
-      const delta = el.scrollHeight - beforeHeight
-      if (!delta) return
-      el.scrollTop = beforeTop + delta
+  const scheduleShiftReset = () => {
+    cancelShiftReset()
+    shiftFrame = requestAnimationFrame(() => {
+      shiftFrame = undefined
+      setState("shift", false)
     })
   }
 
-  const backfillTurns = () => {
-    const start = turnStart()
-    if (start <= 0) return
-
-    const next = start - turnBatch
-    const nextStart = next > 0 ? next : 0
-
-    preserveScroll(() => setTurnStart(nextStart))
-  }
-
-  /** Button path: reveal all cached turns, fetch older history, reveal one batch. */
-  const loadAndReveal = async () => {
-    const id = input.sessionID()
-    if (!id) return
-
-    const start = turnStart()
-    const beforeVisible = input.visibleUserMessages().length
-    let loaded = input.loaded()
-
-    if (start > 0) setTurnStart(0)
-
-    if (!input.historyMore() || input.historyLoading()) return
-
-    let afterVisible = beforeVisible
-    let added = 0
-
-    while (true) {
-      await input.loadMore(id)
-      if (input.sessionID() !== id) return
-
-      afterVisible = input.visibleUserMessages().length
-      const nextLoaded = input.loaded()
-      const raw = nextLoaded - loaded
-      added += raw
-      loaded = nextLoaded
-
-      if (afterVisible > beforeVisible) break
-      if (raw <= 0) break
-      if (!input.historyMore()) break
-    }
-
-    if (added <= 0) return
-    if (state.prefetchNoGrowth) setState("prefetchNoGrowth", 0)
-
-    const growth = afterVisible - beforeVisible
-    if (growth <= 0) return
-    if (turnStart() !== 0) return
-
-    const target = Math.min(afterVisible, beforeVisible + turnBatch)
-    setTurnStart(Math.max(0, afterVisible - target))
-  }
-
-  /** Scroll/prefetch path: fetch older history from server. */
-  const fetchOlderMessages = async (opts?: { prefetch?: boolean }) => {
+  const fetchOlderMessages = async () => {
     const id = input.sessionID()
     if (!id) return
     if (!input.historyMore() || input.historyLoading()) return
 
-    if (opts?.prefetch) {
-      const now = Date.now()
-      if (state.prefetchUntil > now) return
-      if (state.prefetchNoGrowth >= prefetchNoGrowthLimit) return
-      setState("prefetchUntil", now + prefetchCooldownMs)
-    }
-
-    const start = turnStart()
+    // TODO(session-timeline): switch this to core cursor-based part pagination when that API lands.
     const beforeVisible = input.visibleUserMessages().length
-    const beforeRendered = start <= 0 ? beforeVisible : renderedUserMessages().length
     let loaded = input.loaded()
-    let added = 0
     let growth = 0
 
+    cancelShiftReset()
+    setState("shift", true)
+
     while (true) {
       await input.loadMore(id)
       if (input.sessionID() !== id) return
 
       const nextLoaded = input.loaded()
       const raw = nextLoaded - loaded
-      added += raw
       loaded = nextLoaded
       growth = input.visibleUserMessages().length - beforeVisible
 
       if (growth > 0) break
       if (raw <= 0) break
-      if (opts?.prefetch) break
       if (!input.historyMore()) break
     }
 
-    const afterVisible = input.visibleUserMessages().length
-
-    if (opts?.prefetch) {
-      setState("prefetchNoGrowth", added > 0 ? 0 : state.prefetchNoGrowth + 1)
-    } else if (added > 0 && state.prefetchNoGrowth) {
-      setState("prefetchNoGrowth", 0)
-    }
-
-    if (added <= 0) return
-    if (growth <= 0) return
-
-    if (opts?.prefetch) {
-      const current = turnStart()
-      preserveScroll(() => setTurnStart(current + growth))
+    if (growth > 0) {
+      scheduleShiftReset()
       return
     }
 
-    if (turnStart() !== start) return
-
-    const currentRendered = renderedUserMessages().length
-    const base = Math.max(beforeRendered, currentRendered)
-    const target = Math.min(afterVisible, base + turnBatch)
-    preserveScroll(() => setTurnStart(Math.max(0, afterVisible - target)))
+    setState("shift", false)
   }
+
+  const loadAndReveal = () => fetchOlderMessages()
 
   const onScrollerScroll = () => {
     if (!input.userScrolled()) return
     const el = input.scroller()
     if (!el) return
-    if (el.scrollTop >= turnScrollThreshold) return
-
-    const start = turnStart()
-    if (start > 0) {
-      if (start <= turnPrefetchBuffer) {
-        void fetchOlderMessages({ prefetch: true })
-      }
-      backfillTurns()
-      return
-    }
+    if (el.scrollTop >= historyScrollThreshold) return
 
     void fetchOlderMessages()
   }
@@ -298,34 +171,25 @@ function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
     on(
       input.sessionID,
       () => {
-        setState({ prefetchUntil: 0, prefetchNoGrowth: 0 })
+        cancelShiftReset()
+        setState({ shift: false })
       },
       { defer: true },
     ),
   )
 
-  createEffect(
-    on(
-      () => [input.sessionID(), input.messagesReady()] as const,
-      ([id, ready]) => {
-        if (!id || !ready) return
-        setTurnStart(initialTurnStart(input.visibleUserMessages().length))
-      },
-      { defer: true },
-    ),
-  )
+  onCleanup(cancelShiftReset)
 
   return {
-    turnStart,
-    setTurnStart,
-    renderedUserMessages,
+    userMessages,
+    shift: () => state.shift,
     loadAndReveal,
     onScrollerScroll,
   }
 }
 
 export default function Page() {
-  const globalSync = useGlobalSync()
+  const serverSync = useServerSync()
   const layout = useLayout()
   const local = useLocal()
   const file = useFile()
@@ -334,12 +198,17 @@ export default function Page() {
   const dialog = useDialog()
   const language = useLanguage()
   const sdk = useSDK()
+  const serverSDK = useServerSDK()
   const settings = useSettings()
+  const platform = usePlatform()
   const prompt = usePrompt()
   const comments = useComments()
   const terminal = useTerminal()
+  const server = useServer()
   const [searchParams, setSearchParams] = useSearchParams<{ prompt?: string }>()
-  const { params, sessionKey, tabs, view } = useSessionLayout()
+  const location = useLocation()
+  const { params, sessionKey, workspaceKey, tabs, view } = useSessionLayout()
+  const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
 
   createEffect(() => {
     if (!prompt.ready()) return
@@ -351,25 +220,6 @@ export default function Page() {
       setSearchParams({ ...searchParams, prompt: undefined })
     })
   })
-
-  // FORK: 创作卡作用域跟随当前 session [feat: media-creation-mode]
-  //   - 进某 session(id 有值)→ 切到该 session 作用域(只显示它自己的创作卡);
-  //     若从首页 draft 直接建出 session(prev 无 id)→ 把 draft 卡过继给新 session;
-  //   - 回首页/新建会话(id 变空)→ 重置 draft 作用域(干净起步),修"旧创作记录在新会话冒出来"。
-  createEffect(
-    on(
-      () => params.id,
-      (id, prevId) => {
-        if (id) {
-          if (!prevId) creation.adoptDraftInto(id)
-          creation.setScope(id)
-        } else {
-          creation.resetScope(DRAFT_SCOPE)
-          creation.setScope(DRAFT_SCOPE)
-        }
-      },
-    ),
-  )
 
   const [ui, setUi] = createStore({
     pendingMessage: undefined as string | undefined,
@@ -384,15 +234,57 @@ export default function Page() {
 
   const composer = createSessionComposerState()
 
-  // FORK: REQ-042 — 删除新会话 tab handoff(原从 workspace 继承打开的文件 tab)。
-  // 文件 tab 已项目级共享([feat: file-tabs-project-level]),同项目新会话天然就能看到这些
-  // tab,无需继承;且解耦后 workspaceTabs 与 tabs() 都指向同一 projectTabs[dir],原拷贝/清空
-  // 逻辑既是死代码、清空分支还会误抹掉项目共享 tab。一并删 layout.handoff。2026-06-02
+  const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
+
+  createEffect(
+    on(
+      () => params.id,
+      (id, prev) => {
+        if (!id) return
+        if (prev) return
+
+        const pending = layout.handoff.tabs()
+        if (!pending) return
+        if (Date.now() - pending.at > 60_000) {
+          layout.handoff.clearTabs()
+          return
+        }
+        if (pending.scope !== server.scope()) return
+
+        if (pending.id !== id) return
+        layout.handoff.clearTabs()
+        if (pending.dir !== (params.dir ?? "")) return
+
+        const from = workspaceTabs().tabs()
+        if (from.all.length === 0 && !from.active) return
+
+        const current = tabs().tabs()
+        if (current.all.length > 0 || current.active) return
+
+        const all = normalizeTabs(from.all)
+        const active = from.active ? normalizeTab(from.active) : undefined
+        tabs().setAll(all)
+        tabs().setActive(active && all.includes(active) ? active : all[0])
+
+        workspaceTabs().setAll([])
+        workspaceTabs().setActive(undefined)
+      },
+      { defer: true },
+    ),
+  )
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const size = createSizing()
   const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
-  const desktopFileTreeOpen = createMemo(() => isDesktop() && layout.fileTree.opened())
+  const desktopFileTreeOpen = createMemo(
+    () =>
+      isDesktop() &&
+      shouldShowFileTree({
+        desktopV2: platform.platform === "desktop" && settings.general.newLayoutDesigns(),
+        showFileTree: settings.general.showFileTree(),
+        opened: layout.fileTree.opened(),
+      }),
+  )
   const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
   const sessionPanelWidth = createMemo(() => {
     if (!desktopSidePanelOpen()) return "100%"
@@ -406,16 +298,45 @@ export default function Page() {
     return file.tab(tab)
   }
 
+  function normalizeTabs(list: string[]) {
+    const seen = new Set<string>()
+    const next: string[] = []
+    for (const item of list) {
+      const value = normalizeTab(item)
+      if (seen.has(value)) continue
+      seen.add(value)
+      next.push(value)
+    }
+    return next
+  }
+
   const openReviewPanel = () => {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
   }
 
   // FORK: 每次打开/切换项目默认收起内容预览器(reviewPanel),让"新项目打开"是干净的聊天 + 文件树,
-  //   点文件才展开预览(展开链路 createOpenSessionFileTab→openReviewPanel 已现成)。reviewPanel 是
-  //   全局持久化单例,这里监听项目目录(sdk.directory)变化主动 close —— 进/切/重开项目都触发;
-  //   同项目内切会话 directory 不变、不触发,保持当前开/关状态。
+  //   点文件才展开预览(展开链路 createOpenSessionFileTab→openReviewPanel 已现成)。监听项目目录
+  //   (sdk.directory)变化主动 close;同项目内切会话 directory 不变、不触发。
   //   [feat: new-project-hide-file-viewer-default] 2026-06-09
   createEffect(on(() => sdk.directory, () => view().reviewPanel.close()))
+
+  // FORK: 创作卡作用域跟随当前 session [feat: media-creation-mode]
+  //   - 进某 session → 切到该 session 作用域;首页 draft 直接建出 session(prev 无 id)→ draft 卡过继;
+  //   - 回首页/新建会话(id 变空)→ 重置 draft 作用域,修"旧创作记录在新会话冒出来"。
+  createEffect(
+    on(
+      () => params.id,
+      (id, prevId) => {
+        if (id) {
+          if (!prevId) creation.adoptDraftInto(id)
+          creation.setScope(id)
+        } else {
+          creation.resetScope(DRAFT_SCOPE)
+          creation.setScope(DRAFT_SCOPE)
+        }
+      },
+    ),
+  )
 
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const isChildSession = createMemo(() => !!info()?.parentID)
@@ -506,7 +427,7 @@ export default function Page() {
   })
 
   const [followup, setFollowup] = persisted(
-    Persist.workspace(sdk.directory, "followup", ["followup.v1"]),
+    Persist.serverWorkspace(serverSDK.scope, sdk.directory, "followup", ["followup.v1"]),
     createStore<{
       items: Record<string, FollowupItem[] | undefined>
       failed: Record<string, string | undefined>
@@ -587,8 +508,6 @@ export default function Page() {
     return {
       queryKey: [...vcsKey(), mode] as const,
       enabled,
-      staleTime: Number.POSITIVE_INFINITY,
-      gcTime: 60 * 1000,
       queryFn: mode
         ? () =>
             sdk.client.vcs
@@ -601,7 +520,7 @@ export default function Page() {
         : skipToken,
     }
   })
-  const refreshVcs = () => void queryClient.invalidateQueries({ queryKey: vcsKey() })
+  const refreshVcs = debounce(() => void queryClient.invalidateQueries({ queryKey: vcsKey() }), 100)
   const reviewDiffs = () => {
     if (store.changes === "git" || store.changes === "branch")
       // avoids suspense
@@ -680,11 +599,11 @@ export default function Page() {
   }
 
   function upsert(next: Project) {
-    const list = globalSync.data.project
+    const list = serverSync.data.project
     sync.set("project", next.id)
     const idx = list.findIndex((item) => item.id === next.id)
     if (idx >= 0) {
-      globalSync.set(
+      serverSync.set(
         "project",
         list.map((item, i) => (i === idx ? { ...item, ...next } : item)),
       )
@@ -692,10 +611,10 @@ export default function Page() {
     }
     const at = list.findIndex((item) => item.id > next.id)
     if (at >= 0) {
-      globalSync.set("project", [...list.slice(0, at), next, ...list.slice(at)])
+      serverSync.set("project", [...list.slice(0, at), next, ...list.slice(at)])
       return
     }
-    globalSync.set("project", [...list, next])
+    serverSync.set("project", [...list, next])
   }
 
   const gitMutation = useMutation(() => ({
@@ -723,6 +642,7 @@ export default function Page() {
   let dockHeight = 0
   let scroller: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
+  let revealMessage = (_id: string) => {}
   let scrollMark = 0
   let messageMark = 0
 
@@ -754,7 +674,7 @@ export default function Page() {
       const stale = !cached
         ? false
         : (() => {
-            const info = getSessionPrefetch(directory, id)
+            const info = getSessionPrefetch(serverSDK.scope, directory, id)
             if (!info) return true
             return Date.now() - info.at > SESSION_PREFETCH_TTL
           })()
@@ -792,7 +712,7 @@ export default function Page() {
         todoTimer = undefined
         if (!id) return
         if (status === "idle" && !blocked) return
-        const cached = untrack(() => sync.data.todo[id] !== undefined || globalSync.data.session_todo[id] !== undefined)
+        const cached = untrack(() => sync.data.todo[id] !== undefined || serverSync.data.session_todo[id] !== undefined)
 
         todoFrame = requestAnimationFrame(() => {
           todoFrame = undefined
@@ -867,6 +787,7 @@ export default function Page() {
     selection: SelectedLineRange
     comment: string
     preview?: string
+    // FORK: quote 子分类(从 Tauri 迁回)[feat: 聊天选区-卡片化-换行] 2026-06-14
     origin?: "review" | "file" | "quote"
   }) => {
     const selection = selectionFromLines(input.selection)
@@ -1389,9 +1310,8 @@ export default function Page() {
     },
   )
 
-  const historyWindow = createSessionHistoryWindow({
+  const historyLoader = createSessionHistoryLoader({
     sessionID: () => params.id,
-    messagesReady,
     loaded: () => messages().length,
     visibleUserMessages,
     historyMore,
@@ -1413,9 +1333,9 @@ export default function Page() {
       const el = scroller
       if (!el) return
       if (el.scrollHeight > el.clientHeight + 1) return
-      if (historyWindow.turnStart() <= 0 && !historyMore()) return
+      if (!historyMore()) return
 
-      void historyWindow.loadAndReveal()
+      void historyLoader.loadAndReveal()
     })
   }
 
@@ -1425,15 +1345,14 @@ export default function Page() {
         [
           params.id,
           messagesReady(),
-          historyWindow.turnStart(),
           historyMore(),
           historyLoading(),
           autoScroll.userScrolled(),
           visibleUserMessages().length,
         ] as const,
-      ([id, ready, start, more, loading, scrolled]) => {
+      ([id, ready, more, loading, scrolled]) => {
         if (!id || !ready || loading || scrolled) return
-        if (start <= 0 && !more) return
+        if (!more) return
         fill()
       },
       { defer: true },
@@ -1482,12 +1401,7 @@ export default function Page() {
       return out
     })
 
-  const busy = (sessionID: string) => {
-    if ((sync.data.session_status[sessionID] ?? { type: "idle" as const }).type !== "idle") return true
-    return (sync.data.message[sessionID] ?? []).some(
-      (item) => item.role === "assistant" && typeof item.time.completed !== "number",
-    )
-  }
+  const busy = (sessionID: string) => sync.data.session_working(sessionID)
 
   const queuedFollowups = createMemo(() => {
     const id = params.id
@@ -1512,7 +1426,7 @@ export default function Page() {
       const ok = await sendFollowupDraft({
         client: sdk.client,
         sync,
-        globalSync,
+        serverSync,
         draft: item,
         optimisticBusy: item.sessionDirectory === sdk.directory,
       }).catch((err) => {
@@ -1604,7 +1518,7 @@ export default function Page() {
   }
 
   // FORK: 停止失败不再静默吞错(原 .catch(()=>{})),弹真实提示;残留 busy 由 session.status()
-  // 对账自愈,见 global-sync/session-status-reconcile.ts [feat: stuck-working-status-reconcile] 2026-06-12
+  // 对账自愈,见 global-sync/session-status-reconcile.ts [feat: stuck-working-status-reconcile] 2026-06-13
   const halt = async (sessionID: string) => {
     if (!busy(sessionID)) return
     try {
@@ -1751,15 +1665,14 @@ export default function Page() {
     historyMore,
     historyLoading,
     loadMore: (sessionID) => sync.session.history.loadMore(sessionID),
-    turnStart: historyWindow.turnStart,
     currentMessageId: () => store.messageId,
     pendingMessage: () => ui.pendingMessage,
     setPendingMessage: (value) => setUi("pendingMessage", value),
     setActiveMessage,
-    setTurnStart: historyWindow.setTurnStart,
     autoScroll,
     scroller: () => scroller,
     anchor,
+    revealMessage: (id) => revealMessage(id),
     scheduleScrollState,
     consumePendingMessage: layout.pendingMessage.consume,
   })
@@ -1789,16 +1702,78 @@ export default function Page() {
     if (fillFrame !== undefined) cancelAnimationFrame(fillFrame)
   })
 
+  useUsageExceededDialogs()
+
+  const composerRegion = (placement: "dock" | "inline") => (
+    <SessionComposerRegion
+      state={composer}
+      ready={!store.deferRender && messagesReady()}
+      centered={placement === "dock" && centered()}
+      placement={placement}
+      inputRef={(el) => {
+        inputRef = el
+      }}
+      newSessionWorktree={newSessionWorktree()}
+      onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
+      onSubmit={() => {
+        comments.clear()
+        resumeScroll()
+      }}
+      onResponseSubmit={resumeScroll}
+      followup={
+        params.id && !isChildSession()
+          ? {
+              queue: queueEnabled,
+              items: followupDock(),
+              sending: sendingFollowup(),
+              edit: editingFollowup(),
+              onQueue: queueFollowup,
+              onAbort: () => {
+                const id = params.id
+                if (!id) return
+                setFollowup("paused", id, true)
+              },
+              onSend: (id) => {
+                void sendFollowup(params.id!, id, { manual: true })
+              },
+              onEdit: editFollowup,
+              onEditLoaded: clearFollowupEdit,
+            }
+          : undefined
+      }
+      revert={
+        rolled().length > 0
+          ? {
+              items: rolled(),
+              restoring: restoring(),
+              disabled: reverting(),
+              onRestore: restore,
+            }
+          : undefined
+      }
+      setPromptDockRef={(el) => {
+        promptDock = el
+      }}
+    />
+  )
+
   return (
-    <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
+    <div class="relative size-full overflow-hidden flex flex-col">
       {sessionSync() ?? ""}
       {/* FORK: 选区菜单 Host 提到 Session 顶层(原在 MessageTimeline,被 messagesReady Show 门控)
           确保 user 看 PDF/office 无 chat 会话时也能用右键菜单 + 拖拽 overlay
           [feat: office-选中加聊天] 2026-05-25 */}
       <ChatSelectionMenu />
       <SessionHeader />
-      {/* FORK: 镜像翻转 — 桌面下聊天区↔(审查+文件树)整体对调,聊天靠右 2026-06-02 */}
-      <div class="flex-1 min-h-0 flex flex-col md:flex-row-reverse">
+      <div
+        // FORK: REQ-041 五栏 — 经典布局下文件树/审查面板锚左(rail 右侧)、聊天居中,对齐 DeskFox Image#2;
+        //   上游新 v2 维持 flex-row [feat: electron-replatform] 2026-06-12
+        class="flex-1 min-h-0 flex flex-col "
+        classList={{
+          "md:flex-row gap-2 p-2": settings.general.newLayoutDesigns(),
+          "md:flex-row-reverse": !settings.general.newLayoutDesigns(),
+        }}
+      >
         <Show when={!isDesktop() && !!params.id}>
           <Tabs value={store.mobileTab} class="h-auto">
             <Tabs.List>
@@ -1824,24 +1799,33 @@ export default function Page() {
           </Tabs>
         </Show>
 
-        {/* Session panel */}
         <div
           classList={{
-            "@container relative shrink-0 flex flex-col min-h-0 h-full bg-background-stronger flex-1 md:flex-none": true,
-            "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
-              !size.active() && !ui.reviewSnap,
+            "@container relative shrink-0 flex flex-col min-h-0 h-full flex-1 md:flex-none transition-[width]": true,
+            // FORK: 文件查看区开/收动画 240→360ms + 去掉 !ui.reviewSnap 抑制 —— reviewSnap 在 review 切换的那一帧
+            //   移除 transition class 导致宽度"啪"地 snap(实测 708→265 仅 24ms,360ms 根本没机会跑);
+            //   去掉该抑制后切换查看区才真正按 360ms 过渡。位移(~505px)远大于文件树(~265px),360ms 让
+            //   单位像素速度与其他面板看齐,更从容(仍保留 !size.active() 在拖拽 resize 时不过渡)
+            //   [feat: titlebar-icons-rearrange] 2026-06-13
+            "duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+              !size.active(),
           }}
           style={{
             width: sessionPanelWidth(),
           }}
         >
-          <div class="flex-1 min-h-0 overflow-hidden">
-            <Switch>
-              <Match when={params.id}>
-                <Show when={messagesReady()}>
-                  <MessageTimeline
-                    mobileChanges={mobileChanges()}
-                    mobileFallback={reviewContent({
+          <div
+            classList={{
+              "flex-1 min-h-0 flex flex-col bg-background-stronger": true,
+              "rounded-[10px] overflow-hidden": settings.general.newLayoutDesigns(),
+              "shadow-[var(--v2-elevation-raised)]": settings.general.newLayoutDesigns() && !!params.id,
+            }}
+          >
+            <div class="flex-1 min-h-0 overflow-hidden">
+              <Switch>
+                <Match when={params.id && mobileChanges()}>
+                  <div class="relative h-full overflow-hidden">
+                    {reviewContent({
                       diffStyle: "unified",
                       classes: {
                         root: "pb-8",
@@ -1851,97 +1835,60 @@ export default function Page() {
                       loadingClass: "px-4 py-4 text-text-weak",
                       emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
                     })}
-                    actions={actions}
-                    scroll={ui.scroll}
-                    onResumeScroll={resumeScroll}
-                    setScrollRef={setScrollRef}
-                    onScheduleScrollState={scheduleScrollState}
-                    onAutoScrollHandleScroll={autoScroll.handleScroll}
-                    onMarkScrollGesture={markScrollGesture}
-                    hasScrollGesture={hasScrollGesture}
-                    onUserScroll={markUserScroll}
-                    onTurnBackfillScroll={historyWindow.onScrollerScroll}
-                    onAutoScrollInteraction={autoScroll.handleInteraction}
-                    centered={centered()}
-                    setContentRef={(el) => {
-                      content = el
-                      autoScroll.contentRef(el)
+                  </div>
+                </Match>
+                <Match when={params.id}>
+                  <Show when={messagesReady()}>
+                    <MessageTimeline
+                      actions={actions}
+                      scroll={ui.scroll}
+                      onResumeScroll={resumeScroll}
+                      setScrollRef={setScrollRef}
+                      onScheduleScrollState={scheduleScrollState}
+                      onAutoScrollHandleScroll={autoScroll.handleScroll}
+                      onMarkScrollGesture={markScrollGesture}
+                      hasScrollGesture={hasScrollGesture}
+                      onUserScroll={markUserScroll}
+                      onHistoryScroll={historyLoader.onScrollerScroll}
+                      onAutoScrollInteraction={autoScroll.handleInteraction}
+                      shouldAnchorBottom={() =>
+                        !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
+                      }
+                      centered={centered()}
+                      setContentRef={(el) => {
+                        content = el
+                        autoScroll.contentRef(el)
 
-                      const root = scroller
-                      if (root) scheduleScrollState(root)
-                    }}
-                    turnStart={historyWindow.turnStart()}
-                    historyMore={historyMore()}
-                    historyLoading={historyLoading()}
-                    onLoadEarlier={() => {
-                      void historyWindow.loadAndReveal()
-                    }}
-                    renderedUserMessages={historyWindow.renderedUserMessages()}
-                    anchor={anchor}
-                  />
-                </Show>
-              </Match>
-              <Match when={true}>
-                <NewSessionView worktree={newSessionWorktree()} />
-              </Match>
-            </Switch>
+                        const root = scroller
+                        if (root) scheduleScrollState(root)
+                      }}
+                      historyShift={historyLoader.shift()}
+                      userMessages={historyLoader.userMessages()}
+                      anchor={anchor}
+                      setRevealMessage={(fn) => {
+                        revealMessage = fn
+                      }}
+                    />
+                  </Show>
+                </Match>
+                <Match when={true}>
+                  <NewSessionView worktree={newSessionWorktree()} />
+                </Match>
+              </Switch>
+            </div>
+
+            <Show when={params.id || !newSessionDesign()}>{composerRegion("dock")}</Show>
           </div>
-
-          <SessionComposerRegion
-            state={composer}
-            ready={!store.deferRender && messagesReady()}
-            centered={centered()}
-            inputRef={(el) => {
-              inputRef = el
-            }}
-            newSessionWorktree={newSessionWorktree()}
-            onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
-            onSubmit={() => {
-              comments.clear()
-              resumeScroll()
-            }}
-            onResponseSubmit={resumeScroll}
-            followup={
-              params.id && !isChildSession()
-                ? {
-                    queue: queueEnabled,
-                    items: followupDock(),
-                    sending: sendingFollowup(),
-                    edit: editingFollowup(),
-                    onQueue: queueFollowup,
-                    onAbort: () => {
-                      const id = params.id
-                      if (!id) return
-                      setFollowup("paused", id, true)
-                    },
-                    onSend: (id) => {
-                      void sendFollowup(params.id!, id, { manual: true })
-                    },
-                    onEdit: editFollowup,
-                    onEditLoaded: clearFollowupEdit,
-                  }
-                : undefined
-            }
-            revert={
-              rolled().length > 0
-                ? {
-                    items: rolled(),
-                    restoring: restoring(),
-                    disabled: reverting(),
-                    onRestore: restore,
-                  }
-                : undefined
-            }
-            setPromptDockRef={(el) => {
-              promptDock = el
-            }}
-          />
 
           <Show when={desktopReviewOpen()}>
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
+                classList={{
+                  "-right-1": settings.general.newLayoutDesigns(),
+                }}
                 direction="horizontal"
-                edge="start"
+                // FORK: 经典布局镜像后聊天区在右,拖左缘增宽 = start 语义(上游默认 end 拖不动)2026-06-13
+                edge={settings.general.newLayoutDesigns() ? undefined : "start"}
                 size={layout.session.width()}
                 min={450}
                 max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}

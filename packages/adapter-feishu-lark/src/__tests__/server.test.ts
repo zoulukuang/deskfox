@@ -29,14 +29,14 @@ function makeOauthMock(plan: Resp[]) {
 // 启动 / 健康检查 / auth
 // ============================================================
 
-let h: ReturnType<typeof startServer>
+let h: Awaited<ReturnType<typeof startServer>> // FORK: startServer 改 async [feat: electron-replatform]
 let username = "test-u"
 let password = "test-p"
 let authHeader: string
 
-beforeEach(() => {
+beforeEach(async () => {
   authHeader = `Basic ${btoa(`${username}:${password}`)}`
-  h = startServer({
+  h = await startServer({
     username,
     password,
     gcIntervalMs: 1_000_000, // 测试期不 GC
@@ -111,7 +111,7 @@ describe("POST /oauth/start", () => {
         },
       },
     ])
-    h = startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
+    h = await startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
 
     const r = await fetch(`${h.url}/oauth/start`, {
       method: "POST",
@@ -141,7 +141,7 @@ describe("POST /oauth/start", () => {
         },
       },
     ])
-    h = startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
+    h = await startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
 
     await fetch(`${h.url}/oauth/start`, {
       method: "POST",
@@ -177,7 +177,7 @@ describe("POST /oauth/start", () => {
   test("init 失败 → 502 oauth_start_failed", async () => {
     h.stop()
     const m = makeOauthMock([{ status: 500, body: { error: "server_error" } }])
-    h = startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
+    h = await startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
 
     const r = await fetch(`${h.url}/oauth/start`, {
       method: "POST",
@@ -241,7 +241,7 @@ describe("POST /oauth/poll", () => {
       },
       { status: 200, body: { error: "authorization_pending" } },
     ])
-    h = startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
+    h = await startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
 
     const sid = await startSession(m)
     const r = await fetch(`${h.url}/oauth/poll`, {
@@ -278,7 +278,7 @@ describe("POST /oauth/poll", () => {
       },
       // 二次 poll 应 404(session 已清)
     ])
-    h = startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
+    h = await startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
 
     const sid = await startSession(m)
     const r1 = await fetch(`${h.url}/oauth/poll`, {
@@ -314,7 +314,7 @@ describe("POST /oauth/poll", () => {
         },
       },
     ])
-    h = startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
+    h = await startServer({ username, password, oauthFetchImpl: m.fn, onReady: () => {} })
 
     const sid = await startSession(m)
     // 等 10ms 让 0 秒 expiresIn 过期判断生效
@@ -335,10 +335,10 @@ describe("POST /oauth/poll", () => {
 // ============================================================
 
 describe("onReady callback", () => {
-  test("被调一次 + 含 url/username/password", () => {
+  test("被调一次 + 含 url/username/password", async () => {
     h.stop()
     let captured: unknown = null
-    h = startServer({
+    h = await startServer({
       username,
       password,
       onReady: (info) => {
@@ -352,7 +352,7 @@ describe("onReady callback", () => {
     })
   })
 
-  test("无 onReady 走 console.log(默认行为不报)", () => {
+  test("无 onReady 走 console.log(默认行为不报)", async () => {
     h.stop()
     // 静默 console.log 防止污染输出
     const orig = console.log
@@ -361,7 +361,7 @@ describe("onReady callback", () => {
       captured = args.map(String).join(" ")
     }
     try {
-      h = startServer({ username, password })
+      h = await startServer({ username, password })
       expect(captured.length).toBeGreaterThan(0)
       expect(captured).toContain("127.0.0.1")
     } finally {
@@ -413,16 +413,16 @@ describe("POST /accounts/update-settings — workspace 字段校验 (T10)", () =
 // ============================================================
 
 describe("默认值", () => {
-  test("默认 username = deskfox", () => {
+  test("默认 username = deskfox", async () => {
     h.stop()
-    h = startServer({ password: "p", onReady: () => {} })
+    h = await startServer({ password: "p", onReady: () => {} })
     expect(h.ready.username).toBe("deskfox")
     expect(h.ready.password).toBe("p")
   })
 
-  test("默认随机 password 长度 ≥ 24 hex", () => {
+  test("默认随机 password 长度 ≥ 24 hex", async () => {
     h.stop()
-    h = startServer({ onReady: () => {} })
+    h = await startServer({ onReady: () => {} })
     expect(h.ready.password.length).toBeGreaterThanOrEqual(24)
     expect(h.ready.password).toMatch(/^[0-9a-f]+$/)
   })

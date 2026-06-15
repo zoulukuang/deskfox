@@ -34,8 +34,9 @@ const config = {
   SANITIZE_NAMED_PROPS: true,
   FORBID_TAGS: ["style"],
   FORBID_CONTENTS: ["style", "script"],
-  // FORK: 显式允许 data-mermaid-pending 属性活过 sanitize(decorate 把它转 data-mermaid-source) 2026-05-05
-  ADD_ATTR: ["data-mermaid-pending"],
+  // FORK: ADD_TAGS svg/path 上游所加;ADD_ATTR 取并集 —— 上游 svg 属性 + fork data-mermaid-pending(decorate 转 data-mermaid-source) [feat: electron-replatform]
+  ADD_TAGS: ["svg", "path"],
+  ADD_ATTR: ["data-mermaid-pending", "d", "viewBox", "preserveAspectRatio", "xmlns", "target"],
 }
 
 const iconPaths = {

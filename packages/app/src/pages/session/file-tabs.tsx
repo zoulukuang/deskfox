@@ -13,7 +13,7 @@ import { Markdown } from "@opencode-ai/ui/markdown"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { showToast } from "@opencode-ai/ui/toast"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke, listen } from "@/utils/native"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useComments } from "@/context/comments"
@@ -33,6 +33,10 @@ import { langFromExt } from "@/utils/lang-from-ext"
 // FORK: .md 编辑增强(列表续延 / Ctrl+B/I/K / 拖图 / 智能粘贴 / Ctrl+F 等)2026-05-05
 import { markdownEditorExtensions } from "@/utils/markdown-editor-extensions"
 import { isBinary, isOfficeDocument, tooLarge } from "@/utils/file-limits"
+// FORK: CSV/TSV 表格查看器(新功能,user 拍板)[feat: csv-table-viewer] 2026-06-14
+import { CsvTable } from "@/components/csv-table"
+// FORK: 选区 overlay 几何工具(CSV 裁剪 + iframe 投影)[feat: viewer-selection-tray-style]
+import { clampRectsToBounds, projectIframeRects } from "./selection-overlay"
 // FORK: 本地资源 protocol(.md 内 <img>/<video>/<audio> 重写 + HTML 预览 iframe)2026-05-05
 import { localAssetUrl, resolveAbsolute, rewriteAssetSrc } from "@/utils/local-asset"
 // FORK: 大文件预览统一防护 — L4 UX 兜底组件 [feat: large-file-preview-guard] 2026-05-21
@@ -69,6 +73,13 @@ function isHtmlPath(p: string | undefined): boolean {
   if (!p) return false
   const lower = p.toLowerCase()
   return lower.endsWith(".html") || lower.endsWith(".htm")
+}
+
+// FORK: CSV/TSV 表格视图 [feat: csv-table-viewer] 2026-06-14
+function isCsvPath(p: string | undefined): boolean {
+  if (!p) return false
+  const lower = p.toLowerCase()
+  return lower.endsWith(".csv") || lower.endsWith(".tsv")
 }
 
 // HTML 预览大文件阈值 — 对齐 file-limits.ts MAX_EDITABLE_BYTES(预览与编辑同卡 10MB)
@@ -614,8 +625,10 @@ export function FileTabContent(props: {
     }
   })
 
-  // FORK: window close flush — 监听 Tauri prevent_close 之前发的 "flush-before-close" event
+  // FORK: window close flush — 关闭到托盘前 silent save 未保存改动
   // [feat: auto-save-debounce-flush] 2026-05-21
+  // [feat: electron-replatform] 2026-06-12 — Electron 主进程 close 时直接 emit deskfox-flush-before-close,
+  //   本组件直连 native.listen(不再依赖 layout 把它转成 DOM 事件);DOM 事件路径保留向后兼容。
   onMount(() => {
     const handler = () => {
       if (editing() && dirty()) {
@@ -623,7 +636,12 @@ export function FileTabContent(props: {
       }
     }
     window.addEventListener("deskfox-flush-now", handler)
-    onCleanup(() => window.removeEventListener("deskfox-flush-now", handler))
+    let unlisten: (() => void) | undefined
+    void listen("deskfox-flush-before-close", handler).then((u) => (unlisten = u))
+    onCleanup(() => {
+      window.removeEventListener("deskfox-flush-now", handler)
+      unlisten?.()
+    })
   })
   // FORK: dirty 状态同步给 file context,让 watcher reload 守卫(查看器-自动刷新)2026-04-28
   createEffect(
@@ -670,6 +688,7 @@ export function FileTabContent(props: {
     selection: SelectedLineRange
     comment: string
     preview?: string
+    // FORK: quote 特性已从 Tauri 迁回(原 deferred TODO 完成)[feat: 聊天选区-卡片化-换行] 2026-06-14
     origin?: "review" | "file" | "quote"
   }) => {
     const selection = selectionFromLines(input.selection)
@@ -961,20 +980,24 @@ export function FileTabContent(props: {
   //   - 清除:setHighlightRects(null) → Solid 信号驱动 unmount,WebKit 没机会缓存
   //   - 滚动:绑 scroll capture 监听,滚动时直接清(用户在菜单生命周期内极少滚)
   //
-  // 颜色:Microsoft Fluent 系统红 #d13438 半透明 0.5 alpha,与 Windows 同款操作色一致。
-  // md / 代码文件 / Pierre shadow DOM 都走同一渲染路径,视觉天然一致。
+  // 颜色:GitHub 蓝 rgba(56,139,253,0.4) —— 与原生 ::selection(index.css 统一蓝)同系,
+  //   拖选(原生蓝)↔ 右键(overlay 蓝)视觉无缝。md / 代码 / PDF / CSV / HTML iframe 都走此 overlay,统一一致。
+  //   [feat: viewer-selection-tray-style] 2026-06-14(原 Microsoft Fluent 红 #d13438,user 反馈各格式不统一)
   type HighlightRect = { left: number; top: number; width: number; height: number }
   const [highlightRects, setHighlightRects] = createSignal<HighlightRect[] | null>(null)
 
-  const setSelectionHighlight = (range: Range | null) => {
+  // clipRect:把高亮矩形裁到容器边界(CSV grid 选区会横跨整行/横向滚出可视区,overlay fixed 定位会
+  // 溢出到文件树/聊天 → 传 CSV 容器矩形裁剪)。其余格式不传,行为不变。[feat: viewer-selection-tray-style]
+  const setSelectionHighlight = (range: Range | null, clipRect?: DOMRect | null) => {
     if (!range) {
       setHighlightRects(null)
       return
     }
     try {
-      const rects = Array.from(range.getClientRects())
+      const raw = Array.from(range.getClientRects())
         .filter((r) => r.width > 0 && r.height > 0)
         .map((r) => ({ left: r.left, top: r.top, width: r.width, height: r.height }))
+      const rects = clipRect ? clampRectsToBounds(raw, clipRect) : raw
       setHighlightRects(rects.length > 0 ? rects : null)
     } catch {
       setHighlightRects(null)
@@ -1228,6 +1251,25 @@ export function FileTabContent(props: {
         const y = rect.top + (Number((data as { y?: unknown }).y) || 0)
         const txt = (data as { text?: unknown }).text
         const text = typeof txt === "string" ? txt : ""
+        // FORK: 把 iframe 内选区 rects(桥接脚本传来,相对 iframe viewport)投影到父文档 → 画 overlay 蓝。
+        //   iframe 失焦(父菜单获焦)后浏览器把 iframe 内原生选区渲染成灰,overlay 蓝补偿 → 与其他格式统一。
+        //   [feat: viewer-selection-tray-style]
+        const rawRects = (data as { rects?: unknown }).rects
+        if (Array.isArray(rawRects)) {
+          const rects = (rawRects as unknown[])
+            .map((r) => r as { left?: unknown; top?: unknown; width?: unknown; height?: unknown })
+            .filter(
+              (r) =>
+                typeof r.left === "number" &&
+                typeof r.top === "number" &&
+                typeof r.width === "number" &&
+                typeof r.height === "number",
+            )
+            .map((r) => ({ left: r.left as number, top: r.top as number, width: r.width as number, height: r.height as number }))
+          setHighlightRects(rects.length > 0 ? projectIframeRects(rects, { left: rect.left, top: rect.top }) : null)
+        } else {
+          setHighlightRects(null)
+        }
         setMdComment("")
         setMdMenu({ open: true, x, y, text, mode: "menu" })
       } else if (t === "mousedown") {
@@ -1500,6 +1542,8 @@ export function FileTabContent(props: {
             })
           },
           officeTooling: {
+            // FORK: office 路由已在后端 HttpApi(/office-tooling/*),SDK 已 regen 生成 office.tooling.* 方法 [feat: electron-replatform]
+            
             getStatus: async () =>
               sdk.client.office.tooling
                 .status()
@@ -1538,6 +1582,7 @@ export function FileTabContent(props: {
             const cached = officePdfCacheGet(cacheKey)
             if (cached) return cached
             try {
+              // FORK: /file/office-pdf 路由已在后端,SDK 已 regen 生成 file.officePdf [feat: electron-replatform]
               const res = await sdk.client.file.officePdf(
                 { path: filePath },
                 { parseAs: "arrayBuffer" } as any,
@@ -1641,6 +1686,73 @@ export function FileTabContent(props: {
     )
   }
 
+  // FORK: CSV 右键 —— 复用 md/html 的选区菜单(添加到聊天/复制)。
+  //   原先**不画 overlay**(CSS grid 选区 getClientRects 横跨整行 → viewport-fixed overlay 溢出文件树/聊天,
+  //   Image#34/#35),只靠 native 选区;但右键 collapse + grid 几何使 native 高亮常消失(user 报"右键底色消失")。
+  //   现改为:画 overlay 蓝 + **裁到 CSV 容器矩形**(clampRectsToBounds)防溢出 → 与其他格式统一蓝、不再消失。
+  //   [feat: viewer-selection-tray-style] 2026-06-14(原 [feat: csv-table-viewer])
+  const handleCsvContextMenu = (event: MouseEvent) => {
+    if (editing()) return
+    event.preventDefault()
+    let text = ""
+    let range: Range | null = null
+    // FORK: CSV 网格右键点"选区外的表格线"时,Chromium 把原生选区 collapse 成空(原"light DOM 无 collapse"
+    //   假设对 CSS grid 不成立,user 报 Image#36/#37)。两步兜底,对齐 Pierre 路径 handleSelectionContextMenu:
+    //   ① 用 history.pickBestRecent()(selectionchange 已把选区入栈,免疫右键 collapse)拿回文本+range;
+    //   ② 程序化恢复原生选区(sel.addRange)→ 蓝色高亮重新可见,user 不再觉得"失去选区"。
+    //   ③ 画 setSelectionHighlight overlay 蓝并**裁到 CSV 容器矩形**(clampRectsToBounds 防 grid getClientRects
+    //   整行铺满溢出文件树/聊天,Image#34/#35)→ 与其他格式统一蓝、右键后不再消失。
+    const best = viewerHistory?.pickBestRecent() ?? null
+    if (best && best.text.trim()) {
+      text = best.text
+      range = best.range
+    }
+    if (!text) {
+      const sel = typeof window !== "undefined" ? window.getSelection() : null
+      if (sel && sel.rangeCount > 0) {
+        const t = sel.toString()
+        if (t.trim()) {
+          text = t
+          range = sel.getRangeAt(0).cloneRange()
+        }
+      }
+    }
+    // 画 overlay 蓝 + 裁到 CSV 容器矩形(防 grid 矩形溢出);range 为 null 时内部自动清空
+    const csvBounds = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect() ?? null
+    setSelectionHighlight(range, csvBounds)
+    if (range) {
+      // 恢复 collapse 掉的原生选区,让 OS 蓝色高亮重新覆盖原文本范围。
+      try {
+        const sel = typeof window !== "undefined" ? window.getSelection() : null
+        if (sel) {
+          sel.removeAllRanges()
+          sel.addRange(range.cloneRange())
+        }
+      } catch {
+        // 恢复失败不影响菜单功能
+      }
+    }
+    setMdComment("")
+    setMdMenu({ open: true, x: event.clientX, y: event.clientY, text, mode: "menu" })
+  }
+
+  // FORK: CSV/TSV 表格视图 [feat: csv-table-viewer] 2026-06-14
+  const renderCsv = (source: string) => (
+    <div class="h-full min-h-0" onContextMenu={handleCsvContextMenu}>
+      <CsvTable
+        text={source}
+        onOpenExternal={() => {
+          const root = sdk.directory
+          const p = path()
+          if (!root || !p) return
+          invoke("open_path", { path: `${root}/${p}`.replace(/\\/g, "/"), appName: null }).catch((e) => {
+            showToast({ variant: "error", title: "无法用本机软件打开", description: String(e) })
+          })
+        }}
+      />
+    </div>
+  )
+
   const renderFile = (source: string) => {
     const p = path()
     // FORK: 大文件预览统一防护 — L1 闸门已在 context/file.tsx load() 命中,UI 渲染 FileTooLarge
@@ -1658,8 +1770,14 @@ export function FileTabContent(props: {
       )
     }
     if (isMarkdownPath(p)) return renderMarkdown(source)
+    // FORK: pdf/office 走 renderDefault → File/FileMedia 的 pdf 分支 → DocumentViewer(pdf.js TextLayer 可选中
+    //   + 右键加聊天,与 md 同一套选区机制)。必须在 mediaKindFromPath 之前,因 pdfLikeExtensions 含 office
+    //   会让它们落到无 pdf 分支的 renderMedia → 空白。[feat: pdf-render-path] 2026-06-14
+    if (isPdfLikePath(p)) return renderDefault(source)
     if (mediaKindFromPath(p)) return renderMedia()
     if (isHtmlPath(p)) return renderHtml(source)
+    // FORK: csv/tsv 走表格视图 [feat: csv-table-viewer] 2026-06-14
+    if (isCsvPath(p)) return renderCsv(source)
     return renderDefault(source)
   }
 
@@ -1735,7 +1853,7 @@ export function FileTabContent(props: {
                   top: `${rect.top}px`,
                   width: `${rect.width}px`,
                   height: `${rect.height}px`,
-                  "background-color": "rgba(209, 52, 56, 0.5)",
+                  "background-color": "rgba(56, 139, 253, 0.4)", // FORK: 统一选区蓝(原 #d13438 红)→ 与原生 ::selection 同系,各格式视觉一致 [feat: viewer-selection-tray-style]
                 }}
               />
             )}

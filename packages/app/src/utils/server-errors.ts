@@ -46,6 +46,23 @@ export function isTransientStartupError(error: unknown): boolean {
   return /missing queryfn/i.test(msg)
 }
 
+// FORK: 冷启动 file.list 瞬时 500 识别 [feat: coldstart-list-500-retry] 2026-06-13
+// 起因:sidecar HTTP 已起但内部(文件索引 / instance / worktree)未热,首个 file.list 返回
+//   500「Unexpected server error. Check server logs for details.」,稍后自愈(树最终正常加载)。
+// 这是 transient 500(非连接级不可达,故 isBackendUnreachableError 漏判),应重试而非各弹红 toast。
+// 仅匹配该通用 500 文案 —— 真实业务 5xx 带具体错误信息,不命中此正则,仍正常 surface。
+const TRANSIENT_SERVER_ERROR_RE = /unexpected server error|check server logs for details/i
+export function isTransientServerError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  if (!msg) return false
+  return TRANSIENT_SERVER_ERROR_RE.test(msg)
+}
+
+/** file.list 可重试错误 = 连接级不可达 OR 冷启动瞬时 500。其余(真实业务错)立即 surface 不延迟。 */
+export function isRetryableListError(error: unknown): boolean {
+  return isBackendUnreachableError(error) || isTransientServerError(error)
+}
+
 type Translator = (key: string, vars?: Record<string, string | number>) => string
 
 function tr(translator: Translator | undefined, key: string, text: string, vars?: Record<string, string | number>) {
@@ -56,12 +73,20 @@ function tr(translator: Translator | undefined, key: string, text: string, vars?
 }
 
 export function formatServerError(error: unknown, translate?: Translator, fallback?: string) {
-  if (isConfigInvalidErrorLike(error)) return parseReadableConfigInvalidError(error, translate)
-  if (isProviderModelNotFoundErrorLike(error)) return parseReadableProviderModelNotFoundError(error, translate)
+  const unwrapped = unwrapNamedError(error)
+  if (isConfigInvalidErrorLike(unwrapped)) return parseReadableConfigInvalidError(unwrapped, translate)
+  if (isProviderModelNotFoundErrorLike(unwrapped)) return parseReadableProviderModelNotFoundError(unwrapped, translate)
   if (error instanceof Error && error.message) return error.message
   if (typeof error === "string" && error) return error
   if (fallback) return fallback
   return tr(translate, "error.chain.unknown", "Unknown error")
+}
+
+function unwrapNamedError(error: unknown): unknown {
+  if (error instanceof Error && error.cause && typeof error.cause === "object" && "body" in error.cause) {
+    return (error.cause as Record<string, unknown>).body
+  }
+  return error
 }
 
 function isConfigInvalidErrorLike(error: unknown): error is ConfigInvalidError {

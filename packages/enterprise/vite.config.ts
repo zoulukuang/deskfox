@@ -8,7 +8,7 @@ const nitroConfig: any = (() => {
   if (target === "cloudflare") {
     return {
       compatibilityDate: "2024-09-19",
-      preset: "cloudflare_module",
+      preset: "cloudflare-module",
       cloudflare: {
         nodeCompat: true,
       },
@@ -27,9 +27,9 @@ export default defineConfig({
     }),
   ],
   server: {
-    // FORK: R6 loopback-only — 默认 0.0.0.0 暴露 dev server 到 LAN 是安全风险 2026-05-25
-    host: "127.0.0.1",
+    host: "0.0.0.0",
     allowedHosts: true,
+    port: 3002,
   },
   worker: {
     format: "es",

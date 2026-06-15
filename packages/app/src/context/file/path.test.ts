@@ -358,3 +358,17 @@ describe("encodeFilePath", () => {
     })
   })
 })
+
+// FORK: [bug-repro: 文件树拖出目录后源目录残留幽灵条目] 2026-06-13
+// Windows 双分隔符双 key:点击展开用 server 原生 backslash,拖放刷新用 absoluteToRelative
+// 的 forward slash → 必须归一到同一 store key。
+describe("normalizeDir 分隔符归一(Windows 双 key 幽灵修复)", () => {
+  const helpers = createPathHelpers(() => "D:\\Downloads")
+  test("backslash 与 forward slash 归一到同一 key", () => {
+    expect(helpers.normalizeDir("test\\phase3")).toBe(helpers.normalizeDir("test/phase3"))
+    expect(helpers.normalizeDir("test\\phase3")).toBe("test/phase3")
+  })
+  test("绝对路径(backslash)剥根后也归一", () => {
+    expect(helpers.normalizeDir("D:\\Downloads\\test\\phase3")).toBe("test/phase3")
+  })
+})

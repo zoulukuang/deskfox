@@ -6,21 +6,23 @@ import { useMutation } from "@tanstack/solid-query"
 import { Icon } from "@opencode-ai/ui/icon"
 import { createMemo, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useGlobalSDK } from "@/context/global-sdk"
-import { useGlobalSync } from "@/context/global-sync"
 import { type LocalProject, getAvatarColors } from "@/context/layout"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { Avatar } from "@opencode-ai/ui/avatar"
 import { useLanguage } from "@/context/language"
-import { getProjectAvatarSource } from "@/pages/layout/sidebar-items"
+import { getProjectAvatarSource } from "@/pages/layout/helpers"
+import { ServerConnection } from "@/context/server"
+import { useGlobal } from "@/context/global"
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 
-export function DialogEditProject(props: { project: LocalProject }) {
+export function DialogEditProject(props: { project: LocalProject; server: ServerConnection.Any }) {
   const dialog = useDialog()
-  const globalSDK = useGlobalSDK()
-  const globalSync = useGlobalSync()
+  const global = useGlobal()
   const language = useLanguage()
+  const serverCtx = createMemo(() => global.createServerCtx(props.server))
+  const serverSDK = () => serverCtx().sdk
+  const serverSync = () => serverCtx().sync
 
   const folderName = createMemo(() => getFilename(props.project.worktree))
   const defaultName = createMemo(() => props.project.name || folderName())
@@ -78,7 +80,7 @@ export function DialogEditProject(props: { project: LocalProject }) {
       const start = store.startup.trim()
 
       if (props.project.id && props.project.id !== "global") {
-        await globalSDK.client.project.update({
+        await serverSDK().client.project.update({
           projectID: props.project.id,
           directory: props.project.worktree,
           name,
@@ -86,17 +88,16 @@ export function DialogEditProject(props: { project: LocalProject }) {
           commands: { start },
         })
       } else {
-        globalSync.project.meta(props.project.worktree, {
+        serverSync().project.meta(props.project.worktree, {
           name,
           icon: { color: store.color || undefined, override: store.iconOverride || undefined },
           commands: { start: start || undefined },
         })
       }
 
-      // FORK: project-avatar-save — 把 override 写进 canonical 的 childStore.icon(enrich 唯一无条件读取的本地源),
-      // 对「有 id 走 update」和「无 id / global 走 meta」两条路径都生效。旧代码只在 update 分支写 icon,
-      // meta 分支的 override 仅落 projectMeta(enrich 不读)→ 上传头像永久不显示。[feat: project-avatar-save]
-      globalSync.project.icon(props.project.worktree, store.iconOverride || undefined)
+      // FORK: project-avatar-save — override 写进 canonical childStore.icon(enrich 唯一无条件读取的本地源),
+      // 对「有 id 走 update」和「无 id / global 走 meta」两条路径都生效 [feat: project-avatar-save]
+      serverSync().project.icon(props.project.worktree, store.iconOverride || undefined)
       dialog.close()
     },
   }))

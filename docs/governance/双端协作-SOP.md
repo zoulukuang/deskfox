@@ -277,9 +277,9 @@ git push origin main
 
 **反例**(必须立 feat,不许直推 main):
 
-- 任何代码改动(`.ts` / `.tsx` / `.rs` / `.ps1` / `.sh` 等)
+- 任何代码改动(`.ts` / `.tsx` / `.ps1` / `.sh` 等;换基座后 `.rs` 仅历史)
 - 跨多文件的文档改动(≥ 3 个文件)
-- 配置改动(`.iss` / `tauri.conf.json` / `.husky/*` 等)
+- 配置改动(`electron-builder.deskfox.config.ts` / `electron.vite.config.ts` / `.husky/*` 等)
 - 新增功能 / 重构 / bug fix(无论多小)
 
 **约定上限**:同一天直推 main ≤ 3 笔。超过说明"小补丁"判断错了,后续应该立 feat 攒着合。

@@ -1,7 +1,9 @@
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { encodeFilePath } from "@/context/file/path"
-import { DialogFileTreePrompt, DialogFileTreeConfirm } from "@/components/dialog-file-tree"
+import { DialogFileTreeConfirm, DialogFileTreeConflict, type ConflictAction } from "@/components/dialog-file-tree"
+// FORK: 纯逻辑 helper 抽出(test-isolation;原定义见 file-tree-helpers.ts)[feat: test-isolation-file-tree] 2026-06-14
+import { shouldListRoot, dirsToExpand } from "@/components/file-tree-helpers"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -23,7 +25,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 // FORK: 应用内 Tooltip(WKWebView 不渲染原生 title)— 文件树行「再次点击可收起预览」hover 提示 [feat: filetree-hover-collapse-hint] 2026-06-09
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke } from "@/utils/native"
 import {
   createEffect,
   createMemo,
@@ -80,33 +82,8 @@ type Filter = {
   dirs: Set<string>
 }
 
-export function shouldListRoot(input: { level: number; dir?: { loaded?: boolean; loading?: boolean } }) {
-  if (input.level !== 0) return false
-  if (input.dir?.loaded) return false
-  if (input.dir?.loading) return false
-  return true
-}
-
-export function shouldListExpanded(input: {
-  level: number
-  dir?: { expanded?: boolean; loaded?: boolean; loading?: boolean }
-}) {
-  if (input.level === 0) return false
-  if (!input.dir?.expanded) return false
-  if (input.dir.loaded) return false
-  if (input.dir.loading) return false
-  return true
-}
-
-export function dirsToExpand(input: {
-  level: number
-  filter?: { dirs: Set<string> }
-  expanded: (dir: string) => boolean
-}) {
-  if (input.level !== 0) return []
-  if (!input.filter) return []
-  return [...input.filter.dirs].filter((dir) => !input.expanded(dir))
-}
+// FORK: shouldListRoot / shouldListExpanded / dirsToExpand 已抽到 ./file-tree-helpers
+// (纯逻辑,供单测直接 import 免加载 @kobalte;见顶部 import)[feat: test-isolation-file-tree] 2026-06-14
 
 const kindLabel = (kind: Kind) => {
   if (kind === "add") return "A"
@@ -151,6 +128,85 @@ function isPathDragging(absolute: string): boolean {
 function resetDragState(): void {
   setDraggingPaths([])
   setDropTargetPath(null)
+}
+// FORK-END
+
+// FORK-BEGIN: 内联编辑 — 全树共享(模块级 signal,跨 FileTree 层级)[feat: file-tree-inline-edit] 2026-06-13
+// 重命名:editingPath = 正在改名的节点 rel path → 该行 name 换成 input。
+// 新建:pendingNew = { parentRel, type } → 目标文件夹内顶部渲染一个空 input 行,提交即创建。
+const [editingPath, setEditingPath] = createSignal<string | null>(null)
+// FORK: 含 parentAbs/onAfter —— FileTree 递归,startNew 在父实例(文件夹菜单)set,input 在子实例
+//   (path=该文件夹)render+commit,instance-local 取不到,故全放模块级 signal。
+const [pendingNew, setPendingNew] = createSignal<{
+  parentRel: string
+  parentAbs: string
+  type: "file" | "directory"
+  onAfter?: () => void
+} | null>(null)
+
+/** 内联名称输入 — 自动聚焦 + 选中(重命名时选文件名不含扩展名);Enter 提交 / Escape 取消 / blur 提交。 */
+function InlineNameInput(props: {
+  initial: string
+  selectBasename?: boolean
+  onCommit: (name: string) => void
+  onCancel: () => void
+}) {
+  let ref: HTMLInputElement | undefined
+  let done = false
+  const commit = () => {
+    if (done) return
+    done = true
+    const v = ref?.value.trim() ?? ""
+    if (v && v !== props.initial) props.onCommit(v)
+    else props.onCancel()
+  }
+  const focusSelect = () => {
+    if (!ref) return
+    ref.value = props.initial
+    ref.focus()
+    const v = props.initial
+    const dot = v.lastIndexOf(".")
+    if (props.selectBasename && dot > 0) ref.setSelectionRange(0, dot)
+    else ref.select()
+  }
+  onMount(() => {
+    focusSelect()
+    // FORK: 右键菜单触发新建时,Kobalte 菜单关闭(含动画)会延迟把焦点抢回 trigger → 多帧 + 延时重夺,
+    //   直到 input 拿到焦点(rename 走 F2 无此问题但重试无害)。
+    let tries = 0
+    const reclaim = () => {
+      if (!ref) return
+      if (document.activeElement === ref) return
+      focusSelect()
+      if (++tries < 12) requestAnimationFrame(reclaim)
+    }
+    requestAnimationFrame(reclaim)
+    setTimeout(reclaim, 80)
+    setTimeout(reclaim, 180)
+  })
+  return (
+    <input
+      ref={ref}
+      class="flex-1 min-w-0 h-5 text-12-medium bg-surface-base text-text-base border border-interactive-base rounded px-1 outline-none"
+      spellcheck={false}
+      autocomplete="off"
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === "Enter") {
+          e.preventDefault()
+          commit()
+        } else if (e.key === "Escape") {
+          e.preventDefault()
+          done = true
+          props.onCancel()
+        }
+      }}
+      onBlur={commit}
+      onClick={(e) => e.stopPropagation()}
+      onDblClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    />
+  )
 }
 // FORK-END
 
@@ -202,6 +258,9 @@ const FileTreeNode = (
       // FORK: 预览区是否已开 — 决定「正在查看的那一行」hover 时是否提示「再次点击可收起预览」
       //   [feat: filetree-hover-collapse-hint] 2026-06-09
       viewerOpen?: boolean
+      // FORK: 内联重命名 [feat: file-tree-inline-edit] 2026-06-13
+      onCommitRename?: (name: string) => void
+      onCancelEdit?: () => void
     },
 ) => {
   const language = useLanguage()
@@ -221,6 +280,8 @@ const FileTreeNode = (
     "computeDragSources",
     "onRowContextMenu",
     "viewerOpen",
+    "onCommitRename",
+    "onCancelEdit",
     "children",
     "class",
     "classList",
@@ -307,16 +368,29 @@ const FileTreeNode = (
       {...rest}
     >
       {local.children}
-      <span
-        classList={{
-          "flex-1 min-w-0 text-12-medium whitespace-nowrap truncate": true,
-          "text-text-weaker": local.node.ignored,
-          "text-text-weak": !local.node.ignored && !active(),
-        }}
-        style={active() ? color() : undefined}
+      {/* FORK: 内联重命名 — 编辑态换 input,否则原 name span [feat: file-tree-inline-edit] 2026-06-13 */}
+      <Show
+        when={editingPath() === local.node.path}
+        fallback={
+          <span
+            classList={{
+              "flex-1 min-w-0 text-12-medium whitespace-nowrap truncate": true,
+              "text-text-weaker": local.node.ignored,
+              "text-text-weak": !local.node.ignored && !active(),
+            }}
+            style={active() ? color() : undefined}
+          >
+            {local.node.name}
+          </span>
+        }
       >
-        {local.node.name}
-      </span>
+        <InlineNameInput
+          initial={local.node.name}
+          selectBasename={local.node.type === "file"}
+          onCommit={(name) => local.onCommitRename?.(name)}
+          onCancel={() => local.onCancelEdit?.()}
+        />
+      </Show>
       {(() => {
         const value = kind()
         if (!value) return null
@@ -424,6 +498,71 @@ export default function FileTree(props: {
     clipboard.setCopy(paths)
   }
 
+  // FORK-BEGIN: #6 同名冲突解决 — 替换 / 保留两者 / 跳过(+ 应用到后续全部)[feat: file-tree-ux-polish-p2] 2026-06-13
+  /** 弹冲突对话框,返回用户选择;Escape/关闭视为 skip(仅当前项)。 */
+  const resolveConflict = (name: string): Promise<{ action: ConflictAction; applyToAll: boolean }> =>
+    new Promise((resolve) => {
+      let done = false
+      const finish = (action: ConflictAction, applyToAll: boolean) => {
+        if (done) return
+        done = true
+        resolve({ action, applyToAll })
+      }
+      dialog.show(
+        () => <DialogFileTreeConflict name={name} onResolve={finish} />,
+        () => finish("skip", false),
+      )
+    })
+
+  type MoveOp = { src: string; target: string; overwrite: boolean }
+  /** 对每个源算目标:无冲突直接用;冲突则按用户选择(替换=覆盖原名 / 保留两者=加后缀 / 跳过=丢弃)。
+   *  next_available_path 返回的 basename 与原名不同 = 存在冲突(无需额外 IPC 探测)。 */
+  const resolveConflicts = async (targetDirAbs: string, sources: readonly string[]): Promise<MoveOp[]> => {
+    const ops: MoveOp[] = []
+    let blanket: ConflictAction | null = null
+    for (const src of sources) {
+      const name = basename(src)
+      const free = await computeAvailableTarget(targetDirAbs, name)
+      if (basename(free) === name) {
+        ops.push({ src, target: free, overwrite: false })
+        continue
+      }
+      let action: ConflictAction | null = blanket
+      if (!action) {
+        const choice = await resolveConflict(name)
+        action = choice.action
+        if (choice.applyToAll) blanket = action
+      }
+      if (action === "skip") continue
+      if (action === "keepBoth") ops.push({ src, target: free, overwrite: false })
+      else ops.push({ src, target: joinAbs(targetDirAbs, name), overwrite: true })
+    }
+    return ops
+  }
+
+  /** 执行一批移动 op(替换时先 trash 旧目标再 rename),返回成功对 + 错误。 */
+  const runMoveOps = async (ops: MoveOp[]) => {
+    const movedPairs: { from: string; to: string }[] = []
+    const errors: string[] = []
+    for (const op of ops) {
+      try {
+        if (op.overwrite) {
+          try {
+            await invoke("trash_path", { path: op.target })
+          } catch {
+            // 旧目标可能已不存在 — 忽略,直接尝试 rename
+          }
+        }
+        await invoke("rename_path", { from: op.src, to: op.target })
+        movedPairs.push({ from: op.src, to: op.target })
+      } catch (e) {
+        errors.push(`${basename(op.src)}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    return { movedPairs, errors }
+  }
+  // FORK-END
+
   /** 把 clipboard 内容粘贴到 targetDirAbs。cut → rename_path 后清 clipboard;copy → copy_path 保留 clipboard */
   const pasteTo = async (targetDirAbs: string, targetDirRel: string) => {
     if (!clipboard.hasContent()) return
@@ -438,20 +577,24 @@ export default function FileTree(props: {
     if (valid.length === 0) return
 
     const errors: string[] = []
-    const movedPairs: { from: string; to: string }[] = []
+    let movedPairs: { from: string; to: string }[] = []
     const created: string[] = []
-    for (const src of valid) {
-      try {
-        const target = await computeAvailableTarget(targetDirAbs, basename(src))
-        if (mode === "cut") {
-          await invoke("rename_path", { from: src, to: target })
-          movedPairs.push({ from: src, to: target })
-        } else {
+    if (mode === "cut") {
+      // FORK: #6 cut 粘贴走同名冲突对话框(替换/保留两者/跳过)2026-06-13
+      const ops = await resolveConflicts(targetDirAbs, valid)
+      const res = await runMoveOps(ops)
+      movedPairs = res.movedPairs
+      errors.push(...res.errors)
+    } else {
+      // copy 模式保留静默"保留两者"语义(显式复制 = 自然生成副本,不打断问)
+      for (const src of valid) {
+        try {
+          const target = await computeAvailableTarget(targetDirAbs, basename(src))
           await invoke("copy_path", { from: src, to: target })
           created.push(target)
+        } catch (e) {
+          errors.push(`${basename(src)}: ${e instanceof Error ? e.message : String(e)}`)
         }
-      } catch (e) {
-        errors.push(`${basename(src)}: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
 
@@ -466,7 +609,10 @@ export default function FileTree(props: {
     await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
 
     // FORK: push undo 栈(commit #4 of file-tree-dnd)2026-04-28
-    if (movedPairs.length > 0) file.undoStack.push({ kind: "move", pairs: movedPairs })
+    if (movedPairs.length > 0) {
+      file.undoStack.push({ kind: "move", pairs: movedPairs })
+      showMoveUndoToast(movedPairs.length) // #10 撤销 Toast 2026-06-13
+    }
     if (created.length > 0) file.undoStack.push({ kind: "copy", created })
 
     // cut 用完即弃,copy 保留供多次粘贴
@@ -579,6 +725,18 @@ export default function FileTree(props: {
     await Promise.all([...refreshRels].map((r) => file.tree.refresh(r)))
   }
 
+  // FORK: 移动后 Gmail 式 Toast — "已移动 N 项 [撤销]"(#10/#13)2026-06-13
+  const showMoveUndoToast = (count: number) => {
+    showToast({
+      variant: "default",
+      title:
+        count === 1
+          ? language.t("fileTree.toast.moved.single")
+          : language.t("fileTree.toast.moved.bulk", { count }),
+      actions: [{ label: language.t("fileTree.toast.undo"), onClick: () => void undoLast() }],
+    })
+  }
+
   // FORK-BEGIN: 键盘导航 — buildFlatVisible 全局递归扫(尊重 expanded 状态)
   // [feat: file-tree-ux-polish] 2026-05-04
   /** 从 rootPath 递归构建当前可见的扁平 FileNode 序列(展开顺序 = 屏幕上下顺序)。
@@ -637,6 +795,31 @@ export default function FileTree(props: {
     }
   }
 
+  // FORK: ← 展开的目录→折叠;否则(文件/已折叠目录)→ 选父级。[feat: file-tree-arrow-lr] 2026-06-13
+  const onArrowLeftAction = () => {
+    const node = singleSelectedNode()
+    if (!node) return
+    if (node.type === "directory" && file.tree.state(node.path)?.expanded) {
+      file.tree.collapse(node.path)
+      return
+    }
+    const parentRel = dirname(node.path)
+    if (!parentRel) return // 已在根层
+    const parent = buildFlatVisible(props.path).find((n) => n.path === parentRel)
+    if (parent) selection.replace(parent.absolute)
+  }
+  // FORK: → 折叠目录→展开;已展开目录→选首个子;文件→无操作。
+  const onArrowRightAction = () => {
+    const node = singleSelectedNode()
+    if (!node || node.type !== "directory") return
+    if (!file.tree.state(node.path)?.expanded) {
+      file.tree.expand(node.path)
+      return
+    }
+    const children = file.tree.children(node.path)
+    if (children.length > 0) selection.replace(children[0].absolute)
+  }
+
   const onRenameAction = () => {
     const node = singleSelectedNode()
     if (node) promptRename(node)
@@ -661,6 +844,10 @@ export default function FileTree(props: {
       // FORK: 键盘导航 [feat: file-tree-ux-polish] 2026-05-04
       onArrowUp: () => navigateRelative(-1),
       onArrowDown: () => navigateRelative(1),
+      onArrowLeft: onArrowLeftAction,
+      onArrowRight: onArrowRightAction,
+      // FORK: Ctrl+A 全选当前所有可见行 [feat: file-tree-select-all] 2026-06-13
+      onSelectAll: () => selection.selectAll(buildFlatVisible(props.path).map((n) => n.absolute)),
       onEnter: onEnterAction,
       onRename: onRenameAction,
       onDelete: onDeleteAction,
@@ -671,61 +858,48 @@ export default function FileTree(props: {
   }
   // FORK-END
 
-  const promptNewFileAt = (targetAbs: string, targetRel: string, onAfter?: () => void) => {
-    dialog.show(() => (
-      <DialogFileTreePrompt
-        title={language.t("fileTree.dialog.newFile.title")}
-        label={language.t("fileTree.dialog.newFile.label")}
-        defaultValue="untitled.md"
-        placeholder={language.t("fileTree.dialog.newFile.placeholder")}
-        confirmLabel={language.t("fileTree.dialog.create")}
-        onConfirm={async (name) => {
-          await invoke("create_empty_file", { path: joinAbs(targetAbs, name) })
-          onAfter?.()
-          await file.tree.refresh(targetRel)
-        }}
-      />
-    ))
+  // FORK: 内联新建 — 展开目标目录 + 在其内顶部渲染空 input 行(treeContent 里),提交即创建
+  //   [feat: file-tree-inline-edit] 2026-06-13。targetAbs/onAfter 暂存供 commitNew 用。
+  const startNew = (targetAbs: string, targetRel: string, type: "file" | "directory", onAfter?: () => void) => {
+    setEditingPath(null)
+    if (targetRel !== props.path) file.tree.expand(targetRel)
+    setPendingNew({ parentRel: targetRel, parentAbs: targetAbs, type, onAfter })
+  }
+  const promptNewFileAt = (targetAbs: string, targetRel: string, onAfter?: () => void) =>
+    startNew(targetAbs, targetRel, "file", onAfter)
+  const promptNewFolderAt = (targetAbs: string, targetRel: string, onAfter?: () => void) =>
+    startNew(targetAbs, targetRel, "directory", onAfter)
+
+  const commitNew = async (name: string) => {
+    const pn = pendingNew()
+    setPendingNew(null)
+    if (!pn) return
+    try {
+      const target = joinAbs(pn.parentAbs, name)
+      if (pn.type === "directory") await invoke("create_directory", { path: target })
+      else await invoke("create_empty_file", { path: target })
+      pn.onAfter?.()
+      await file.tree.refresh(pn.parentRel)
+    } catch (e) {
+      showToast({ variant: "error", title: language.t("fileTree.toast.createFailed"), description: String(e) })
+    }
   }
 
-  const promptNewFolderAt = (targetAbs: string, targetRel: string, onAfter?: () => void) => {
-    dialog.show(() => (
-      <DialogFileTreePrompt
-        title={language.t("fileTree.dialog.newFolder.title")}
-        label={language.t("fileTree.dialog.newFolder.label")}
-        defaultValue=""
-        placeholder={language.t("fileTree.dialog.newFolder.placeholder")}
-        confirmLabel={language.t("fileTree.dialog.create")}
-        onConfirm={async (name) => {
-          await invoke("create_directory", { path: joinAbs(targetAbs, name) })
-          onAfter?.()
-          await file.tree.refresh(targetRel)
-        }}
-      />
-    ))
-  }
-
+  // FORK: 内联重命名 — 该行换 input,Enter 提交 [feat: file-tree-inline-edit] 2026-06-13
   const promptRename = (target: FileNode) => {
-    const oldName = basename(target.absolute)
+    setPendingNew(null)
+    setEditingPath(target.path)
+  }
+  const commitRename = async (target: FileNode, name: string) => {
+    setEditingPath(null)
     const parentAbs = dirname(target.absolute)
     const parentRel = dirname(target.path)
-    dialog.show(() => (
-      <DialogFileTreePrompt
-        title={
-          target.type === "directory"
-            ? language.t("fileTree.dialog.rename.folderTitle")
-            : language.t("fileTree.dialog.rename.fileTitle")
-        }
-        label={language.t("fileTree.dialog.rename.label")}
-        defaultValue={oldName}
-        confirmLabel={language.t("fileTree.dialog.rename.confirm")}
-        validate={(v) => (v === oldName ? language.t("fileTree.dialog.rename.unchanged") : undefined)}
-        onConfirm={async (name) => {
-          await invoke("rename_path", { from: target.absolute, to: joinAbs(parentAbs, name) })
-          await file.tree.refresh(parentRel)
-        }}
-      />
-    ))
+    try {
+      await invoke("rename_path", { from: target.absolute, to: joinAbs(parentAbs, name) })
+      await file.tree.refresh(parentRel)
+    } catch (e) {
+      showToast({ variant: "error", title: language.t("fileTree.toast.renameFailed"), description: String(e) })
+    }
   }
 
   // FORK-BEGIN: 复制文件路径 / 刷新单节点 helpers [feat: file-tree-ux-polish] 2026-05-04
@@ -761,6 +935,80 @@ export default function FileTree(props: {
   }
   // FORK-END
 
+  // FORK-BEGIN: #12 复制相对路径 + 在终端打开 [feat: file-tree-ux-polish-p2] 2026-06-13
+  /** 复制相对路径(node.path 即相对项目根);多选拼 \n。 */
+  const copyRelPathToClipboard = async (target: FileNode) => {
+    const sel = selection.paths()
+    const rels =
+      sel.length > 1
+        ? sel.map((p) => file.tree.node(p)?.path).filter((p): p is string => Boolean(p))
+        : [target.path]
+    if (rels.length === 0) return
+    try {
+      await navigator.clipboard.writeText(rels.join("\n"))
+      showToast({
+        variant: "success",
+        title:
+          rels.length === 1
+            ? language.t("fileTree.toast.copyRelPathSuccessSingle")
+            : language.t("fileTree.toast.copyRelPathSuccessBulk", { count: rels.length }),
+      })
+    } catch (e) {
+      showToast({
+        variant: "error",
+        title: language.t("fileTree.toast.copyFailedSingle"),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  /** 在系统终端打开:文件夹→自身,文件→其父目录。 */
+  const openInTerminalAt = (target: FileNode) => {
+    const dir = target.type === "directory" ? target.absolute : dirname(target.absolute)
+    void invoke("open_in_terminal", { path: dir }).catch((e) => {
+      showToast({ variant: "error", title: language.t("fileTree.toast.terminalFailed"), description: String(e) })
+    })
+  }
+  // FORK-END
+
+  // FORK-BEGIN: #8 全部展开 / 全部折叠 [feat: file-tree-ux-polish-p2] 2026-06-13
+  /** 收集 rootRel 子树下所有 expanded 的目录(深度优先)。
+   *  关键:对所有**已加载**目录都下钻 —— 折叠隐藏的子目录其 expanded 状态也要清,
+   *  否则"全部折叠"后再展开某顶层文件夹,其子目录会"记得"展开直接弹开(非 Explorer/VSCode 行为)。
+   *  collapse 只置 expanded=false 不清 children,故被折叠父目录的 children() 仍可读 → 能完整下钻。 */
+  const collectExpandedDirs = (rootRel: string): string[] => {
+    const out: string[] = []
+    const visit = (rel: string) => {
+      for (const c of file.tree.children(rel)) {
+        if (c.type !== "directory") continue
+        if (file.tree.state(c.path)?.expanded ?? false) out.push(c.path)
+        visit(c.path) // 不论自身是否展开都继续下钻(未加载目录 children 为空,自然终止)
+      }
+    }
+    visit(rootRel)
+    return out
+  }
+  const collapseAll = () => {
+    for (const dir of collectExpandedDirs(props.path)) file.tree.collapse(dir)
+  }
+  /** 递归展开(跳过 ignored 目录如 node_modules;深度上限防爆树)。 */
+  const expandAll = async () => {
+    const MAX_EXPAND_DEPTH = 8
+    const expandUnder = async (rel: string, depth: number) => {
+      if (depth > MAX_EXPAND_DEPTH) return
+      const kids = file.tree.children(rel).filter((n) => n.type === "directory" && !n.ignored)
+      await Promise.all(
+        kids.map(async (k) => {
+          file.tree.expand(k.path)
+          await file.tree.list(k.path)
+          await expandUnder(k.path, depth + 1)
+        }),
+      )
+    }
+    await expandUnder(props.path, 0)
+  }
+  // FORK-END
+
   // FORK-BEGIN: 拖放移动 — drop handler + spring-load 共享 timer 2026-04-27
   let springTimer: ReturnType<typeof setTimeout> | undefined
   const cancelSpringTimer = () => {
@@ -779,17 +1027,9 @@ export default function FileTree(props: {
     const valid = sources.filter((s) => isValidMoveTarget(s, { absolute: targetAbs, type: "directory" }))
     if (valid.length === 0) return // 全部无效(拖父进子 / 拖到自身 / 已在目标),静默 no-op
 
-    const errors: string[] = []
-    const movedPairs: { from: string; to: string }[] = []
-    for (const src of valid) {
-      try {
-        const targetPath = await computeAvailableTarget(targetAbs, basename(src))
-        await invoke("rename_path", { from: src, to: targetPath })
-        movedPairs.push({ from: src, to: targetPath })
-      } catch (e) {
-        errors.push(`${basename(src)}: ${e instanceof Error ? e.message : String(e)}`)
-      }
-    }
+    // FORK: #6 拖放移动走同名冲突对话框(替换/保留两者/跳过)2026-06-13
+    const ops = await resolveConflicts(targetAbs, valid)
+    const { movedPairs, errors } = await runMoveOps(ops)
 
     // 刷新源父目录(去重)+ 目标目录
     const refreshTargets = new Set<string>([targetRel])
@@ -802,6 +1042,7 @@ export default function FileTree(props: {
     // FORK: 入 undo 栈(commit #4 of file-tree-dnd)— 至少有一对成功才 push 2026-04-28
     if (movedPairs.length > 0) {
       file.undoStack.push({ kind: "move", pairs: movedPairs })
+      showMoveUndoToast(movedPairs.length) // #10 Gmail 式撤销 Toast 2026-06-13
     }
 
     if (errors.length > 0) {
@@ -876,6 +1117,22 @@ export default function FileTree(props: {
       // FORK: 外部 OS 文件拖入(从 Windows Explorer 等)— dataTransfer.types 含 "Files"(commit #4)2026-04-28
       const externalFiles = event.dataTransfer?.types.includes("Files") ?? false
       if (!inTree && !externalFiles) return
+      // FORK: #11 非法目标(拖进自身子目录 / 自身 / 原父目录)→ 禁止光标,不高亮、不 spring-load、不接收。
+      //   需 preventDefault 才能让 dropEffect=none 生效(否则浏览器用默认 cursor)。[feat: file-tree-ux-polish-p2] 2026-06-13
+      if (inTree && !externalFiles) {
+        const sources = draggingPaths()
+        const anyValid = sources.some((s) => isValidMoveTarget(s, { absolute: targetAbs, type: "directory" }))
+        if (!anyValid) {
+          event.preventDefault()
+          event.stopPropagation()
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+          if (dropTargetPath() === targetAbs) {
+            cancelSpringTimer()
+            setDropTargetPath(null)
+          }
+          return
+        }
+      }
       event.preventDefault()
       event.stopPropagation()
       if (event.dataTransfer) event.dataTransfer.dropEffect = externalFiles ? "copy" : "move"
@@ -911,60 +1168,48 @@ export default function FileTree(props: {
   })
   // FORK-END
 
-  const promptDelete = (target: FileNode) => {
-    // FORK: 批量删除 — 右键的 target 在 selection 中就删整组,否则只删 target(同 sourcesFor 规约)2026-04-27
+  // FORK: 删除 = 直接进回收站(对齐 Explorer/VSCode:Delete → 回收站不弹确认,可恢复)+ 结果 Toast。
+  //   去掉重确认弹窗(每次删都弹太烦);trash 可在系统回收站恢复,故信息提示而非拦截。
+  //   [feat: file-tree-delete-trash-toast] 2026-06-13
+  const promptDelete = async (target: FileNode) => {
     const targets = sourcesFor(target)
     const single = targets.length === 1
-    const onlyName = single
-      ? basename(targets[0])
-      : language.t("fileTree.dialog.confirmDelete.bulkName", { count: targets.length })
-    dialog.show(() => (
-      <DialogFileTreeConfirm
-        title={
-          single
-            ? target.type === "directory"
-              ? language.t("fileTree.dialog.confirmDelete.folderTitle")
-              : language.t("fileTree.dialog.confirmDelete.fileTitle")
-            : language.t("fileTree.dialog.confirmDelete.bulkTitle")
-        }
-        message={
-          single
-            ? language.t("fileTree.dialog.confirmDelete.messageSingle", { name: onlyName })
-            : language.t("fileTree.dialog.confirmDelete.messageBulk", { name: onlyName })
-        }
-        detail={language.t("fileTree.dialog.confirmDelete.detail")}
-        confirmLabel={language.t("fileTree.dialog.confirmDelete.confirm")}
-        onConfirm={async () => {
-          const errors: string[] = []
-          for (const path of targets) {
-            try {
-              await invoke("trash_path", { path })
-            } catch (e) {
-              errors.push(`${basename(path)}: ${e instanceof Error ? e.message : String(e)}`)
-            }
-          }
-          // 刷新所有源父目录(去重)
-          const refreshTargets = new Set<string>()
-          for (const parent of uniqueParents(targets)) {
-            const rel = absoluteToRelative(parent, sdk.directory)
-            if (rel !== null) refreshTargets.add(rel)
-          }
-          await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
-          // 删完清 selection
-          selection.clear()
-          if (errors.length > 0) {
-            showToast({
-              variant: "error",
-              title:
-                errors.length === 1
-                  ? language.t("fileTree.toast.deleteFailedSingle")
-                  : language.t("fileTree.toast.deleteFailedBulk", { count: errors.length }),
-              description: errors[0],
-            })
-          }
-        }}
-      />
-    ))
+    const errors: string[] = []
+    for (const path of targets) {
+      try {
+        await invoke("trash_path", { path })
+      } catch (e) {
+        errors.push(`${basename(path)}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    const refreshTargets = new Set<string>()
+    for (const parent of uniqueParents(targets)) {
+      const rel = absoluteToRelative(parent, sdk.directory)
+      if (rel !== null) refreshTargets.add(rel)
+    }
+    await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
+    selection.clear()
+    const okCount = targets.length - errors.length
+    if (errors.length > 0) {
+      showToast({
+        variant: "error",
+        title:
+          errors.length === 1
+            ? language.t("fileTree.toast.deleteFailedSingle")
+            : language.t("fileTree.toast.deleteFailedBulk", { count: errors.length }),
+        description: errors[0],
+      })
+    }
+    if (okCount > 0) {
+      // #13 批量反馈 + 回收站可恢复说明(trash 无 API 级 undo,提示去回收站)
+      showToast({
+        variant: "default",
+        title: single
+          ? language.t("fileTree.toast.deleted.single", { name: basename(targets[0]) })
+          : language.t("fileTree.toast.deleted.bulk", { count: okCount }),
+        description: language.t("fileTree.toast.deleted.hint"),
+      })
+    }
   }
 
   const revealInFolder = (target: FileNode) => {
@@ -1017,6 +1262,13 @@ export default function FileTree(props: {
         <ContextMenu.Item onSelect={() => void copyPathToClipboard(target)}>
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.copyPath")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
+        {/* FORK: #12 复制相对路径 + 在终端打开 [feat: file-tree-ux-polish-p2] 2026-06-13 */}
+        <ContextMenu.Item onSelect={() => void copyRelPathToClipboard(target)}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.copyRelativePath")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => openInTerminalAt(target)}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.openInTerminal")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
         <ContextMenu.Separator />
         {/* 组 3: 新建文件 / 新建文件夹 */}
         <ContextMenu.Item onSelect={() => promptNewFileAt(newTargetAbs, newTargetRel, onAfterNew)}>
@@ -1026,7 +1278,14 @@ export default function FileTree(props: {
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.newFolder")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
         <ContextMenu.Separator />
-        {/* 组 4: 刷新 */}
+        {/* 组 4: 全部展开 / 全部折叠(放行菜单,保证树铺满时仍可达 — 空白区可能滚出视口)/ 刷新
+            [feat: file-tree-ux-polish-p2 #8] 2026-06-13 */}
+        <ContextMenu.Item onSelect={() => void expandAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.expandAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => collapseAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.collapseAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
         <ContextMenu.Item onSelect={() => void refreshNode(target)}>
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.refresh")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
@@ -1056,7 +1315,18 @@ export default function FileTree(props: {
           </ContextMenu.Item>
         </Show>
         <ContextMenu.Separator />
-        {/* 组 2: 刷新(递归) */}
+        {/* FORK: #8 全部展开 / 全部折叠 [feat: file-tree-ux-polish-p2] 2026-06-13 */}
+        <ContextMenu.Item onSelect={() => void expandAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.expandAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => collapseAll()}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.collapseAll")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Item onSelect={() => void invoke("open_in_terminal", { path: rootAbs }).catch(() => {})}>
+          <ContextMenu.ItemLabel>{language.t("fileTree.menu.openInTerminal")}</ContextMenu.ItemLabel>
+        </ContextMenu.Item>
+        <ContextMenu.Separator />
+        {/* 组 3: 刷新(递归) */}
         <ContextMenu.Item onSelect={() => void file.tree.refreshAll(rootRel)}>
           <ContextMenu.ItemLabel>{language.t("fileTree.menu.refresh")}</ContextMenu.ItemLabel>
         </ContextMenu.Item>
@@ -1236,8 +1506,39 @@ export default function FileTree(props: {
     return out
   })
 
+  // FORK: #7 根级占位 — 加载中 / 加载错误(空目录由 host session-side-panel 的 nofiles 处理,
+  //   这里只接管 loading / error 两态,避免与 host 的 empty 冲突)[feat: file-tree-ux-polish-p2] 2026-06-13
+  const rootPlaceholder = createMemo<{ kind: "loading" | "error"; msg?: string } | null>(() => {
+    if (level !== 0) return null
+    if (nodes().length > 0) return null
+    const st = file.tree.state(props.path)
+    if (st?.error) return { kind: "error", msg: st.error }
+    if (st?.loading || !st?.loaded) return { kind: "loading" }
+    return null
+  })
+
   const bodyClass = `flex flex-col gap-0.5 ${level === 0 ? "min-h-full" : ""} ${props.class ?? ""}`
   const treeContent = (
+    <>
+      {/* FORK: 内联新建行 — 当前目录是新建目标时,顶部渲染空 input 行 [feat: file-tree-inline-edit] 2026-06-13 */}
+      <Show when={pendingNew()?.parentRel === props.path}>
+        <div
+          class="w-full h-6 flex items-center gap-x-1.5 rounded-md px-1.5"
+          style={`padding-left: ${Math.max(0, 8 + (level + 1) * 12 - (pendingNew()?.type === "file" ? 24 : 4))}px`}
+        >
+          <Show when={pendingNew()?.type === "directory"}>
+            <div class="size-4 flex items-center justify-center text-icon-weak">
+              <Icon name="chevron-right" size="small" />
+            </div>
+          </Show>
+          <InlineNameInput
+            initial={pendingNew()?.type === "file" ? "untitled.md" : ""}
+            selectBasename={pendingNew()?.type === "file"}
+            onCommit={(name) => void commitNew(name)}
+            onCancel={() => setPendingNew(null)}
+          />
+        </div>
+      </Show>
     <For each={nodes()}>
         {(node) => {
           const expanded = () => file.tree.state(node.path)?.expanded ?? false
@@ -1284,6 +1585,8 @@ export default function FileTree(props: {
                           onSelectMaybe={(e) => handleRowSelect(node, e)}
                           computeDragSources={computeDragSources(node)}
                           onRowContextMenu={() => handleRowContextMenu(node)}
+                          onCommitRename={(name) => void commitRename(node, name)}
+                          onCancelEdit={() => setEditingPath(null)}
                         >
                           <div class="size-4 flex items-center justify-center text-icon-weak">
                             <Icon name={expanded() ? "chevron-down" : "chevron-right"} size="small" />
@@ -1343,7 +1646,9 @@ export default function FileTree(props: {
                       selected={selection.isSelected(node.absolute)}
                       onSelectMaybe={(e) => handleRowSelect(node, e)}
                       computeDragSources={computeDragSources(node)}
-                      as="button"
+                      onCommitRename={(name) => void commitRename(node, name)}
+                      onCancelEdit={() => setEditingPath(null)}
+                      as={editingPath() === node.path ? "div" : "button"}
                       type="button"
                       onClick={() => props.onFileClick?.(node)}
                     >
@@ -1388,6 +1693,7 @@ export default function FileTree(props: {
           )
         }}
       </For>
+    </>
   )
 
   if (level !== 0) {
@@ -1426,6 +1732,29 @@ export default function FileTree(props: {
         onDrop={rootDropHandlers.onDrop}
       >
         {treeContent}
+        {/* FORK: #7 加载中 / 错误占位 [feat: file-tree-ux-polish-p2] 2026-06-13 */}
+        <Show when={rootPlaceholder()} keyed>
+          {(ph) => (
+            <div class="px-3 py-6 flex flex-col items-center gap-2 text-12-regular text-text-weak">
+              <Show when={ph.kind === "loading"}>
+                <span>
+                  {language.t("common.loading")}
+                  {language.t("common.loading.ellipsis")}
+                </span>
+              </Show>
+              <Show when={ph.kind === "error"}>
+                <span class="text-text-base">{language.t("fileTree.placeholder.error")}</span>
+                <button
+                  type="button"
+                  class="px-2 py-0.5 rounded border border-border-base text-text-base hover:bg-surface-raised-base-hover"
+                  onClick={() => void file.tree.refresh(props.path)}
+                >
+                  {language.t("fileTree.placeholder.retry")}
+                </button>
+              </Show>
+            </div>
+          )}
+        </Show>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>{renderEmptyMenuItems()}</ContextMenu.Portal>
     </ContextMenu>

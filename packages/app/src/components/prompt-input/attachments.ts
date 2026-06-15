@@ -1,6 +1,6 @@
 import { onMount } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { showToast } from "@opencode-ai/ui/toast"
+import { showToast } from "@/utils/toast"
 import { usePrompt, type ContentPart, type ImageAttachmentPart } from "@/context/prompt"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
@@ -40,6 +40,7 @@ type PromptAttachmentsInput = {
 export function createPromptAttachments(input: PromptAttachmentsInput) {
   const prompt = usePrompt()
   const language = useLanguage()
+  // FORK: 多选拖动 abs→rel 需要项目根 [feat: file-tree-multi-drag-to-chat] 2026-05-15
   const sdk = useSDK()
 
   const warn = () => {
@@ -168,9 +169,8 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
   }
 
   // FORK: drop overlay 卡死兜底 — file-tree 行 onDrop 调 stopPropagation 杀掉 document bubble drop,
-  // 浮层 setDraggingType(null) 不执行;dragend(Esc 取消 / 拖到非 drop zone)也不发 drop。
-  // 两个 window-level 兜底事件 ONLY 清状态,不参与 drop 处理逻辑。
-  // [feat: chat-drop-overlay-stuck-fix] [bug-repro: 文件树拖文件到聊天窗口释放后浮层卡死] 2026-05-21
+  //   overlay 状态没人复位会卡死;window capture 阶段 + dragend 双保险复位。
+  //   [feat: chat-drop-overlay-stuck-fix] 2026-05-21
   const handleDragOverlayReset = () => {
     input.setDraggingType(null)
   }

@@ -31,6 +31,7 @@ import {
 import { fetchBotName } from "./feishu/bot-info"
 // [feat: feishu-edit-dialog-ux 2026-06-08] 回显账号实际生效的 workspace 绝对路径(GUI 列表显示用)
 import { resolveWorkspace } from "./feishu/deskfox-dir"
+import { serveFetch } from "./node-serve" // FORK: Bun.serve → Node http(Electron 边车跑 Node)[feat: electron-replatform]
 
 // ============================================================
 // 类型
@@ -129,7 +130,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 // public API
 // ============================================================
 
-export function startServer(options: ServerOptions = {}): ServerHandle {
+export async function startServer(options: ServerOptions = {}): Promise<ServerHandle> {
   const username = options.username ?? "deskfox"
   const password = options.password ?? randomToken()
   const authHeader = `Basic ${btoa(`${username}:${password}`)}`
@@ -553,12 +554,12 @@ export function startServer(options: ServerOptions = {}): ServerHandle {
     return jsonResponse({ error: "not_found" }, 404)
   }
 
-  const server = Bun.serve({
+  // FORK: Bun.serve → serveFetch(node:http,Electron 边车跑 Node)[feat: electron-replatform]
+  // 显式绑 loopback — 默认 "0.0.0.0"(所有接口)会让 Win Firewall 弹"是否允许公网访问"提示,
+  // 同时把 plugin server 暴露到 LAN(虽有 basic auth 但攻击面应降到 0)。
+  // (2026-05-10 加;参考 feishu-server-loopback-bind feat-id)
+  const server = await serveFetch({
     port: options.port ?? 0,
-    // 显式绑 loopback — Bun.serve 默认 hostname 为 "0.0.0.0"(所有接口),会让 Win Firewall
-    // 弹"是否允许公网访问"提示(标 "Bun"+publisher "Oven",对 user 困惑且看起来像恶意软件)
-    // 同时把 plugin server 暴露到 LAN — 虽然有 basic auth 但攻击面应降到 0。
-    // (2026-05-10 加;参考 feishu-server-loopback-bind feat-id)
     hostname: "127.0.0.1",
     fetch: handler,
   })

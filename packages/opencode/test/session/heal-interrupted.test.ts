@@ -1,14 +1,14 @@
 // FORK-ONLY test: stuck-working-indicator-fix [feat: stuck-working-indicator-fix]
 import { describe, expect, test } from "bun:test"
 import { findInterrupted, planHeal } from "../../src/session/heal-interrupted"
-import { MessageV2 } from "../../src/session/message-v2"
-import { ModelID, ProviderID } from "../../src/provider/schema"
+// FORK: 上游 #30473 v1 消息 schema 迁入 core;ID 类型仅 fixture 用,裸字符串(对象整体 as unknown 强转) [feat: electron-replatform]
+import { Assistant, User, WithParts } from "@opencode-ai/core/v1/session"
 import { SessionID } from "../../src/session/schema"
 
 const sessionID = SessionID.make("ses_test")
-const providerID = ProviderID.make("claude-code")
+const providerID = "claude-code"
 
-function user(id: string): MessageV2.WithParts {
+function user(id: string): WithParts {
   return {
     info: {
       id,
@@ -16,15 +16,15 @@ function user(id: string): MessageV2.WithParts {
       role: "user",
       time: { created: 100 },
       agent: "user",
-      model: { providerID, modelID: ModelID.make("opus") },
+      model: { providerID, modelID: "opus" },
       tools: {},
       mode: "",
-    } as unknown as MessageV2.User,
+    } as unknown as User,
     parts: [],
   }
 }
 
-function assistant(id: string, completed?: number): MessageV2.WithParts {
+function assistant(id: string, completed?: number): WithParts {
   return {
     info: {
       id,
@@ -39,7 +39,7 @@ function assistant(id: string, completed?: number): MessageV2.WithParts {
       path: { cwd: "/", root: "/" },
       cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    } as unknown as MessageV2.Assistant,
+    } as unknown as Assistant,
     parts: [],
   }
 }
@@ -73,7 +73,7 @@ describe("heal-interrupted.planHeal", () => {
     const plan = planHeal(msgs, true)
     expect(plan.toUpdate.map((m) => String(m.id))).toEqual(["a-stuck"])
     expect(plan.toUpdate[0].time.completed).toBe(200) // = created
-    const healedInfo = plan.messages[1].info as MessageV2.Assistant
+    const healedInfo = plan.messages[1].info as Assistant
     expect(healedInfo.time.completed).toBe(200)
   })
 

@@ -21,9 +21,9 @@
 - 例外:仅追加依赖到 `package.json` / `Cargo.toml` 不需要 marker
 
 ### R3. 三类 hardcode 禁令
-- **品牌字符串**(productName/identifier)→ 走 `packages/branding/tauri-overrides/{dev,beta,prod}.json` override(不改 base `tauri.conf.json`)。**应用身份命名规则**:Mac Bundle ID 三档(prod=`ai.deskfox.app` / beta=`...beta` / dev=`...dev`,reverse-DNS 与 `deskfox.ai` 域名对齐);Win AppId 三档独立 GUID(prod 锁死 `{F9F6F6C5-...}` / beta `{86413DCA-...}` / dev `{4C5D29F2-...}`,2026-04-30 落地 commit `21c3f80f9`),详见 [`docs/governance/应用身份-命名规则.md`](docs/governance/应用身份-命名规则.md)
-- **主题色/字号** → 自己入口 CSS `:root { --primary: ... }` 覆盖,**不改** `packages/ui/` 内部 token
-- **icon/启动图资源** → 自己目录放新资源 + build 脚本替换,**不直接覆盖** `packages/desktop/src-tauri/icons/`
+- **品牌字符串**(productName/identifier)→ 走 `packages/desktop/electron-builder.deskfox.config.ts`(appId/productName 三档 override;**不改**上游 `electron-builder.config.ts`)。**应用身份**:三档 appId `ai.deskfox.app`(prod)/ `.beta` / `.dev`(reverse-DNS 与 `deskfox.ai` 对齐,**继承 Tauri 版身份保升级无感**);发布者名走 deskfox config `extraMetadata.author.name`。详见 [`docs/governance/应用身份-命名规则.md`](docs/governance/应用身份-命名规则.md)(注:文档里 Win NSIS GUID 三档是 Tauri/WiX 时代细节,Electron 走 appId)
+- **主题色/字号** → 自己入口 CSS / `@opencode-ai/branding/theme.css` 的 `:root { --... }` 覆盖,**不改** `packages/ui/` 内部 token
+- **icon/启动图资源** → 自己目录(`packages/branding/src/assets/icons/<channel>`)放新资源,build 期 `copy-icons` 叠加到 `resources/icons` + electron-builder `win.icon` 内嵌,**不直接覆盖**上游 `packages/desktop/icons/`
 
 存放位置:统一 `packages/branding/`(已建)。
 
@@ -166,25 +166,42 @@ grep `[feat: <id>]` 能反查到对应文档。
 
 **软件叫 DeskFox**(2026-04-27 起定名)。任何用户可见文案 / 文档 / commit message / build 产物都用 "DeskFox"。
 **不是** "OpenCode"(那是上游) / "OpenCode Desktop" / "OpenCode Dev"。
-源码内部 package 名 / binary 标识仍可保留 `opencode-*`(那是上游 contract,改了上游会冲突,品牌通过 tauri-overrides 注入)。
+源码内部 package 名 / binary 标识仍可保留 `opencode-*`(那是上游 contract,改了上游会冲突,品牌通过 `electron-builder.deskfox.config.ts` + `packages/branding/` 注入)。
 
-## 验证约定
+## 版本号规则(速查 — 改任何版本/渠道/打包前必读)
 
-- **typecheck**:`bun run typecheck`(monorepo 全量,turbo 缓存)
-- **release exe**:**必须**走 DeskFox 品牌 wrapper,产物是 `DeskFox.exe`:
+**唯一权威**:[`docs/governance/版本号与发布渠道规范.md`](docs/governance/版本号与发布渠道规范.md)(§3.10 有**代码触点地图**,列全所有相关文件)。下面只是速查,细则以该文档为准。
+
+- **格式**:`YYYY.次.补` 纯 3 段 semver(如 `2026.7.0`),**不加任何后缀**(updater 比较 + Mac CFBundleShortVersionString 限制)。
+- **三维度正交,绝不混入同一字段**:**版本号** × **渠道**(prod/dev/beta)× **架构**(arm64/x64)。
+  - 渠道靠**文件名前缀**(`DeskFox-` / `DeskFox-Dev-` / `DeskFox-Beta-`)+ **顶部徽标**(prod 无 / `DEV` / `BETA`)+ app id(`.dev`/`.beta`)区分,**不进版本号**。
+  - 架构靠**文件名**(`...-mac-arm64` / `-mac-x64` / `-win-x64`)区分,**不进版本号**;同次发布的不同芯片**共享同一版本号**。Mac 出 arm64/x64 **两个独立包**(不出 universal)。
+- **号线**:prod/dev/beta **各走独立号线**(`installer-versions.json` 的 `<plat>` / `dev-<plat>` / `beta-<plat>` key);平台(win/mac/linux)也各独立;**Dev 领先**(dev号 ≥ beta号 ≥ prod号)。本地测试版(Tier 3)不建号线,沿用 dev 线。
+- **两个唯一源**:渠道唯一源 = env `OPENCODE_CHANNEL`(派生 main define / renderer `VITE_OPENCODE_CHANNEL` define / electron-builder);版本号唯一源 = `installer-versions.json`(UI 牌 / 打包 / updater 全读它)。**别在别处硬编码版本号或渠道。** 改号走 `bump-installer-version.{ps1,sh}`,勿手编。
+
+## 验证约定(Electron 基座,2026-06-15 换基座对齐)
+
+> 已从 Tauri 切换到 Electron 基座;以下为 Electron 流程。历史 Tauri 指令(`build-deskfox.ps1` / `src-tauri` / `tauri build` / WebView2)作废,docs/history 里的旧字眼是历史快照不回填。
+
+- **typecheck**:`bun run typecheck`(monorepo 全量,turbo 缓存)。注:**pre-push 闸用 fork 范围**(`bun turbo typecheck --filter='!./packages/console/*'`,排除 §七 console —— 非发布、无发布包依赖,不该卡我们的 push)。
+- **release 包**:走 DeskFox 品牌 Electron wrapper,产物 `DeskFox.exe`(prod)/ `DeskFox Dev.exe`(dev):
   ```powershell
-  D:\project\opencode-fork\packages\branding\scripts\build-deskfox.ps1 -Env dev -NoBundle
+  packages\branding\scripts\build-deskfox-electron.ps1 -Env dev            # 完整 NSIS installer
+  packages\branding\scripts\build-deskfox-electron.ps1 -Env dev -NoBundle  # 只出 win-unpacked(最快本地测)
   ```
-  - 产物路径:`packages/desktop/src-tauri/target/release/DeskFox.exe`
-  - `-Env dev|beta|prod` 三档 installer channel(平时验证用 `dev` 这档,跟分支名 `main` 无关);`-NoBundle` 跳过 NSIS bundler(SignTool 没装时用,不影响 exe)
-  - **禁止**直接跑 `bun run --cwd packages/desktop tauri build`,那会出 `OpenCode.exe`,违反品牌规范
-- **改完不起 tauri dev mode(`bun dev`),直接 build release exe 验证**(WebView2 + Tauri 在 dev mode 下行为可能与 release 不一致)
-- **Phase 2 真桌面 e2e**(碰 native dialog / Tauri 跨进程 / 真 Rust 后端的改动必跑):`bun run --cwd packages/app test:e2e:tauri`(前置 build release exe);完整用法见 [`packages/app/e2e-tauri/README.md`](packages/app/e2e-tauri/README.md);治理对照 [`docs/governance/自动化测试规范.md`](docs/governance/自动化测试规范.md) Phase 2 段
-- **build 前必须先杀进程**:tauri build 会被运行中的 `DeskFox.exe` / `opencode-cli.exe` 锁文件导致 PermissionDenied。任何 release build 前**无条件**先执行,不询问 user:
+  - 产物:NSIS → `packages/desktop/dist-deskfox/DeskFox(-Dev)-<版本>-win-x64.exe`;win-unpacked exe → `packages/desktop/dist-deskfox/win-unpacked/`
+  - `-Env dev|beta|prod` 三档 channel;版本号由 `electron-builder.deskfox.config.ts` 自读 `installer-versions.json`(无需传参)
+  - **禁止**直接跑 `bun run --cwd packages/desktop package`(上游 config 出 OpenCode 品牌包);品牌一律走 `electron-builder.deskfox.config.ts`
+  - ⚠️ **PS5.1 踩坑**:`.ps1` 里 `bun run build` 的 native stderr 可能被包成 `NativeCommandError` 误判中断 → 改用 Bash 直接调:`packages/desktop` 下 `OPENCODE_CHANNEL=dev bun run build` + `node_modules/.bin/electron-builder.exe --dir --win --publish never --config electron-builder.deskfox.config.ts`(先 `unset *_PROXY` + 设 npmmirror 镜像 env)
+- **renderer 改动闭环**:运行中 DeskFox 加载 `out/renderer` 构建产物(`oc://` 读磁盘,非 vite dev server,**无 HMR**)→ 改 renderer 要 `bun run build` + CDP `location.reload()`,**不需重启 electron**;别空等热更新。
+- **build 前必须先杀进程**(无条件,不问 user):
   ```powershell
-  Get-Process -Name DeskFox,OpenCode,opencode-cli -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name DeskFox,'DeskFox Dev',OpenCode,opencode-cli,electron -ErrorAction SilentlyContinue | Stop-Process -Force
   ```
-  (兼容历史残留的 `OpenCode.exe`)。user 会自己重开新版 exe 验证。
+- **Win 全自动验证(现成脚本,2026-06-15 换基座就绪验证沉淀)**:
+  - 全量冒烟:安装版 / win-unpacked exe 带 `--remote-debugging-port=9222` 跑起来 → `python packages/branding/smoke/smoke.py`(CDP 真点供应商/面板/设置/文件预览,抓渲染崩溃)
+  - 冷启动健康检查:`python ../OPENCODE-PLAN/诊断工具/cold-start-health-check.py`(kill + 真冷启动 + 监控启动期 error toast / JS 异常;**≥2 次 CLEAN 才算过**)
+- **真桌面 QA ≠ CDP 自测**:视觉对齐 + native(对话框/通知/托盘/Dock/深链/文件关联)只能真桌面验;Mac 专属(Dock/托盘/updater)在 Win 上做不了。
 
 ## 健康指标(季度自查)
 
