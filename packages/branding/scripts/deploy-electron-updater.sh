@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# [fork-only] DeskFox **Electron** updater manifest 一站式发布(Windows/Electron)
+# [feat: electron-replatform / 换基座灰度] 2026-06-15
+#
+# 背景:换基座到 Electron 后,自动升级从 Tauri(latest.json + .app.tar.gz + minisign)切到
+#   electron-updater(generic provider:latest.yml + sha512 内嵌)。deskfox config 的 publish.url =
+#   https://updates.deskfox.ai/electron/<channel>。本脚本补齐**之前缺失的 Electron 部署编排**
+#   (Tauri 的 deploy-updater-manifest.sh 不适用:它发 darwin/.app.tar.gz/latest.json 到 v1/latest/<ch>/darwin)。
+#
+# 做什么(对齐 Tauri 脚本的服务器/OSS 机制,改 Electron 格式 + 路径):
+#   ① 上传 NSIS(+.blockmap)到阿里云 OSS(CDN dl.clawtray.com)拿稳定下载 URL
+#   ② 改 electron-builder 产的 latest.yml:把 files[].url / path 从相对文件名 → OSS 绝对 URL
+#      (generic provider 读到绝对 url 就从 CDN 下;manifest 本身只放更新服务器,资产走 CDN)
+#   ③ SCP latest.yml 到 updates.deskfox.ai 的 /var/www/updates/electron/<channel>/latest.yml
+#   ④ HTTPS 回读校验线上 latest.yml version == 本次版本
+#   ⑤ (可选)Gitee 镜像 NSIS,挂国内备用下载
+#
+# 前置:
+#   - 已 build 出 dist-deskfox/DeskFox(-Beta|-Dev)-<ver>-win-x64.exe + latest.yml(electron-builder 自动产)
+#   - source ~/.deskfox-signing/config.env(OSS_ACCESS_KEY_ID/SECRET)
+#   - SSH key:$SSH_KEY 或 ~/.ssh/lightsail-tokyo-*.pem 或 ~/.ssh/LightsailDefaultKey-*.pem(同一台东京 lightsail)
+#
+# 用法:
+#   bash packages/branding/scripts/deploy-electron-updater.sh --env beta --version 2026.8.0 --dry-run
+#   bash packages/branding/scripts/deploy-electron-updater.sh --env beta --version 2026.8.0
+#   选项:--no-gitee 跳过 Gitee 镜像;--asset <path> 指定 NSIS(默认从 dist-deskfox 自动找)
+#
+# --dry-run:不传 OSS / 不 SCP / 不 Gitee,只生成改好的 latest.yml 到 /tmp + 打印将执行的命令(安全预演,0 碰线上)。
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+DIST_DIR="$REPO_ROOT/packages/desktop/dist-deskfox"
+
+ENV="beta"; VERSION=""; DRY_RUN=0; NO_GITEE=0; ASSET=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -Env|--env|-e) ENV="$2"; shift 2 ;;
+    --version|-v)  VERSION="$2"; shift 2 ;;
+    --asset)       ASSET="$2"; shift 2 ;;
+    --dry-run)     DRY_RUN=1; shift ;;
+    --no-gitee)    NO_GITEE=1; shift ;;
+    *) echo "Unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+[[ -z "$VERSION" ]] && { echo "[el-updater] ERROR: --version 必传(例 2026.8.0)" >&2; exit 1; }
+case "$ENV" in dev|beta|prod) ;; *) echo "[el-updater] ERROR: --env 须 dev|beta|prod" >&2; exit 1 ;; esac
+
+# 服务器(同 Tauri 那台东京 lightsail)+ Electron 专用路径
+SERVER="ubuntu@52.197.46.120"
+REMOTE_DIR="/var/www/updates/electron/$ENV"
+VERIFY_URL="https://updates.deskfox.ai/electron/$ENV/latest.yml"
+OSS_CDN_BASE="https://dl.clawtray.com"
+# SSH key 探测(Mac/Win 文件名不同)
+SSH_KEY="${SSH_KEY:-}"
+if [[ -z "$SSH_KEY" ]]; then
+  for k in "$HOME/.ssh/lightsail-tokyo-ap-northeast-1.pem" "$HOME/.ssh/LightsailDefaultKey-ap-northeast-1.pem"; do
+    [[ -f "$k" ]] && { SSH_KEY="$k"; break; }
+  done
+fi
+
+echo "[el-updater] === Electron updater 发布 env=$ENV version=$VERSION $([ $DRY_RUN -eq 1 ] && echo '(DRY-RUN)') ==="
+echo "[el-updater] server=$SERVER  remote=$REMOTE_DIR  verify=$VERIFY_URL"
+echo "[el-updater] ssh-key=${SSH_KEY:-<未找到>}"
+
+# 1. 定位 NSIS + latest.yml(electron-builder 产物)
+if [[ -z "$ASSET" ]]; then
+  ASSET=$(ls "$DIST_DIR"/DeskFox*-"${VERSION}"-win-x64.exe 2>/dev/null | grep -v "blockmap" | head -1 || true)
+fi
+[[ -z "$ASSET" || ! -f "$ASSET" ]] && { echo "[el-updater] ERROR: 找不到 NSIS(dist-deskfox/DeskFox*-${VERSION}-win-x64.exe)— 先 build" >&2; exit 1; }
+YML="$DIST_DIR/latest.yml"
+[[ ! -f "$YML" ]] && { echo "[el-updater] ERROR: 缺 latest.yml($YML)— electron-builder 应自动产" >&2; exit 1; }
+BLOCKMAP="$ASSET.blockmap"
+OBJ="$(basename "$ASSET")"          # 纯 ASCII,直接做 OSS 对象名
+OSS_URL="$OSS_CDN_BASE/$OBJ"
+echo "[el-updater] asset: $OBJ ($(stat -c%s "$ASSET" 2>/dev/null || stat -f%z "$ASSET") bytes)$([ -f "$BLOCKMAP" ] && echo ' + .blockmap')"
+echo "[el-updater] OSS URL(资产下载): $OSS_URL"
+
+# 2. 改 latest.yml:相对文件名 → OSS 绝对 URL(generic provider 读绝对 url 从 CDN 下)
+OUT_YML="/tmp/deskfox-electron-${ENV}-latest.yml"
+sed -E "s#(url|path): +${OBJ}\$#\1: ${OSS_URL}#" "$YML" > "$OUT_YML"
+echo "[el-updater] 改写后 latest.yml($OUT_YML):"; echo "----------"; cat "$OUT_YML"; echo "----------"
+# 自检:url 必须已变绝对,且 version 对得上
+grep -q "url: ${OSS_URL}" "$OUT_YML" || { echo "[el-updater] ERROR: latest.yml url 改写失败(文件名与 sed 不匹配?)" >&2; exit 1; }
+grep -q "version: ${VERSION}" "$OUT_YML" || { echo "[el-updater] ERROR: latest.yml version != ${VERSION}" >&2; exit 1; }
+
+# 3. 上传 OSS(NSIS + blockmap)
+upload_oss() {
+  local f="$1" name="$2"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "[el-updater] (dry-run) 将上传: upload-asset-to-oss.sh --asset $f --name $name → $OSS_CDN_BASE/$name"
+  else
+    bash "$SCRIPT_DIR/upload-asset-to-oss.sh" --asset "$f" --name "$name" 2>&1 | tail -3
+  fi
+}
+upload_oss "$ASSET" "$OBJ"
+[[ -f "$BLOCKMAP" ]] && upload_oss "$BLOCKMAP" "$OBJ.blockmap"
+
+# 4. 部署 latest.yml 到更新服务器(/var/www/updates 属 www-data → SCP /tmp + sudo cp)
+TMP_REMOTE="/tmp/deskfox-electron-${ENV}-latest.yml"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "[el-updater] (dry-run) 将 SCP: scp -i $SSH_KEY $OUT_YML $SERVER:$TMP_REMOTE"
+  echo "[el-updater] (dry-run) 将远端: sudo cp $TMP_REMOTE $REMOTE_DIR/latest.yml + chown www-data + chmod 644"
+  echo "[el-updater] (dry-run) 将校验: curl $VERIFY_URL"
+else
+  [[ -z "$SSH_KEY" ]] && { echo "[el-updater] ERROR: 无 SSH key,无法部署" >&2; exit 1; }
+  echo "[el-updater] SCP latest.yml → 服务器 ..."
+  scp -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 "$OUT_YML" "$SERVER:$TMP_REMOTE"
+  ssh -i "$SSH_KEY" -o ConnectTimeout=20 "$SERVER" \
+    "sudo mkdir -p '$REMOTE_DIR' && sudo cp '$TMP_REMOTE' '$REMOTE_DIR/latest.yml' && sudo chown www-data:www-data '$REMOTE_DIR/latest.yml' && sudo chmod 644 '$REMOTE_DIR/latest.yml' && rm -f '$TMP_REMOTE'"
+  echo "[el-updater] 回读校验线上 latest.yml ..."; sleep 2
+  ONLINE_VER=$(curl -s "$VERIFY_URL" | grep -oE '^version: *[0-9.]+' | head -1 | sed -E 's/version: *//')
+  if [[ "$ONLINE_VER" == "$VERSION" ]]; then
+    echo "[el-updater] ✅ 线上 version=$ONLINE_VER == 发布版本,升级源生效: $VERIFY_URL"
+  else
+    echo "[el-updater] ⚠️ 线上 version=$ONLINE_VER != $VERSION — 检查 nginx 缓存/CDN/路径" >&2; exit 1
+  fi
+fi
+
+# 5. Gitee 镜像(国内备用下载)
+if [[ "$NO_GITEE" -eq 0 ]]; then
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "[el-updater] (dry-run) 将 Gitee 镜像: mirror-asset-to-gitee.sh $ASSET"
+  else
+    bash "$SCRIPT_DIR/mirror-asset-to-gitee.sh" --asset "$ASSET" 2>&1 | tail -3 || echo "[el-updater] ⚠️ Gitee 镜像失败(非致命,主下载走 OSS)"
+  fi
+fi
+
+echo "[el-updater] $([ $DRY_RUN -eq 1 ] && echo '✅ dry-run 完成(0 碰线上;改好的 latest.yml 在 '$OUT_YML')' || echo '✅ 发布完成')"
