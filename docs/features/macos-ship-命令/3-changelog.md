@@ -71,3 +71,23 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 **验证**:`publish.sh --dry-run --skip-pull` 实测对刚发的 `ship-mac-prod-2026.7.0` 正确识别(GitHub API 认出 macOS 2026.7.0 / Win 2026.7.1),且官网 index.html 已是最新 → 输出 `already at latest versions, nothing to do`(幂等路径验通)。
 
 > **附记**:本次 2026.7.0 是 `/ship` skill **首次真实完整发版**,跑通了此前 changelog 标注「真推送待下次实际发版验证」的步骤 3-9 全链路(签名+公证+staple+GitHub Release+OSS+Gitee+updater manifest+合 main+push)。中途撞 macOS 收回外置卷 TCC 权限卡在步骤 7,授权后从断点续跑成功(产物零重做)。
+
+---
+
+## Follow-up:换基座 Electron 适配(2026-06-15,阶段4)
+
+换基座 Tauri→Electron 后,`ship.md`(本机 gitignored)整体从 Tauri 链改写成 Electron 链。**本节为入仓知识**(skill 文件不入仓)。
+
+**改了 8 处**:
+- 铁律/步骤3:`pack-installer.sh`/`build-deskfox.sh`(Tauri)→ `build-deskfox-electron.sh -Env prod --sign --notarize`(electron-builder 原生签名公证)。
+- 版本号:4 段 `YYYY.M.D.N` → 3 段 semver,读 `installer-versions.json` 的 `macos`,**ship 不自动 bump**(bump 是独立前置步骤)。
+- 产物路径:`src-tauri/.../bundle/dmg/*_aarch64.dmg` → `dist-deskfox/DeskFox-<v>-mac-arm64.dmg`。
+- 步骤4/8:无版本 bump commit(版本已在 main),chore 分支只回填台账。
+- 步骤6/7:`-mac-arm64.dmg` + OSS 用 `--asset` 直指(tag 模式硬编码 Tauri 路径)。
+- **步骤7.5:Tauri 单 updater → 两条源**:(A) `deploy-electron-updater.sh --platform mac`(Electron 自更新)+ (B) `bridge-electron-updater.sh --deploy`(Tauri→Electron 迁移桥)。
+
+**2026.8.0 prod 实发抓到并修的 2 个真坑**:
+1. 🔴 **electron-builder 不公证 .dmg 容器**(只公证 .app):`spctl <dmg>` 直接 `Unnotarized` → 步骤 3.5 **补 `notarytool submit <dmg> --wait` + `stapler staple <dmg>`**(已固化进 ship.md)。详 [[reference_electron_macos_signing]] 坑4。
+2. 🔴 **deskfox-site `publish.sh`/`update-version.ps1` 用 Tauri 命名 `_aarch64.dmg`**:官网 Mac 链接一度 404 → 修 publish.sh `MAC_ASSET=-mac-arm64.dmg` + regex 兼容新旧 + 加 `--force`,已 commit/push/部署 deskfox-site(`0785772`)。**Win 侧 `update-version.ps1` + `WIN_ASSET` 仍 Tauri 命名,Win 发 Electron 时需同样对齐(待 Win 协调)**。
+
+**首发实测**:DeskFox 2026.8.0 macOS prod 完整发版成功(GitHub/Gitee/OSS + Electron 自更新源 + Tauri 迁移桥 + 官网,全线上验证生效;复用彩排产物跳过重建)。相关 feat:`electron-macos-sign-notarize`(阶段2)+ `electron-macos-updater-bridge`(阶段3)。

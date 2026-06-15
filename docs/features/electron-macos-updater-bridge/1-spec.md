@@ -1,5 +1,5 @@
 feat-id: electron-macos-updater-bridge
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 阶段3:macOS Electron updater 部署 + Tauri→Electron 升级桥

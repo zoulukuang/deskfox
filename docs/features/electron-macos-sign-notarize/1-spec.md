@@ -1,5 +1,5 @@
 feat-id: electron-macos-sign-notarize
-status: spec
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 阶段2:macOS Electron 包 Developer ID 签名 + 公证
