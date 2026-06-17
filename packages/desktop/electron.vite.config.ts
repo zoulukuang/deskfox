@@ -7,7 +7,8 @@ const OPENCODE_SERVER_DIST = "../opencode/dist/node"
 
 const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
-  if (raw === "dev" || raw === "beta" || raw === "prod") return raw
+  // FORK: 第 4 档 local 必须透传,否则被兜底成 "dev" → 打包本地版冒用预览版身份且不隔离数据 [feat: local-channel]
+  if (raw === "local" || raw === "dev" || raw === "beta" || raw === "prod") return raw
   if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
   return "dev"
 })()

@@ -16,7 +16,8 @@ const mediaGenDir = path.resolve(packageDir, "../media-gen")
 
 const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
-  if (raw === "dev" || raw === "beta" || raw === "prod") return raw
+  // FORK: 第 4 档 local = 本地测试版(永不发布,数据隔离)[feat: local-channel] 2026-06-17
+  if (raw === "local" || raw === "dev" || raw === "beta" || raw === "prod") return raw
   return "dev"
 })()
 
@@ -46,12 +47,14 @@ const appVersion = (() => {
 })()
 
 const APP_IDS = {
+  local: "ai.deskfox.app.local",
   dev: "ai.deskfox.app.dev",
   beta: "ai.deskfox.app.beta",
   prod: "ai.deskfox.app",
 } as const
-const PRODUCT_NAMES = { dev: "DeskFox Dev", beta: "DeskFox Beta", prod: "DeskFox" } as const
-const ARTIFACT_PREFIX = { dev: "DeskFox-Dev", beta: "DeskFox-Beta", prod: "DeskFox" } as const
+// FORK: dev 对外名 = 预览版(对齐治理 §一);local = 本地测试版。产物文件名前缀仍按内部代号(DeskFox-Dev-/DeskFox-Local-)。
+const PRODUCT_NAMES = { local: "DeskFox 本地版", dev: "DeskFox 预览版", beta: "DeskFox Beta", prod: "DeskFox" } as const
+const ARTIFACT_PREFIX = { local: "DeskFox-Local", dev: "DeskFox-Dev", beta: "DeskFox-Beta", prod: "DeskFox" } as const
 // 图标:dev/beta 用 dev 套(预览狐),prod 用 prod 套
 const iconEnv = channel === "prod" ? "prod" : "dev"
 const iconIco = path.join(brandingDir, "src", "assets", "icons", iconEnv, "icon.ico")
@@ -154,11 +157,15 @@ const config: Configuration = {
   dmg: {
     sign: Boolean(process.env.APPLE_SIGNING_IDENTITY),
   },
-  // 自动更新:electron-updater generic provider(latest.yml 部署到 updates.deskfox.ai,ship 时落地)
-  publish: {
-    provider: "generic",
-    url: `https://updates.deskfox.ai/electron/${channel}`,
-  },
+  // 自动更新:electron-updater generic provider(latest.yml 部署到 updates.deskfox.ai,ship 时落地)。
+  // FORK: local 本地测试版永不发布 → 不配 publish(无更新源)[feat: local-channel]
+  publish:
+    channel === "local"
+      ? null
+      : {
+          provider: "generic",
+          url: `https://updates.deskfox.ai/electron/${channel}`,
+        },
 }
 
 export default config
