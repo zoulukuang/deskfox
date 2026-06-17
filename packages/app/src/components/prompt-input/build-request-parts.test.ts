@@ -309,6 +309,87 @@ describe("buildRequestParts", () => {
     }
   })
 
+  // FORK: REQ-065 — 同文件多张选区卡(相同 url、不同 commentID)必须全部提交,不被旧的"按 url 去重"误并
+  test("keeps multiple same-path selection cards distinguished by commentID", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [
+        { key: "ctx:c1", type: "file", path: "src/a.ts", selection: { startLine: 1, startChar: 0, endLine: 2, endChar: 0 }, commentID: "c1", preview: "alpha" },
+        { key: "ctx:c2", type: "file", path: "src/a.ts", selection: { startLine: 1, startChar: 0, endLine: 2, endChar: 0 }, commentID: "c2", preview: "beta" },
+        { key: "ctx:c3", type: "file", path: "src/a.ts", selection: { startLine: 1, startChar: 0, endLine: 2, endChar: 0 }, commentID: "c3", preview: "gamma" },
+      ],
+      images: [],
+      text: "go",
+      messageID: "msg_multi_card",
+      sessionID: "ses_multi_card",
+      sessionDirectory: "/repo",
+    })
+
+    const fileParts = result.requestParts.filter((part) => part.type === "file")
+    const synthetic = result.requestParts.filter((part) => part.type === "text" && part.synthetic)
+    // 三张卡 url 相同,仅 commentID 不同 → 仍各自保留(修前只会留 1 张)
+    expect(fileParts).toHaveLength(3)
+    expect(synthetic).toHaveLength(3)
+  })
+
+  // FORK: REQ-065 / md-token — 无评论的选区卡也要把"选中文字 preview"送达模型,不退化为整文件
+  test("selection card without comment still delivers preview text (md token fix)", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [
+        { key: "ctx:p", type: "file", path: "docs/big.md", selection: { startLine: 10, startChar: 0, endLine: 20, endChar: 0 }, commentID: "q1", preview: "the selected paragraph" },
+      ],
+      images: [],
+      text: "explain",
+      messageID: "msg_preview",
+      sessionID: "ses_preview",
+      sessionDirectory: "/repo",
+    })
+
+    const synthetic = result.requestParts.filter((part) => part.type === "text" && part.synthetic)
+    expect(synthetic).toHaveLength(1)
+    expect(synthetic.some((part) => part.type === "text" && part.text.includes("the selected paragraph"))).toBe(true)
+    // 仍带行范围的 file url
+    expect(
+      result.requestParts.some((part) => part.type === "file" && part.url.includes("?start=10&end=20")),
+    ).toBe(true)
+  })
+
+  // FORK: REQ-065 — 选区卡既无评论又无 preview:无可发内容 → 退化为单 file part(但不被去重丢掉)
+  test("commentID card without comment or preview degrades to file part only", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [{ key: "ctx:empty", type: "file", path: "src/a.ts", commentID: "e1" }],
+      images: [],
+      text: "go",
+      messageID: "msg_empty",
+      sessionID: "ses_empty",
+      sessionDirectory: "/repo",
+    })
+
+    expect(result.requestParts.filter((part) => part.type === "file")).toHaveLength(1)
+    expect(result.requestParts.filter((part) => part.type === "text" && part.synthetic)).toHaveLength(0)
+  })
+
+  // FORK: REQ-065 — commentID 卡在前不应污染 url 去重集:其后同路径的整文件裸卡仍应保留
+  test("commentID card before a bare whole-file card does not swallow it", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [
+        { key: "ctx:c", type: "file", path: "src/a.ts", commentID: "c1", preview: "x" },
+        { key: "ctx:bare", type: "file", path: "src/a.ts" },
+      ],
+      images: [],
+      text: "go",
+      messageID: "msg_order",
+      sessionID: "ses_order",
+      sessionDirectory: "/repo",
+    })
+
+    // commentID 卡(text+file)+ 裸整文件卡(file)→ 共 2 个 file part
+    expect(result.requestParts.filter((part) => part.type === "file")).toHaveLength(2)
+  })
+
   test("handles file paths with dots and special segments on Windows", () => {
     const prompt: Prompt = [
       { type: "file", path: "..\\..\\shared\\util.ts", content: "@..\\..\\shared\\util.ts", start: 0, end: 21 },
