@@ -271,9 +271,21 @@ export const layer = Layer.effect(
 
       if (flags.experimentalIconDiscovery) yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
 
+      // FORK: REQ-061/064 — 磁盘改名/移动后,DB 里 existing.worktree 仍指向已不存在的旧路径,
+      // 侧栏据此调 /file?directory=旧路径 → 503、且显示旧名。当用户用文件夹选择器重新打开该项目时
+      // (git-id 命中同一行),按实际打开路径 data.directory 重绑 worktree —— 仅当旧 worktree 磁盘上
+      // 确已不存在时才重绑,正常项目 / 打开沙箱子目录(旧 worktree 仍在)行为不变,不误伤。2026-06-17
+      const existingWorktreeMissing =
+        projectID !== ProjectV2.ID.global &&
+        existing.worktree !== data.directory &&
+        !(yield* fs.exists(existing.worktree).pipe(Effect.orElseSucceed(() => false)))
+      if (existingWorktreeMissing)
+        yield* Effect.logInfo("rebinding stale worktree", { from: existing.worktree, to: data.directory })
+
       const result: Info = {
         ...existing,
-        worktree: projectID === ProjectV2.ID.global ? worktree : existing.worktree,
+        worktree:
+          projectID === ProjectV2.ID.global ? worktree : existingWorktreeMissing ? data.directory : existing.worktree,
         vcs: data.vcs?.type ?? fakeVcs,
         time: { ...existing.time, updated: Date.now() },
       }
