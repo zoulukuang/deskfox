@@ -1580,6 +1580,9 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
 PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   const data = useData()
+  const i18n = useI18n()
+  // FORK: REQ-053/058 — 思考链对齐 DeskFox 原生:默认收起。复用原生 Collapsible(同 tool 折叠)。2026-06-17
+  const [open, setOpen] = createSignal(false)
   const part = () => props.part as ReasoningPart
   const streaming = createMemo(
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
@@ -1589,9 +1592,28 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   return (
     <Show when={text()}>
       <div data-component="reasoning-part" data-timeline-part-id={part().id}>
-        <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
-          <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
-        </Show>
+        {/* FORK: REQ-053/058 — 思考过程在正文上方(stream 顺序天然保证 reasoning 先于 text)+ 默认收起 +
+            点击向下展开。复用原生 Collapsible / ToolStatusTitle / Arrow,与工具折叠同款外观,不自创。2026-06-17 */}
+        <Collapsible open={open()} onOpenChange={setOpen} variant="ghost" class="tool-collapsible">
+          <Collapsible.Trigger>
+            <div data-component="reasoning-trigger">
+              <span data-slot="reasoning-label" class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong">
+                <ToolStatusTitle
+                  active={streaming()}
+                  activeText={i18n.t("ui.sessionTurn.status.thinking")}
+                  doneText={i18n.t("ui.sessionTurn.status.thinking")}
+                  split={false}
+                />
+              </span>
+              <Collapsible.Arrow />
+            </div>
+          </Collapsible.Trigger>
+          <Collapsible.Content>
+            <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
+              <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+            </Show>
+          </Collapsible.Content>
+        </Collapsible>
       </div>
     </Show>
   )
