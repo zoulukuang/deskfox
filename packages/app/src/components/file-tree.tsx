@@ -329,14 +329,14 @@ const FileTreeNode = (
       data-tree-path={local.node.path}
       classList={{
         "w-full min-w-0 h-6 flex items-center justify-start gap-x-1.5 rounded-md px-1.5 py-0 text-left hover:bg-surface-raised-base-hover active:bg-surface-base-active transition-colors cursor-pointer": true,
-        "bg-surface-base-active": local.node.path === local.active || !!local.contextOpen,
+        // FORK: REQ-062 — 多选选中态复用文件 active 同款 filled 底色(并入此行,classList 对象不可重复 key),
+        // 去掉原文件夹专属 ring 圆角线框 2026-06-17
+        "bg-surface-base-active": local.node.path === local.active || !!local.contextOpen || !!local.selected,
         // FORK: active 行加左侧 2px 竖条(VS Code 风);box-shadow inset 不占布局,避免内容右移 2026-05-05
         "shadow-[inset_2px_0_0_0_var(--text-interactive-base)]":
           local.node.path === local.active && !local.contextOpen,
         // FORK: 拖动中的源行半透明 2026-04-27
         "opacity-50": isPathDragging(local.node.absolute),
-        // FORK: 多选选中行 — 用 ring 区分于 active(filled)2026-04-27
-        "ring-1 ring-interactive-base ring-inset": !!local.selected && local.node.path !== local.active,
         // FORK: 被剪切行 — 半透明 + 斜体提示"已在 clipboard 等待粘贴"(commit #3 of file-tree-dnd)2026-04-27
         "opacity-60 italic": !!local.cut,
         ...local.classList,
