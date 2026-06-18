@@ -19,6 +19,9 @@ export interface MockServerConfig {
   sessions: ({ id: string } & Record<string, unknown>)[]
   pageMessages: (sessionId: string, limit: number, before?: string) => { items: unknown[]; cursor?: string }
   events?: () => unknown[]
+  // FORK: 可选 —— mock `/file?path=` 列目录(给文件树类 spec 用,如 REQ-062 选中态)。
+  //   返回该目录下的条目数组;不提供则 /file 返回 []。2026-06-18
+  files?: (path: string) => unknown[]
 }
 
 export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
@@ -49,6 +52,8 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
     if (emptyObject.has(path)) return json(route, {})
     if (emptyList.has(path)) return json(route, [])
     if (path in staticRoutes) return json(route, staticRoutes[path])
+
+    if (path === "/file") return json(route, config.files?.(url.searchParams.get("path") ?? "") ?? [])
 
     const sessionMatch = path.match(/^\/session\/([^/]+)$/)
     if (sessionMatch) {
