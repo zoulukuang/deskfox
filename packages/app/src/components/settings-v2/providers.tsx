@@ -221,17 +221,19 @@ export const SettingsProvidersV2: Component = () => {
                     <div class="flex items-center gap-2">
                       {/* FORK-BEGIN: REQ-054 — getbot 刷新模型按钮(v2 layout,仅 getbot 显示) 2026-06-18 */}
                       <Show when={item.id === GETBOT_PROVIDER_ID}>
-                        <ButtonV2
-                          size="normal"
-                          variant="neutral"
-                          disabled={getbotRefreshing()}
-                          data-component="getbot-refresh-models"
-                          onClick={() => void refreshGetbotModels()}
-                        >
-                          {getbotRefreshing()
-                            ? language.t("common.loading")
-                            : language.t("provider.getbot.refreshModels")}
-                        </ButtonV2>
+                        {/* FORK: REQ-054 — data-component 锚点放外层 span(ButtonV2 根硬编码 data-component 不可覆盖,沿用 U1 wrapper 方案,避免改上游) 2026-06-18 */}
+                        <span data-component="getbot-refresh-models">
+                          <ButtonV2
+                            size="normal"
+                            variant="neutral"
+                            disabled={getbotRefreshing()}
+                            onClick={() => void refreshGetbotModels()}
+                          >
+                            {getbotRefreshing()
+                              ? language.t("common.loading")
+                              : language.t("provider.getbot.refreshModels")}
+                          </ButtonV2>
+                        </span>
                       </Show>
                       {/* FORK-END */}
                       <Show

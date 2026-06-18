@@ -38,7 +38,7 @@ describe("mergeGetbotModels", () => {
         tool_call: true,
         attachment: true,
         reasoning: false,
-        modalities: ["text", "audio"],
+        modalities: { input: ["text", "audio"], output: ["text"] },
       },
     }
     const remoteIds = ["gpt-4o-audio"]
@@ -47,7 +47,7 @@ describe("mergeGetbotModels", () => {
     expect(result["gpt-4o-audio"].tool_call).toBe(true)
     expect(result["gpt-4o-audio"].attachment).toBe(true)
     expect(result["gpt-4o-audio"].reasoning).toBe(false)
-    expect(result["gpt-4o-audio"].modalities).toEqual(["text", "audio"])
+    expect(result["gpt-4o-audio"].modalities).toEqual({ input: ["text", "audio"], output: ["text"] })
   })
 
   test("AC3: modalities is undefined for new models without existing config", () => {

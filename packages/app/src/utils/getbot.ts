@@ -28,12 +28,16 @@ const CLASSIFY_RULES: { cat: "image" | "tts" | "asr"; re: RegExp }[] = [
   { cat: "asr", re: /^(?!.*realtime).*(whisper|(^|[-_])asr([-_]|$)|(^|[-_])omni([-_]|$)|livetranslate)/i },
 ]
 
+// FORK: REQ-054 — modalities 必须对齐 SDK config 的结构体 { input?, output? }(非扁平 string[]),否则 merge 结果写回 config 时 typecheck 不过 2026-06-18
+type Modality = "text" | "audio" | "image" | "video" | "pdf"
+type ModalitiesConfig = { input?: Modality[]; output?: Modality[] }
+
 export type GetbotModelMeta = {
   name: string
   tool_call?: boolean
   attachment?: boolean
   reasoning?: boolean
-  modalities?: string[]
+  modalities?: ModalitiesConfig
 }
 
 // FORK-BEGIN: REQ-054 — mergeGetbotModels 纯函数:remote ids 为主、local 能力标注优先保留、幽灵自然丢弃 2026-06-18
@@ -43,7 +47,7 @@ export type GetbotModelMetaInput = {
   tool_call?: boolean
   attachment?: boolean
   reasoning?: boolean
-  modalities?: string[]
+  modalities?: ModalitiesConfig
 }
 
 /**
