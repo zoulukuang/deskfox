@@ -3,6 +3,8 @@ import type { Message, Part, PermissionRequest, Project, QuestionRequest, Sessio
 import { createStore } from "solid-js/store"
 import type { State } from "./types"
 import { applyDirectoryEvent, applyGlobalEvent, cleanupDroppedSessionCaches } from "./event-reducer"
+import { isProvidersQueryKey } from "../server-sync"
+import type { ServerScope } from "@/utils/server-scope"
 
 const rootSession = (input: { id: string; parentID?: string; archived?: number }) =>
   ({
@@ -572,5 +574,30 @@ describe("applyDirectoryEvent", () => {
 
     expect(pushes).toEqual(["/tmp"])
     expect(lspLoads).toBe(1)
+  })
+})
+
+// FORK: REQ-052 — isProvidersQueryKey 纯函数单测 2026-06-18
+describe("isProvidersQueryKey", () => {
+  const scope = "scope-abc" as ServerScope
+
+  test("returns true for providers key with matching scope", () => {
+    expect(isProvidersQueryKey([scope, null, "providers"], scope)).toBe(true)
+  })
+
+  test("returns true for providers key with directory sub-key", () => {
+    expect(isProvidersQueryKey([scope, "some/dir", "providers"], scope)).toBe(true)
+  })
+
+  test("returns false for non-providers key type", () => {
+    expect(isProvidersQueryKey([scope, null, "config"], scope)).toBe(false)
+  })
+
+  test("returns false for different scope", () => {
+    expect(isProvidersQueryKey(["other-scope" as ServerScope, null, "providers"], scope)).toBe(false)
+  })
+
+  test("returns false for empty key", () => {
+    expect(isProvidersQueryKey([], scope)).toBe(false)
   })
 })
