@@ -155,6 +155,10 @@ export const dict = {
   "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.",
   "provider.connect.getbot.timeout":
     "Request to api.getbot.me timed out (15s). Please check your network and try again.",
+  // FORK: REQ-054 — 刷新模型按钮 i18n 2026-06-18
+  "provider.getbot.refreshModels": "Refresh models",
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)",
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}",
   // FORK-END
   "provider.connect.oauth.code.visit.prefix": "Visit ",
   "provider.connect.oauth.code.visit.link": "this link",

@@ -35,6 +35,42 @@ export type GetbotModelMeta = {
   reasoning?: boolean
 }
 
+// FORK-BEGIN: REQ-054 — mergeGetbotModels 纯函数:remote ids 为主、local 能力标注优先保留、幽灵自然丢弃 2026-06-18
+/** 宽松输入类型:接受来自 SDK config 的 { name?: string; ... } 形态,不要求 name 必填 */
+export type GetbotModelMetaInput = {
+  name?: string
+  tool_call?: boolean
+  attachment?: boolean
+  reasoning?: boolean
+}
+
+/**
+ * 将远端 /v1/models 返回的最新 id 列表与本地已有配置合并:
+ * - 仅保留 remoteIds 中存在的模型(幽灵自然丢弃);
+ * - 已有手工能力标注(tool_call/attachment/reasoning)原样保留;
+ * - 新增模型走 inferModelConfig 兜底推断;
+ * - 返回按 id 字母序排序的新 Record。
+ *
+ * 纯函数,无副作用,便于单测。
+ */
+export function mergeGetbotModels(
+  existing: Record<string, GetbotModelMetaInput>,
+  remoteIds: string[],
+): Record<string, GetbotModelMeta> {
+  const next: Record<string, GetbotModelMeta> = {}
+  for (const id of remoteIds) {
+    const local = existing[id]
+    if (local !== undefined) {
+      // 保留已有能力标注,name 若缺失则回退到 id
+      next[id] = { name: local.name ?? id, tool_call: local.tool_call, attachment: local.attachment, reasoning: local.reasoning }
+    } else {
+      next[id] = inferModelConfig(id)
+    }
+  }
+  return next
+}
+// FORK-END
+
 export function inferModelConfig(id: string): GetbotModelMeta {
   const isRealtime = /realtime|streaming/i.test(id)
   const isOmni = /omni/i.test(id)

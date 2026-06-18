@@ -4,15 +4,24 @@ import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Tag } from "@opencode-ai/ui/tag"
 import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { createMemo, type Component, For, Show } from "solid-js"
+import { createMemo, createSignal, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
+import { usePlatform } from "@/context/platform"
 import { DialogConnectProvider } from "./dialog-connect-provider"
 import { DialogSelectProvider } from "./dialog-select-provider"
 import { DialogCustomProvider } from "./dialog-custom-provider"
 import { SettingsList } from "./settings-list"
 import { SettingsServerPicker, SettingsServerScope } from "./settings-server-picker"
+// FORK: REQ-054 — 刷新 GetBot 模型列表 2026-06-18
+import {
+  GETBOT_PROVIDER_ID,
+  fetchGetbotChatModels,
+  mergeGetbotModels,
+  GetbotInvalidKeyError,
+  GetbotTimeoutError,
+} from "@/utils/getbot"
 
 type ProviderSource = "env" | "api" | "config" | "custom"
 type ProviderItem = ReturnType<ReturnType<typeof useProviders>["connected"]>[number]
@@ -43,7 +52,10 @@ const SettingsProvidersContent: Component = () => {
   const language = useLanguage()
   const serverSDK = useServerSDK()
   const serverSync = useServerSync()
+  const platform = usePlatform()
   const providers = useProviders()
+  // FORK: REQ-054 — getbot 刷新模型加载状态 2026-06-18
+  const [getbotRefreshing, setGetbotRefreshing] = createSignal(false)
 
   const connected = createMemo(() => {
     return providers
@@ -96,6 +108,44 @@ const SettingsProvidersContent: Component = () => {
     if (!provider.models || Object.keys(provider.models).length === 0) return false
     return true
   }
+
+  // FORK-BEGIN: REQ-054 — getbot 刷新模型列表 handler 2026-06-18
+  const refreshGetbotModels = async () => {
+    if (getbotRefreshing()) return
+    const apiKey = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
+      | string
+      | undefined
+    if (!apiKey) {
+      showToast({ title: language.t("common.requestFailed"), description: "GetBot API key not found in config" })
+      return
+    }
+    setGetbotRefreshing(true)
+    try {
+      const remoteIds = await fetchGetbotChatModels(apiKey, { fetch: platform.fetch })
+      const existing = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+      const merged = mergeGetbotModels(existing, remoteIds)
+      // 写回:两步整块替换以规避 patchJsonc 只增不删的限制:
+      // 步骤 1:注入 merged 模型(新模型出现 + 已有能力标注保留)
+      await serverSync.updateConfig({
+        provider: { [GETBOT_PROVIDER_ID]: { models: merged } },
+      })
+      serverSync.refreshProviders()
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("provider.getbot.refreshModels.success", { count: String(remoteIds.length) }),
+      })
+    } catch (e) {
+      let msg: string
+      if (e instanceof GetbotInvalidKeyError) msg = language.t("provider.connect.getbot.apiKey.invalid")
+      else if (e instanceof GetbotTimeoutError) msg = language.t("provider.connect.getbot.timeout")
+      else msg = e instanceof Error ? e.message : String(e)
+      showToast({ title: language.t("provider.getbot.refreshModels.failed", { error: msg }) })
+    } finally {
+      setGetbotRefreshing(false)
+    }
+  }
+  // FORK-END
 
   const disableProvider = async (providerID: string, name: string) => {
     const before = serverSync.data.config.disabled_providers ?? []
@@ -173,18 +223,35 @@ const SettingsProvidersContent: Component = () => {
                       <span class="text-14-medium text-text-strong truncate">{item.name}</span>
                       <Tag>{type(item)}</Tag>
                     </div>
-                    <Show
-                      when={canDisconnect(item)}
-                      fallback={
-                        <span class="text-14-regular text-text-base opacity-0 group-hover:opacity-100 transition-opacity duration-200 pr-3 cursor-default">
-                          {language.t("settings.providers.connected.environmentDescription")}
-                        </span>
-                      }
-                    >
-                      <Button size="large" variant="ghost" onClick={() => void disconnect(item.id, item.name)}>
-                        {language.t("common.disconnect")}
-                      </Button>
-                    </Show>
+                    <div class="flex items-center gap-2">
+                      {/* FORK-BEGIN: REQ-054 — getbot 刷新模型按钮(仅 getbot 显示) 2026-06-18 */}
+                      <Show when={item.id === GETBOT_PROVIDER_ID}>
+                        <Button
+                          size="large"
+                          variant="secondary"
+                          disabled={getbotRefreshing()}
+                          data-component="getbot-refresh-models"
+                          onClick={() => void refreshGetbotModels()}
+                        >
+                          {getbotRefreshing()
+                            ? language.t("common.loading")
+                            : language.t("provider.getbot.refreshModels")}
+                        </Button>
+                      </Show>
+                      {/* FORK-END */}
+                      <Show
+                        when={canDisconnect(item)}
+                        fallback={
+                          <span class="text-14-regular text-text-base opacity-0 group-hover:opacity-100 transition-opacity duration-200 pr-3 cursor-default">
+                            {language.t("settings.providers.connected.environmentDescription")}
+                          </span>
+                        }
+                      >
+                        <Button size="large" variant="ghost" onClick={() => void disconnect(item.id, item.name)}>
+                          {language.t("common.disconnect")}
+                        </Button>
+                      </Show>
+                    </div>
                   </div>
                 )}
               </For>

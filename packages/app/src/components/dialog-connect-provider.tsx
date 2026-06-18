@@ -21,6 +21,7 @@ import { useProviders, GETBOT_SYNTHETIC } from "@/hooks/use-providers"
 import {
   buildGetbotProviderConfig,
   fetchGetbotChatModels,
+  mergeGetbotModels,
   GETBOT_PROVIDER_ID,
   GETBOT_SITE_URL,
   GetbotInvalidKeyError,
@@ -491,8 +492,12 @@ export function DialogConnectProvider(props: { provider: string }) {
         // 关键:把自己从 disabled_providers 清出去（用户之前断开过会留这一行,不清的话连了等于没连）
         const beforeDisabled = serverSync.data.config.disabled_providers ?? []
         const nextDisabled = beforeDisabled.filter((id) => id !== GETBOT_PROVIDER_ID)
+        // FORK: REQ-054 — 首连也走 mergeGetbotModels:保留已有能力标注(重连场景),新模型推断兜底 2026-06-18
+        const existingModels = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+        const mergedModels = mergeGetbotModels(existingModels, chatIds)
+        const freshConfig = buildGetbotProviderConfig(apiKey, [])
         await serverSync.updateConfig({
-          provider: { [GETBOT_PROVIDER_ID]: buildGetbotProviderConfig(apiKey, chatIds) },
+          provider: { [GETBOT_PROVIDER_ID]: { ...freshConfig, models: mergedModels } },
           ...(nextDisabled.length !== beforeDisabled.length ? { disabled_providers: nextDisabled } : {}),
         })
       } catch (e) {
