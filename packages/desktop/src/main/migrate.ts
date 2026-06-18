@@ -32,7 +32,9 @@ const TAURI_APP_IDS: Record<string, string> = {
   prod: "ai.deskfox.app",
 }
 function tauriAppId() {
-  return app.isPackaged ? TAURI_APP_IDS[CHANNEL] : "ai.deskfox.app.dev"
+  // FORK: 本地测试版(local / 未打包)无 Tauri 前身 → 指向 ai.deskfox.app.local,
+  // 该目录不存在故迁移自然 no-op,不再冒用预览版 .dev 的偏好目录。[feat: local-channel] 2026-06-17
+  return app.isPackaged ? (TAURI_APP_IDS[CHANNEL] ?? "ai.deskfox.app.local") : "ai.deskfox.app.local"
 }
 
 // Migrate a single Tauri .dat file into the corresponding electron-store.

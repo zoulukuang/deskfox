@@ -26,7 +26,7 @@ const REQUEST_TIMEOUT_MS = 5000
 
 // 模块状态:启动时由 index.ts initTelemetry() 注入(version + bundle identifier)。
 let appVersion = "0.0.0"
-let appIdentifier = "ai.deskfox.app.dev"
+let appIdentifier = "ai.deskfox.app.local"
 
 export function initTelemetry(info: { version: string; identifier: string }): void {
   appVersion = info.version

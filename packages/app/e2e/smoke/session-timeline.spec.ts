@@ -411,15 +411,11 @@ function expectCompleteScroll(
 }
 
 async function selectHomeProject(page: Page, projectName: string) {
+  // FORK: v2 desktop —— configureSmokePage 已种 projects.local + lastProject,"/" 会自动进入该项目上下文
+  //   (不再有"home 落地页点 home-project-row"那个旧流程;项目现于 sidebar-nav-desktop 渲染)。
+  //   这里只确认项目上下文已加载;真正的会话导航由 navigateToSession 用显式 URL 完成。2026-06-18
   await page.goto("/")
-  const row = page
-    .locator('[data-component="home-project-row"]')
-    .filter({ hasText: new RegExp(projectName, "i") })
-    .first()
-  await expectAppVisible(row)
-  await row.click()
-  await expect(row).toHaveAttribute("data-selected", "", { timeout: APP_READY_TIMEOUT })
-  await expect(page).toHaveURL(/\/$/)
+  await expectAppVisible(page.getByText(new RegExp(projectName, "i")).first())
 }
 
 async function navigateToSession(page: Page, directory: string, sessionId: string, expectedTitle: string) {

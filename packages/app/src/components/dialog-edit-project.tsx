@@ -13,6 +13,7 @@ import { useLanguage } from "@/context/language"
 import { getProjectAvatarSource } from "@/pages/layout/helpers"
 import { ServerConnection } from "@/context/server"
 import { useGlobal } from "@/context/global"
+import { showToast } from "@/utils/toast"
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 
@@ -98,7 +99,15 @@ export function DialogEditProject(props: { project: LocalProject; server: Server
       // FORK: project-avatar-save — override 写进 canonical childStore.icon(enrich 唯一无条件读取的本地源),
       // 对「有 id 走 update」和「无 id / global 走 meta」两条路径都生效 [feat: project-avatar-save]
       serverSync().project.icon(props.project.worktree, store.iconOverride || undefined)
+    },
+    onSuccess: () => {
       dialog.close()
+    },
+    onError: (err) => {
+      // FORK: REQ-064 — 保存失败不再静默卡死(原 dialog.close() 在 mutationFn 内,抛错就到不了、按钮永久 pending)。
+      // 改为成功才关 dialog;失败弹错误 toast 且 dialog 保持打开,用户可重试或手动关闭。2026-06-17
+      const message = err instanceof Error ? err.message : String(err)
+      showToast({ variant: "error", title: language.t("common.requestFailed"), description: message })
     },
   }))
 

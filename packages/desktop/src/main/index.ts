@@ -55,6 +55,7 @@ import { migrate } from "./migrate"
 // FORK: app 名复用 constants 的 PRODUCT_NAMES 单一事实源(原本地 APP_NAMES 与之重复)[feat: electron-brand-cleanup]
 const APP_NAMES = PRODUCT_NAMES
 const APP_IDS: Record<string, string> = {
+  local: "ai.deskfox.app.local",
   dev: "ai.deskfox.app.dev",
   beta: "ai.deskfox.app.beta",
   prod: "ai.deskfox.app",
@@ -123,8 +124,9 @@ const main = Effect.gen(function* () {
 
   process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
 
-  // FORK: 未打包 dev 跑也用 DeskFox dev 身份(身份/迁移路径与打包一致,便于自动化验证)[feat: electron-replatform]
-  const appId = app.isPackaged ? APP_IDS[CHANNEL] : "ai.deskfox.app.dev"
+  // FORK: 未打包跑 = 本地测试版身份(ai.deskfox.app.local,与发布渠道隔离,不抢预览版单实例锁)。
+  // [feat: local-channel] 2026-06-17(原先未打包冒用 .dev 预览版身份,语义混淆 + 抢锁,已纠正)
+  const appId = app.isPackaged ? APP_IDS[CHANNEL] : APP_IDS.local
   const onboardingTestRoot = ((): string | undefined => {
     if (!TEST_ONBOARDING) return
 
@@ -140,7 +142,7 @@ const main = Effect.gen(function* () {
     process.env.XDG_STATE_HOME = join(root, "state")
     return root
   })()
-  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "DeskFox Dev") // FORK: DeskFox 品牌 [feat: electron-replatform]
+  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : APP_NAMES.local) // FORK: DeskFox 品牌(未打包=本地版)[feat: electron-replatform / local-channel]
   app.setAppUserModelId(appId)
   // FORK: 统计客户端注入 version + bundle identifier(按 channel 选 Plausible site)[feat: telemetry-usage-stats]
   initTelemetry({ version: app.getVersion(), identifier: appId })

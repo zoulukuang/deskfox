@@ -133,12 +133,26 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
   })
 
   const used = new Set(files.map((part) => part.url))
+  // FORK: REQ-065 — 选区/引用卡按 commentID 去重(每张卡有唯一 commentID),与整文件 url 去重分属两个命名空间,
+  // 避免同文件多卡(不同 commentID)被旧的"按 url+有无comment"口径误并成一张。2026-06-17
+  const usedComments = new Set<string>()
   const context = input.context.flatMap((item) => {
     const path = absolute(input.sessionDirectory, item.path)
     const url = `file://${encodeFilePath(path)}${fileQuery(item.selection)}`
     const comment = item.comment?.trim()
-    if (!comment && used.has(url)) return []
-    used.add(url)
+    const preview = item.preview?.trim()
+    const commentID = item.commentID
+
+    // FORK: REQ-065 去重分流 —
+    //  · 有 commentID(选区/引用卡):按 commentID 去重,同文件多张不同卡全部保留;不写入 url 集,避免污染整文件去重。
+    //  · 无 commentID(整文件引用):仍按 url 去重,保留"prompt 已 @mention 同路径则丢无评论重复卡"的原行为。
+    if (commentID) {
+      if (usedComments.has(commentID)) return []
+      usedComments.add(commentID)
+    } else {
+      if (!comment && used.has(url)) return []
+      used.add(url)
+    }
 
     const filePart = {
       id: Identifier.ascending("part"),
@@ -148,22 +162,27 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
       filename: getFilename(item.path),
     } satisfies PromptRequestPart
 
-    if (!comment) return [filePart]
+    // FORK: REQ-065 + md-token — 仅"无评论且无可发内容"的纯整文件卡退化为单 filePart;
+    // 选区卡(有 commentID + preview)即使无评论也发 {选中文字 preview + 文件 URL(行范围)},
+    // 不退化为整文件,避免大 .md 整文件灌进上下文浪费 token、且保证选中文字真正到达模型。2026-06-17
+    if (!comment && !preview) return [filePart]
 
-    const mentions = parseCommentMentions(comment).flatMap((path) => {
-      const url = `file://${encodeFilePath(absolute(input.sessionDirectory, path))}`
-      if (used.has(url)) return []
-      used.add(url)
-      return [
-        {
-          id: Identifier.ascending("part"),
-          type: "file",
-          mime: "text/plain",
-          url,
-          filename: getFilename(path),
-        } satisfies PromptRequestPart,
-      ]
-    })
+    const mentions = comment
+      ? parseCommentMentions(comment).flatMap((path) => {
+          const url = `file://${encodeFilePath(absolute(input.sessionDirectory, path))}`
+          if (used.has(url)) return []
+          used.add(url)
+          return [
+            {
+              id: Identifier.ascending("part"),
+              type: "file",
+              mime: "text/plain",
+              url,
+              filename: getFilename(path),
+            } satisfies PromptRequestPart,
+          ]
+        })
+      : []
 
     return [
       {
@@ -173,7 +192,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
         text: formatCommentNote({
           path: item.path,
           selection: item.selection,
-          comment,
+          comment: comment ?? "",
           preview: item.preview,
           kind: item.kind,
         }),
@@ -181,7 +200,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
         metadata: createCommentMetadata({
           path: item.path,
           selection: item.selection,
-          comment,
+          comment: comment ?? "",
           preview: item.preview,
           origin: item.commentOrigin,
           kind: item.kind,

@@ -7,7 +7,9 @@ const theme = fileURLToPath(new URL("./public/oc-theme-preload.js", import.meta.
 
 const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
-  if (raw === "dev" || raw === "beta" || raw === "prod") return raw
+  // FORK: 第 4 档 local 必须透传,否则 app 渲染层 VITE_OPENCODE_CHANNEL 兜底成 dev → 本地版徽标错显 DEV
+  // 且版本牌读错号线。此 define 会盖过 electron.vite 的同名 define(app 文件以本插件为准)。[feat: local-channel]
+  if (raw === "local" || raw === "dev" || raw === "beta" || raw === "prod") return raw
   if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
   return "dev"
 })()

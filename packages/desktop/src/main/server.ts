@@ -2,6 +2,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, utilityProcess } from "electron"
 import type { Details } from "electron"
+import { CHANNEL } from "./constants"
 import { getLogger } from "./logging"
 import { getUserShell, loadShellEnv } from "./shell-env"
 import { getStore } from "./store"
@@ -213,11 +214,17 @@ function createSidecarEnv(): Record<string, string> {
   )
   delete env.DEBUG
   if (process.platform === "linux") delete env.LD_PRELOAD
-  // FORK: DeskFox 全渠道统一 opencode.db(不分 opencode-dev/beta.db)— 对齐 Tauri 版行为
-  //   (build 时烤 OPENCODE_CHANNEL=prod,401-fix),保证打包后 dev/beta 渠道升级时老用户
-  //   会话/DB 不"消失"。上游原生读此 env,薄 FORK。原逻辑仅 !isPackaged 时设,DeskFox 改为恒设。
-  //   [feat: electron-replatform] 2026-06-12 — 升级无感关键(见 OPENCODE-PLAN 复审实锤)
-  env.OPENCODE_DISABLE_CHANNEL_DB = "1"
+  // FORK: 数据库归属按身份分流 [feat: local-channel] 2026-06-17 —
+  //  · 发布渠道(预览/Beta/正式):统一 opencode.db(OPENCODE_DISABLE_CHANNEL_DB=1)— 对齐 Tauri 版行为
+  //    (build 时烤 OPENCODE_CHANNEL=prod,401-fix),保证打包后 dev/beta 渠道升级时老用户会话/DB 不"消失"。
+  //  · 本地测试版(local / 未打包):显式 OPENCODE_CHANNEL=local → sidecar 落 opencode-local.db,
+  //    与正式版 opencode.db 隔离,本机灌测试数据/折腾不污染正式版(详见治理规范 §3.11)。
+  if (!app.isPackaged || CHANNEL === "local") {
+    env.OPENCODE_CHANNEL = "local"
+    delete env.OPENCODE_DISABLE_CHANNEL_DB
+  } else {
+    env.OPENCODE_DISABLE_CHANNEL_DB = "1"
+  }
   return env
 }
 

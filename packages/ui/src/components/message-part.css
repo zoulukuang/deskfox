@@ -282,6 +282,15 @@
   color: var(--text-base);
   line-height: var(--line-height-normal);
 
+  /* FORK: REQ-053/058 — 思考链折叠触发行:摘要左、展开箭头右,与工具折叠头同布局 2026-06-17 */
+  [data-component="reasoning-trigger"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
+
   [data-component="markdown"] {
     margin-top: 16px;
     font-style: normal;
