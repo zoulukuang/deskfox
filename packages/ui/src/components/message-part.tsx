@@ -1525,6 +1525,15 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
       .at(-1)
     return last?.id === part().id
   })
+  // FORK-BEGIN: REQ-066 — Build meta 行从尾部挪到首个 text part 正文上方 + 默认收起。2026-06-18
+  const isFirstTextPart = createMemo(() => {
+    const first = (data.store.part?.[props.message.id] ?? [])
+      .filter((item): item is TextPart => item?.type === "text" && !!item.text?.trim())
+      .at(0)
+    return first?.id === part().id
+  })
+  const [metaOpen, setMetaOpen] = createSignal(false)
+  // FORK-END
   const showCopy = createMemo(() => {
     if (props.message.role !== "assistant") return isLastTextPart()
     if (props.showAssistantCopyPartID === null) return false
@@ -1545,6 +1554,33 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
   return (
     <Show when={text()}>
       <div data-component="text-part" data-timeline-part-id={part().id}>
+        {/* FORK-BEGIN: REQ-066 — Build meta 行在正文上方 + 默认收起。仅首个 text part 显示(避免
+            多 text part 消息重复渲染 meta)。写法一比一对齐 reasoning Collapsible(`:1597-1616`)。2026-06-18 */}
+        <Show when={isFirstTextPart() && meta()}>
+          <div data-component="build-meta">
+            <Collapsible open={metaOpen()} onOpenChange={setMetaOpen} variant="ghost" class="tool-collapsible">
+              <Collapsible.Trigger>
+                <div data-component="build-meta-trigger">
+                  <span data-slot="build-meta-label" class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong">
+                    <ToolStatusTitle
+                      active={streaming()}
+                      activeText={meta()}
+                      doneText={meta()}
+                      split={false}
+                    />
+                  </span>
+                  <Collapsible.Arrow />
+                </div>
+              </Collapsible.Trigger>
+              <Collapsible.Content>
+                <span data-slot="build-meta-detail" class="text-12-regular text-text-weak cursor-default">
+                  {meta()}
+                </span>
+              </Collapsible.Content>
+            </Collapsible>
+          </div>
+        </Show>
+        {/* FORK-END */}
         <div data-slot="text-part-body">
           <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
             <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
@@ -1566,11 +1602,6 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
                 aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
               />
             </Tooltip>
-            <Show when={meta()}>
-              <span data-slot="text-part-meta" class="text-12-regular text-text-weak cursor-default">
-                {meta()}
-              </span>
-            </Show>
           </div>
         </Show>
       </div>
