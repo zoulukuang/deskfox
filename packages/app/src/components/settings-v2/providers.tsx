@@ -116,6 +116,8 @@ export const SettingsProvidersV2: Component = () => {
       .remove({ providerID })
       .then(async () => {
         await serverSdk.client.global.dispose()
+        // FORK: REQ-052 — 断开收尾强制失效 providers query,使列表立即消失,无需重启 2026-06-18
+        serverSync.refreshProviders()
         showToast({
           variant: "success",
           icon: "circle-check",

@@ -466,6 +466,16 @@ export function createServerSyncContextInner(_serverSDK?: ServerSDK) {
     },
   }))
 
+  // FORK-BEGIN: REQ-052 — 暴露 refreshProviders() 供连接/断开收尾调用,强制失效目录级 providers query 2026-06-18
+  function refreshProviders() {
+    bootstrap.refetch()
+    queryClient.invalidateQueries({ queryKey: [serverSDK.scope, null, "providers"] })
+    queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === serverSDK.scope && query.queryKey[2] === "providers",
+    })
+  }
+  // FORK-END
+
   return {
     data: globalStore,
     set,
@@ -481,6 +491,7 @@ export function createServerSyncContextInner(_serverSDK?: ServerSDK) {
     queryOptions: queryOptionsApi,
     // bootstrap,
     updateConfig: updateConfigMutation.mutateAsync,
+    refreshProviders,
     project: projectApi,
     todo: {
       set: setSessionTodo,

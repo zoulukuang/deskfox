@@ -349,6 +349,8 @@ export function DialogConnectProvider(props: { provider: string }) {
 
   async function complete() {
     await serverSDK.client.global.dispose()
+    // FORK: REQ-052 — 连接收尾强制失效 providers query,使列表和模型选择器立即刷新 2026-06-18
+    serverSync.refreshProviders()
     dialog.close()
     showToast({
       variant: "success",
