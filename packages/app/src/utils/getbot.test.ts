@@ -30,6 +30,32 @@ describe("mergeGetbotModels", () => {
     expect(result["gpt-4o"]).toEqual({ name: "gpt-4o", tool_call: true, attachment: true, reasoning: false })
   })
 
+  test("AC3: preserves modalities field when present in existing config", () => {
+    // AC3 逐字段验证:tool_call / attachment / reasoning / modalities 全部原样保留
+    const existing: Record<string, GetbotModelMeta> = {
+      "gpt-4o-audio": {
+        name: "gpt-4o-audio",
+        tool_call: true,
+        attachment: true,
+        reasoning: false,
+        modalities: ["text", "audio"],
+      },
+    }
+    const remoteIds = ["gpt-4o-audio"]
+    const result = mergeGetbotModels(existing, remoteIds)
+
+    expect(result["gpt-4o-audio"].tool_call).toBe(true)
+    expect(result["gpt-4o-audio"].attachment).toBe(true)
+    expect(result["gpt-4o-audio"].reasoning).toBe(false)
+    expect(result["gpt-4o-audio"].modalities).toEqual(["text", "audio"])
+  })
+
+  test("AC3: modalities is undefined for new models without existing config", () => {
+    const result = mergeGetbotModels({}, ["new-model-no-modality"])
+    // inferModelConfig 不设 modalities,新增模型该字段为 undefined
+    expect(result["new-model-no-modality"].modalities).toBeUndefined()
+  })
+
   test("uses inferModelConfig for new models not in existing", () => {
     const existing: Record<string, GetbotModelMeta> = {}
     const remoteIds = ["o1-mini", "claude-3-5-sonnet"]

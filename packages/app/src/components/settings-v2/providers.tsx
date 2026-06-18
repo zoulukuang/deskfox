@@ -19,6 +19,7 @@ import {
   GETBOT_PROVIDER_ID,
   fetchGetbotChatModels,
   mergeGetbotModels,
+  buildGetbotProviderConfig,
   GetbotInvalidKeyError,
   GetbotTimeoutError,
 } from "@/utils/getbot"
@@ -109,10 +110,13 @@ export const SettingsProvidersV2: Component = () => {
     setGetbotRefreshing(true)
     try {
       const remoteIds = await fetchGetbotChatModels(apiKey, { fetch: platform.fetch })
-      const existing = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
-      const merged = mergeGetbotModels(existing, remoteIds)
+      const existingModels = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+      const merged = mergeGetbotModels(existingModels, remoteIds)
+      // AC2: 整块替换 — 读取现有 provider config 展开,避免只写 models 字典时丢失 name/npm/options
+      const existingProviderConfig = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID] ?? {}
+      const freshConfig = buildGetbotProviderConfig(apiKey, [])
       await serverSync.updateConfig({
-        provider: { [GETBOT_PROVIDER_ID]: { models: merged } },
+        provider: { [GETBOT_PROVIDER_ID]: { ...freshConfig, ...existingProviderConfig, models: merged } },
       })
       serverSync.refreshProviders()
       showToast({

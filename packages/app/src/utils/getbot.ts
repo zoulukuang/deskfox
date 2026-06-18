@@ -33,6 +33,7 @@ export type GetbotModelMeta = {
   tool_call?: boolean
   attachment?: boolean
   reasoning?: boolean
+  modalities?: string[]
 }
 
 // FORK-BEGIN: REQ-054 — mergeGetbotModels 纯函数:remote ids 为主、local 能力标注优先保留、幽灵自然丢弃 2026-06-18
@@ -42,6 +43,7 @@ export type GetbotModelMetaInput = {
   tool_call?: boolean
   attachment?: boolean
   reasoning?: boolean
+  modalities?: string[]
 }
 
 /**
@@ -61,8 +63,8 @@ export function mergeGetbotModels(
   for (const id of remoteIds) {
     const local = existing[id]
     if (local !== undefined) {
-      // 保留已有能力标注,name 若缺失则回退到 id
-      next[id] = { name: local.name ?? id, tool_call: local.tool_call, attachment: local.attachment, reasoning: local.reasoning }
+      // 保留已有能力标注,name 若缺失则回退到 id;modalities 同样原样保留
+      next[id] = { name: local.name ?? id, tool_call: local.tool_call, attachment: local.attachment, reasoning: local.reasoning, modalities: local.modalities }
     } else {
       next[id] = inferModelConfig(id)
     }
