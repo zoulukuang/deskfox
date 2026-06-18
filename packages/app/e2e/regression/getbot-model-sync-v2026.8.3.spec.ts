@@ -1,7 +1,12 @@
 // FORK: REQ-054 [feat: v2026.8.3 自定义供应商模型列表同步] —— L2 回归 spec
-//   验证:settings-v2 Providers 面板在 GetBot 已连接时显示「刷新模型」按钮,
+//   验证:Providers 面板在 GetBot 已连接时显示「刷新模型」按钮,
 //         点击后调用 refreshGetbotModels → 成功 toast 出现。
-//   覆盖路径:SettingsProvidersV2 → connected provider row → item.id === "getbot" → Show → ButtonV2
+//   ⚠️ 测的是 DeskFox 实际发货的 v1 经典布局(settings-providers.tsx / dialog-settings.tsx):
+//     DeskFox 默认 newLayoutDesigns=false 且 FORK 隐藏 v2 开关,用户永远看不到 settings-v2。
+//     故不再 enableNewLayout(早期版本误测 v2 = 不发货布局),改走 data-component="dialog"
+//     + role=tab Providers 的 v1 路径;getbot-refresh-models 锚点在 v1/v2 两套都有,
+//     data-provider-id 现已对齐加到 v1 组件。
+//   覆盖路径:SettingsProviders → connected provider row → item.id === "getbot" → Show → Button
 //   data-* 断言优先:[data-component="getbot-refresh-models"]、[data-provider-id="getbot"];
 //   locale 已钉 en-US。
 //   备注:本 spec 在 mock-server 层验证 UI 渲染路径,GetBot /v1/models API 走 page.route 拦截
@@ -42,6 +47,8 @@ function makeProviderWithGetbot() {
   }
 }
 
+// 打开 v1 经典布局的 Providers 面板(dialog-settings.tsx → Tabs.Trigger value="providers")。
+// 不 enableNewLayout = 走 DeskFox 实际发货的默认布局。
 async function navigateToProvidersTab(page: Page) {
   await page.goto("/")
 
@@ -49,7 +56,8 @@ async function navigateToProvidersTab(page: Page) {
   await settingsBtn.waitFor({ state: "visible", timeout: 20_000 })
   await settingsBtn.click()
 
-  const settingsDialog = page.locator('[data-component="dialog-v2"]').first()
+  // v1 设置对话框走 data-component="dialog"(v2 才是 dialog-v2)
+  const settingsDialog = page.locator('[data-component="dialog"]').first()
   await settingsDialog.waitFor({ state: "visible", timeout: 10_000 })
 
   const providersTab = page.getByRole("tab", { name: "Providers", exact: true }).first()
@@ -63,7 +71,6 @@ async function navigateToProvidersTab(page: Page) {
 
 test.describe("regression: GetBot 刷新模型按钮在 Providers 面板可见 (REQ-054 v2026.8.3)", () => {
   test("connected GetBot row shows refresh-models button with data-component anchor", async ({ page }) => {
-    await enableNewLayout(page)
     await mockOpenCodeServer(page, {
       directory,
       project: makeProject({ id: projectID, directory, name: title }),
@@ -94,8 +101,6 @@ test.describe("regression: GetBot 刷新模型按钮在 Providers 面板可见 (
   // 该 click→merge 逻辑由 getbot.test.ts 的 mergeGetbotModels 单测(12 条)覆盖;端到端成功路径归真实触发/手测。
 
   test("non-GetBot provider row does NOT show refresh-models button", async ({ page }) => {
-    await enableNewLayout(page)
-
     // 只连 anthropic,不连 getbot
     const providerData = {
       all: [
@@ -143,12 +148,3 @@ test.describe("regression: GetBot 刷新模型按钮在 Providers 面板可见 (
     await expect(anthropicRow.locator('[data-component="getbot-refresh-models"]')).not.toBeVisible()
   })
 })
-
-async function enableNewLayout(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      "settings.v3",
-      JSON.stringify({ general: { newLayoutDesigns: true } }),
-    )
-  })
-}
