@@ -144,12 +144,16 @@ export const SettingsProvidersV2: Component = () => {
             <Show
               when={connected().length > 0}
               fallback={
-                <div class="settings-v2-provider-empty">{language.t("settings.providers.connected.empty")}</div>
+                // FORK: REQ-052 — data-empty-state 锚点供 e2e 断言 2026-06-18
+                <div class="settings-v2-provider-empty" data-empty-state="connected-providers">
+                  {language.t("settings.providers.connected.empty")}
+                </div>
               }
             >
               <For each={connected()}>
                 {(item) => (
-                  <div class="settings-v2-provider-row group">
+                  // FORK: REQ-052 — data-provider-id 锚点供 e2e 断言 2026-06-18
+                  <div class="settings-v2-provider-row group" data-provider-id={item.id}>
                     <div class="settings-v2-provider-lead">
                       <ProviderIcon
                         id={item.id}

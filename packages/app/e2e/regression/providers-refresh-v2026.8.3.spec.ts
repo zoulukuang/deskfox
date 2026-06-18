@@ -77,8 +77,8 @@ test.describe("regression: providers list renders connected providers (REQ-052 v
     const connectedSection = page.locator('[data-component="connected-providers-section"]').first()
     await connectedSection.waitFor({ state: "visible", timeout: 8_000 })
 
-    // Anthropic 行可见(用 provider name 文案,locale 已钉 en-US)
-    const anthropicRow = connectedSection.getByText("Anthropic", { exact: false }).first()
+    // Anthropic 行可见(用 data-provider-id 锚点,不依赖裸文案)
+    const anthropicRow = connectedSection.locator('[data-provider-id="anthropic"]').first()
     await anthropicRow.waitFor({ state: "visible", timeout: 5_000 })
 
     // 断开按钮可用(验证 canDisconnect=true 且 source=api)
@@ -114,9 +114,9 @@ test.describe("regression: providers list renders connected providers (REQ-052 v
     const connectedSection = page.locator('[data-component="connected-providers-section"]').first()
     await connectedSection.waitFor({ state: "visible", timeout: 8_000 })
 
-    // 空态文案出现(locale en-US: "No connected providers")
+    // 空态出现(用 data-empty-state 锚点,不依赖裸文案)
     await expect(
-      connectedSection.getByText("No connected providers", { exact: false }).first(),
+      connectedSection.locator('[data-empty-state="connected-providers"]').first(),
     ).toBeVisible({ timeout: 8_000 })
   })
 })
