@@ -12,10 +12,12 @@ export interface ButtonProps
 
 export function Button(props: ButtonProps) {
   const [split, rest] = splitProps(props, ["variant", "size", "icon", "class", "classList"])
+  // FORK: REQ-054 — 允许外部传入 data-component 覆盖默认值,否则硬编码会使锚点选择器失效 2026-06-18
+  const [dataAttrs, restWithoutData] = splitProps(rest, ["data-component" as keyof typeof rest])
   return (
     <Kobalte
-      {...rest}
-      data-component="button"
+      {...restWithoutData}
+      data-component={(dataAttrs as { "data-component"?: string })["data-component"] ?? "button"}
       data-size={split.size || "normal"}
       data-variant={split.variant || "secondary"}
       data-icon={split.icon}

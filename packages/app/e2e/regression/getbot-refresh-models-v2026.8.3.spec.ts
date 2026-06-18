@@ -81,8 +81,9 @@ test.describe("regression: GetBot 刷新模型按钮在 Providers 面板可见 (
     await expect(refreshBtn).toBeVisible({ timeout: 5_000 })
     await expect(refreshBtn).toBeEnabled()
 
-    // 按钮文案为 "Refresh models"(en-US locale)
-    await expect(refreshBtn).toContainText("Refresh models")
+    // 按钮可用 ARIA role + accessible-name 验证(避免裸文案断言,locale 无关)
+    await expect(refreshBtn).toHaveRole("button")
+    await expect(refreshBtn).toHaveAccessibleName(/refresh models/i)
   })
 
   test("non-GetBot provider row does NOT show refresh-models button", async ({ page }) => {
