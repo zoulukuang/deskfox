@@ -210,14 +210,19 @@ const SettingsProvidersContent: Component = () => {
             <Show
               when={connected().length > 0}
               fallback={
-                <div class="py-4 text-14-regular text-text-weak">
+                // FORK: REQ-052 — data-empty-state 锚点供 e2e 断言(对齐 v2 providers.tsx)2026-06-18
+                <div class="py-4 text-14-regular text-text-weak" data-empty-state="connected-providers">
                   {language.t("settings.providers.connected.empty")}
                 </div>
               }
             >
               <For each={connected()}>
                 {(item) => (
-                  <div class="group flex flex-wrap items-center justify-between gap-4 min-h-16 py-3 border-b border-border-weak-base last:border-none">
+                  // FORK: REQ-052 — data-provider-id 锚点供 e2e 断言(对齐 v2 providers.tsx)2026-06-18
+                  <div
+                    class="group flex flex-wrap items-center justify-between gap-4 min-h-16 py-3 border-b border-border-weak-base last:border-none"
+                    data-provider-id={item.id}
+                  >
                     <div class="flex items-center gap-3 min-w-0">
                       <ProviderIcon id={item.id} class="size-5 shrink-0 icon-strong-base" />
                       <span class="text-14-medium text-text-strong truncate">{item.name}</span>
