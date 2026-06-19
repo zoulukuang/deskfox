@@ -15,19 +15,28 @@ related: ../../../../OPENCODE-PLAN/版本计划/v2026.8.3.md (1-spec 等价物) 
 
 | 单元 | REQ | 内容 | commit |
 |---|---|---|---|
-| **U1** | REQ-066 | Build 摘要行从 text part 尾部 copy-wrapper 抽出 → 首个 text part 正文前 + Collapsible 默认收起 | `f2ee59a387` feat · `fb09caa905` 清死样式补 acceptance |
+| ~~**U1**~~ | ~~REQ-066~~ | ~~Build 摘要行从 text part 尾部 copy-wrapper 抽出 → 首个 text part 正文前 + Collapsible 默认收起~~ **已撤销**(理解有误,见 U5) | ~~`f2ee59a387`~~ ~~`fb09caa905`~~ · revert `<本笔>` |
+| **U5** | shell-折叠 | bash/shell 工具纳入「已探索」折叠组(默认收起、点击展开),消除 Claude Code 回合下方 shell 竖向铺开;替代被撤的 U1 | `<本笔>`(R4 override) |
 | **U2** | REQ-052 | 供应商连接/断开后 providers query 强制失效:暴露 `refreshProviders()` 并在 `complete()`/`disconnect()` 调用 | `b78e87ea52` feat · `939e940bd7` 验收1轮 · `6d5be64d7a` 单测迁 event-reducer · `acadcc13e7` 验收锚点对齐 v1 |
 | **U3** | REQ-054 | `mergeGetbotModels` 纯函数 + 脚本档补写回 + 应用内「刷新模型」按钮(清幽灵模型) | `fb8f2a8036` feat · `067cbb96cc` data-component override · `21f5628bf0` 验收2轮 · `1db9454e95` 验收3轮收尾 · `82b9ac26ba` e2e 改测 v1 |
 | **U4** | (检查更新弹重复框) | 收敛 `layout.tsx` 双 ToastRegion 为单一 region(Kobalte toast 单例被两 region 各渲一遍 → 每条 toast 翻倍) | `6302e2a8dd` feat |
 
 ## 各单元详情
 
-### U1 REQ-066 — Build 摘要行位置 + 默认收起
+### ~~U1 REQ-066 — Build 摘要行位置 + 默认收起~~(已撤销)
 
-- **根因**:`message-part.tsx` 的 `meta()`(agent+model+duration 拼装)硬编码渲染在 text part DOM 末尾的 copy-wrapper 内,且 CSS `opacity:0` 仅 hover 显形 → 默认根本看不见、且在正文下方。
-- **改法**(对齐 reasoning 折叠样板):`TextPartDisplay` 里 meta 行从尾部抽出,新增 `isFirstTextPart` 判定,在首个 text part 正文前插入 `Collapsible`(默认收起、`data-component="build-meta"`/`build-meta-trigger` 复用 `tool-collapsible` 样式),原 copy-wrapper 删 meta span 避免重复;`message-part.css` 删除随之失效的死样式。
-- **文件**:`packages/ui/src/components/message-part.tsx`(+41/−4,上游文件,FORK marker)、`message-part.css`(−4)、`e2e/regression/build-meta-above-body-v2026.8.3.spec.ts`(+92)。
-- **本地版真机 CDP 实测**:`build-meta-trigger` 默认 `aria-expanded=false`(收起),点击 true↔false 来回切换正常。
+> **2026-06-19 user 复核后撤销**:REQ-066 原始理解有误——它只把 Build meta **一行**挪到正文上方+折叠,但 user 真正诉求是 Claude Code 回合的**思考/工具整段**对齐 DeskFox 原生(上方+收起),那是另一条需求(`思考链显示顺序-reasoning在正文下方.md`,未做)。U1 改了也不解决 user 看到的「最终答案下方一大堆 shell 铺开」,故整体撤回。
+>
+> **撤销内容**:`message-part.{tsx,css}` 还原到上游(0 fork 侵入),删 `build-meta-above-body-v2026.8.3.spec.ts`。原根因/改法记录见 git 历史 `f2ee59a387`。
+
+### U5 shell-折叠 — bash 工具纳入「已探索」折叠组(替代 U1)
+
+- **诉求**:Claude Code 回合里最终答案下方铺着 20+ 个独立 shell 行(每行一条命令,竖向拉很长)。要把它们默认收起、点击才展开。
+- **根因**:原生「已探索 N 次」折叠组只收 `read/glob/grep/list`(`CONTEXT_GROUP_TOOLS`),`bash` 不在内 → 每条 shell 单独成行。单个 shell 工具本就默认收起(`shellToolPartsExpanded:false`),问题是**条数铺开**不是单条展开。
+- **改法**(复用原生折叠机制,零新组件):① 把纯分组逻辑(`groupParts`/`isContextGroupTool`/`CONTEXT_GROUP_TOOLS`/`PartGroup`)抽到 fork-only 新文件 `message-part-grouping.ts`(原文件 import client-only 组件、bun 单测加载即抛,helper extract → Logic 清单),`CONTEXT_GROUP_TOOLS` 加 `"bash"`;`message-part.tsx` 改为 import + re-export 保持对外 API 不变。② `contextToolSummary` + `ContextToolGroup` 的 `AnimatedCountList` 加「命令」计数项;i18n `ui.messagePart.context.command.one/other`(ui en/zh)。
+- **作用范围**:全局(所有模型的连续 shell 都折叠,一致;DeepSeek/Claude Code 同款)。**非单一大折叠**——交错的 `bash→思考→bash` 会折成多个连续段各一个收起组(比 20 行散开好很多,整段大折叠属更大的`思考链显示顺序`需求)。
+- **文件**:`message-part-grouping.ts`(新,+96,fork-only)、`message-part.tsx`(import/re-export + 计数项)、`message-part.test.ts`(+3 折叠测试)、`i18n/en.ts`/`zh.ts`(+2 key each)。
+- **R4 override**:5 文件全在 `packages/ui/`(路径型黑名单,含 fork-only 新文件误伤),已复核(wrapper 最大化隔离、剩余触点不可外置、低风险)。见 `改动日志.md`。
 
 ### U2 REQ-052 — 供应商连接/断开后列表实时刷新
 
@@ -56,12 +65,13 @@ related: ../../../../OPENCODE-PLAN/版本计划/v2026.8.3.md (1-spec 等价物) 
 
 - **集成终关**:turbo typecheck 22/22 · app 459 pass · ui 30 pass · e2e 回归 17 pass · 0 fail。
 - **v1 对齐两笔**:providers-refresh 2 pass(v1)· getbot-model-sync 2 pass(v1)· regression 全套 17 pass · app typecheck 通过。
+- **U5 撤U1+shell折叠**:typecheck 26/26 · ui 单测 33 pass(含新增 3 个 `groupParts` bash 折叠测试)· e2e 回归 16 pass(撤 U1 删了 build-meta spec,17→16)· 0 fail。
 
 ## 影响范围 / 上游侵入
 
 - 净改动 17 文件 / +983 −60。
-- 上游文件仅 `packages/ui/src/components/message-part.{tsx,css}`(U1),均带 FORK marker;U3 一度越界改上游 `button.tsx` 已撤回换 wrapper-span。
-- 其余全 fork-only(`packages/app/`)。0 R4 override / 0 黑名单。
+- U1 撤销后 `message-part.{tsx,css}` 还原上游;U5 重新触及它们(import/re-export + 计数项)+ ui i18n en/zh + 新 fork 文件 `message-part-grouping.ts` —— 5 文件全在 `packages/ui/`(路径型黑名单),走 **1 笔 R4 override**(本季首笔)。U3 一度越界改上游 `button.tsx` 已撤回换 wrapper-span。
+- 其余全 fork-only(`packages/app/`)。
 
 ## 回退方法
 
