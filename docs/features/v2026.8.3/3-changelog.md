@@ -1,5 +1,5 @@
 feat-id: v2026.8.3
-status: in-progress
+status: done
 related: ../../../../OPENCODE-PLAN/版本计划/v2026.8.3.md (1-spec 等价物) ./3-changelog.md
 
 # v2026.8.3 — changelog
@@ -77,7 +77,13 @@ related: ../../../../OPENCODE-PLAN/版本计划/v2026.8.3.md (1-spec 等价物) 
 
 逐单元 commit 可独立 `git revert`(P4);整版回退 `git reset --hard main`(feat 分支未合 main)。
 
+## 测试阶段记录(2026-06-20,local 本地版真机走查)
+
+- 验收闸:typecheck 22/22 · getbot 单测 12 pass · event-reducer(含 `isProvidersQueryKey`)19 pass · 0 fail。
+- **GetBot「No available channel for model … under group default (distributor)」= 服务端问题**:报错串不在本仓源码,来自 GetBot 网关运行时路由失败(模型仍在 `/v1/models` 目录中被广告、但账号分组无可用 channel)。U3 清幽灵按设计只丢「GetBot 不再广告」的模型,抓不到「广告中但跑不通」这类。**已确认服务端问题、交付服务端,本版不处理。**
+- 测试通过,合入本地 main(`--no-ff`),未 push 远端。
+
 ## 待办
 
 - 真桌面 QA:U4 动态「每点必双」需带 updater 的包(dev/prod)真机点「检查更新」确认只弹一框;视觉对齐(Build 折叠头外观)真机验。
-- push `feat/v2026.8.3` / 合 main 待 user 拍板。
+- push `feat/v2026.8.3` / 合并后的 main → 远端,待 user 拍板。
