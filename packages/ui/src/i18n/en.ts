@@ -88,6 +88,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} searches",
   "ui.messagePart.context.list.one": "{{count}} list",
   "ui.messagePart.context.list.other": "{{count}} lists",
+  "ui.messagePart.context.command.one": "{{count}} command",
+  "ui.messagePart.context.command.other": "{{count}} commands",
 
   "ui.list.loading": "Loading",
   "ui.list.empty": "No results",

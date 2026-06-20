@@ -173,6 +173,10 @@ export const dict = {
   "provider.connect.getbot.fetchModels.failed": "API Key 已保存，但拉取模型列表失败：{{error}}。可稍后到设置里手动刷新。",
   "provider.connect.getbot.apiKey.invalid": "API 密钥验证不通过，请检查后重试。",
   "provider.connect.getbot.timeout": "连接 api.getbot.me 超时（15 秒未响应）。请检查网络后重试。",
+  // FORK: REQ-054 — 刷新模型按钮 i18n 2026-06-18
+  "provider.getbot.refreshModels": "刷新模型",
+  "provider.getbot.refreshModels.success": "模型列表已同步（共 {{count}} 个模型）",
+  "provider.getbot.refreshModels.failed": "刷新模型失败：{{error}}",
   // FORK-END
   "provider.connect.oauth.code.visit.prefix": "访问 ",
   "provider.connect.oauth.code.visit.link": "此链接",

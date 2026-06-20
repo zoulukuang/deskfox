@@ -39,6 +39,11 @@ import type { ServerScope } from "@/utils/server-scope"
 import { persisted } from "@/utils/persist"
 import { toggleMcp } from "./global-sync/mcp"
 
+// FORK: REQ-052 — 抽出纯函数供两处 predicate 复用,避免重复 lambda 2026-06-18
+export function isProvidersQueryKey(key: readonly unknown[], scope: ServerScope): boolean {
+  return key[0] === scope && key[2] === "providers"
+}
+
 type GlobalStore = {
   ready: boolean
   error?: InitError
@@ -461,10 +466,20 @@ export function createServerSyncContextInner(_serverSDK?: ServerSDK) {
       // appear immediately in the available provider list across all directories.
       queryClient.invalidateQueries({ queryKey: [serverSDK.scope, null, "providers"] })
       queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === serverSDK.scope && query.queryKey[2] === "providers",
+        predicate: (query) => isProvidersQueryKey(query.queryKey, serverSDK.scope),
       })
     },
   }))
+
+  // FORK-BEGIN: REQ-052 — 暴露 refreshProviders() 供连接/断开收尾调用,强制失效目录级 providers query 2026-06-18
+  function refreshProviders() {
+    bootstrap.refetch()
+    queryClient.invalidateQueries({ queryKey: [serverSDK.scope, null, "providers"] })
+    queryClient.invalidateQueries({
+      predicate: (query) => isProvidersQueryKey(query.queryKey, serverSDK.scope),
+    })
+  }
+  // FORK-END
 
   return {
     data: globalStore,
@@ -481,6 +496,7 @@ export function createServerSyncContextInner(_serverSDK?: ServerSDK) {
     queryOptions: queryOptionsApi,
     // bootstrap,
     updateConfig: updateConfigMutation.mutateAsync,
+    refreshProviders,
     project: projectApi,
     todo: {
       set: setSessionTodo,

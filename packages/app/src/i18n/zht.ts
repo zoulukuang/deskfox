@@ -151,6 +151,10 @@ export const dict = {
   "provider.connect.getbot.fetchModels.failed": "API Key 已儲存，但拉取模型清單失敗：{{error}}。可稍後到設定裡手動重整。",
   "provider.connect.getbot.apiKey.invalid": "API 金鑰驗證未通過，請檢查後重試。",
   "provider.connect.getbot.timeout": "連線 api.getbot.me 逾時（15 秒未回應）。請檢查網路後重試。",
+  // FORK: REQ-054 — 刷新模型按鈕 i18n 2026-06-18
+  "provider.getbot.refreshModels": "重新整理模型",
+  "provider.getbot.refreshModels.success": "模型清單已同步（共 {{count}} 個模型）",
+  "provider.getbot.refreshModels.failed": "重新整理模型失敗：{{error}}",
   // FORK-END
   "provider.connect.oauth.code.visit.prefix": "造訪 ",
   "provider.connect.oauth.code.visit.link": "此連結",

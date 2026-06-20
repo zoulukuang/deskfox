@@ -1,0 +1,114 @@
+// FORK: REQ-052 [feat: v2026.8.3 供应商列表实时刷新] —— L2 回归 spec
+//   验证:Providers 面板能正确渲染来自 mock /provider 的已连接供应商列表。
+//   覆盖路径:useProviders().connected() ← providers() ← child store / globalStore,
+//   即 refreshProviders() 失效后重取的同一数据管线。
+//   ⚠️ 测的是 DeskFox 实际发货的 v1 经典布局(settings-providers.tsx / dialog-settings.tsx):
+//     DeskFox 默认 newLayoutDesigns=false 且 FORK 隐藏 v2 开关,用户永远看不到 settings-v2。
+//     故 spec 不再 enableNewLayout(早期版本误测 v2 = 不发货布局),改走 data-component="dialog"
+//     + role=tab Providers 的 v1 路径,锚点 connected-providers-section/data-provider-id/
+//     data-empty-state 现已对齐加到 v1 组件。
+//   data-* 断言优先:connected-providers-section / provider row;locale 已钉 en-US。
+//   备注:本 spec 在 mock-server 层验证数据渲染路径,不模拟真实 auth.set 网络调用
+//   (那需要真 sidecar),断言聚焦「有已连接 provider 时列表显示且断开按钮可用」。
+import { expect, test, type Page } from "@playwright/test"
+import { mockOpenCodeServer } from "../utils/mock-server"
+import { makeProject, makeProvider, makeSession } from "../utils/fixtures"
+
+const directory = "C:/OpenCode/ProvidersRefreshREQ052"
+const projectID = "proj_providers_refresh_052"
+const sessionID = "ses_providers_refresh_052"
+const title = "Providers refresh regression"
+
+// Mock provider data: anthropic connected (走 B 路径的典型普通 provider)
+function makeProviderWithAnthropic() {
+  return {
+    all: [
+      {
+        id: "opencode",
+        name: "OpenCode",
+        models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
+      },
+      {
+        id: "anthropic",
+        name: "Anthropic",
+        source: "api",
+        env: [],
+        options: {},
+        models: {
+          "claude-3-5-sonnet-20241022": {
+            id: "claude-3-5-sonnet-20241022",
+            name: "Claude 3.5 Sonnet",
+            limit: { context: 200_000 },
+            cost: { input: 3, output: 15 },
+          },
+        },
+      },
+    ],
+    connected: ["opencode", "anthropic"],
+    default: { providerID: "opencode", modelID: "claude-opus-4-6" },
+  }
+}
+
+// 打开 v1 经典布局的 Providers 面板(dialog-settings.tsx → Tabs.Trigger value="providers")。
+// 不 enableNewLayout = 走 DeskFox 实际发货的默认布局。
+async function navigateToProvidersTab(page: Page) {
+  await page.goto("/")
+
+  const settingsBtn = page.getByRole("button", { name: "Settings", exact: true }).first()
+  await settingsBtn.waitFor({ state: "visible", timeout: 20_000 })
+  await settingsBtn.click()
+
+  // v1 设置对话框走 data-component="dialog"(v2 才是 dialog-v2)
+  const settingsDialog = page.locator('[data-component="dialog"]').first()
+  await settingsDialog.waitFor({ state: "visible", timeout: 10_000 })
+
+  const providersTab = page.getByRole("tab", { name: "Providers", exact: true }).first()
+  await providersTab.waitFor({ state: "visible", timeout: 5_000 })
+  await providersTab.click()
+
+  const connectedSection = page.locator('[data-component="connected-providers-section"]').first()
+  await connectedSection.waitFor({ state: "visible", timeout: 8_000 })
+  return connectedSection
+}
+
+test.describe("regression: providers list renders connected providers (REQ-052 v2026.8.3)", () => {
+  test("connected-providers-section shows anthropic row with disconnect button", async ({ page }) => {
+    await mockOpenCodeServer(page, {
+      directory,
+      project: makeProject({ id: projectID, directory, name: title }),
+      provider: makeProviderWithAnthropic(),
+      sessions: [makeSession({ id: sessionID, projectID, directory, title })],
+      pageMessages: () => ({ items: [] }),
+      events: () => [],
+    })
+
+    const connectedSection = await navigateToProvidersTab(page)
+
+    // Anthropic 行可见(用 data-provider-id 锚点,不依赖裸文案)
+    const anthropicRow = connectedSection.locator('[data-provider-id="anthropic"]').first()
+    await anthropicRow.waitFor({ state: "visible", timeout: 5_000 })
+
+    // 断开按钮可用(验证 canDisconnect=true 且 source=api)
+    const disconnectBtn = connectedSection.getByRole("button", { name: "Disconnect", exact: true }).first()
+    await expect(disconnectBtn).toBeVisible()
+  })
+
+  test("connected-providers-section shows empty state when no providers connected", async ({ page }) => {
+    await mockOpenCodeServer(page, {
+      directory,
+      project: makeProject({ id: projectID, directory, name: title }),
+      // opencode provider 没有付费模型(cost.input 未定义),connected 列表渲染为空
+      provider: makeProvider(),
+      sessions: [makeSession({ id: sessionID, projectID, directory, title })],
+      pageMessages: () => ({ items: [] }),
+      events: () => [],
+    })
+
+    const connectedSection = await navigateToProvidersTab(page)
+
+    // 空态出现(用 data-empty-state 锚点,不依赖裸文案)
+    await expect(
+      connectedSection.locator('[data-empty-state="connected-providers"]').first(),
+    ).toBeVisible({ timeout: 8_000 })
+  })
+})

@@ -2359,30 +2359,37 @@ export default function Layout(props: ParentProps) {
     />
   )
 
+  // FORK-BEGIN: U4 检查更新重复 toast — 收敛双 ToastRegion 为单一 region [feat: v2026.8.3] 2026-06-18
+  //   原因:legacy Toast.Region 与 v2 ToastV2.Region 共用同一 Kobalte @kobalte/core/toast 单例,
+  //   Show 分支切换瞬间两 region 共存 → 一条 toast 被渲两遍(见 docs v2026.8.3 §检查更新弹重复框)。
+  //   修法:把 ToastRegion 挪到 Show 之外单一渲染;UpdateAvailableToast 同步移到 Show 外(两 design 共用)。
   return (
-    <Show
-      when={!newDesign()}
-      fallback={
-        <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
-          {autoselecting() ?? ""}
-          <Titlebar update={titlebarUpdate} />
-          <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
-            <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
-              {props.children}
-            </Show>
-          </main>
-          {import.meta.env.DEV && <DebugBar />}
-          <HelpButton />
-          <ToastRegion v2={newDesign()} />
-        </div>
-      }
-    >
+    <>
+      {/* 唯一 toast region:必须在 Show 之外,不受 design-mode 分支影响 */}
+      <ToastRegion v2={newDesign()} />
+      {/* update toast 也在 Show 之外,两个 design-mode 分支均可触发 */}
+      <Show when={updateVersion() !== undefined}>
+        <UpdateAvailableToast version={updateVersion() ?? ""} install={installUpdate} language={language} />
+      </Show>
+      <Show
+        when={!newDesign()}
+        fallback={
+          <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+            {autoselecting() ?? ""}
+            <Titlebar update={titlebarUpdate} />
+            <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
+              <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
+                {props.children}
+              </Show>
+            </main>
+            {import.meta.env.DEV && <DebugBar />}
+            <HelpButton />
+          </div>
+        }
+      >
       <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
         {autoselecting() ?? ""}
         <Titlebar update={titlebarUpdate} />
-        <Show when={updateVersion() !== undefined}>
-          <UpdateAvailableToast version={updateVersion() ?? ""} install={installUpdate} language={language} />
-        </Show>
         <div class="flex-1 min-h-0 min-w-0 flex">
           <div class="flex-1 min-h-0 relative">
             <div class="size-full relative overflow-x-hidden">
@@ -2545,11 +2552,12 @@ export default function Layout(props: ParentProps) {
           {import.meta.env.DEV && <DebugBar />}
         </div>
         <HelpButton />
-        <ToastRegion v2={newDesign()} />
       </div>
     </Show>
+    </>
   )
 }
+// FORK-END: U4 检查更新重复 toast
 
 function UpdateAvailableToast(props: {
   version: string

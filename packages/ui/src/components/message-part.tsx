@@ -31,6 +31,9 @@ import {
   QuestionInfo,
 } from "@opencode-ai/sdk/v2"
 import { useData } from "../context"
+// FORK: 纯分组逻辑抽到无 client-only 依赖的模块,便于单测;此处导入并 re-export 保持对外 API 不变。2026-06-19
+import { groupParts, isContextGroupTool, sameGroups, type PartGroup, type PartRef } from "./message-part-grouping"
+export { groupParts, sameGroups, type PartGroup, type PartRef }
 import { useFileComponent } from "../context/file"
 import { useDialog } from "../context/dialog"
 import { type UiI18n, useI18n } from "../context/i18n"
@@ -500,7 +503,6 @@ function taskSession(
     .sort((a, b) => (b.time.created ?? 0) - (a.time.created ?? 0))[0]?.id
 }
 
-const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
 const HIDDEN_TOOLS = new Set(["todowrite"])
 
 function list<T>(value: T[] | undefined | null, fallback: T[]) {
@@ -513,91 +515,6 @@ function same<T>(a: readonly T[] | undefined, b: readonly T[] | undefined) {
   if (!a || !b) return false
   if (a.length !== b.length) return false
   return a.every((x, i) => x === b[i])
-}
-
-export type PartRef = {
-  messageID: string
-  partID: string
-}
-
-export type PartGroup =
-  | {
-      key: string
-      type: "part"
-      ref: PartRef
-    }
-  | {
-      key: string
-      type: "context"
-      refs: PartRef[]
-    }
-
-function sameRef(a: PartRef, b: PartRef) {
-  return a.messageID === b.messageID && a.partID === b.partID
-}
-
-function sameGroup(a: PartGroup, b: PartGroup) {
-  if (a === b) return true
-  if (a.key !== b.key) return false
-  if (a.type !== b.type) return false
-  if (a.type === "part") {
-    if (b.type !== "part") return false
-    return sameRef(a.ref, b.ref)
-  }
-  if (b.type !== "context") return false
-  if (a.refs.length !== b.refs.length) return false
-  return a.refs.every((ref, i) => sameRef(ref, b.refs[i]!))
-}
-
-export function sameGroups(a: readonly PartGroup[] | undefined, b: readonly PartGroup[] | undefined) {
-  if (a === b) return true
-  if (!a || !b) return false
-  if (a.length !== b.length) return false
-  return a.every((item, i) => sameGroup(item, b[i]!))
-}
-
-export function groupParts(parts: { messageID: string; part: PartType }[]) {
-  const result: PartGroup[] = []
-  let start = -1
-
-  const flush = (end: number) => {
-    if (start < 0) return
-    const first = parts[start]
-    const last = parts[end]
-    if (!first || !last) {
-      start = -1
-      return
-    }
-    result.push({
-      key: `context:${first.part.id}`,
-      type: "context",
-      refs: parts.slice(start, end + 1).map((item) => ({
-        messageID: item.messageID,
-        partID: item.part.id,
-      })),
-    })
-    start = -1
-  }
-
-  parts.forEach((item, index) => {
-    if (isContextGroupTool(item.part)) {
-      if (start < 0) start = index
-      return
-    }
-
-    flush(index - 1)
-    result.push({
-      key: `part:${item.messageID}:${item.part.id}`,
-      type: "part",
-      ref: {
-        messageID: item.messageID,
-        partID: item.part.id,
-      },
-    })
-  })
-
-  flush(parts.length - 1)
-  return result
 }
 
 function index<T extends { id: string }>(items: readonly T[]) {
@@ -727,9 +644,6 @@ export function AssistantParts(props: {
   )
 }
 
-function isContextGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
-}
 
 function contextToolDetail(part: ToolPart): string | undefined {
   const info = getToolInfo(
@@ -802,7 +716,9 @@ function contextToolSummary(parts: ToolPart[]) {
   const read = parts.filter((part) => part.tool === "read").length
   const search = parts.filter((part) => part.tool === "glob" || part.tool === "grep").length
   const list = parts.filter((part) => part.tool === "list").length
-  return { read, search, list }
+  // FORK: bash 纳入折叠组后,摘要补「命令」计数,否则收起标题不含 shell 数。2026-06-19
+  const command = parts.filter((part) => part.tool === "bash").length
+  return { read, search, list, command }
 }
 
 function ExaOutput(props: { output?: string }) {
@@ -991,6 +907,13 @@ export function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean; onS
                     count: summary().list,
                     one: i18n.t("ui.messagePart.context.list.one"),
                     other: i18n.t("ui.messagePart.context.list.other"),
+                  },
+                  // FORK: shell 命令计数,与 read/search/list 同款展示。2026-06-19
+                  {
+                    key: "command",
+                    count: summary().command,
+                    one: i18n.t("ui.messagePart.context.command.one"),
+                    other: i18n.t("ui.messagePart.context.command.other"),
                   },
                 ]}
                 fallback=""

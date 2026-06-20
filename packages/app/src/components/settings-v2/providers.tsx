@@ -4,15 +4,25 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { createMemo, type Component, For, Show } from "solid-js"
+import { createMemo, createSignal, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
+import { usePlatform } from "@/context/platform"
 import { DialogConnectProvider } from "../dialog-connect-provider"
 import { DialogSelectProvider } from "../dialog-select-provider"
 import { DialogCustomProvider } from "../dialog-custom-provider"
 import { SettingsListV2 } from "./parts/list"
 import "./settings-v2.css"
+// FORK: REQ-054 — 刷新 GetBot 模型列表 2026-06-18
+import {
+  GETBOT_PROVIDER_ID,
+  fetchGetbotChatModels,
+  mergeGetbotModels,
+  buildGetbotProviderConfig,
+  GetbotInvalidKeyError,
+  GetbotTimeoutError,
+} from "@/utils/getbot"
 
 type ProviderSource = "env" | "api" | "config" | "custom"
 type ProviderItem = ReturnType<ReturnType<typeof useProviders>["connected"]>[number]
@@ -35,7 +45,10 @@ export const SettingsProvidersV2: Component = () => {
   const language = useLanguage()
   const serverSdk = useServerSDK()
   const serverSync = useServerSync()
+  const platform = usePlatform()
   const providers = useProviders()
+  // FORK: REQ-054 — getbot 刷新模型加载状态 2026-06-18
+  const [getbotRefreshing, setGetbotRefreshing] = createSignal(false)
 
   const connected = createMemo(() => {
     return providers
@@ -84,6 +97,45 @@ export const SettingsProvidersV2: Component = () => {
     return true
   }
 
+  // FORK-BEGIN: REQ-054 — getbot 刷新模型列表 handler (v2 layout) 2026-06-18
+  const refreshGetbotModels = async () => {
+    if (getbotRefreshing()) return
+    const apiKey = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
+      | string
+      | undefined
+    if (!apiKey) {
+      showToast({ title: language.t("common.requestFailed"), description: "GetBot API key not found in config" })
+      return
+    }
+    setGetbotRefreshing(true)
+    try {
+      const remoteIds = await fetchGetbotChatModels(apiKey, { fetch: platform.fetch })
+      const existingModels = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+      const merged = mergeGetbotModels(existingModels, remoteIds)
+      // AC2: 整块替换 — 读取现有 provider config 展开,避免只写 models 字典时丢失 name/npm/options
+      const existingProviderConfig = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID] ?? {}
+      const freshConfig = buildGetbotProviderConfig(apiKey, [])
+      await serverSync.updateConfig({
+        provider: { [GETBOT_PROVIDER_ID]: { ...freshConfig, ...existingProviderConfig, models: merged } },
+      })
+      serverSync.refreshProviders()
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("provider.getbot.refreshModels.success", { count: String(remoteIds.length) }),
+      })
+    } catch (e) {
+      let msg: string
+      if (e instanceof GetbotInvalidKeyError) msg = language.t("provider.connect.getbot.apiKey.invalid")
+      else if (e instanceof GetbotTimeoutError) msg = language.t("provider.connect.getbot.timeout")
+      else msg = e instanceof Error ? e.message : String(e)
+      showToast({ title: language.t("provider.getbot.refreshModels.failed", { error: msg }) })
+    } finally {
+      setGetbotRefreshing(false)
+    }
+  }
+  // FORK-END
+
   const disableProvider = async (providerID: string, name: string) => {
     const before = serverSync.data.config.disabled_providers ?? []
     const next = before.includes(providerID) ? before : [...before, providerID]
@@ -116,6 +168,8 @@ export const SettingsProvidersV2: Component = () => {
       .remove({ providerID })
       .then(async () => {
         await serverSdk.client.global.dispose()
+        // FORK: REQ-052 — 断开收尾强制失效 providers query,使列表立即消失,无需重启 2026-06-18
+        serverSync.refreshProviders()
         showToast({
           variant: "success",
           icon: "circle-check",
@@ -142,12 +196,16 @@ export const SettingsProvidersV2: Component = () => {
             <Show
               when={connected().length > 0}
               fallback={
-                <div class="settings-v2-provider-empty">{language.t("settings.providers.connected.empty")}</div>
+                // FORK: REQ-052 — data-empty-state 锚点供 e2e 断言 2026-06-18
+                <div class="settings-v2-provider-empty" data-empty-state="connected-providers">
+                  {language.t("settings.providers.connected.empty")}
+                </div>
               }
             >
               <For each={connected()}>
                 {(item) => (
-                  <div class="settings-v2-provider-row group">
+                  // FORK: REQ-052 — data-provider-id 锚点供 e2e 断言 2026-06-18
+                  <div class="settings-v2-provider-row group" data-provider-id={item.id}>
                     <div class="settings-v2-provider-lead">
                       <ProviderIcon
                         id={item.id}
@@ -160,18 +218,37 @@ export const SettingsProvidersV2: Component = () => {
                         <Tag>{type(item)}</Tag>
                       </div>
                     </div>
-                    <Show
-                      when={canDisconnect(item)}
-                      fallback={
-                        <span class="settings-v2-provider-env-hint">
-                          {language.t("settings.providers.connected.environmentDescription")}
+                    <div class="flex items-center gap-2">
+                      {/* FORK-BEGIN: REQ-054 — getbot 刷新模型按钮(v2 layout,仅 getbot 显示) 2026-06-18 */}
+                      <Show when={item.id === GETBOT_PROVIDER_ID}>
+                        {/* FORK: REQ-054 — data-component 锚点放外层 span(ButtonV2 根硬编码 data-component 不可覆盖,沿用 U1 wrapper 方案,避免改上游) 2026-06-18 */}
+                        <span data-component="getbot-refresh-models">
+                          <ButtonV2
+                            size="normal"
+                            variant="neutral"
+                            disabled={getbotRefreshing()}
+                            onClick={() => void refreshGetbotModels()}
+                          >
+                            {getbotRefreshing()
+                              ? language.t("common.loading")
+                              : language.t("provider.getbot.refreshModels")}
+                          </ButtonV2>
                         </span>
-                      }
-                    >
-                      <ButtonV2 size="normal" variant="ghost-muted" onClick={() => void disconnect(item.id, item.name)}>
-                        {language.t("common.disconnect")}
-                      </ButtonV2>
-                    </Show>
+                      </Show>
+                      {/* FORK-END */}
+                      <Show
+                        when={canDisconnect(item)}
+                        fallback={
+                          <span class="settings-v2-provider-env-hint">
+                            {language.t("settings.providers.connected.environmentDescription")}
+                          </span>
+                        }
+                      >
+                        <ButtonV2 size="normal" variant="ghost-muted" onClick={() => void disconnect(item.id, item.name)}>
+                          {language.t("common.disconnect")}
+                        </ButtonV2>
+                      </Show>
+                    </div>
                   </div>
                 )}
               </For>
