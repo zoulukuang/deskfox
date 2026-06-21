@@ -32,3 +32,8 @@ UPCOMING_CHANGELOG.md
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
+
+# 本机/平台特定的 Claude Code 斜杠命令(如 macOS /ship 与 Win /ship 同名异内容)——
+# 故意不入仓避免双端互相覆盖,且防止被 git add -A 误扫进 commit 后切分支被删。
+# 可共享的发布知识在 docs/features/macos-ship-命令/;命令本体恢复源见 ~/.deskfox-signing/ship.md.bak
+.claude/commands/
