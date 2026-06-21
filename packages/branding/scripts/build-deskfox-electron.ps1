@@ -24,12 +24,19 @@
 #   .\packages\branding\scripts\build-deskfox-electron.ps1 -Env dev               # 完整出 NSIS installer
 #   .\packages\branding\scripts\build-deskfox-electron.ps1 -Env dev -NoBundle     # 只出 win-unpacked(最快,本地测)
 #   .\packages\branding\scripts\build-deskfox-electron.ps1 -Env prod
+#   .\packages\branding\scripts\build-deskfox-electron.ps1 -Env local             # 本地测试版(独立身份+数据隔离,永不发布)
 #
 # 注:本脚本只产【未签名】包(DeskFox installer 不签名,治理:数字签名问题.md)。
+#
+# local 第 4 档(2026-06-17 起,规范《版本号与发布渠道规范》§3.11/§4.3/§5.3):
+#   - 身份独立:appId ai.deskfox.app.local + 产物名「DeskFox 本地版」+ LOCAL 徽标 + 数据库 opencode-local.db
+#     物理隔离(本机灌测试数据不污染正式/预览版)。以上由 electron-builder.deskfox.config.ts 按 channel=local 注入。
+#   - 永不发布:始终 --dir 出 win-unpacked(不打 NSIS installer),不配 publish、无自动升级。
+#   - 版本号:不建专属号线,config 回落平台裸号(windows key);本地版版本号只是显示牌,不 bump、不 commit。
 
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("dev", "beta", "prod")]
+    [ValidateSet("dev", "beta", "prod", "local")]
     [string]$Env,
 
     [switch]$NoBundle
@@ -44,11 +51,15 @@ $desktop     = Join-Path $repoRoot "packages/desktop"
 $versionsJson = Join-Path $brandingDir "installer-versions.json"
 
 $isRelease = -not $NoBundle
+# local 永不发布 → 始终 --dir 出 win-unpacked(不打 NSIS installer),对齐规范 §5.3 与 config 不配 publish。
+# 与 -NoBundle 的区别:local 默认仍含 LibreOffice(本机要能测 office),-NoBundle 才跳过 LO。
+$useDir = $NoBundle -or ($Env -eq "local")
 
-# === 1. 日历版号(prod → windows;dev/beta → <env>-windows,独立号线)===
+# === 1. 日历版号(prod → windows;dev/beta → <env>-windows,独立号线;local → 回落平台裸号 windows)===
 # 实际版本注入由 electron-builder.deskfox.config.ts 自读 installer-versions.json 完成
 # (dev-independent-version-line:config 按 --win argv + channel 选号线)。此处仅预检 + 打印。
-$versionKey = if ($Env -eq "prod") { "windows" } else { "$Env-windows" }
+# local 无专属号线:config 取 versions[local-windows] ?? versions[windows] → 回落平台裸号;预检同样回落 windows。
+$versionKey = if ($Env -eq "prod" -or $Env -eq "local") { "windows" } else { "$Env-windows" }
 # UTF-8 显式读取:installer-versions.json 含中文 _doc,PS5.1 Get-Content 默认按 GBK 解码会读乱 → JSON 解析崩。
 $versions = [System.IO.File]::ReadAllText($versionsJson, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
 $appVersion = $versions.$versionKey
@@ -161,7 +172,7 @@ foreach ($pv in @("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL
 }
 
 $ebArgs = @("--win", "--publish", "never", "--config", "electron-builder.deskfox.config.ts")
-if ($NoBundle) { $ebArgs = @("--dir") + $ebArgs }
+if ($useDir) { $ebArgs = @("--dir") + $ebArgs }
 
 Write-Host "[deskfox] electron-builder $($ebArgs -join ' ')  (绕 Clash 代理直连 npmmirror)…"
 Push-Location $desktop
@@ -204,7 +215,7 @@ if ((Test-Path $loSoffice) -and (Test-Path $unpacked)) {
 $out = Join-Path $desktop "dist-deskfox"
 Write-Host ""
 Write-Host "[deskfox] OK 构建完成,产物:" -ForegroundColor Green
-if ($NoBundle) {
+if ($useDir) {
     Get-ChildItem $unpacked -Filter "*.exe" -ErrorAction SilentlyContinue |
         ForEach-Object { Write-Host "  exe : $($_.FullName)" }
     Write-Host "  dir : $unpacked"

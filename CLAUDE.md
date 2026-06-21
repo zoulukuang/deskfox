@@ -174,10 +174,10 @@ grep `[feat: <id>]` 能反查到对应文档。
 **唯一权威**:[`docs/governance/版本号与发布渠道规范.md`](docs/governance/版本号与发布渠道规范.md)(§3.10 有**代码触点地图**,列全所有相关文件)。下面只是速查,细则以该文档为准。
 
 - **格式**:`YYYY.次.补` 纯 3 段 semver(如 `2026.7.0`),**不加任何后缀**(updater 比较 + Mac CFBundleShortVersionString 限制)。
-- **三维度正交,绝不混入同一字段**:**版本号** × **渠道**(prod/dev/beta)× **架构**(arm64/x64)。
-  - 渠道靠**文件名前缀**(`DeskFox-` / `DeskFox-Dev-` / `DeskFox-Beta-`)+ **顶部徽标**(prod 无 / `DEV` / `BETA`)+ app id(`.dev`/`.beta`)区分,**不进版本号**。
+- **三维度正交,绝不混入同一字段**:**版本号** × **渠道**(prod/dev/beta/local)× **架构**(arm64/x64)。
+  - 渠道靠**文件名前缀**(`DeskFox-` / `DeskFox-Dev-` / `DeskFox-Beta-` / `DeskFox-Local-`)+ **顶部徽标**(prod 无 / `DEV` / `BETA` / `LOCAL`)+ app id(`.dev`/`.beta`/`.local`)区分,**不进版本号**。
   - 架构靠**文件名**(`...-mac-arm64` / `-mac-x64` / `-win-x64`)区分,**不进版本号**;同次发布的不同芯片**共享同一版本号**。Mac 出 arm64/x64 **两个独立包**(不出 universal)。
-- **号线**:prod/dev/beta **各走独立号线**(`installer-versions.json` 的 `<plat>` / `dev-<plat>` / `beta-<plat>` key);平台(win/mac/linux)也各独立;**Dev 领先**(dev号 ≥ beta号 ≥ prod号)。本地测试版(Tier 3)不建号线,沿用 dev 线。
+- **号线**:prod/dev/beta **各走独立号线**(`installer-versions.json` 的 `<plat>` / `dev-<plat>` / `beta-<plat>` key);平台(win/mac/linux)也各独立;**Dev 领先**(dev号 ≥ beta号 ≥ prod号)。**本地测试版(Tier 3 = `local` 渠道)不建号线**:config 取 `versions[local-<plat>] ?? versions[<plat>]` → **回落平台裸号**(与 prod 同号);local 永不发布、不参与 updater 比较,版本号只是显示牌。(注:2026-06-17 起 local 是独立第 4 档,**不再**沿用 dev 线 / 冒用 dev 身份,详见规范 §3.11。)
 - **两个唯一源**:渠道唯一源 = env `OPENCODE_CHANNEL`(派生 main define / renderer `VITE_OPENCODE_CHANNEL` define / electron-builder);版本号唯一源 = `installer-versions.json`(UI 牌 / 打包 / updater 全读它)。**别在别处硬编码版本号或渠道。** 改号走 `bump-installer-version.{ps1,sh}`,勿手编。
 
 ## 验证约定(Electron 基座,2026-06-15 换基座对齐)
@@ -185,13 +185,16 @@ grep `[feat: <id>]` 能反查到对应文档。
 > 已从 Tauri 切换到 Electron 基座;以下为 Electron 流程。历史 Tauri 指令(`build-deskfox.ps1` / `src-tauri` / `tauri build` / WebView2)作废,docs/history 里的旧字眼是历史快照不回填。
 
 - **typecheck**:`bun run typecheck`(monorepo 全量,turbo 缓存)。注:**pre-push 闸用 fork 范围**(`bun turbo typecheck --filter='!./packages/console/*'`,排除 §七 console —— 非发布、无发布包依赖,不该卡我们的 push)。
-- **release 包**:走 DeskFox 品牌 Electron wrapper,产物 `DeskFox.exe`(prod)/ `DeskFox Dev.exe`(dev):
+- **release 包**:走 DeskFox 品牌 Electron wrapper,产物 `DeskFox.exe`(prod)/ `DeskFox 预览版.exe`(dev):
   ```powershell
-  packages\branding\scripts\build-deskfox-electron.ps1 -Env dev            # 完整 NSIS installer
-  packages\branding\scripts\build-deskfox-electron.ps1 -Env dev -NoBundle  # 只出 win-unpacked(最快本地测)
+  packages\branding\scripts\build-deskfox-electron.ps1 -Env dev              # 预览版,完整 NSIS installer
+  packages\branding\scripts\build-deskfox-electron.ps1 -Env dev -NoBundle    # 预览版,只出 win-unpacked(最快)
+  packages\branding\scripts\build-deskfox-electron.ps1 -Env local            # 本地测试版,独立身份+数据隔离,始终 --dir 出 win-unpacked
+  packages\branding\scripts\build-deskfox-electron.ps1 -Env local -NoBundle  # 本地测试版最快(额外跳过 LibreOffice)
   ```
-  - 产物:NSIS → `packages/desktop/dist-deskfox/DeskFox(-Dev)-<版本>-win-x64.exe`;win-unpacked exe → `packages/desktop/dist-deskfox/win-unpacked/`
-  - `-Env dev|beta|prod` 三档 channel;版本号由 `electron-builder.deskfox.config.ts` 自读 `installer-versions.json`(无需传参)
+  - 产物:NSIS → `packages/desktop/dist-deskfox/DeskFox(-Dev/-Local)-<版本>-win-x64.exe`;win-unpacked exe(`DeskFox.exe` / `DeskFox 预览版.exe` / `DeskFox 本地版.exe`)→ `packages/desktop/dist-deskfox/win-unpacked/`
+  - `-Env dev|beta|prod|local` **四档** channel;版本号由 `electron-builder.deskfox.config.ts` 自读 `installer-versions.json`(无需传参)。**`local` = 第 4 档本地测试版**(2026-06-17 起):独立 appId `ai.deskfox.app.local` + `opencode-local.db` 数据隔离 + `LOCAL` 徽标 + **永不发布**(始终 `--dir`,不打 installer、不配 publish);版本号回落平台裸号、不 bump。规则详见《版本号与发布渠道规范》§3.11/§4.3/§5.3
+  - ⚠️ **双端差异**:`-Env local` 目前**仅 Windows wrapper(`.ps1`)支持**;**Mac wrapper(`.sh`)暂未集成 local**,Mac 打本地版走规范 §5.3 的裸命令(`OPENCODE_CHANNEL=local bun run build` + `electron-builder --mac --dir`)。`local` 渠道身份/数据隔离由两端共用的 `electron-builder.deskfox.config.ts` 注入,**与平台无关、两端一致**;不一致的只是「wrapper 是否封装了这档」这一层便捷入口。
   - **禁止**直接跑 `bun run --cwd packages/desktop package`(上游 config 出 OpenCode 品牌包);品牌一律走 `electron-builder.deskfox.config.ts`
   - ⚠️ **PS5.1 踩坑**:`.ps1` 里 `bun run build` 的 native stderr 可能被包成 `NativeCommandError` 误判中断 → 改用 Bash 直接调:`packages/desktop` 下 `OPENCODE_CHANNEL=dev bun run build` + `node_modules/.bin/electron-builder.exe --dir --win --publish never --config electron-builder.deskfox.config.ts`(先 `unset *_PROXY` + 设 npmmirror 镜像 env)
 - **renderer 改动闭环**:运行中 DeskFox 加载 `out/renderer` 构建产物(`oc://` 读磁盘,非 vite dev server,**无 HMR**)→ 改 renderer 要 `bun run build` + CDP `location.reload()`,**不需重启 electron**;别空等热更新。
