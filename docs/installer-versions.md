@@ -10,6 +10,25 @@
 
 
 
+## [Windows] 2026.8.1 - 2026-06-22 00:12
+
+**主题**:Electron 首个 Win 稳定版 2026.8.0 之后的一波累积更新——自定义供应商模型列表实时同步 + 思考链/工具折叠对齐原生 + local 第 4 档本地测试版渠道 + 项目磁盘改名自愈重绑;小更新进"补"位(2026.8.0 → 2026.8.1)。
+
+**本次内容**(自 `ship-prod-2026.8.0` 起):
+- **自定义供应商模型列表同步**(feat: v2026.8.3):U2 连接/断开供应商后 providers query 强制失效实时刷新(`refreshProviders`);U3 GetBot 模型一键刷新 + 清除幽灵条目(`mergeGetbotModels` 纯函数);U4「检查更新」重复 toast 收敛为单一 region;U5 连续 shell/bash 工具纳入「已探索」折叠组(U1 REQ-066 Build 摘要重排已撤销)。
+- **思考链对齐原生**(U6 REQ-053/058):AI 思考链默认收起 + 点击展开,复用原生折叠组件。
+- **项目磁盘改名自愈**(U3 REQ-061/064):项目在磁盘改名/移动后,用选择器重开自动重绑 worktree;编辑项目保存失败不再静默卡死(弹 toast)。
+- **local 第 4 档本地测试版渠道**:独立身份(appId `.local`)+ 数据隔离(`opencode-local.db`),永不发布;Win/Mac wrapper 双端对等;发布三档(prod/dev/beta)共享 `opencode.db` 杀进程规则矩阵定稿。
+- **工程**:清退 10 个 Tauri 时代构建残留脚本;ship 流程健壮性(deploy 自加载 config.env + upload 跨平台 ossutil);L2/L3 e2e 测试体系 + 文件预览自动化 `verify-fileviewer.py`。
+- 发版前 code-review:无高危项;思考链默认折叠 / bash 纳入折叠组为明确接受的交互变化。
+
+**Release**:GitHub `ship-prod-2026.8.1`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.1-win-x64.exe`(Electron;含 LibreOffice,263 MB;signtool 代码签名)
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.8.1-win-x64.exe`
+**升级源**:① Electron 自更新 `updates.deskfox.ai/electron/prod/latest.yml`(2026.8.1)② Tauri→Electron 迁移桥 `…/v1/latest/desktop/windows/latest.json`(2026.8.1,存量 Tauri 用户迁移)
+
+---
+
 ## [Windows] 2026.8.0 - 2026-06-16
 
 **主题**:换基座 Tauri → Electron 首个 Windows 稳定版(补齐 8.0 波次,与 macOS 8.0 对齐;`[Windows] 2026.7.2` 是最后一个 Tauri Windows prod)。SkipBump 发当前号 2026.8.0(不进补位)。
