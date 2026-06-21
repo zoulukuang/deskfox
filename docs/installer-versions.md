@@ -10,6 +10,21 @@
 
 
 
+## [macOS] 2026.8.1 - 2026-06-22
+
+**主题**:累积发布(自 macOS 2026.8.0 换基座 Electron 首发以来)。内容属功能波次,user 拍板按 patch 号线发(2026.8.0 → 2026.8.1)。
+
+**本次内容**:自 `ship-mac-prod-2026.8.0` 累积 ~110 文件 / ~3952 行 —— v2026.8.3 自定义供应商模型列表实时同步(U2 连接/断开后强制刷新 providers / U3 GetBot 刷新去幽灵 + mergeGetbotModels 纯函数 / U4 重复 toast 收敛 / U5 shell 折叠入「已探索」组)+ 本地测试版渠道(local 第 4 档独立身份 `ai.deskfox.app.local` + `opencode-local.db` 数据隔离 + LOCAL 徽标,prod 路径恒等保留)+ U1~U6 GUI(思考链默认收起点击展开 / 项目改名移动后选择器重开自愈重绑 worktree / 文件树文件夹选中态 filled 底色 / 编辑项目保存失败不静默 / 上下文卡片按 commentID 去重)+ Build 摘要行结构重排折叠 + 检查更新重复 toast 收敛 + Tauri 构建残留清退 + `.claude/commands` gitignore。**发版前验收**:步骤1 code-review 无高危(主进程 server/index/constants/migrate 改动对 prod 路径全部恒等保留)。
+
+**Release**:GitHub `ship-mac-prod-2026.8.1`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(id 718608,正文挂 CDN)
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.1-mac-arm64.dmg`(Electron;含 LibreOffice,324301530 bytes / ~309 MiB;Developer ID 签名 + 公证 + staple)
+**sha256**:`c9d00b48f91dabd73b2d138538e26e234458b3f8e0690d5fe44679242a482c9a`
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.8.1-mac-arm64.dmg`
+**升级源**:Electron 自更新 `updates.deskfox.ai/electron/prod/latest-mac.yml`(线上 2026.8.1 回读校验)+ Tauri 迁移桥 `updates.deskfox.ai/v1/latest/desktop/darwin/latest.json`(线上 2026.8.1 回读校验)
+**公证**:notarytool Accepted(submission `357e29a9-6b61-4975-9bb0-0048a761377e`)+ .dmg `stapler validate` 通过 + `spctl` accepted/Notarized Developer ID
+
+---
+
 ## [Windows] 2026.8.0 - 2026-06-16
 
 **主题**:换基座 Tauri → Electron 首个 Windows 稳定版(补齐 8.0 波次,与 macOS 8.0 对齐;`[Windows] 2026.7.2` 是最后一个 Tauri Windows prod)。SkipBump 发当前号 2026.8.0(不进补位)。
