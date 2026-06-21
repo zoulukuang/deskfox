@@ -110,3 +110,7 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 - **CLAUDE.md**:三档 channel 切换命令 `pack-installer.* -Env <env>` → `build-deskfox-electron.* -Env <env>`(权威文件,启动必加载,旧脚本是 Tauri 时代)。
 - **代码过时注释**:`packages/app/src/utils/local-asset.ts` 注释指向 `src-tauri/src/local_asset.rs`(已删)→ 改指 Electron 实现 `packages/desktop/src/main/deskfox/local-asset.ts`;`packages/branding/scripts/finalize-latest-json.ts` 用法示例 `--sig` 的 `src-tauri/target/.../nsis/*.exe.sig` 过时路径 → `dist-deskfox/DeskFox-<v>-win-x64.exe.sig`。
 - **刻意不碰**:`packages/desktop/scripts/finalize-latest-json.ts`(含 `@tauri-apps/cli signer`)是**上游文件**,按 R2/P1 fork 不动,上游 merge 时处理;fork 自己的 updater 桥 `bridge-electron-updater.sh` 走 minisign,不依赖该上游脚本。
+
+**B/D 批盘点结论(2026-06-21,`chore/electron-governance-doc-sweep` 分支)**:对 governance 文档 + 旧 Tauri 脚本做了系统盘点,**结论是大部分无需动**,只修 1 处真死链。留痕防下次重盘:
+- **B(4 个 governance 文档)已合规,只修 B4 一处死链**:`跨平台协作.md`(L8)/`改动规则.md`(L126)/`自动化测试规范.md`(L250)**均已有醒目「⚠️ 换基座对齐(2026-06)」标注**,Tauri 内容按 fork 规则「历史快照加标注、不回填逐行改写」处理,合规;`UPSTREAM-MERGE-GUIDE.md` 全文 `src-tauri` 0 命中、主体已是 Electron。**唯一真 bug**:`自动化测试规范.md` L253 指向 `packages/app/e2e-tauri/README.md`(目录已随换基座删除)= 死链 → 改为「内容见 git 历史 + 指向现行验证」。
+- **D(删旧 Tauri 脚本)不在本分支做,需单独立 feat**:`build-deskfox.{sh,ps1}`/`pack-installer.{sh,ps1}`/`pack-preview-dev.sh` 虽被 `build-deskfox-electron.*` 注释标为「取代」(不 source/不调用,非活依赖),但 **`__tests__/lo-bundle-strip.test.ts` 硬 `readFileSync` 旧脚本断言其 LO 校验/NSIS 哨兵逻辑**,且 `electron-builder.deskfox.config.ts` 注释提「换基座漏迁 build-deskfox.ps1 的版本注入逻辑」。删脚本=带 R5 测试迁移 + 确认新脚本职责完整的代码任务,非文档清理,另起 feat(如 `chore/retire-tauri-build-scripts`)处理。
