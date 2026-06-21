@@ -9,7 +9,7 @@
 #   beta  → icon-mono     样式(单色,测试阶段)
 #   dev   → icon-favicon  样式(极简,开发调试)
 #
-# 跟 build-deskfox.ps1 配套用:build 前调本脚本,build 后由 restore-icons.ps1 还原 git。
+# 跟 build-deskfox-electron.ps1 配套用:build 前调本脚本,build 后由 restore-icons.ps1 还原 git。
 # 也可单独跑(开发时调试 icon),但记得跑完 restore-icons.ps1 否则工作树脏。
 #
 # 用法:

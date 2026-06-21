@@ -92,79 +92,64 @@ describe("冷启动 smoke gate 存在(防被删)", () => {
   })
 })
 
-// 守护 build 侧完整性校验:注入前确认 bundle 含 presets + extensions(挡 fix 前的过期/过度剥皮 bundle)
-describe("build-deskfox bundle 完整性校验存在(防过期 bundle 流入打包)", () => {
-  const BUILD_SH = readFileSync(join(SCRIPTS, "build-deskfox.sh"), "utf8")
-  const BUILD_PS1 = readFileSync(join(SCRIPTS, "build-deskfox.ps1"), "utf8")
+// 守护 build 侧完整性校验:注入前确认 LO bundle 含非空 presets(挡过期/过度剥皮 bundle 流入打包)。
+// 换基座(Tauri→Electron 2026-06-15)后,守护对象从已删的 build-deskfox.{sh,ps1}/pack-installer.{sh,ps1}
+// 迁到 build-deskfox-electron.{sh,ps1}(注入前硬卡 + post-build 复验)+ smoke/verify.ts(L3 发布物校验)。
+// 注:electron 链精化了判据 —— presets 是 office 转换硬依赖(硬卡),extensions 打包必丢空目录(仅警告,不硬卡)。
+describe("build-deskfox-electron 注入前 LO 完整性校验(防过期 bundle 流入打包)", () => {
+  const BUILD_SH = readFileSync(join(SCRIPTS, "build-deskfox-electron.sh"), "utf8")
+  const BUILD_PS1 = readFileSync(join(SCRIPTS, "build-deskfox-electron.ps1"), "utf8")
 
-  test("build-deskfox.sh 注入前校验 presets/extensions 存在", () => {
-    expect(BUILD_SH).toMatch(/for\s+_req\s+in\s+presets\s+extensions/)
+  test("build-deskfox-electron.sh:注入前 presets 非空硬卡(office 转换硬依赖)", () => {
+    expect(BUILD_SH).toMatch(/presets/)
+    expect(BUILD_SH).toMatch(/office 转换硬依赖/)
   })
 
-  test("build-deskfox.ps1 注入前校验 presets/extensions 存在", () => {
-    expect(BUILD_PS1).toMatch(/presets["\s,]/)
-    expect(BUILD_PS1).toMatch(/share\/extensions/)
+  test("build-deskfox-electron.ps1:注入前 presets 非空硬卡(office 转换硬依赖)", () => {
+    expect(BUILD_PS1).toMatch(/presets/)
+    expect(BUILD_PS1).toMatch(/office 转换硬依赖/)
   })
 })
 
-// 守护"出货必须含 LO":缺 LO 时出货构建硬失败(不静默降级)+ 打包后验证最终包真含 soffice。
-// 对应 3-tier:Tier1/2(发布物,出真包)缺 LO → 硬失败;Tier3(--no-bundle raw exe 自测)允许跳过。
-describe("出货必须含 LibreOffice(缺 LO 不静默出货 + 打包后验证)", () => {
-  const BUILD_SH = readFileSync(join(SCRIPTS, "build-deskfox.sh"), "utf8")
-  const BUILD_PS1 = readFileSync(join(SCRIPTS, "build-deskfox.ps1"), "utf8")
+// 守护"出货必须含 LO":发布物(非 --no-bundle/-NoBundle)缺 LO 时构建硬失败(不静默降级)+ post-build 验证最终包真含 soffice + 非空 presets。
+// 对应 3-tier:Tier1/2(发布物,出真包)缺 LO → 硬失败;Tier3(--no-bundle / local raw 自测)允许跳过。
+describe("出货必须含 LibreOffice(缺 LO 不静默出货 + post-build 验证)", () => {
+  const BUILD_SH = readFileSync(join(SCRIPTS, "build-deskfox-electron.sh"), "utf8")
+  const BUILD_PS1 = readFileSync(join(SCRIPTS, "build-deskfox-electron.ps1"), "utf8")
 
-  test("build-deskfox.sh:出货构建缺 LO 硬失败(--no-bundle 才放行,否则 exit 1)", () => {
-    expect(BUILD_SH).toMatch(/elif\s+\[\[\s+"\$NO_BUNDLE"\s+-eq\s+1/) // Tier3 放行分支
-    expect(BUILD_SH).toMatch(/发布物构建[\s\S]*?exit 1/) // 出货缺 LO → 硬失败
+  test("build-deskfox-electron.sh:发布物缺 LO 硬失败(--no-bundle 才放行,否则 exit 1)", () => {
+    expect(BUILD_SH).toMatch(/NO_BUNDLE/) // Tier3 放行判据
+    expect(BUILD_SH).toMatch(/发布物构建但 LO bundle 不存在[\s\S]*?exit 1/) // 缺 LO → 硬失败
   })
 
-  test("build-deskfox.ps1:出货构建缺 LO 硬失败(-NoBundle 才放行,否则 throw)", () => {
-    expect(BUILD_PS1).toMatch(/elseif\s*\(\$NoBundle\)/) // Tier3 放行分支
-    expect(BUILD_PS1).toMatch(/throw[\s\S]*?发布物构建/) // 出货缺 LO → throw
+  test("build-deskfox-electron.ps1:发布物缺 LO 硬失败(-NoBundle 才放行,否则 throw)", () => {
+    expect(BUILD_PS1).toMatch(/NoBundle/) // Tier3 放行判据
+    expect(BUILD_PS1).toMatch(/发布物构建但 LO bundle 不存在/) // 缺 LO → throw
   })
 
-  test("build-deskfox.sh:打包后验证最终 .app 内 soffice 存在(挡 LO 没注入)", () => {
+  test("build-deskfox-electron.sh:post-build 验证最终 .app 含可执行 soffice + 非空 presets(挡 LO 没注入)", () => {
     expect(BUILD_SH).toMatch(/VERIFY_SOFFICE/)
-    expect(BUILD_SH).toMatch(/libreoffice\/Contents\/MacOS\/soffice/)
+    expect(BUILD_SH).toMatch(/Contents\/MacOS\/soffice/)
+    expect(BUILD_SH).toMatch(/最终 \.app 内 LO presets 缺失/)
   })
 
-  // [feat: win-lo-bundle-output-verify 2026-06-08] Win 侧对称的"输出验证":发布构建(非 -NoBundle)
-  // 注入 LO 后,确认 Tauri 真把 LO 输出到 target/release/libreoffice/program/soffice.exe(填同事留的
-  // Win follow-up;Mac 有 VERIFY_SOFFICE,Win 之前空)。防 --config deep-merge 静默失败致产物缺 LO。
-  test("build-deskfox.ps1:全量 build 后验证 LO 已输出到 target/release/libreoffice/(挡 LO 没注入)", () => {
-    expect(BUILD_PS1).toMatch(/target\/release\/libreoffice\/program\/soffice\.exe/)
-    expect(BUILD_PS1).toMatch(/\$loConfigFile\s+-and\s+-not\s+\$NoBundle/) // 仅发布物验,Tier3 raw exe 豁免
+  test("build-deskfox-electron.ps1:post-build 验证最终包含 soffice.exe + 非空 presets(挡 LO 没注入)", () => {
+    expect(BUILD_PS1).toMatch(/program\/soffice\.exe/)
+    expect(BUILD_PS1).toMatch(/最终包内 LO presets 缺失/)
   })
 })
 
-// 守护"发布闸"(权威):pack-installer 是 Tier1/2 发布唯一入口,缺 LO bundle 在 bump 前硬失败。
-// 这是比 build-deskfox 的 --no-bundle 判据更可靠的"是否发布"判据(Windows 发布也用 -NoBundle,
-// 那个判据在 Win 不可靠;走没走 pack-installer 才是真判据)。
-describe("发布闸:pack-installer 缺 LO 硬失败(Tier1/2 发布物必须含 LibreOffice)", () => {
-  const PACK_SH = readFileSync(join(SCRIPTS, "pack-installer.sh"), "utf8")
-  const PACK_PS1 = readFileSync(join(SCRIPTS, "pack-installer.ps1"), "utf8")
+// 守护"发布物 L3 校验"(权威):verify.ts 是 electron-updater 口径的发布物唯一校验入口(--release/--build),
+// 取代旧 pack-installer 的"NSIS 大小哨兵"。换基座后"是否含 LO"判据 = 最终包内 soffice.exe 存在 +
+// 升级链命门 latest.yml sha512 == exe 实算(不一致则客户端下载后校验失败装不上)。
+describe("发布物 L3 校验:verify.ts 确认发布包真含 LibreOffice + 升级链完整", () => {
+  const VERIFY = readFileSync(join(SCRIPTS, "..", "smoke", "verify.ts"), "utf8")
 
-  test("pack-installer.sh 缺 LO bundle → exit 1(且在 bump 前)", () => {
-    expect(PACK_SH).toMatch(/必须含 LibreOffice/)
-    expect(PACK_SH).toMatch(/LO_BUNDLE_APP[\s\S]*?exit 1/)
+  test("verify.ts 校验发布包含 LO(win-unpacked/libreoffice/program/soffice.exe)", () => {
+    expect(VERIFY).toMatch(/libreoffice[\s\S]*program[\s\S]*soffice\.exe/)
   })
 
-  test("pack-installer.ps1 缺 LO bundle → throw", () => {
-    expect(PACK_PS1).toMatch(/必须含 LibreOffice/)
-    expect(PACK_PS1).toMatch(/loBundleWin/)
-  })
-
-  test("两端发布闸都校验 presets + extensions 完整", () => {
-    expect(PACK_SH).toMatch(/for\s+_req\s+in\s+presets\s+extensions/)
-    expect(PACK_PS1).toMatch(/presets["\s,]/)
-    expect(PACK_PS1).toMatch(/share\/extensions/)
-  })
-
-  // [feat: win-lo-bundle-output-verify 2026-06-08] 末道产物大小哨兵:NSIS 安装包必含 LO(~190MB),
-  // 完整包 >100MB,无 LO 包仅 ~15-25MB。低于阈值 → NSIS 漏打 LO,绝不发。也覆盖 -SkipBuild 路径
-  // (跳过 build 直接校已存在的 NSIS 产物大小),填同事提到的"-SkipBuild 产物验证缺口"。
-  test("pack-installer.ps1:NSIS 产物大小哨兵(<100MB = 不含 LO,throw)", () => {
-    expect(PACK_PS1).toMatch(/minInstallerMB/)
-    expect(PACK_PS1).toMatch(/产物不完整/)
+  test("verify.ts 校验 latest.yml sha512 == exe(electron-updater 升级链命门)", () => {
+    expect(VERIFY).toMatch(/sha512/)
   })
 })

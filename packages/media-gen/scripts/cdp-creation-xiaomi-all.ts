@@ -8,7 +8,7 @@
 // 不真打小米 API(intercept 把所有 /generate 短路 SSE error 假回应,只看前端发出去的 body 长啥样)
 //
 // 用法:
-//   1) 跑 build-deskfox.ps1 -Env dev -NoBundle 出新 DeskFox.exe(包含 fork 改动)
+//   1) 跑 build-deskfox-electron.ps1 -Env dev -NoBundle 出新 DeskFox.exe(包含 fork 改动)
 //   2) 终端: DeskFox.exe --remote-debugging-port=9222(或 launch.json 已开 9222)
 //   3) bun run packages/media-gen/scripts/cdp-creation-xiaomi-all.ts
 
