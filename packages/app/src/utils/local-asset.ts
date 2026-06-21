@@ -1,5 +1,5 @@
 // FORK: 本地资源 protocol(localasset://) URL 构造 + 路径解析工具 2026-05-05
-// 配合 packages/desktop/src-tauri/src/local_asset.rs 的 Rust handler 使用。
+// 配合 packages/desktop/src/main/deskfox/local-asset.ts 的 Electron protocol handler 使用(换基座前是 src-tauri/src/local_asset.rs 的 Rust handler)。
 // URL 形态:
 //   Windows / Android:  http://localasset.localhost/<base64url-root>/<rel-path>
 //   macOS / Linux / iOS: localasset://localhost/<base64url-root>/<rel-path>

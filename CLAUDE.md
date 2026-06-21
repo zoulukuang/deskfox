@@ -152,7 +152,7 @@ grep `[feat: <id>]` 能反查到对应文档。
 - **功能分支**:`feat/<name>` — **一次性容器**,合 main = 销毁,**新项目用新名字,绝不复用**。`<name>` **全小写 + kebab-case**(中划线分词,行业常规),中英混合 OK 但英文部分必须小写。详见 [`docs/governance/双端协作-SOP.md`](docs/governance/双端协作-SOP.md)(feat 生命周期 + 命名规范 + Win/Mac 双端协作流程)
 - **🌿 开任何新分支前必先拉最新 main**(硬规则,无例外):`git checkout -b feat/<name>` / `chore/<name>` / `sync/<日期>` 之前,**必须**先 `git checkout main && git pull --rebase`。理由:Win/Mac 双端协作 + 远端持续推进,基于 stale main 起 feat = 注定 rebase / 大概率冲突。实施超 30 min 时,合 main 前再 `git fetch && git log main..origin/main` 确认远端没新动。
 - **上游同步**:临时分支 `sync/upstream-<日期>`,merge 完即删
-- **三档 installer channel**(prod / beta / dev):靠 **build 参数**切换(`pack-installer.* -Env <env>`),**不靠分支** — 同一 commit 可出三档产物。**"dev" 在 channel 维度 = 预览版**(开发包,可对外发,稳定性低于 prod),跟分支名 `main` 完全独立的命名空间
+- **三档 installer channel**(prod / beta / dev):靠 **build 参数**切换(`build-deskfox-electron.* -Env <env>`),**不靠分支** — 同一 commit 可出三档产物。**"dev" 在 channel 维度 = 预览版**(开发包,可对外发,稳定性低于 prod),跟分支名 `main` 完全独立的命名空间
 - **tag 命名**:
   - `upstream-baseline`(同步起点)/ `pre-rebase-<日期>`(rebase 前)/ `pre-strategy-v2-<日期>`(关键切换兜底)
   - `ship-<env>-<版本>`,例 `ship-prod-2026.4.29.2`

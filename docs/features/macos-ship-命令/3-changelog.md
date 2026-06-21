@@ -104,3 +104,9 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 - **`1-spec.md` 不动**:签名后锁版,作为 Tauri 时代设计的历史快照保留(换基座事实已由本 changelog 阶段4 记录)。
 
 **未做(刻意)**:§5.1/§5.2 Win 侧 PowerShell 命令(`pack-installer.ps1`/`ISCC`/`DeskFox.iss`)保留原样仅加状态标注——Win 发 Electron 流程未定,不凭推断改写。Win 协调落地后再二次同步。
+
+**同分支顺带清理(2026-06-21,Electron 迁移残留盘点的延伸)**:
+- **清 14G 本地垃圾**:`packages/desktop/src-tauri/`(git 0 跟踪,仅剩 `target/` Rust 编译缓存 + `.DS_Store`)整目录 `rm -rf`,ExtSSD 释放 ~13G。仓库零影响(全 gitignored)。
+- **CLAUDE.md**:三档 channel 切换命令 `pack-installer.* -Env <env>` → `build-deskfox-electron.* -Env <env>`(权威文件,启动必加载,旧脚本是 Tauri 时代)。
+- **代码过时注释**:`packages/app/src/utils/local-asset.ts` 注释指向 `src-tauri/src/local_asset.rs`(已删)→ 改指 Electron 实现 `packages/desktop/src/main/deskfox/local-asset.ts`;`packages/branding/scripts/finalize-latest-json.ts` 用法示例 `--sig` 的 `src-tauri/target/.../nsis/*.exe.sig` 过时路径 → `dist-deskfox/DeskFox-<v>-win-x64.exe.sig`。
+- **刻意不碰**:`packages/desktop/scripts/finalize-latest-json.ts`(含 `@tauri-apps/cli signer`)是**上游文件**,按 R2/P1 fork 不动,上游 merge 时处理;fork 自己的 updater 桥 `bridge-electron-updater.sh` 走 minisign,不依赖该上游脚本。

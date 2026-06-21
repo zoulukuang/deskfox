@@ -14,7 +14,7 @@
 //     --target windows \
 //     --version 2026.6.1 \
 //     --url https://dl.clawtray.com/DeskFox-2026.6.1-setup.exe \
-//     --sig packages/desktop/src-tauri/target/release/bundle/nsis/DeskFox_2026.6.1_x64-setup.exe.sig \
+//     --sig packages/desktop/dist-deskfox/DeskFox-2026.6.1-win-x64.exe.sig \
 //     --pub-date 2026-06-05T00:00:00Z \
 //     --out /tmp/windows
 //   → 写 /tmp/windows/latest.json
