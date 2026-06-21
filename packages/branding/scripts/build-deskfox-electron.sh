@@ -93,8 +93,8 @@ fi
 # 只杀「该杀的那几档」,按 .app 路径精确匹配,绝不通杀(对齐 CLAUDE.md 验证约定 / 规范 §3.11):
 #   · local 本地版独立身份(ai.deskfox.app.local)+ 数据隔离(opencode-local.db)→ 只杀本地版,
 #     绝不碰正在用的正式版/预览版(user 长期开正式版做开发,杀它=打断工作)。
-#   · prod 正式版 + dev 预览版共享 opencode.db(server.ts DB 分流 / index.ts 单例锁按 appId 分 → 两档
-#     互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 表写坏,设计上不能共存)→ 两档一起杀,
+#   · prod 正式版 + dev 预览版 + beta 发布三档共享 opencode.db(server.ts DB 分流 / index.ts 单例锁按 appId 分 →
+#     三档互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 表写坏,设计上不能共存)→ 三档一起杀,
 #     但仍排除 local(隔离无冲突)、不按通用 electron/opencode-cli 名通杀(误伤别的 Electron 应用/别项目 sidecar)。
 # 注:".app/Contents/" 锚点精确区分三档 —— "DeskFox.app/" 不匹配 "DeskFox 预览版.app/"/"DeskFox 本地版.app/"(空格/中文隔开)。
 if [[ "$ENV" == "local" ]]; then
@@ -102,6 +102,7 @@ if [[ "$ENV" == "local" ]]; then
 else
     pkill -9 -f "DeskFox.app/Contents/" 2>/dev/null || true       # 正式版(含 Helper)
     pkill -9 -f "DeskFox 预览版.app/Contents/" 2>/dev/null || true # 预览版(含 Helper)
+    pkill -9 -f "DeskFox Beta.app/Contents/" 2>/dev/null || true   # Beta(含 Helper,共享 opencode.db)
 fi
 
 # === 3.5 打包资源就绪校验(对齐 main build-deskfox.sh §1.9 分层:脚本管"发布物必须有",config 管注入)===

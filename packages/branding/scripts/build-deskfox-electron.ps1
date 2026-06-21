@@ -91,10 +91,19 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "[deskfox] png-to-ico.ts 失败 (env=$iconEnv)" }
 } finally { Pop-Location }
 
-# === 3. 杀运行中的 DeskFox(避免 dist-deskfox 输出目录被运行中的 .exe 锁)===
-Get-Process -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -like "DeskFox*" -or $_.Name -in @("OpenCode", "opencode-cli") } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+# === 3. 杀运行中的「该杀那几档」DeskFox(按规则矩阵精确杀,绝不通杀)===
+# 对齐 CLAUDE.md 验证约定杀进程矩阵 + Mac build-deskfox-electron.sh §3(双端一致):
+#   · local 本地版独立身份(ai.deskfox.app.local)+ 隔离 opencode-local.db → 只杀本地版,
+#     绝不碰正在用的正式版/预览版(user 长期开正式版做开发,杀它=打断工作)。
+#   · prod 正式版 + dev 预览版 + beta 发布三档共享 opencode.db(发布档 DB 分流统一落 opencode.db + 单例锁按 appId 分 →
+#     三档互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 写坏,设计上不能共存)→ 三档一起杀,但排除 local、
+#     不按通用 electron/opencode-cli 名通杀(误伤别的 Electron 应用 / 别项目 sidecar)。
+# 注:Get-Process -Name 精确匹配(非通配),"DeskFox" 不会误命中 "DeskFox 预览版"/"DeskFox Beta"/"DeskFox 本地版"(空格隔开)。
+if ($Env -eq "local") {
+    Get-Process -Name 'DeskFox 本地版' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+} else {
+    Get-Process -Name 'DeskFox', 'DeskFox 预览版', 'DeskFox Beta' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
 
 # === 3.5 打包资源就绪校验(对齐 main build-deskfox §1.9 分层:脚本管"发布物必须有",config 管注入)===
 # 发布物(非 -NoBundle)= 发布给用户,资源缺了 = 功能在用户机上直接没有。

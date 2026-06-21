@@ -32,10 +32,10 @@ cd "$TP" && git init -q && git add -A && git -c user.email=t@t.t -c user.name=t 
 
 ## 1. 测试流程(5 阶段,全自动)
 
-每阶段命令见下;**build 前无条件先杀进程**(开发测试期自由杀,不等授权)。
+每阶段命令见下;**build 前无条件先杀进程**(开发测试期自由杀,不等授权)。本 SOP 是 build 预览版 + 冒烟,按 CLAUDE.md 杀进程矩阵属「发布档」→ **只杀发布三档(正式版 + 预览版 + Beta)**(都共享 `opencode.db` 不能共存),**排除 local**(隔离 DB)、**不带通用 `electron`/`opencode-cli`**(会误伤其他 Electron 应用 / 别项目 sidecar)。
 
 ```powershell
-Get-Process -Name 'DeskFox 预览版','DeskFox Dev',DeskFox,OpenCode,opencode-cli,electron -EA SilentlyContinue | Stop-Process -Force
+Get-Process -Name DeskFox,'DeskFox 预览版','DeskFox Beta' -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
 | # | 阶段 | 命令 | 判定 |

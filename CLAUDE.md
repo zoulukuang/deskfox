@@ -202,9 +202,9 @@ grep `[feat: <id>]` 能反查到对应文档。
   - 打/测 **本地版**(日常自测,最常见)→ **只杀 `本地版`,不碰正式版/预览版**。`local` 第 4 档独立身份(appId `ai.deskfox.app.local`)+ 数据隔离(`opencode-local.db`)就是为了**和你正在用的正式版共存、互不打扰**(见《版本号与发布渠道规范》§3.11);user 长期开着正式版做开发,杀它 = 打断 user 工作。
     - Mac:`pkill -f "DeskFox 本地版.app/Contents/"`(`repack-local.sh` 用等价的 `MacOS/DeskFox 本地版`)
     - Win:`Get-Process -Name 'DeskFox 本地版' -ErrorAction SilentlyContinue | Stop-Process -Force`
-  - 打 **正式版 / 预览版** 包 → **正式版 + 预览版两档一起杀**(它们**共享 `opencode.db`**:`server.ts` DB 分流只对发布三档设 `OPENCODE_DISABLE_CHANNEL_DB=1` 统一落 `opencode.db`,`index.ts` 单例锁按 appId 分 → 两档互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 表写坏,**设计上不能共存**),但**仍排除 local**(隔离 DB 无冲突)、**不按通用 `electron`/`opencode-cli` 名通杀**(误伤别的 Electron 应用 / 别项目 sidecar)。按 **`.app` 路径精确杀**(`.app/Contents/` 锚点区分三档,空格/中文隔开不会误匹配):
-    - Mac:`pkill -f "DeskFox.app/Contents/"` + `pkill -f "DeskFox 预览版.app/Contents/"`
-    - Win:`Get-Process -Name DeskFox,'DeskFox 预览版' -ErrorAction SilentlyContinue | Stop-Process -Force`(**只列正式版+预览版,不带通用 `electron`/`opencode-cli`**)
+  - 打 **正式版 / 预览版 / Beta** 包 → **发布三档一起杀**(它们**共享 `opencode.db`**:`server.ts` DB 分流对发布三档设 `OPENCODE_DISABLE_CHANNEL_DB=1` 统一落 `opencode.db`,`index.ts` 单例锁按 appId 分 → 三档互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 表写坏,**设计上不能共存**),但**仍排除 local**(隔离 DB 无冲突)、**不按通用 `electron`/`opencode-cli` 名通杀**(误伤别的 Electron 应用 / 别项目 sidecar)。按 **`.app` 路径精确杀**(`.app/Contents/` 锚点区分各档,空格/中文隔开不会误匹配):
+    - Mac:`pkill -f "DeskFox.app/Contents/"` + `pkill -f "DeskFox 预览版.app/Contents/"` + `pkill -f "DeskFox Beta.app/Contents/"`
+    - Win:`Get-Process -Name DeskFox,'DeskFox 预览版','DeskFox Beta' -ErrorAction SilentlyContinue | Stop-Process -Force`(**只列发布三档,不带通用 `electron`/`opencode-cli`**)
 - **Win 全自动验证(现成脚本,2026-06-15 换基座就绪验证沉淀)**:
   - 全量冒烟:安装版 / win-unpacked exe 带 `--remote-debugging-port=9222` 跑起来 → `python packages/branding/smoke/smoke.py`(CDP 真点供应商/面板/设置/文件预览,抓渲染崩溃)
   - 冷启动健康检查:`python ../OPENCODE-PLAN/诊断工具/cold-start-health-check.py`(kill + 真冷启动 + 监控启动期 error toast / JS 异常;**≥2 次 CLEAN 才算过**)
