@@ -18,10 +18,16 @@
 #      electron SHASUMS256.txt 校验请求超时(大 zip 侥幸过、小 checksum 必挂)。
 #
 # 用法:
-#   bash .../build-deskfox-electron.sh -Env dev                       # 完整出 dmg+zip+app(未签名)
-#   bash .../build-deskfox-electron.sh -Env dev --no-bundle           # 只出 .app(最快,本地测,未签名)
+#   bash .../build-deskfox-electron.sh -Env dev                       # 预览版,完整出 dmg+zip+app(未签名)
+#   bash .../build-deskfox-electron.sh -Env dev --no-bundle           # 预览版,只出 .app(最快,未签名)
 #   bash .../build-deskfox-electron.sh -Env dev --sign --no-bundle    # 签名 .app(深签含 soffice;不公证,快)
 #   bash .../build-deskfox-electron.sh -Env prod --sign --notarize    # 正式分发:深签 + Apple 公证 + staple
+#   bash .../build-deskfox-electron.sh -Env local                     # 本地测试版,独立身份+数据隔离,始终 --dir 出 .app
+#   bash .../build-deskfox-electron.sh -Env local --no-bundle         # 本地测试版最快(额外跳过 LibreOffice)
+#
+# `local` = 第 4 档本地测试版(2026-06-17,对齐 Win wrapper):独立 appId ai.deskfox.app.local +
+#   opencode-local.db 数据隔离 + LOCAL 徽标 + 永不发布(始终 --dir,不打 installer);版本号回落平台裸号、不 bump。
+#   身份/隔离由双端共用的 electron-builder.deskfox.config.ts 注入。规则详见《版本号与发布渠道规范》§3.11/§4.3/§5.3。
 #
 # 签名/公证(阶段2,2026-06-15):--sign source ~/.deskfox-signing/config.env 注入 Developer ID 身份,
 #   electron-builder 深签 .app/.dmg(含嵌套 LibreOffice/soffice,修未签名 soffice 被 SIGKILL → office 导出不可用)。
@@ -44,8 +50,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$ENV" != "dev" && "$ENV" != "beta" && "$ENV" != "prod" ]]; then
-    echo "Usage: $0 -Env <dev|beta|prod> [--no-bundle]" >&2
+if [[ "$ENV" != "dev" && "$ENV" != "beta" && "$ENV" != "prod" && "$ENV" != "local" ]]; then
+    echo "Usage: $0 -Env <dev|beta|prod|local> [--no-bundle]" >&2
     exit 1
 fi
 
@@ -56,12 +62,18 @@ DESKTOP="$REPO_ROOT/packages/desktop"
 CONFIG="$DESKTOP/electron-builder.deskfox.config.ts"
 VERSIONS_JSON="$BRANDING_ROOT/installer-versions.json"
 
-# === 1. 日历版号(prod → macos;dev/beta → <env>-macos,独立号线)===
+# === 1. 日历版号(prod → macos;dev/beta → <env>-macos,独立号线;local → 回落平台裸号)===
 # 实际版本注入由 electron-builder.deskfox.config.ts 自读 installer-versions.json 完成
 # (dev-independent-version-line:config 按 --mac/--win argv + channel 选号线)。此处仅预检 + 打印。
 VERSION_KEY="macos"
 [[ "$ENV" != "prod" ]] && VERSION_KEY="$ENV-macos"
 APP_VERSION="$(jq -r --arg k "$VERSION_KEY" '.[$k] // empty' "$VERSIONS_JSON")"
+# local 不建独立号线(永不发布、不 bump):local-macos 缺失则回落平台裸号 macos —— config 同样取
+# versions[local-macos] ?? versions[macos],两端一致。版本号只作显示牌。详见规范 §3.11。
+if [[ -z "$APP_VERSION" && "$ENV" == "local" ]]; then
+    VERSION_KEY="macos"
+    APP_VERSION="$(jq -r --arg k "$VERSION_KEY" '.[$k] // empty' "$VERSIONS_JSON")"
+fi
 if [[ -z "$APP_VERSION" ]]; then
     echo "[deskfox] ❌ installer-versions.json 缺 key '$VERSION_KEY'(先跑 bump-installer-version.sh)" >&2
     exit 1
@@ -78,11 +90,24 @@ if [[ ! -f "$ICNS" ]]; then
 fi
 
 # === 3. 杀运行中的 DeskFox(避免 dist-deskfox 输出目录被运行中的 .app 锁)===
-pkill -9 -f "DeskFox" 2>/dev/null || true
+# 只杀「该杀的那几档」,按 .app 路径精确匹配,绝不通杀(对齐 CLAUDE.md 验证约定 / 规范 §3.11):
+#   · local 本地版独立身份(ai.deskfox.app.local)+ 数据隔离(opencode-local.db)→ 只杀本地版,
+#     绝不碰正在用的正式版/预览版(user 长期开正式版做开发,杀它=打断工作)。
+#   · prod 正式版 + dev 预览版共享 opencode.db(server.ts DB 分流 / index.ts 单例锁按 appId 分 → 两档
+#     互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 表写坏,设计上不能共存)→ 两档一起杀,
+#     但仍排除 local(隔离无冲突)、不按通用 electron/opencode-cli 名通杀(误伤别的 Electron 应用/别项目 sidecar)。
+# 注:".app/Contents/" 锚点精确区分三档 —— "DeskFox.app/" 不匹配 "DeskFox 预览版.app/"/"DeskFox 本地版.app/"(空格/中文隔开)。
+if [[ "$ENV" == "local" ]]; then
+    pkill -9 -f "DeskFox 本地版.app/Contents/" 2>/dev/null || true
+else
+    pkill -9 -f "DeskFox.app/Contents/" 2>/dev/null || true       # 正式版(含 Helper)
+    pkill -9 -f "DeskFox 预览版.app/Contents/" 2>/dev/null || true # 预览版(含 Helper)
+fi
 
 # === 3.5 打包资源就绪校验(对齐 main build-deskfox.sh §1.9 分层:脚本管"发布物必须有",config 管注入)===
 # [feat: electron-replatform-macos] 发布物(非 --no-bundle)= 发布给用户,资源缺了 = 功能在用户机上直接没有。
 IS_RELEASE=1; [[ "$NO_BUNDLE" -eq 1 ]] && IS_RELEASE=0
+[[ "$ENV" == "local" ]] && IS_RELEASE=0   # 本地测试版永不发布,LO 缺失仅警告不硬卡
 
 # 3.5a plugin dist —— 打包前【从最新源码重建】feishu-bridge / media-gen,再校验。
 # 根治"陈旧 dist 静默混入"(2026-06-15 dev-feishu-binding-missing):源码 2026-06-12 把 Bun.serve
@@ -191,7 +216,8 @@ fi
 
 # === 5. electron-builder 打包(--publish never;--no-bundle → --dir 只出 .app)===
 EB_ARGS=(--mac --publish never --config electron-builder.deskfox.config.ts)
-[[ "$NO_BUNDLE" -eq 1 ]] && EB_ARGS=(--dir "${EB_ARGS[@]}")
+# local 永不发布 → 始终 --dir(只出 .app,不打 dmg/installer);--no-bundle 同样 --dir。
+if [[ "$NO_BUNDLE" -eq 1 || "$ENV" == "local" ]]; then EB_ARGS=(--dir "${EB_ARGS[@]}"); fi
 
 echo "[deskfox] electron-builder ${EB_ARGS[*]}…"
 (
@@ -239,7 +265,7 @@ fi
 OUT="$DESKTOP/dist-deskfox"
 echo ""
 echo "[deskfox] ✅ 构建完成,产物:"
-if [[ "$NO_BUNDLE" -eq 1 ]]; then
+if [[ "$NO_BUNDLE" -eq 1 || "$ENV" == "local" ]]; then
     ls -d "$OUT"/mac*/*.app 2>/dev/null | while read -r a; do echo "  .app : $a"; done
 else
     ls "$OUT"/*.dmg "$OUT"/*.zip 2>/dev/null | while read -r f; do echo "  $f"; done
