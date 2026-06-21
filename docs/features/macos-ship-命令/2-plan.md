@@ -16,7 +16,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 |---|---|---|
 | 0 | 分支(prod 须 main)/工作树/config.env 检查 | 不满足直接停 |
 | 1 | `/code-review` 高危停问,小问题记 | 同 Win |
-| 2 | `pkill -9 DeskFox/opencode-cli` | macOS 命令 |
+| 2 | 按 `.app/Contents/` 精确杀发布三档(prod/预览/Beta,共享 `opencode.db`),排除 local、不带通用 `electron`/`opencode-cli` | macOS 命令;定稿杀进程矩阵(2026-06-21),详见 CLAUDE.md 验证约定段 |
 | 3 | `source config.env` + `pack-installer.sh -Env prod`(bump→build[签名+公证]→重命名) | **签名公证内置** |
 | 3.5 | `stapler validate` + `spctl -a` 门禁 | **macOS 新增,不公证不推送** |
 | 4 | `chore/ship-mac-prod-<版本>` commit bump | mac 前缀 |
