@@ -91,3 +91,16 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 2. 🔴 **deskfox-site `publish.sh`/`update-version.ps1` 用 Tauri 命名 `_aarch64.dmg`**:官网 Mac 链接一度 404 → 修 publish.sh `MAC_ASSET=-mac-arm64.dmg` + regex 兼容新旧 + 加 `--force`,已 commit/push/部署 deskfox-site(`0785772`)。**Win 侧 `update-version.ps1` + `WIN_ASSET` 仍 Tauri 命名,Win 发 Electron 时需同样对齐(待 Win 协调)**。
 
 **首发实测**:DeskFox 2026.8.0 macOS prod 完整发版成功(GitHub/Gitee/OSS + Electron 自更新源 + Tauri 迁移桥 + 官网,全线上验证生效;复用彩排产物跳过重建)。相关 feat:`electron-macos-sign-notarize`(阶段2)+ `electron-macos-updater-bridge`(阶段3)。
+
+---
+
+## Follow-up(2026-06-21):清剩余 Tauri 文档残留(纸面同步,Tiny)
+
+**起因**:换基座阶段4 已把**真实 skill**(`ship.md`,本机 gitignored)整体改 Electron,但**入仓纸面文档**仍有 Tauri 残留未清——上次会话挂着的 backlog:`2-plan.md` 其余 Tauri 残留 + `版本号与发布渠道规范.md` §5.1/§5.2 SOP 过时。决议**不单独立 backlog 记录**(给"文档过时"再挂待办是纯开销且文档照样错),直接在本分支修干净。
+
+**改动**(纯 docs,0 代码,0 上游):
+- `2-plan.md`:顶加换基座横幅 + 步骤3(`pack-installer.sh`→`build-deskfox-electron.sh --env prod --sign --notarize`)+ 复用脚本清单(electron-builder/OSS/updater 桥)+ Resume(`3-notarize.sh`→`notarytool submit`)+ 范围段脚本名,全同步 Electron 现状。
+- `版本号与发布渠道规范.md` §5.1/§5.2:加 Electron 基座横幅——**Mac 侧定稿**(electron-builder 链 + 3 段 semver + `/ship` skill 编排,指向本 changelog 阶段4)、**Win 侧显式标「待协调」**(`build-deskfox-electron.ps1` 已就绪但发布链对齐 Electron 待 Win 协调,不擅改 Win 命令)。
+- **`1-spec.md` 不动**:签名后锁版,作为 Tauri 时代设计的历史快照保留(换基座事实已由本 changelog 阶段4 记录)。
+
+**未做(刻意)**:§5.1/§5.2 Win 侧 PowerShell 命令(`pack-installer.ps1`/`ISCC`/`DeskFox.iss`)保留原样仅加状态标注——Win 发 Electron 流程未定,不凭推断改写。Win 协调落地后再二次同步。
