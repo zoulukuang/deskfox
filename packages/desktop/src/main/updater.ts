@@ -2,6 +2,9 @@ import { app, dialog } from "electron"
 import pkg from "electron-updater"
 import { UPDATER_ENABLED } from "./constants"
 import { createUpdaterController, type UpdaterReadyRecord } from "./updater-controller"
+// FORK: macOS 升级修复 — quitAndInstall 前标记退出意图,绕开「关闭到托盘」拦截 [fix: macos-install-restart-no-quit] 2026-06-22
+import { withQuitIntent } from "./updater-backend"
+import { setQuitting } from "./deskfox/tray"
 import { getLogger } from "./logging"
 import { getStore } from "./store"
 // FORK: 升级漏斗统计(update_downloaded / update_applied)[feat: telemetry-usage-stats] 2026-06-13
@@ -32,7 +35,9 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
   return createUpdaterController({
     enabled: UPDATER_ENABLED,
     currentVersion: app.getVersion(),
-    backend: autoUpdater,
+    // FORK: 包一层 — install 点 quitAndInstall 前先 setQuitting(),否则 macOS 下窗口被「关闭到托盘」
+    //   拦成 hide、app 不真退,Squirrel.Mac 无法替换 bundle(详见 updater-backend.ts)。
+    backend: withQuitIntent(autoUpdater, setQuitting),
     persistence: {
       get() {
         const value = store.get(key)
