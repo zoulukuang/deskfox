@@ -92,7 +92,7 @@ if [[ -z "$ASSET" ]]; then
   else
     echo -e "${RED}[ERROR] 无法从 tag '$TAG' 推 env/version，请用 --asset 手动指定${RESET}" >&2; exit 1
   fi
-  # NumericVer = strip env suffix（对齐 pack-installer.sh 的 .dmg rename）
+  # NumericVer = strip env suffix（对齐 build-deskfox-electron.sh 的 .dmg 命名）
   NUMERIC_VERSION=$(echo "$VERSION" | sed -E 's/-(dev|beta)$//')
   PRODUCT_PREFIX="DeskFox"
   [[ "$ENV_NAME" == "beta" ]] && PRODUCT_PREFIX="DeskFox-Beta"

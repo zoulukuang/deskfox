@@ -2,7 +2,7 @@
 # [fork-only] DeskFox 打包产物自动化验证(A 层包完整性 + B 层 sidecar headless 冒烟)
 # [feat: package-verify-script] 2026-06-01
 #
-# 对称 build-deskfox.sh:打完包(完整 bundle,非 --no-bundle)后跑这个,零 GUI / 零焦点干扰,
+# 对称 build-deskfox-electron.sh:打完包(完整 bundle,非 --no-bundle)后跑这个,零 GUI / 零焦点干扰,
 # 自动断言 .app 结构 / 架构 / 身份(三档 Bundle ID)/ Gatekeeper / media-gen plugin 内联数据,
 # 再真启动 .app 内 opencode-cli sidecar 做 headless 冒烟 + plugin.js ESM 加载冒烟。
 #
@@ -15,7 +15,7 @@
 #   bash packages/branding/scripts/verify-deskfox-package.sh -Env dev
 #   bash packages/branding/scripts/verify-deskfox-package.sh -Env beta
 #
-# 退出码:0=全过,1=有失败项。依赖调用环境已配好 PATH(bun / curl;同 build-deskfox.sh,不内联 export)。
+# 退出码:0=全过,1=有失败项。依赖调用环境已配好 PATH(bun / curl;同 build-deskfox-electron.sh,不内联 export)。
 
 set -uo pipefail
 
@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# 三档 .app 名 + Bundle ID(真相源:packages/branding/tauri-overrides/<env>.json)
+# 三档 .app 名 + Bundle ID(真相源:packages/desktop/electron-builder.deskfox.config.ts)
 case "$ENV" in
   prod) APP_NAME="DeskFox";      EXPECT_BID="ai.deskfox.app" ;;
   beta) APP_NAME="DeskFox Beta"; EXPECT_BID="ai.deskfox.app.beta" ;;
@@ -44,7 +44,7 @@ PLUGIN="$APP/Contents/Resources/plugin/media-gen/dist/plugin.js"
 PLIST="$APP/Contents/Info.plist"
 CATALOG_DATA="$REPO/packages/media-gen/src/catalog.data.json"
 
-command -v bun >/dev/null 2>&1 || { echo "❌ 需要 bun 在 PATH(同 build-deskfox.sh 的调用环境)" >&2; exit 2; }
+command -v bun >/dev/null 2>&1 || { echo "❌ 需要 bun 在 PATH(同 build-deskfox-electron.sh 的调用环境)" >&2; exit 2; }
 
 pass=0; fail=0
 ok()  { echo "  ✅ $1"; pass=$((pass+1)); }
@@ -56,7 +56,7 @@ echo " DeskFox 包验证 — env=$ENV  ($APP_NAME.app)"
 echo "════════════════════════════════════════"
 if [ ! -d "$APP" ]; then
   echo "❌ 找不到 $APP"
-  echo "   先打完整包:bash packages/branding/scripts/build-deskfox.sh -Env $ENV"
+  echo "   先打完整包:bash packages/branding/scripts/build-deskfox-electron.sh -Env $ENV"
   exit 1
 fi
 

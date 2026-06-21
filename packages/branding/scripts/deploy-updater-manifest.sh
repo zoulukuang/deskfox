@@ -10,7 +10,7 @@
 #   ④ HTTPS 回读校验线上 manifest == 刚发布版本
 #
 # 前置:
-#   - 完整 build 已产 bundle/macos/*.app.tar.gz + .sig(build-deskfox.sh 2.6 段;需 prod source config.env 的私钥)
+#   - 完整 build 已产 bundle/macos/*.app.tar.gz + .sig(完整 build + bridge-electron-updater.sh minisign 签;需 prod source config.env 的私钥)
 #   - source ~/.deskfox-signing/config.env(OSS_ACCESS_KEY_ID/SECRET)
 #   - SSH 密钥 ~/.ssh/lightsail-tokyo-ap-northeast-1.pem(东京 updates.deskfox.ai)
 #
@@ -58,7 +58,7 @@ echo "[updater] === manifest 发布 env=$ENV channel=$CHANNEL version=$VERSION $
 TARBALL=$(ls "$MACOS_BUNDLE"/*.app.tar.gz 2>/dev/null | grep -v "Dev.app" | head -1 || true)
 [[ -z "$TARBALL" ]] && TARBALL=$(ls "$MACOS_BUNDLE"/*.app.tar.gz 2>/dev/null | head -1 || true)
 if [[ -z "$TARBALL" || ! -f "$TARBALL" ]]; then
-    echo "[updater] ERROR: bundle/macos 下无 *.app.tar.gz — 先跑完整 build(build-deskfox.sh -Env $ENV;2.6 段产 updater 产物)" >&2
+    echo "[updater] ERROR: bundle/macos 下无 *.app.tar.gz — 先跑完整 build + bridge-electron-updater.sh 产 updater 产物" >&2
     exit 1
 fi
 SIG="$TARBALL.sig"

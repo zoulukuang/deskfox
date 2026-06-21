@@ -1,11 +1,11 @@
 feat-id: retire-tauri-build-residue
-status: spec
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 1-spec — 清退 Tauri 构建残留(脚本 + broken 测试 + tauri-overrides)
 
-> ⚠️ **本 spec 是调研产出,status=spec 未签。等 user 拍板「做不做 / 范围」后再实施。** Medium 改动,1-spec 须 user 审签(R5/规范)。
-> 调研分支:`chore/retire-tauri-build-scripts`(2026-06-21)。源起:Electron 迁移残留盘点 D 批「删旧 Tauri 脚本」的可行性研究。
+> ✅ **2026-06-21 user 口头审签(「A+B 都做,当前分支直接做」)→ 已实施完成,实际改动见 [3-changelog](./3-changelog.md)。** Medium 改动,1-spec 经 user 审签锁版。
+> 分支:`chore/retire-tauri-build-scripts`。源起:Electron 迁移残留盘点 D 批「删旧 Tauri 脚本」的可行性研究。
 
 ## 背景:调研确认了两层问题,都真实存在
 

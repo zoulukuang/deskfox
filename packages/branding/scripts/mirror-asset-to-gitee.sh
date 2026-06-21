@@ -119,10 +119,10 @@ if [[ -z "$ASSET" ]]; then
     exit 1
   fi
 
-  # NumericVer = strip env suffix(对齐 pack-installer.sh .dmg rename 用 NumericVersion)
+  # NumericVer = strip env suffix(对齐 build-deskfox-electron.sh .dmg 命名 用 NumericVersion)
   NUMERIC_VERSION=$(echo "$VERSION" | sed -E 's/-(dev|beta)$//')
 
-  # Mac .dmg 默认路径(对齐 pack-installer.sh rename 后的命名:productName 空格转横杠 + NumericVer)
+  # Mac .dmg 默认路径(对齐 build-deskfox-electron.sh 后的命名:productName 空格转横杠 + NumericVer)
   # 例:env=dev → "DeskFox-Dev-2026.5.21.1_aarch64.dmg"
   PRODUCT_PREFIX="DeskFox"
   [[ "$ENV_NAME" == "beta" ]] && PRODUCT_PREFIX="DeskFox-Beta"

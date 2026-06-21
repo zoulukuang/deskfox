@@ -3,7 +3,7 @@
 # 一次性开发工具:下载 LibreOffice MSI -> msiexec /a 提取 -> 剥皮(去除 headless PDF 转换不需要的
 # 组件)-> 写入 packages/branding/libreoffice-bundle/windows/
 #
-# 输出目录不进 git(.gitignore 已忽略)。pack-installer.ps1 / DeskFox.iss 会自动检测并打入 installer。
+# 输出目录不进 git(.gitignore 已忽略)。build-deskfox-electron.ps1 会自动检测并打入 NSIS installer。
 #
 # 注意:本文件必须以 UTF-8 with BOM 保存,否则 Windows PowerShell 5.1 按 GBK 解码会令中文乱码、
 #       解析失败。用 Write 工具改完后须用 .NET WriteAllText + UTF8Encoding($true) 重新加 BOM。
@@ -265,5 +265,5 @@ if (($finalSize / 1MB) -gt 700) {
     Write-Warning "    不要直接打包此 bundle,否则安装包会暴增。"
 }
 
-Write-Host "下一步: 运行 pack-installer.ps1 将自动打入 installer"
+Write-Host "下一步: 运行 build-deskfox-electron.ps1 将自动打入 NSIS installer"
 Write-Host "=============================================="

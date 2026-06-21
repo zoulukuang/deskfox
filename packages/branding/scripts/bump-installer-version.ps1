@@ -16,10 +16,10 @@
 #   1. 更新 packages/branding/installer-versions.json 对应平台 key(前端读它渲染设置页版本牌)
 #   2. 在 docs/installer-versions.md 顶部 prepend 占位条目(ship 后回填)
 #
-# 注入到 Tauri app version:见 build-deskfox.ps1/.sh(build 前 patch on-disk tauri.conf.json,
-#   修历史 exe=0.0.0)。本脚本只动 installer-versions.json + 台账,不碰 tauri.conf。
+# 版本注入(换基座后):build-deskfox-electron 打包时由 electron-builder.deskfox.config.ts 自读 installer-versions.json,
+#   无需 patch 配置文件。本脚本只动 installer-versions.json + 台账。
 #
-# Output: 末行 "VERSION=<新版本>"(pack-installer.ps1 解析用)
+# Output: 末行 "VERSION=<新版本>"(build-deskfox-electron / config 读 installer-versions.json)
 
 param(
     [ValidateSet("Windows", "macOS", "Linux")]
