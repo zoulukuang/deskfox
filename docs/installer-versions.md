@@ -10,6 +10,21 @@
 
 
 
+## [macOS] 2026.8.2 - 2026-06-22
+
+**主题**:macOS「安装并重启」只关窗口不升级修复(patch,2026.8.1 → 2026.8.2)。
+
+**本次内容**:仅一处 bug 修复 [feat: macos-install-restart-no-quit] —— 点更新提示「安装并重启」后只关桌面窗口、软件不真退、不升级(仅 macOS)。根因:DeskFox「关闭到托盘」在 `isQuittingFlag=false` 时把窗口 close 拦成 hide;`quitAndInstall()` 走 Squirrel.Mac 的 `before-quit-for-update`(非 `before-quit`)从不调 `setQuitting()` → 窗口被 hide、app 不退 → Squirrel.Mac 无法替换 bundle。修法:`withQuitIntent(autoUpdater, setQuitting)` 包一层,quitAndInstall 前先标记退出意图。**发版前验收**:复现单测 2 pass + desktop main 71 pass + typecheck 通过;真机端到端待存量用户升级实测。⚠️ 存量 2026.8.0/2026.8.1 用户旧版本身带 bug,需手动下载本版一次,之后应用内升级恢复正常。
+
+**Release**:GitHub `ship-mac-prod-2026.8.2`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(id 718726,正文挂 CDN)
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.2-mac-arm64.dmg`(Electron;含 LibreOffice,324304622 bytes / ~309 MiB;Developer ID 签名 + 公证 + staple)
+**sha256**:`7f256a52827fc326fe3e74053f85895bf836dd1a34314af1ec6aacb0d80b2ebf`
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.8.2-mac-arm64.dmg`
+**升级源**:Electron 自更新 `updates.deskfox.ai/electron/prod/latest-mac.yml` + Tauri 迁移桥 `…/v1/latest/desktop/darwin/latest.json`(均线上回读校验 2026.8.2)
+**公证**:notarytool Accepted(submission `86edb2c6-e5de-410e-bffa-5417bbd0b58e`)+ .dmg `stapler validate` 通过 + `spctl` accepted/Notarized Developer ID
+
+---
+
 ## [Windows] 2026.8.1 - 2026-06-22 00:12
 
 **主题**:Electron 首个 Win 稳定版 2026.8.0 之后的一波累积更新——自定义供应商模型列表实时同步 + 思考链/工具折叠对齐原生 + local 第 4 档本地测试版渠道 + 项目磁盘改名自愈重绑;小更新进"补"位(2026.8.0 → 2026.8.1)。
