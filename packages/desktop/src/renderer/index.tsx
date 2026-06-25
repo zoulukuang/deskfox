@@ -283,6 +283,11 @@ const createPlatform = (): Platform => {
       return window.api.checkAppExists(appName)
     },
 
+    // FORK: REQ-068 启动前探测默认项目目录是否存在/可达 [feat: stale-path-hardening]
+    pathExists: async (target: string) => {
+      return window.api.pathExists(target)
+    },
+
     async readClipboardImage() {
       const image = await window.api.readClipboardImage().catch(() => null)
       if (!image) return null

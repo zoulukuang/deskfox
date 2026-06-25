@@ -1141,4 +1141,11 @@ export const dict = {
   "settings.feishu.edit.workspace.security":
     "⚠️ 此帳號的 AI 將能讀寫所選專案的真實檔案並執行命令(用於遠端開發)。涉及敏感讀取或不可逆操作時,會發飛書卡片等你確認。",
   // FORK-END
+  // FORK-BEGIN: REQ-068 啟動預設專案路徑不存在/不可達提示 [feat: stale-path-hardening]
+  "project.path.missing.title": "專案目錄不存在",
+  "project.path.missing.description": "“{{directory}}” 已被刪除、改名或移動,請重新選擇專案目錄。",
+  "project.path.unreachable.title": "專案磁碟暫不可達",
+  "project.path.unreachable.description":
+    "無法存取 “{{directory}}”,磁碟可能未連接或未對應(網路磁碟/USB),請重新連接後再試。",
+  // FORK-END
 } satisfies Partial<Record<Keys, string>>

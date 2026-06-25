@@ -1157,4 +1157,11 @@ export const dict = {
     "⚠️ 此账号的 AI 将能读写所选项目的真实文件并执行命令(用于远程开发)。涉及敏感读取或不可逆操作时,会发飞书卡片等你确认。",
   "settings.feishu.edit.loadFailed": "拉取提供商列表失败:{{msg}}",
   // FORK-END
+  // FORK-BEGIN: REQ-068 启动默认项目路径不存在/不可达提示 [feat: stale-path-hardening]
+  "project.path.missing.title": "项目目录不存在",
+  "project.path.missing.description": "“{{directory}}” 已被删除、改名或移动,请重新选择项目目录。",
+  "project.path.unreachable.title": "项目磁盘暂不可达",
+  "project.path.unreachable.description":
+    "无法访问 “{{directory}}”,磁盘可能未连接或未映射(网络盘/U 盘),请重新连接后再试。",
+  // FORK-END
 } satisfies Partial<Record<Keys, string>>

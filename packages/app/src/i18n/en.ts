@@ -1243,4 +1243,12 @@ export const dict = {
   "settings.feishu.edit.workspace.security":
     "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.",
   // FORK-END
+  // FORK-BEGIN: REQ-068 启动默认项目路径不存在/不可达提示 [feat: stale-path-hardening]
+  "project.path.missing.title": "Project folder not found",
+  "project.path.missing.description":
+    "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.",
+  "project.path.unreachable.title": "Project disk unavailable",
+  "project.path.unreachable.description":
+    "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.",
+  // FORK-END
 }

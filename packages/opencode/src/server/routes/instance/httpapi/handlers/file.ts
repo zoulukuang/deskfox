@@ -10,6 +10,8 @@ import ignore from "ignore"
 import path from "path"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
+// FORK: REQ-067 — 大小写路径防御兜底 helper(护 macOS 发布版,防 ignore@7 RangeError 500)[feat: stale-path-hardening]
+import { ignoreRelativePath, safeIgnores } from "./ignore-path"
 // FORK-BEGIN: office routes + 分类(上游 #30447 删 src/file/,迁来 @/office)[feat: electron-replatform]
 import * as LibreOffice from "@/office/libreoffice"
 import * as OfficeInstaller from "@/office/office-installer"
@@ -90,8 +92,11 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
             path: item.path,
             absolute: path.resolve(location.directory, item.path),
             type: item.type,
-            ignored: ignored.ignores(
-              path.relative(location.project.directory, path.resolve(location.directory, item.path)) +
+            // FORK: REQ-067 — 经 ignoreRelativePath 归一大小写/分隔符 + safeIgnores 兜 ".." 逃逸,
+            // 避免大小写不敏感卷(macOS)上 path.relative 产 "../x/.git" → ignore@7 RangeError → 500 [feat: stale-path-hardening]
+            ignored: safeIgnores(
+              ignored,
+              ignoreRelativePath(location.project.directory, path.resolve(location.directory, item.path)) +
                 (item.type === "directory" ? "/" : ""),
             ),
           }))
