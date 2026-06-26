@@ -19,7 +19,11 @@ type SaveFilePickerOptions = { title?: string; defaultPath?: string }
 type PlatformName = "web" | "desktop"
 type DesktopOS = "macos" | "windows" | "linux"
 
-// FORK: REQ-068 路径探测结果(与 desktop preload PathProbeResult 结构一致,IPC/JSON 边界结构兼容)[feat: stale-path-hardening]
+// FORK: REQ-068 路径探测结果 —— 这是 renderer 侧的 IPC 线格式契约,**必须**与 desktop 生产端
+// packages/desktop/src/main/fs-probe.ts 的 PathProbeResult 逐字段保持一致(两端 tsconfig 互相隔离、
+// 无 type import 边,故靠此契约注释 + 双侧单测人工对齐:desktop fs-probe.test.ts / app startup-precheck.test.ts)。
+// 改一端的形状(如新增 reason)必须同步改另一端,否则 decideStartupProject 会收到类型声称不可能的值。
+// [feat: stale-path-hardening]
 export type PathProbeResult =
   | { ok: true }
   | { ok: false; reason: "missing" | "unreachable"; code?: string }

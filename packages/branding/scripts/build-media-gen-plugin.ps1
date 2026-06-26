@@ -24,7 +24,9 @@ if (-not (Test-Path (Join-Path $MediaGenDir "build.ts"))) {
 
 # FORK: 对齐 build-feishu-plugin.ps1 —— 补时间戳跳过(原 .ps1 漏了,与 feishu 不对称:每次都重建)+ 用
 # `bun run --silent` 避免 PS5.1 把 bun 的 "$ ..." banner stderr 误包成 NativeCommandError 中断整个打包。
-# 比较 media-gen src/*.ts + build.ts 与最终 branding 副本 $OutFile 的 mtime,无源码变更秒跳过。[feat: stale-path-hardening] 2026-06-25
+# 比较 media-gen src/*.ts + build.ts + package.json 与最终 branding 副本 $OutFile 的 mtime,无源码变更秒跳过。
+# FORK: 加固(code-review) —— ① 纳入 package.json(依赖/构建配置变更也应触发重建,避免打包旧 dist);
+# ② -le → -lt:mtime 相等(同秒编辑)也重建,不漏改。[feat: stale-path-hardening] 2026-06-26
 $MediaSrc = Join-Path $MediaGenDir "src"
 $NeedRebuild = $true
 if (Test-Path $OutFile) {
@@ -34,8 +36,10 @@ if (Test-Path $OutFile) {
         $latestList += Get-ChildItem -Recurse -File -Path $MediaSrc -Include "*.ts" -ErrorAction SilentlyContinue
     }
     $latestList += Get-Item (Join-Path $MediaGenDir "build.ts")
+    $MediaPkg = Join-Path $MediaGenDir "package.json"
+    if (Test-Path $MediaPkg) { $latestList += Get-Item $MediaPkg }
     $LatestSrc = $latestList | Measure-Object -Property LastWriteTime -Maximum
-    if ($LatestSrc.Maximum -and $LatestSrc.Maximum -le $OutMtime) {
+    if ($LatestSrc.Maximum -and $LatestSrc.Maximum -lt $OutMtime) {
         $NeedRebuild = $false
     }
 }

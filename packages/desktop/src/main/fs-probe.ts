@@ -3,6 +3,8 @@
 // 2026-06-26 [feat: stale-path-hardening]
 import { stat } from "node:fs/promises"
 
+// 生产端类型;IPC 线格式契约,必须与 renderer 端 packages/app/src/context/platform.tsx 的
+// PathProbeResult 逐字段一致(两端 tsconfig 互相隔离、无 type import 边)。改形状须同步改两端。
 export type PathProbeResult =
   | { ok: true }
   | { ok: false; reason: "missing" | "unreachable"; code?: string }
