@@ -64,11 +64,13 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **REQ-061 改名重绑 端到端 ✅**(对运行中打包 sidecar HTTP):打开 git 项目 A(worktree=`req061_A`)→ 磁盘改名 A→B → 用 B 路径打开 → **同一 project id `6149b5c3`,worktree 重绑 `req061_A`→`req061_B`**(M5 三态:旧 worktree ENOENT 判 missing → 重绑),`/session` + `/file/list` 均 **200(非 500)**,git id 保留记录跟随。
 - **REQ-061 UI 侧栏显示新名 端到端 ✅**(CDP 读真实渲染层 DOM):项目 A 在侧栏时显示名 `req061_A`(基线)→ 杀 app 释放 A → 磁盘改名 A→B → 改 electron store 指向 B → 重启 → 侧栏 `data-project` 解码=`D:/tmp/req061_B`、aria-label/文本节点=**`req061_B`(新名)**、**无残留 `req061_A` 旧名** —— 直接证「侧栏显示旧名」症状根治。
 
-## 待办(仍需 user / 桌面 / mac 的真机 QA)
+## 待办(交接 macOS 端,见 [`mac-qa-handoff.md`](./mac-qa-handoff.md) 精确步骤+验收)
 
-- REQ-068 **网络盘掉线 / U盘拔出**模态(unreachable 分支,需物理硬件;missing 分支已端到端验、unmapped 盘符=ENOENT 已实证)。
-- REQ-061 网络盘/U盘 offline 不误重绑(物理硬件)。〔UI 侧栏显示新名已端到端验通,见上〕
-- REQ-067 **mac 端到端 500→200**(无 mac 验收机,挂 mac 借机/CI)。
+> 2026-06-25 user 拍板:剩余 2 项 Windows 本机做不了(物理硬件 / mac-only),交接 mac 端 —— 代码已随分支上传,
+> mac 端拉 `feat/stale-path-hardening` 打 local 版照 `mac-qa-handoff.md` 验,结果回填该文件。
+
+- **待办 1**:REQ-067 **mac 大小写不敏感卷 500→200**(无 mac 验收机;纯字符串逻辑已平台无关单测全覆盖,差最后 HTTP 往返)。
+- **待办 2**:REQ-068 unreachable 分支(盘掉线提示重连不清记录)+ REQ-061 盘 offline 不误重绑 —— 需**物理可插拔盘**(网络盘/U盘/外置盘),本 Win 机当下无;missing 分支 + UI 显示新名已端到端验通。
 
 ## R4 黑名单 override(本季第 2 笔,user 2026-06-25 审批)
 
