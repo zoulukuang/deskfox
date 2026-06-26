@@ -6,6 +6,27 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 分支 `feat/stale-path-hardening`(从 `main/bbc990861`)。commit hash 待提交后回填。
 
+## 追加批次:发版前 code-review 修复(`feat/stale-path-review-fixes`,2026-06-27)
+
+`/ship prod` 步骤 1 的 high-effort code-review(多 agent finder + 独立 verify)命中本 feature 待发内容若干确认项;
+user 拍板「全部修完再发」。本批在 `feat/stale-path-review-fixes`(从 `main/89e966b19`)修掉,每条配复现测试。
+
+| commit | 修复 | 文件 | 测试 |
+|---|---|---|---|
+| `c92abc535` | **Fix A** fs-probe stat 无超时 → 离线网络盘/UNC 启动卡死 | `desktop/src/main/fs-probe.ts`(抽 `probeWithStat`+超时竞速) | fs-probe.test.ts +5(超时/errno) |
+| `f9ef806ca` | **Fix D** 首页最近列表/会话手点死路径仍进 openProject → 白屏+/file 500 | `app` `startup-precheck.ts`(+`checkProjectAvailable`)/`layout.tsx`/`home.tsx` | startup-precheck.test.ts +5 |
+| `3275f542e` | **Fix E/G** media-gen 增量重建纳入 package.json+`-lt`;PathProbeResult 双向契约注释 | `branding` ps1 / `platform.tsx` / `fs-probe.ts` | 构建脚本免测 |
+| `b007a90ba` | **Fix C/B/F** 沙箱 `orDie`→保守保留(离线盘不再崩 500)、update 自愈错误映射回**原始 id** 干净 404(不升级 500/不报 resolved 新 id)、list `path.resolve` 提一次 | `opencode` `project.ts`/`project-rebind.ts`/`handlers/project.ts`/`project-update-selfheal.ts`(新)/`file.ts` | project-rebind +4、selfheal +5(新) |
+
+**验收**:新增/扩展 21 单测全绿 + monorepo typecheck 全绿(opencode/app/desktop 强制无缓存验证)。
+预存失败 `httpapi-file「serves search endpoints」503` 经 stash 对比确认 HEAD 同样失败(环境性、属 search 端点非本次所改 list),非本批回归。
+
+**R4 override(本批,本季第 3 笔)**:`b007a90ba` 触动 `packages/opencode/` 路径黑名单(3 改核心 + 1 既有测试 + 2 fork-only 新文件被路径误伤),user 2026-06-27 审复核报告后批准。
+- wrapper 不可行性:崩点在 opencode 核心 Effect service(`fromDirectory` 沙箱循环)/ HTTP handler(update catch 链)内联,无注入缝;判定/编排已按 R1 抽到 fork-only `project-rebind.ts`(`keepSandboxUnlessConfirmedGone`)/`project-update-selfheal.ts`(`selfHealUpdate`),核心仅 1 行调 helper;`file.ts` 为纯微重构(提 `path.resolve`)。新 helper 因放 `packages/opencode/` 被路径黑名单误伤(同原 feature precedent)。
+- 风险:全部严格更安全(崩→优雅降级、行为不变重构),无新增对外面;21 单测 + typecheck 全绿;diff 127 行 < 500。
+- ⚠️ **配额提示**:本季 override 累计达 **3 笔**(v2026.8.3 / stale-path-hardening / 本批),超 ≤2/季健康软目标 1 笔 —— 季度自查需留意。
+- 回退:`git revert b007a90ba`(各修复带 FORK marker、相互独立)。
+
 ## 改动文件
 
 ### 新 fork-only 文件(核心逻辑 + 单测)
