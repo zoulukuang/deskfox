@@ -20,3 +20,28 @@ export function decideStartupProject(probe: PathProbeResult | undefined): Startu
   if (!probe || probe.ok) return { action: "open" }
   return { action: "skip", forget: probe.reason === "missing", reason: probe.reason }
 }
+
+const TOAST_KEYS = {
+  missing: { titleKey: "project.path.missing.title", descKey: "project.path.missing.description" },
+  unreachable: { titleKey: "project.path.unreachable.title", descKey: "project.path.unreachable.description" },
+} as const
+
+export type ProjectAvailability =
+  | { available: true }
+  | { available: false; forget: boolean; reason: "missing" | "unreachable"; titleKey: string; descKey: string }
+
+/**
+ * 探测 + 决策 + 给出 toast 文案 key 的薄封装(REQ-068 加固):供 layout autoselect 与 home 手动打开**复用同一道防呆**。
+ * 之前 pre-check 只挂在 autoselect,首页最近列表手点死路径仍直接 projects.open → 白屏 + 首个 /file 500。
+ *  - 探测 ok / 无探测能力 → available:true。
+ *  - missing / unreachable → available:false + forget 标志 + 对应 toast key,由调用方做副作用(forget / toast)。
+ */
+export async function checkProjectAvailable(
+  pathExists: ((target: string) => Promise<PathProbeResult>) | undefined,
+  directory: string,
+): Promise<ProjectAvailability> {
+  const probe = pathExists ? await pathExists(directory).catch(() => undefined) : undefined
+  const decision = decideStartupProject(probe)
+  if (decision.action === "open") return { available: true }
+  return { available: false, forget: decision.forget, reason: decision.reason, ...TOAST_KEYS[decision.reason] }
+}

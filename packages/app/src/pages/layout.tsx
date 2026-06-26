@@ -29,7 +29,7 @@ import { getFilename } from "@opencode-ai/core/util/path"
 import { Session, type Message } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 // FORK: REQ-068 启动默认项目 pre-check 决策 [feat: stale-path-hardening]
-import { decideStartupProject } from "@/pages/layout/startup-precheck"
+import { checkProjectAvailable } from "@/pages/layout/startup-precheck"
 import { useSettings } from "@/context/settings"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
@@ -553,17 +553,14 @@ export default function Layout(props: ParentProps) {
   // (否则首请求 session.list 静默返 200 空 → 空白无引导,触达 /file 才 500),按模态清记录 + 提示 + 落选择器。
   // 2026-06-25 [feat: stale-path-hardening]
   const ensureProjectAvailable = async (directory: string): Promise<boolean> => {
-    const probe = platform.pathExists ? await platform.pathExists(directory).catch(() => undefined) : undefined
-    const decision = decideStartupProject(probe)
-    if (decision.action === "open") return true
-    if (decision.forget) server.projects.forget(directory)
-    const titleKey =
-      decision.reason === "missing" ? "project.path.missing.title" : "project.path.unreachable.title"
-    const descKey =
-      decision.reason === "missing"
-        ? "project.path.missing.description"
-        : "project.path.unreachable.description"
-    showToast({ variant: "error", title: language.t(titleKey), description: language.t(descKey, { directory }) })
+    const status = await checkProjectAvailable(platform.pathExists, directory)
+    if (status.available) return true
+    if (status.forget) server.projects.forget(directory)
+    showToast({
+      variant: "error",
+      title: language.t(status.titleKey),
+      description: language.t(status.descKey, { directory }),
+    })
     return false
   }
 
