@@ -58,9 +58,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **REQ-068 `pathExists` IPC 全链路真机验证绿**:`window.api.pathExists` 函数贯通(preload→ipc→main→fs-probe);存在目录→`{ok:true}`;不存在→`{ok:false,reason:"missing",code:"ENOENT"}`;**未映射盘符 `Z:\`→ENOENT/missing**(实证坐实版本计划迁移发现 §④「盘符未映射」模态 = ENOENT → 归 missing 分类)。
 - 验证用 local 第 4 档(`ai.deskfox.app.local` + `opencode-local.db` 数据隔离),全程不碰 user 运行中的正式版。
 
-## 待办(真机 QA,见 1-spec 验收门槛)
+### 真机 QA 通过(2026-06-25,local 版,CDP + sidecar HTTP)
 
-- REQ-068 Windows 四模态冷启动引导 / REQ-061 改名重加 + 网络盘U盘 offline 不误重绑 / REQ-067 mac 端到端 500→200。
+- **REQ-068 目录删/改名模态 端到端 ✅**:注入失效 lastProject(`D:/__req068_missing_default_project__`)入 electron store → 冷重载 → 弹 error toast **「项目目录不存在 "…" 已被删除、改名或移动,请重新选择项目目录。」**(i18n + 路径插值正确)、失效项目**未被打开**(URL 停根路径,无静默空白/无 500)、lastProject **被 forget 清空**(`{}`)→ 下次启动不再自动加载死路径。
+- **REQ-061 改名重绑 端到端 ✅**(对运行中打包 sidecar HTTP):打开 git 项目 A(worktree=`req061_A`)→ 磁盘改名 A→B → 用 B 路径打开 → **同一 project id `6149b5c3`,worktree 重绑 `req061_A`→`req061_B`**(M5 三态:旧 worktree ENOENT 判 missing → 重绑),`/session` + `/file/list` 均 **200(非 500)**,git id 保留记录跟随。
+
+## 待办(仍需 user / 桌面 / mac 的真机 QA)
+
+- REQ-068 **网络盘掉线 / U盘拔出**模态(unreachable 分支,需物理硬件;missing 分支已端到端验、unmapped 盘符=ENOENT 已实证)。
+- REQ-061 **UI 侧栏显示改名后新名**(需原生文件夹选择器加项目,后端重绑已端到端验)+ 网络盘/U盘 offline 不误重绑(物理硬件)。
+- REQ-067 **mac 端到端 500→200**(无 mac 验收机,挂 mac 借机/CI)。
 
 ## R4 黑名单 override(本季第 2 笔,user 2026-06-25 审批)
 
