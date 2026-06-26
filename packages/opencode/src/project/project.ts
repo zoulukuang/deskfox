@@ -22,7 +22,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 // FORK: REQ-061 M5 三态重绑判定 [feat: stale-path-hardening]
-import { isWorktreeConfirmedMissing } from "./project-rebind"
+import { isWorktreeConfirmedMissing, keepSandboxUnlessConfirmedGone } from "./project-rebind"
 
 const ProjectVcs = Schema.Literal("git")
 
@@ -301,13 +301,12 @@ export const layer = Layer.effect(
         !result.sandboxes.includes(data.directory)
       )
         result.sandboxes.push(data.directory)
+      // FORK: REQ-064 加固 — 沙箱存在性检查出错(离线盘/U盘暂拔)保守保留,不再 Effect.orDie→update 500
+      // (与上方 worktree 三态判定一致;判定抽到 keepSandboxUnlessConfirmedGone 便于单测)。
+      // 2026-06-26 [feat: stale-path-hardening]
       result.sandboxes = yield* Effect.forEach(
         result.sandboxes,
-        (s) =>
-          fs.exists(s).pipe(
-            Effect.orDie,
-            Effect.map((exists) => (exists ? s : undefined)),
-          ),
+        (s) => keepSandboxUnlessConfirmedGone(s, fs.exists(s)),
         { concurrency: "unbounded" },
       ).pipe(Effect.map((arr) => arr.filter((x): x is string => x !== undefined)))
 

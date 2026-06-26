@@ -87,19 +87,24 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
             .readFileString(path.join(location.project.directory, ".ignore"))
             .pipe(Effect.catch(() => Effect.succeed("")))
           if (ignorefile) ignored.add(ignorefile)
-          return (yield* fs.list({ path: RelativePath.make(ctx.query.path) })).map((item) => ({
-            name: path.basename(item.path),
-            path: item.path,
-            absolute: path.resolve(location.directory, item.path),
-            type: item.type,
-            // FORK: REQ-067 — 经 ignoreRelativePath 归一大小写/分隔符 + safeIgnores 兜 ".." 逃逸,
-            // 避免大小写不敏感卷(macOS)上 path.relative 产 "../x/.git" → ignore@7 RangeError → 500 [feat: stale-path-hardening]
-            ignored: safeIgnores(
-              ignored,
-              ignoreRelativePath(location.project.directory, path.resolve(location.directory, item.path)) +
-                (item.type === "directory" ? "/" : ""),
-            ),
-          }))
+          return (yield* fs.list({ path: RelativePath.make(ctx.query.path) })).map((item) => {
+            // FORK: REQ-067 — 每项 path.resolve 提一次复用(原 absolute + ignoreRelativePath 各算一遍)。
+            // 2026-06-26 [feat: stale-path-hardening]
+            const absolute = path.resolve(location.directory, item.path)
+            return {
+              name: path.basename(item.path),
+              path: item.path,
+              absolute,
+              type: item.type,
+              // FORK: REQ-067 — 经 ignoreRelativePath 归一大小写/分隔符 + safeIgnores 兜 ".." 逃逸,
+              // 避免大小写不敏感卷(macOS)上 path.relative 产 "../x/.git" → ignore@7 RangeError → 500 [feat: stale-path-hardening]
+              ignored: safeIgnores(
+                ignored,
+                ignoreRelativePath(location.project.directory, absolute) +
+                  (item.type === "directory" ? "/" : ""),
+              ),
+            }
+          })
         }),
       )
     })
