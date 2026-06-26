@@ -9,6 +9,8 @@ import type { FatalRendererError, ServerReadyData, TitlebarTheme } from "../prel
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { assertAttachmentBudget, createPickedFileAuthorizations } from "./attachment-picker"
 import { getStore } from "./store"
+// FORK: REQ-068 路径探测结果类型 [feat: stale-path-hardening]
+import type { PathProbeResult } from "./fs-probe"
 import { getPinchZoomEnabled, setPinchZoomEnabled, setTitlebar, updateTitlebar } from "./windows"
 import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
@@ -34,6 +36,8 @@ type Deps = {
   parseMarkdown: (markdown: string) => Promise<string> | string
   checkAppExists: (appName: string) => Promise<boolean> | boolean
   resolveAppPath: (appName: string) => Promise<string | null>
+  // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
+  pathExists: (target: string) => Promise<PathProbeResult>
   updater: UpdaterController
   showUpdater: () => Promise<void> | void
   setBackgroundColor: (color: string) => void
@@ -58,6 +62,8 @@ export function registerIpcHandlers(deps: Deps) {
   )
   ipcMain.handle("parse-markdown", (_event: IpcMainInvokeEvent, markdown: string) => deps.parseMarkdown(markdown))
   ipcMain.handle("check-app-exists", (_event: IpcMainInvokeEvent, appName: string) => deps.checkAppExists(appName))
+  // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
+  ipcMain.handle("path-exists", (_event: IpcMainInvokeEvent, target: string) => deps.pathExists(target))
   ipcMain.handle("resolve-app-path", (_event: IpcMainInvokeEvent, appName: string) => deps.resolveAppPath(appName))
   ipcMain.handle("updater-subscribe", (event) => {
     const id = event.sender.id

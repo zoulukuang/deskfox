@@ -19,6 +19,11 @@ type SaveFilePickerOptions = { title?: string; defaultPath?: string }
 type PlatformName = "web" | "desktop"
 type DesktopOS = "macos" | "windows" | "linux"
 
+// FORK: REQ-068 路径探测结果(与 desktop preload PathProbeResult 结构一致,IPC/JSON 边界结构兼容)[feat: stale-path-hardening]
+export type PathProbeResult =
+  | { ok: true }
+  | { ok: false; reason: "missing" | "unreachable"; code?: string }
+
 export type FatalRendererErrorLog = {
   error: string
   url: string
@@ -106,6 +111,13 @@ type PlatformBase = {
 
   /** Check if an editor app exists (desktop only) */
   checkAppExists?(appName: string): Promise<boolean>
+
+  /**
+   * Probe whether a local directory exists / is reachable (desktop only).
+   * FORK: REQ-068 — 启动前 pre-check 默认项目目录,区分「确切不存在(missing)」与
+   * 「暂不可达(unreachable,网络盘/U盘 offline)」给不同引导 [feat: stale-path-hardening]
+   */
+  pathExists?(target: string): Promise<PathProbeResult>
 
   /** Read image from clipboard (desktop only) */
   readClipboardImage?(): Promise<File | null>

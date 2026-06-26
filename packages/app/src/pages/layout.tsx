@@ -28,6 +28,8 @@ import { Dialog } from "@opencode-ai/ui/dialog"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { Session, type Message } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
+// FORK: REQ-068 启动默认项目 pre-check 决策 [feat: stale-path-hardening]
+import { decideStartupProject } from "@/pages/layout/startup-precheck"
 import { useSettings } from "@/context/settings"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
@@ -547,6 +549,24 @@ export default function Layout(props: ParentProps) {
     return projects.find((p) => p.worktree === root)
   })
 
+  // FORK: REQ-068 — 启动自动加载默认项目前,先探测目录是否存在/可达。不存在/不可达则不进 openProject
+  // (否则首请求 session.list 静默返 200 空 → 空白无引导,触达 /file 才 500),按模态清记录 + 提示 + 落选择器。
+  // 2026-06-25 [feat: stale-path-hardening]
+  const ensureProjectAvailable = async (directory: string): Promise<boolean> => {
+    const probe = platform.pathExists ? await platform.pathExists(directory).catch(() => undefined) : undefined
+    const decision = decideStartupProject(probe)
+    if (decision.action === "open") return true
+    if (decision.forget) server.projects.forget(directory)
+    const titleKey =
+      decision.reason === "missing" ? "project.path.missing.title" : "project.path.unreachable.title"
+    const descKey =
+      decision.reason === "missing"
+        ? "project.path.missing.description"
+        : "project.path.unreachable.description"
+    showToast({ variant: "error", title: language.t(titleKey), description: language.t(descKey, { directory }) })
+    return false
+  }
+
   const [autoselecting] = createResource(async () => {
     await ready.promise
     await layout.ready.promise
@@ -557,10 +577,12 @@ export default function Layout(props: ParentProps) {
 
     if (list.length === 0) {
       if (!last) return
+      if (!(await ensureProjectAvailable(last))) return
       await openProject(last, true)
     } else {
       const next = list.find((project) => project.worktree === last) ?? list[0]
       if (!next) return
+      if (!(await ensureProjectAvailable(next.worktree))) return
       await openProject(next.worktree, true)
     }
   })

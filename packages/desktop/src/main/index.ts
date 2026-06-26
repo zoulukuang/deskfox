@@ -13,6 +13,8 @@ import contextMenu from "electron-context-menu"
 
 import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
+// FORK: REQ-068 路径存在性探测 [feat: stale-path-hardening]
+import { probePath } from "./fs-probe"
 import { CHANNEL, PRODUCT_NAMES } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
@@ -308,6 +310,8 @@ const main = Effect.gen(function* () {
     parseMarkdown: async (markdown) => parseMarkdown(markdown),
     checkAppExists: (appName) => checkAppExists(appName),
     resolveAppPath: async (appName) => resolveAppPath(appName),
+    // FORK: REQ-068 启动前探测默认项目目录是否存在/可达 [feat: stale-path-hardening]
+    pathExists: (target) => probePath(target),
     updater,
     showUpdater: () => showUpdaterDialog(updater, true),
     setBackgroundColor: (color) => setBackgroundColor(color),

@@ -1,6 +1,9 @@
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
 import type { WslServersPlatform } from "@opencode-ai/app/wsl/types"
 import type { UpdaterState } from "@opencode-ai/app/updater"
+// FORK: REQ-068 路径探测结果类型(type-only,不引入 node:fs 到 preload)[feat: stale-path-hardening]
+import type { PathProbeResult } from "../main/fs-probe"
+export type { PathProbeResult }
 export type {
   WslDistroProbe,
   WslInstalledDistro,
@@ -54,6 +57,8 @@ export type ElectronAPI = {
   parseMarkdownCommand: (markdown: string) => Promise<string>
   checkAppExists: (appName: string) => Promise<boolean>
   resolveAppPath: (appName: string) => Promise<string | null>
+  // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
+  pathExists: (target: string) => Promise<PathProbeResult>
   storeGet: (name: string, key: string) => Promise<string | null>
   storeSet: (name: string, key: string, value: string) => Promise<void>
   storeDelete: (name: string, key: string) => Promise<void>

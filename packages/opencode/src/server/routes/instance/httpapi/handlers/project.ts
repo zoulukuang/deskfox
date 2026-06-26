@@ -37,7 +37,18 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
       params: { projectID: ProjectV2.ID }
       payload: Project.UpdatePayload
     }) {
-      return yield* svc.update({ ...ctx.payload, projectID: ctx.params.projectID }).pipe(
+      const apply = (projectID: ProjectV2.ID) => svc.update({ ...ctx.payload, projectID })
+      return yield* apply(ctx.params.projectID).pipe(
+        // FORK: REQ-064 自愈 — 项目身份迁移(改名/移动后 migrateProjectId 删旧 id 行)后,侧栏仍持旧 id
+        // → update 直接 404、保存静默失效。改为:首次按 URL 旧 id 失败时,用当前 instance 真实目录
+        // fromDirectory 落库/迁移拿到现行 id,重试一次;仍失败才映射成 HTTP NotFound。2026-06-25 [feat: stale-path-hardening]
+        Effect.catchTag("Project.NotFoundError", () =>
+          Effect.gen(function* () {
+            const context = yield* InstanceState.context
+            const resolved = yield* svc.fromDirectory(context.directory)
+            return yield* apply(resolved.project.id)
+          }),
+        ),
         Effect.catchTag("Project.NotFoundError", (error) =>
           Effect.fail(
             new ProjectNotFoundError({

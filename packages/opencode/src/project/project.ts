@@ -21,6 +21,8 @@ import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
+// FORK: REQ-061 M5 三态重绑判定 [feat: stale-path-hardening]
+import { isWorktreeConfirmedMissing } from "./project-rebind"
 
 const ProjectVcs = Schema.Literal("git")
 
@@ -275,10 +277,14 @@ export const layer = Layer.effect(
       // 侧栏据此调 /file?directory=旧路径 → 503、且显示旧名。当用户用文件夹选择器重新打开该项目时
       // (git-id 命中同一行),按实际打开路径 data.directory 重绑 worktree —— 仅当旧 worktree 磁盘上
       // 确已不存在时才重绑,正常项目 / 打开沙箱子目录(旧 worktree 仍在)行为不变,不误伤。2026-06-17
+      // FORK: REQ-061 M5 三态 — 仅「确切探到 worktree 不存在(ENOENT)」才判 missing 并重绑;检查出错
+      // (EACCES/网络盘离线/U盘暂拔/超时)保守当作仍存在、不重绑。原 orElseSucceed(()=>false) 会把检查
+      // 出错也误判 missing → 把暂不可达的有效 worktree 改掉。判定抽到 isWorktreeConfirmedMissing 便于单测。
+      // 2026-06-25 [feat: stale-path-hardening]
       const existingWorktreeMissing =
         projectID !== ProjectV2.ID.global &&
         existing.worktree !== data.directory &&
-        !(yield* fs.exists(existing.worktree).pipe(Effect.orElseSucceed(() => false)))
+        (yield* isWorktreeConfirmedMissing(fs.exists(existing.worktree)))
       if (existingWorktreeMissing)
         yield* Effect.logInfo("rebinding stale worktree", { from: existing.worktree, to: data.directory })
 

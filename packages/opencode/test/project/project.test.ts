@@ -241,6 +241,31 @@ describe("Project.fromDirectory", () => {
       ).toBe(remoteID)
     }),
   )
+
+  // FORK: REQ-064 — 身份迁移(改名/移动 → migrateProjectId 删旧 id 行)后,侧栏持旧 id 调 update 必 404、
+  // 保存静默失效。验证自愈机制:旧 id update 抛 NotFoundError,但 handler 的自愈配方(fromDirectory 重解析
+  // 拿现行 id → 用现行 id 重试 update)能成功落库。2026-06-25 [feat: stale-path-hardening]
+  it.live("REQ-064: stale-id update self-heals via fromDirectory after identity migration", () =>
+    Effect.gen(function* () {
+      const projects = yield* Project.Service
+      const tmp = yield* tmpdirScoped({ git: true })
+      const staleId = (yield* projects.fromDirectory(tmp)).project.id
+
+      // 触发身份迁移:加 origin remote → 重新 resolve → 旧 root id 行被删
+      yield* Effect.promise(() => $`git remote add origin git@github.com:acme/app.git`.cwd(tmp).quiet())
+      const migratedId = (yield* projects.fromDirectory(tmp)).project.id
+      expect(migratedId).not.toBe(staleId)
+
+      // bug 现象:旧 id update → NotFoundError(原本前端静默卡死的根因)
+      const stale = yield* projects.update({ projectID: staleId, name: "renamed" }).pipe(Effect.exit)
+      expect(stale._tag).toBe("Failure")
+
+      // 自愈配方(handler 在 catchTag NotFoundError 时所做):fromDirectory(ctx.directory) 拿现行 id → 重试 update
+      const resolved = yield* projects.fromDirectory(tmp)
+      const healed = yield* projects.update({ projectID: resolved.project.id, name: "renamed" })
+      expect(healed.name).toBe("renamed")
+    }),
+  )
 })
 
 describe("Project.fromDirectory git failure paths", () => {

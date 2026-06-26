@@ -108,6 +108,13 @@ export function createServerProjects<T extends ServerProjectState>(input: {
     touch(directory: string) {
       setStore("lastProject", input.scope(), directory)
     },
+    // FORK: REQ-068 — 默认项目目录已不存在(missing)时清掉它作为 lastProject,避免下次启动又自动加载死路径
+    // → UI 落到项目选择器。仅当当前 scope 的 lastProject 正是该目录时才清,不误伤。2026-06-25 [feat: stale-path-hardening]
+    forget(directory: string) {
+      if (input.store.lastProject[input.scope()] === directory) {
+        setStore("lastProject", input.scope(), undefined as unknown as string)
+      }
+    },
   }
 }
 

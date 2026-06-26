@@ -67,6 +67,8 @@ const api: ElectronAPI = {
   parseMarkdownCommand: (markdown) => ipcRenderer.invoke("parse-markdown", markdown),
   checkAppExists: (appName) => ipcRenderer.invoke("check-app-exists", appName),
   resolveAppPath: (appName) => ipcRenderer.invoke("resolve-app-path", appName),
+  // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
+  pathExists: (target) => ipcRenderer.invoke("path-exists", target),
   storeGet: (name, key) => ipcRenderer.invoke("store-get", name, key),
   storeSet: (name, key, value) => ipcRenderer.invoke("store-set", name, key, value),
   storeDelete: (name, key) => ipcRenderer.invoke("store-delete", name, key),
