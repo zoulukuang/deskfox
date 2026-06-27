@@ -41,6 +41,9 @@ import {
   toggleHomeProjectSelection,
 } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
+// FORK: REQ-068 加固 — 首页手动打开项目前共用同一道死路径防呆(避免白屏+/file 500)[feat: stale-path-hardening]
+import { checkProjectAvailable } from "@/pages/layout/startup-precheck"
+import { showToast } from "@/utils/toast"
 import { sessionTitle } from "@/utils/session-title"
 import { pathKey } from "@/utils/path-key"
 import { useGlobal } from "@/context/global"
@@ -282,8 +285,23 @@ function HomeDesign() {
     server.setActive(next.server)
   }
 
-  function openProjectNewSession(conn: ServerConnection.Any, directory: string) {
+  // FORK: REQ-068 加固 — 进入项目前探测路径,死路径(被删/改名/离线)不进 openProject,报错替代白屏+/file 500。
+  // 与 layout autoselect 复用同一道判定(checkProjectAvailable)。2026-06-26 [feat: stale-path-hardening]
+  async function guardProjectPath(forget: (directory: string) => void, directory: string): Promise<boolean> {
+    const status = await checkProjectAvailable(platform.pathExists, directory)
+    if (status.available) return true
+    if (status.forget) forget(directory)
+    showToast({
+      variant: "error",
+      title: language.t(status.titleKey),
+      description: language.t(status.descKey, { directory }),
+    })
+    return false
+  }
+
+  async function openProjectNewSession(conn: ServerConnection.Any, directory: string) {
     const ctx = global.createServerCtx(conn)
+    if (!(await guardProjectPath(ctx.projects.forget, directory))) return
     ctx.projects.open(directory)
     ctx.projects.touch(directory)
     navigateOnServer(conn, `/${base64Encode(directory)}/session`)
@@ -307,12 +325,13 @@ function HomeDesign() {
       .forEach((directory) => notification.project.markViewed(directory))
   }
 
-  function openSession(session: Session) {
+  async function openSession(session: Session) {
     const project = projectForSession(session, projects(), projectByID())
     const conn = focusedServer()
     if (!conn) return
     const directory = project?.worktree ?? session.directory
     const ctx = global.createServerCtx(conn)
+    if (!(await guardProjectPath(ctx.projects.forget, directory))) return
     ctx.projects.open(directory)
     ctx.projects.touch(directory)
     navigateOnServer(conn, `/${base64Encode(session.directory)}/session/${session.id}`)
@@ -1122,8 +1141,20 @@ function LegacyHome() {
     return "bg-border-weak-base"
   })
 
-  function openProject(server: ServerConnection.Any, directory: string) {
+  // FORK: REQ-068 加固 — 同 HomeDesign,进入项目前死路径防呆(复用 checkProjectAvailable)。
+  // 2026-06-26 [feat: stale-path-hardening]
+  async function openProject(server: ServerConnection.Any, directory: string) {
     const serverCtx = global.createServerCtx(server)
+    const status = await checkProjectAvailable(platform.pathExists, directory)
+    if (!status.available) {
+      if (status.forget) serverCtx.projects.forget(directory)
+      showToast({
+        variant: "error",
+        title: language.t(status.titleKey),
+        description: language.t(status.descKey, { directory }),
+      })
+      return
+    }
     serverCtx.projects.open(directory)
     serverCtx.projects.touch(directory)
     navigate(`/${base64Encode(directory)}`)

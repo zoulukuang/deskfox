@@ -6,6 +6,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { ProjectNotFoundError } from "../errors"
 import { markInstanceForReload } from "../lifecycle"
+import { selfHealUpdate } from "./project-update-selfheal"
 
 export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", (handlers) =>
   Effect.gen(function* () {
@@ -37,27 +38,24 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
       params: { projectID: ProjectV2.ID }
       payload: Project.UpdatePayload
     }) {
-      const apply = (projectID: ProjectV2.ID) => svc.update({ ...ctx.payload, projectID })
-      return yield* apply(ctx.params.projectID).pipe(
-        // FORK: REQ-064 自愈 — 项目身份迁移(改名/移动后 migrateProjectId 删旧 id 行)后,侧栏仍持旧 id
-        // → update 直接 404、保存静默失效。改为:首次按 URL 旧 id 失败时,用当前 instance 真实目录
-        // fromDirectory 落库/迁移拿到现行 id,重试一次;仍失败才映射成 HTTP NotFound。2026-06-25 [feat: stale-path-hardening]
-        Effect.catchTag("Project.NotFoundError", () =>
-          Effect.gen(function* () {
-            const context = yield* InstanceState.context
-            const resolved = yield* svc.fromDirectory(context.directory)
-            return yield* apply(resolved.project.id)
-          }),
-        ),
-        Effect.catchTag("Project.NotFoundError", (error) =>
-          Effect.fail(
-            new ProjectNotFoundError({
-              projectID: error.projectID,
-              message: `Project not found: ${error.projectID}`,
-            }),
-          ),
-        ),
-      )
+      // FORK: REQ-064 自愈 — 项目身份迁移(改名/移动后 migrateProjectId 删旧 id 行)后,侧栏仍持旧 id
+      // → update 直接 404、保存静默失效。首次按 URL 旧 id 失败时,用当前 instance 真实目录 fromDirectory
+      // 拿现行 id 重试一次;自愈链任何失败一律映射回基于「客户端原始 id」的干净 404,绝不升级 500、绝不
+      // 报回 resolved 新 id(编排抽到 selfHealUpdate 便于单测)。2026-06-26 [feat: stale-path-hardening]
+      const originalID = ctx.params.projectID
+      return yield* selfHealUpdate({
+        originalID,
+        apply: (projectID: ProjectV2.ID) => svc.update({ ...ctx.payload, projectID }),
+        resolveCurrentID: Effect.gen(function* () {
+          const context = yield* InstanceState.context
+          const resolved = yield* svc.fromDirectory(context.directory)
+          return resolved.project.id
+        }),
+        notFound: new ProjectNotFoundError({
+          projectID: originalID,
+          message: `Project not found: ${originalID}`,
+        }),
+      })
     })
 
     const directories = Effect.fn("ProjectHttpApi.directories")((ctx: { params: { projectID: ProjectV2.ID } }) =>
