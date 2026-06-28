@@ -1,6 +1,6 @@
 // FORK: REQ-068 — 启动默认项目 pre-check 决策单测(纯函数,平台无关)[feat: stale-path-hardening]
 import { test, expect } from "bun:test"
-import { checkProjectAvailable, decideStartupProject } from "./startup-precheck"
+import { checkProjectAvailable, decideStartupProject, openPickedDirectories } from "./startup-precheck"
 import type { PathProbeResult } from "@/context/platform"
 
 test("目录存在(ok)→ open", () => {
@@ -74,4 +74,38 @@ test("checkProjectAvailable: pathExists 抛错 → 容错按 available(不阻塞
     throw new Error("ipc boom")
   }
   expect(await checkProjectAvailable(throwing, "/p")).toEqual({ available: true })
+})
+
+// [bug-repro: openProject 改异步后,多选目录循环未 await → N 个 openProject 并发在飞 →
+//  navigate 解析顺序不确定 → 最终落点非预期项目 / 死路径 toast 乱序]
+test("openPickedDirectories 串行执行,任一时刻最多 1 个在飞(并发版会是 3)", async () => {
+  let active = 0
+  let maxActive = 0
+  const completed: string[] = []
+  // 第一个目录故意最慢:并发版完成顺序会乱成 b,c,a;串行版严格 a,b,c
+  const openOne = (directory: string) =>
+    new Promise<void>((resolve) => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      setTimeout(
+        () => {
+          completed.push(directory)
+          active--
+          resolve()
+        },
+        directory === "a" ? 30 : 5,
+      )
+    })
+  await openPickedDirectories(["a", "b", "c"], openOne)
+  expect(maxActive).toBe(1)
+  expect(completed).toEqual(["a", "b", "c"])
+})
+
+test("openPickedDirectories: 单个 openOne 抛错不应吞掉(冒泡给调用方)", async () => {
+  const boom = new Error("open failed")
+  await expect(
+    openPickedDirectories(["a"], async () => {
+      throw boom
+    }),
+  ).rejects.toBe(boom)
 })
