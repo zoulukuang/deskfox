@@ -87,3 +87,21 @@ test("B5 首次非 NotFound 错误 → 原样透传,不触发自愈", () => {
   )
   expect(error).toBe(boom)
 })
+
+// [bug-repro: 自愈重试时的真实非 NotFound 错误(磁盘满/DB 写失败)被 blanket catch 吞成 404 →
+//  用户看到误导的「项目不存在」、保存静默失败、真因被藏]
+test("B6 首次 404 → 解析新 id 重试时撞真实错误(磁盘满)→ 原样透传该错误,绝不掩盖成 404", () => {
+  const boom = new Error("disk full")
+  const error = err(
+    selfHealUpdate({
+      originalID: OLD,
+      // 旧 id 404 触发自愈;重试解析出的新 id 撞真实非 NotFound 错误
+      apply: (id): Effect.Effect<string, Project.NotFoundError | Error> =>
+        id === OLD ? tagged404(OLD) : Effect.fail(boom),
+      resolveCurrentID: Effect.succeed(NEW),
+      notFound: notFoundHttp(OLD),
+    }),
+  )
+  expect(error).toBe(boom) // 修前:被 blanket catch 吞成 ProjectNotFoundError(OLD)
+  expect(error).not.toBeInstanceOf(ProjectNotFoundError)
+})
