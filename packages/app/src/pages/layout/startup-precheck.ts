@@ -45,3 +45,19 @@ export async function checkProjectAvailable(
   if (decision.action === "open") return { available: true }
   return { available: false, forget: decision.forget, reason: decision.reason, ...TOAST_KEYS[decision.reason] }
 }
+
+/**
+ * 串行打开目录选择器多选的结果(REQ-068 加固):对每个目录**依次 await** openOne,杜绝并发触发。
+ * 修 code-review 命中的回归 —— openProject 改异步后,多选循环 `for (const d of result) openProject(d)`
+ * 未 await,N 个异步 openProject 同时在飞(各 await 最长 3s 路径探测后再 navigate),navigate 解析顺序
+ * 不确定 → 最终落点不是用户预期的项目、死路径 toast 乱序。串行后:落点确定(最后一个成功 open 的项目)、
+ * toast 按选择顺序、任一时刻最多 1 个探测在飞。openOne 自身负责探测/防呆/打开(如 home 的 openProject)。
+ */
+export async function openPickedDirectories(
+  directories: string[],
+  openOne: (directory: string) => Promise<void>,
+): Promise<void> {
+  for (const directory of directories) {
+    await openOne(directory)
+  }
+}

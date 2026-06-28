@@ -42,7 +42,7 @@ import {
 } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 // FORK: REQ-068 加固 — 首页手动打开项目前共用同一道死路径防呆(避免白屏+/file 500)[feat: stale-path-hardening]
-import { checkProjectAvailable } from "@/pages/layout/startup-precheck"
+import { checkProjectAvailable, openPickedDirectories } from "@/pages/layout/startup-precheck"
 import { showToast } from "@/utils/toast"
 import { sessionTitle } from "@/utils/session-title"
 import { pathKey } from "@/utils/path-key"
@@ -1164,13 +1164,13 @@ function LegacyHome() {
     const s = server.current
     if (!s) return
 
+    // FORK: REQ-068 加固 — 多选目录串行打开,杜绝并发 openProject 的 navigate 竞态(落点不确定/toast 乱序)。
+    // 2026-06-28 [feat: stale-path-hardening]
     const resolve = (result: string | string[] | null) => {
       if (Array.isArray(result)) {
-        for (const directory of result) {
-          openProject(s, directory)
-        }
+        void openPickedDirectories(result, (directory) => openProject(s, directory))
       } else if (result) {
-        openProject(s, result)
+        void openProject(s, result)
       }
     }
 

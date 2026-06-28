@@ -62,3 +62,29 @@ test("safeIgnores 直接喂 .. 字符串也不崩", () => {
   expect(() => safeIgnores(ig, "../x/.git")).not.toThrow()
   expect(safeIgnores(ig, "../x/.git")).toBe(false)
 })
+
+// [bug-repro: Windows 跨盘符/UNC 绝对路径喂 ignore@7 抛 RangeError 被吞 → 降级不忽略 → .git/node_modules 泄漏进文件树]
+// 旧 safeIgnores 只防 "..";Windows subst/junction 同仓库经另一盘符时 path.win32.relative 产绝对路径(无 ".."),
+// 直落 ig.ignores() → RangeError → catch → false(泄漏)。修后退用末段 basename 兜按名忽略。
+test("safeIgnores 对 Windows 跨盘符绝对路径不崩,且 .git 仍按 basename 命中(不泄漏)", () => {
+  const ig = ignore().add(".git").add("node_modules")
+  expect(() => safeIgnores(ig, "D:\\other\\.git")).not.toThrow()
+  expect(safeIgnores(ig, "D:\\other\\.git")).toBe(true)
+})
+
+test("safeIgnores 对 Windows 跨盘符绝对目录路径(尾斜杠)命中 node_modules", () => {
+  const ig = ignore().add("node_modules")
+  expect(safeIgnores(ig, "D:\\other\\sub\\node_modules\\")).toBe(true)
+  expect(safeIgnores(ig, "D:\\other\\sub\\node_modules/")).toBe(true)
+})
+
+test("safeIgnores 对 Windows 跨盘符绝对路径下未命中规则的普通文件 → 不忽略", () => {
+  const ig = ignore().add(".git")
+  expect(safeIgnores(ig, "D:\\other\\src\\index.ts")).toBe(false)
+})
+
+test("safeIgnores 对 UNC 绝对路径(\\\\server\\share)不崩,按 basename 判定", () => {
+  const ig = ignore().add(".git")
+  expect(() => safeIgnores(ig, "\\\\server\\share\\proj\\.git")).not.toThrow()
+  expect(safeIgnores(ig, "\\\\server\\share\\proj\\.git")).toBe(true)
+})

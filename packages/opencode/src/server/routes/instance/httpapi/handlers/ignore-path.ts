@@ -47,11 +47,29 @@ export function ignoreRelativePath(base: string, target: string): string {
 }
 
 /**
- * 安全调用 ignore 实例的 ignores():ignore@7 对以 ".." 开头的路径(checkPath)抛 RangeError。
- * 任何残留 ".." 逃逸路径都不应让 /file 列表 500 → 出现时降级为「不忽略」(返回 false)而非崩溃。
+ * 安全调用 ignore 实例的 ignores():ignore@7 的 checkPath 只接受「仓库内相对 posix 路径」,
+ * 对以 ".." 开头(逃逸)或绝对/盘符/UNC 路径抛 RangeError。两类分别处理,绝不让 /file 列表 500:
+ *
+ *  - ".." 逃逸(软链/junction 指向仓库外):保持「不忽略」(返回 false → 显示),与既有真逃逸设计一致。
+ *  - 绝对/盘符/UNC 路径:仅 **Windows 跨盘符**(subst/junction 把同一仓库映射到另一盘符,
+ *    path.win32.relative 无法算相对 → 产绝对路径如 `D:\other\.git`)才会走到这。它通常是同一仓库的
+ *    另一盘符视图,其 .git/node_modules 应被忽略而非泄漏进文件树。ignore@7 吃不下绝对路径(会抛
+ *    RangeError),故退用末段 basename(保留目录尾斜杠)兜按名忽略 —— 修 code-review 命中的
+ *    「跨盘符绝对路径靠 RangeError 被吞 → 降级为不忽略 → .git/node_modules 泄漏」,且不再依赖异常被抛。
  */
 export function safeIgnores(ig: { ignores(p: string): boolean }, p: string): boolean {
   if (p.startsWith("..")) return false
+  if (path.win32.isAbsolute(p) || path.posix.isAbsolute(p)) {
+    const isDir = /[\\/]$/.test(p)
+    const segments = splitSegments(p)
+    const base = segments[segments.length - 1]
+    if (!base) return false
+    try {
+      return ig.ignores(isDir ? base + "/" : base)
+    } catch {
+      return false
+    }
+  }
   try {
     return ig.ignores(p)
   } catch {

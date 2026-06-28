@@ -10,11 +10,13 @@ import type { Project } from "@/project/project"
  *
  *  - apply(originalID) 成功 → 返回。
  *  - apply(originalID) 抛 Project.NotFoundError → 用 resolveCurrentID 解析当前目录现行 id,apply 重试一次。
- *  - 自愈链任何失败(resolveCurrentID 解析失败 / 重试仍 NotFound / 其它 typed 错误)→ 一律映射回
- *    notFound(基于**客户端原始 id**),绝不:
- *      ① 把本应优雅的 404 升级成 500(非 NotFound 错误通道未映射 → 裸 500);
- *      ② 报回客户端从未请求的 resolved 新 id(原 catchTag 用 error.projectID = 重试解析出的新 id)。
- *  - apply(originalID) 的非 NotFound 错误不触发自愈、原样透传(与原 handler 行为一致)。
+ *  - 只在「确属找不到」时映射回 notFound(基于**客户端原始 id**):
+ *      · resolveCurrentID 解析失败(拿不到当前目录现行 id)→ notFound;
+ *      · 重试 apply 仍抛 Project.NotFoundError(解析出的 id 也不存在)→ notFound。
+ *    映射时绝不报回客户端从未请求的 resolved 新 id(原 catchTag 用 error.projectID = 重试解析出的新 id)。
+ *  - 但**重试 apply 的真实非 NotFound 错误**(磁盘满 / DB 写失败 / 校验失败等)**原样透传,绝不掩盖成 404** —
+ *    否则用户看到误导的「项目不存在」、保存静默失败、真因被藏(code-review 命中:旧版 blanket catch 把重试
+ *    的一切错误都吞成 notFound)。与 apply(originalID) 首次的非 NotFound 错误透传行为对称。
  *
  * 注:离线盘 sandbox exists 出错导致 fromDirectory **die→500** 的根因在 fromDirectory 本身(已由
  * project-rebind.keepSandboxUnlessConfirmedGone 修),catchAll 兜不住 defect,需该修复配合。
@@ -30,8 +32,15 @@ export const selfHealUpdate = <A, EApply, R, RErr, RReq, NF>(opts: {
   opts.apply(opts.originalID).pipe(
     Effect.catchTag("Project.NotFoundError", () =>
       opts.resolveCurrentID.pipe(
-        Effect.flatMap(opts.apply),
+        // resolveCurrentID 拿不到当前目录现行 id → 干净 404(基于客户端原始 id)
         Effect.catch(() => Effect.fail(opts.notFound)),
+        Effect.flatMap((currentID) =>
+          opts.apply(currentID).pipe(
+            // 重试仍 NotFound(解析出的 id 也不存在)→ 干净 404;
+            // 真实非 NotFound 错误(磁盘满/DB 写失败/校验失败…)原样透传,不掩盖
+            Effect.catchTag("Project.NotFoundError", () => Effect.fail(opts.notFound)),
+          ),
+        ),
       ),
     ),
   )
