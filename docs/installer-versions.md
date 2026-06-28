@@ -10,6 +10,25 @@
 
 
 
+## [Windows] 2026.8.2 - 2026-06-28
+
+**主题**:项目入口 stale 路径全族根治(REQ-067/068/061/064)+ 两批发版前 code-review 修复;小更新进"补"位(2026.8.1 → 2026.8.2)。
+
+**本次内容**(自 `ship-prod-2026.8.1` 起,主体 [feat: stale-path-hardening]):
+- **stale 路径全族根治**:系统性修掉「项目文件夹改名/移动/默认路径不存在/路径大小写不一致」导致的文件树/文件请求 **500**、编辑保存静默失败、侧栏显示旧名、启动静默空白。四条 REQ —— REQ-067 大小写不一致 `/file` 500 防御兜底(护 mac 发布版)/ REQ-068 启动默认项目路径不存在的 pre-check + 分模态引导(目录删/改名/盘符未映射)/ REQ-061 改名后拉不到数据 + 侧栏旧名的 worktree 三态重绑 / REQ-064 编辑保存 stale id update 自愈重试。核心逻辑全抽 fork-only 新文件(`ignore-path` / `project-rebind` / `startup-precheck` / `fs-probe` / `project-update-selfheal`),上游仅 ≤数行注入。
+- **发版前 code-review 批次1(A-G)**:fs-probe stat 超时竞速(离线盘不挂起阻塞启动)/ 首页最近列表手点死路径防呆 / 沙箱 orDie→保守保留 / update 自愈错误映射回原始 id 干净 404 / media-gen 增量重建。
+- **发版前 code-review 批次2(A-D)**:high-effort workflow 复审命中并修掉 —— 多选目录串行打开防 navigate 竞态(A)/ 离线盘 ENOENT 用盘符根可达性区分真删 vs 整盘离线、可移动盘拔出不误 forget(D)/ 自愈重试真实错误透传不掩盖成 404(B)/ Windows 跨盘符/UNC 绝对路径不泄漏 `.git`/`node_modules`(C)。
+- **同源 mac 修复随附**(mac 已发,Windows 二进制含但 mac-only 代码无副作用):macOS「安装并重启」只关窗口不升级修复 [feat: macos-install-restart-no-quit]。
+- **验收**:两批共新增/扩展 30 单测全绿 + 回归全绿 + monorepo typecheck 全绿(强制无缓存);批次1 Windows 真机 QA 通过(REQ-068 目录删/改名模态 + REQ-061 改名重绑 + 侧栏显示新名端到端),REQ-067 mac 大小写 500→200 / REQ-068 unreachable 物理盘场景交接 mac QA。R4 override 本季累计 4 笔(季度自查重点项)。
+
+**Release**:GitHub `ship-prod-2026.8.2`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.2-win-x64.exe`(Electron;含 LibreOffice)
+**sha512**:`g+M4eqVliYniboixfrx2LIz/yUYVIR8BItzSEs3lbhqObLTq/IUagNDlbkBp2WVWx2joNIPUCECNA5mTOR3K8g==`(size 275964945)
+**国内下载**:`https://dl.clawtray.com/DeskFox-2026.8.2-win-x64.exe`
+**升级源**:Electron 自更新 `updates.deskfox.ai/electron/prod/latest.yml` + Tauri 迁移桥 `…/v1/latest/desktop/windows/latest.json`(均线上回读校验 2026.8.2)
+
+---
+
 ## [macOS] 2026.8.2 - 2026-06-22
 
 **主题**:macOS「安装并重启」只关窗口不升级修复(patch,2026.8.1 → 2026.8.2)。
