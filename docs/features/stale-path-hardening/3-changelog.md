@@ -6,6 +6,35 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 分支 `feat/stale-path-hardening`(从 `main/bbc990861`)。commit hash 待提交后回填。
 
+## 追加批次 2:发版前 code-review 修复(`feat/stale-path-shipfix`,2026-06-28)
+
+`/ship prod`(批次1合 main 后再发)步骤 1 的 high-effort workflow code-review(8 finder + 独立 verify,40 agent)
+对 `ship-prod-2026.8.1..main` 全量复审,命中 3 条 CONFIRMED 正确性回归 + 4 条 PLAUSIBLE(无启动崩溃级);
+其中数条是批次1「修复」自身引入的回归。user 拍板「先修高危再发」。本批在 `feat/stale-path-shipfix`(从批次1
+合并后的 `main`)修掉 **4 条**(3 CONFIRMED + 1 命中网络盘目标场景的 PLAUSIBLE),每条配复现测试、同 commit。
+
+| commit | 修复 | 文件 | 测试 |
+|---|---|---|---|
+| `3dbeb540b` | **Fix A** `openProject` 改异步后多选目录循环未 await → 并发 navigate 竞态(落点不确定/toast 乱序) | `app` `home.tsx`(LegacyHome.chooseProject)/`startup-precheck.ts`(新 `openPickedDirectories` 串行助手) | startup-precheck +2(maxActive=1/完成顺序=输入顺序、错误冒泡) |
+| `3dbeb540b` | **Fix D** 可移动盘拔出/盘符未映射 ENOENT 被无条件归 missing → forget 永久遗忘合法项目 | `desktop` `fs-probe.ts`(ENOENT/ENOTDIR 再探盘符根可达性) | fs-probe +2(A2c USB拔出/A2d UNC离线→unreachable),A2/A2b 改路径感知 stub |
+| `6773f722f` | **Fix B** 自愈重试时真实非 NotFound 错误(磁盘满/DB 写失败)被 blanket catch 吞成 404 → 误导「项目不存在」+保存静默失败 | `opencode` `project-update-selfheal.ts`(重试只 catchTag NotFound,真错透传) | selfheal +1(B6) |
+| `6773f722f` | **Fix C** Windows 跨盘符/UNC 绝对路径喂 ignore@7 抛 RangeError 被吞 → 降级不忽略 → `.git`/`node_modules` 泄漏进文件树 | `opencode` `ignore-path.ts`(`safeIgnores` 绝对路径退 basename) | ignore-path +4(跨盘.git/node_modules/UNC/普通文件) |
+
+**验收**:新增/改 9 单测全绿(ignore-path 12 / selfheal 6 / fs-probe 10 / startup-precheck 12)+ 回归 project.test+project-rebind 45 全绿 + app/desktop/opencode typecheck 全绿。
+ignore-path 偶发 `(unnamed)` afterAll hook 超时 = 全局 `test/preload.ts` 在 Windows 上 SQLite WAL EBUSY 重试清理 flaky,`--timeout 60000` 重跑 12 pass / 0 fail,与本批改的纯函数无关。
+
+**⚠️ 有意行为变更(Fix D)**:可移动盘拔出/盘符未映射从 `missing`(forget)改判 `unreachable`(保留 lastProject)——
+**修订《版本计划》「迁移发现 §④」原「盘符未映射 = missing」决策**。理由:USB 拔出→盘符 ENOENT→旧逻辑永久遗忘合法项目、
+用户重连后项目从最近列表消失;非破坏性方向取 unreachable 更安全。已在 `fs-probe.ts` 代码注释标注,版本计划待同步。
+
+**R4 override(本批,本季第 4 笔)**:`6773f722f` 触动 `packages/opencode/` 路径黑名单(2 改 fork-only helper + 2 fork-only 测试),user 2026-06-28 审复核报告后批准,`--no-verify` 提交。
+- wrapper 不可行性:`ignore-path.ts` / `project-update-selfheal.ts` 是 **100% fork-only helper(0 上游逻辑)**,放 `packages/opencode/` 仅为 import 就近其服务的上游 handler;本批**未碰任何上游代码**;移出会造 opencode-core → fork 包反向依赖更糟(同批次1/原 feature 路径黑名单误伤 precedent)。
+- 风险:B 让真实错误浮现(原被吞成误导 404)、C 让跨盘 `.git` 被忽略(原泄漏)且不再依赖异常被抛;无新增对外面;9 新测+45 回归+typecheck 全绿;diff 87 行 < 500。
+- ⚠️ **配额提示**:本季 override 累计达 **4 笔**(v2026.8.3 / stale-path 批次1 两笔 / 本批),已超 ≤2/季健康软目标 2 笔 —— 季度自查重点项。
+- 回退:`git revert 6773f722f`(各修复带 FORK marker、相互独立)。
+
+未修(超本批范围,留待后续):review 命中的 PLAUSIBLE `selfheal fromDirectory 抛 defect→500`、`openSession 守 worktree 导航 session.directory 错位`、`server.tsx forget 写 undefined 进 typed Record`,及 3 条清理类(forget+toast 三处复制抽 helper / 自愈用重量级 fromDirectory / fs-probe 超时孤儿 stat 未取消)。
+
 ## 追加批次:发版前 code-review 修复(`feat/stale-path-review-fixes`,2026-06-27)
 
 `/ship prod` 步骤 1 的 high-effort code-review(多 agent finder + 独立 verify)命中本 feature 待发内容若干确认项;
