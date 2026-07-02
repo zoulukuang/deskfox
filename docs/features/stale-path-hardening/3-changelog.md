@@ -119,8 +119,8 @@ user 拍板「全部修完再发」。本批在 `feat/stale-path-review-fixes`(�
 > 2026-06-25 user 拍板:剩余 2 项 Windows 本机做不了(物理硬件 / mac-only),交接 mac 端 —— 代码已随分支上传,
 > mac 端拉 `feat/stale-path-hardening` 打 local 版照 `mac-qa-handoff.md` 验,结果回填该文件。
 
-- **待办 1**:REQ-067 **mac 大小写不敏感卷 500→200**(无 mac 验收机;纯字符串逻辑已平台无关单测全覆盖,差最后 HTTP 往返)。
-- **待办 2**:REQ-068 unreachable 分支(盘掉线提示重连不清记录)+ REQ-061 盘 offline 不误重绑 —— 需**物理可插拔盘**(网络盘/U盘/外置盘),本 Win 机当下无;missing 分支 + UI 显示新名已端到端验通。
+- **待办 1 · ✅ 已通过(2026-07-02,mac local 版)**:REQ-067 **mac 大小写不敏感卷 500→200**。mac 端从最新 main 现打 local 版,CDP 取 sidecar auth,真 HTTP 往返验证 —— 小写 directory 参数(与 git toplevel 规范大写仅大小写不同)`GET /file` 返回 **HTTP 200**,`.gitignore`(node_modules/*.log/build)归一后仍 `ignored:true`、与大写规范路径逐条一致;真实 `ignore@7` 复现「未修必抛 RangeError → 500」根因。详见 [`mac-qa-handoff.md`](./mac-qa-handoff.md) 结果回填段。
+- **待办 2 · ⏳ 延期(记入需求池)**:REQ-068 unreachable 分支(盘掉线提示重连不清记录)+ REQ-061 盘 offline 不误重绑 —— 需**物理可插拔盘**(网络盘/U盘/外置盘)造 unreachable errno,Win/Mac 当下均无立即可插拔盘;missing 分支 + UI 显示新名已端到端验通。已记入 OPENCODE-PLAN 需求池(`需求池/stale-path-mac-物理盘QA.md`)作为未来待办,待有盘时按 `mac-qa-handoff.md` 步骤补验。
 
 ## R4 黑名单 override(本季第 2 笔,user 2026-06-25 审批)
 

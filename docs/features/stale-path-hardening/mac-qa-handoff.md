@@ -91,8 +91,14 @@ Windows/NTFS 根本不触发这个 500(详见版本计划「Windows 迁移实测
 
 ## 结果回填(mac 端做完填这里)
 
-- [ ] 待办 1（REQ-067 mac 500→200）:结果 = ______;截图/日志 = ______;实测 errno/RangeError = ______
+- [x] **待办 1（REQ-067 mac 500→200）:通过 ✅**(2026-07-02,mac local 版从最新 main 现打 · CDP 取 auth · sidecar HTTP 真往返)
+  - **结果**:小写 directory 参数(`/Users/openclaw/Projects/deskfox-plugins`,与 git toplevel 规范大写 `Deskfox-Plugins` 仅大小写不同)请求 `GET /file?path=.&directory=<小写>` → **HTTP 200**(修复前必 500)。
+  - **`.gitignore` 归一 tail 命中验证**:测试项目含 `.gitignore`(`node_modules/` `*.log` `build/`)。小写路径下 `node_modules/` `build/` `debug.log` 均 **`ignored:true`**,与大写规范路径(对照组)**逐条一致** → 证 `ignoreRelativePath` 大小写归一后 `.gitignore` 规则仍精确命中、不泄漏。
+  - **实测 RangeError**:真实 `ignore@7` 复现 —— `path.relative("…Deskfox-Plugins","…deskfox-plugins/.git")` = `"../deskfox-plugins/.git"` → `ig.ignores()` 抛 **`RangeError: path should be a path.relative()'d string`**(坐实根因);经 `ignoreRelativePath` 归一为 `".git/"`/`"node_modules/"` + `safeIgnores` 兜底后不再抛。
+  - **透明说明**:`.git` 本身返回里 `ignored:false`(显示)——因它未写进 `.gitignore`,`ignore` 库不隐式忽略;小写/大写两路径行为**一致**,与本修复无关(前端文件树另有 `.git` 过滤)。不影响验收。
 - [ ] 待办 2a（REQ-068 unreachable）:结果 = ______;实际 errno = ______;toast 文案 = ______;lastProject 是否保留 = ______
 - [ ] 待办 2b（REQ-061 不误重绑）:结果 = ______;offline 期间 worktree = ______;插回后是否完好 = ______
+
+> **待办 2（2a+2b）延期**:需物理拔插外置盘/U盘造 unreachable errno,已记入 OPENCODE-PLAN 需求池作为未来待办(见 `需求池/stale-path-mac-物理盘QA.md`),待有可插拔盘时按本文件步骤补验。
 
 填完请把 `3-changelog.md`「待办」段 + 版本计划 `v2026.6.21.md` 对应 ⏳ 项勾掉,并在改动日志补一行 mac QA 通过。
