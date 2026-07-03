@@ -10,6 +10,12 @@
 
 
 
+
+## [macOS] 2026.8.3 - 2026-07-03 23:34
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows] 2026.8.2 - 2026-06-28
 
 **主题**:项目入口 stale 路径全族根治(REQ-067/068/061/064)+ 两批发版前 code-review 修复;小更新进"补"位(2026.8.1 → 2026.8.2)。
