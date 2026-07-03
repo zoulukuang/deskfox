@@ -11,9 +11,21 @@
 
 
 
-## [macOS] 2026.8.3 - 2026-07-03 23:34
+## [macOS] 2026.8.3 - 2026-07-04
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:macOS 端补发 stale 路径全族根治(与 Win prod 2026.8.2 同源代码),小更新进"补"位(mac 2026.8.2 → 2026.8.3)。mac 2026.8.2 曾用于「安装并重启」修复,故本批 stale-path 顺延到 2026.8.3。
+
+**本次内容**(自 `ship-mac-prod-2026.8.2` 起,主体 [feat: stale-path-hardening]):
+- **stale 路径全族根治**:同 Win 2026.8.2 —— REQ-067 大小写不一致 `/file` 500 兜底 / REQ-068 启动默认路径不存在 pre-check + 分模态引导 / REQ-061 改名后 worktree 三态重绑 + 侧栏显示新名 / REQ-064 编辑保存 stale id update 自愈重试。核心逻辑全抽 fork-only 新文件(`ignore-path` / `project-rebind` / `startup-precheck` / `fs-probe` / `project-update-selfheal`),上游仅 ≤数行注入。
+- **两批发版前 code-review 修复(A-G + 批次2 A-D)**:fs-probe stat 超时竞速 / 死路径防呆 / 沙箱 orDie 保守保留 / update 自愈错误映射回原 id 干净 404 / 多选目录串行防竞态 / 离线盘 ENOENT 不误 forget / 自愈真错透传不掩盖 404 / 跨盘符绝对路径不泄漏 `.git`。
+- **发版前验收**:main HEAD 合并态全套自动化测试全绿 —— typecheck 22/22 + media-gen 140 + feishu 740 + app 471 + opencode stale-path 63 + desktop fs-probe 10,0 fail;发版前 code-review(逐行 + 删除行为/跨文件)无崩溃/高危。mac 真机 QA(REQ-067/068/061)此前已回填验通。
+- **公证**:.app + .dmg 均 Developer ID 签名 + Apple notary 公证 + staple;spctl accepted / source=Notarized Developer ID。(首跑撞 Apple 法律协议过期 403,签署后重跑通过。)
+
+**Release**:GitHub `ship-mac-prod-2026.8.3`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)+ 阿里云 OSS CDN。
+**updater**:Electron 自更新源 `updates.deskfox.ai/electron/prod/latest-mac.yml` version=2026.8.3;Tauri→Electron 迁移桥 `v1/latest/desktop/darwin/latest.json` version=2026.8.3。
+**官网**:deskfox.ai 下载链接已更新部署。
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.3-mac-arm64.dmg`(309 MB)
+**sha256**:`e57160da12d8376b9c3bfa3b3d55fa1db6c764e41f404e2cd1a9f61bd8e2e8c0`
 
 ---
 ## [Windows] 2026.8.2 - 2026-06-28
