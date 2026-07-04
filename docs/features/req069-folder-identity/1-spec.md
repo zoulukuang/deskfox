@@ -1,5 +1,5 @@
 feat-id: req069-folder-identity
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-069 非 git 文件夹稳定项目身份(v2026.6.25,Large)
@@ -129,3 +129,6 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 4. git → 删 `.git` → 同一项目连续
 5. 删除 `.deskfox/id` 后重开 → 软恢复沿用原身份,历史不失联
 6. flag 关闭(默认)→ 一切行为与现状完全一致
+
+---
+**审签记录**:2026-07-04 user 审签通过(连同 phase2 额度报备一并确认),spec 锁版,进入实施。

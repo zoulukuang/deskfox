@@ -1,5 +1,5 @@
 feat-id: req069-folder-identity
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-069 实施计划 + 决策轨迹
