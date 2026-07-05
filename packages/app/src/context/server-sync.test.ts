@@ -24,8 +24,9 @@ describe("pickDirectoriesToEvict", () => {
 })
 
 describe("loadRootSessionsWithFallback", () => {
-  test("uses limited roots query when supported", async () => {
-    const calls: Array<{ directory: string; roots: true; limit?: number }> = []
+  // REQ-072: 侧栏加载必须显式传 scope=project,后端才按项目身份列会话(改名/挪位/复制跟随)
+  test("uses limited roots query when supported (with scope=project)", async () => {
+    const calls: Array<{ directory: string; roots: true; limit?: number; scope?: "project" }> = []
 
     const result = await loadRootSessionsWithFallback({
       directory: "dir",
@@ -38,11 +39,12 @@ describe("loadRootSessionsWithFallback", () => {
 
     expect(result.data).toEqual([])
     expect(result.limited).toBe(true)
-    expect(calls).toEqual([{ directory: "dir", roots: true, limit: 10 }])
+    // TC-F1: 主路径带 scope=project
+    expect(calls).toEqual([{ directory: "dir", roots: true, limit: 10, scope: "project" }])
   })
 
-  test("falls back to full roots query on limited-query failure", async () => {
-    const calls: Array<{ directory: string; roots: true; limit?: number }> = []
+  test("falls back to full roots query on limited-query failure (with scope=project)", async () => {
+    const calls: Array<{ directory: string; roots: true; limit?: number; scope?: "project" }> = []
 
     const result = await loadRootSessionsWithFallback({
       directory: "dir",
@@ -56,9 +58,10 @@ describe("loadRootSessionsWithFallback", () => {
 
     expect(result.data).toEqual([])
     expect(result.limited).toBe(false)
+    // TC-F2: fallback 路径(无 limit)也带 scope=project
     expect(calls).toEqual([
-      { directory: "dir", roots: true, limit: 25 },
-      { directory: "dir", roots: true },
+      { directory: "dir", roots: true, limit: 25, scope: "project" },
+      { directory: "dir", roots: true, scope: "project" },
     ])
   })
 })

@@ -589,7 +589,10 @@ export const createDirSyncContext = (
       fetch: async (count = 10) => {
         const [store, setStore] = serverSync.child(directory)
         setStore("limit", (x) => x + count)
-        await client.session.list().then((x) => {
+        // FORK: REQ-072 会话侧栏项目维度 — 与 session-load.ts 一致传 scope=project:按项目身份列会话
+        // (改名/挪位/复制跟随,global 由后端 gateProjectScope 自动降级 directory 过滤)。裸 list()
+        // 退回 directory 过滤,副本目录(共享会话 directory 指向原目录)会拉到空列表。2026-07-05
+        await client.session.list({ scope: "project" }).then((x) => {
           const sessions = (x.data ?? [])
             .filter((s) => !!s?.id)
             .sort((a, b) => cmp(a.id, b.id))

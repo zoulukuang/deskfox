@@ -1,7 +1,7 @@
 // FORK: REQ-068 — probePath 真实 fs 探测单测(平台无关,Windows CI 可跑)[feat: stale-path-hardening]
 import { describe, expect, test } from "bun:test"
 import path, { join } from "node:path"
-import { probePath, probeWithStat, type StatFn } from "./fs-probe"
+import { probePath, probeWithStat, mountRootOf, findRelocatedWithFs, type StatFn } from "./fs-probe"
 
 describe("probePath", () => {
   test("存在的目录 → ok", async () => {
@@ -85,6 +85,33 @@ describe("probeWithStat 超时/errno 分类", () => {
     })
   })
 
+  // FORK: REQ-070 物理盘 QA 实测修复 — macOS 外置盘挂载根(/Volumes/<name>)判定 2026-07-06
+  // [bug-repro: macOS 外置盘 diskutil unmount 后 stat 报 ENOENT,v2 默认用 path.parse().root=`/`(mac 恒可达)
+  //  → 误判 missing → forget 掉 U 盘项目;真机实测 /Volumes/WININSTALL 卸载复现,分类应为 unreachable]
+  // 注入 mac 挂载根解析(与生产 mountRootOf 一致逻辑),平台无关可在 Windows CI 跑。
+  const macRoot = (p: string) => {
+    const m = /^(\/Volumes\/[^/]+)(?:\/|$)/.exec(p)
+    return m ? m[1] : path.posix.parse(p).root
+  }
+
+  test("A2e macOS 外置盘卸载(ENOENT + /Volumes/<盘> 也 ENOENT)→ unreachable(绝不 forget)", async () => {
+    const stat = byTarget({ "/Volumes/USB/proj": "ENOENT", "/Volumes/USB": "ENOENT" })
+    expect(await probeWithStat("/Volumes/USB/proj", stat, 1000, macRoot)).toEqual({
+      ok: false,
+      reason: "unreachable",
+      code: "ENOENT",
+    })
+  })
+
+  test("A2f macOS 盘在线但目录被删(ENOENT + /Volumes/<盘> ok)→ missing(forget)", async () => {
+    const stat = byTarget({ "/Volumes/USB/proj": "ENOENT", "/Volumes/USB": "ok" })
+    expect(await probeWithStat("/Volumes/USB/proj", stat, 1000, macRoot)).toEqual({
+      ok: false,
+      reason: "missing",
+      code: "ENOENT",
+    })
+  })
+
   test("A3 stat throw EACCES → unreachable(保留 lastProject)", async () => {
     expect(await probeWithStat("/x", throws("EACCES"))).toEqual({
       ok: false,
@@ -98,5 +125,63 @@ describe("probeWithStat 超时/errno 分类", () => {
     const result = await probeWithStat("/offline", neverResolves, 50)
     expect(result).toEqual({ ok: false, reason: "unreachable", code: "ETIMEDOUT" })
     expect(Date.now() - start).toBeLessThan(2000)
+  })
+})
+
+// FORK: REQ-070 物理盘 QA 实测修复 — 生产 mountRootOf 默认实现(darwin 门控,验默认接线就是修复本体)
+describe("mountRootOf (REQ-070 mac 挂载根)", () => {
+  const onMac = process.platform === "darwin"
+  test.if(onMac)("mac: /Volumes/<盘>/子路径 → 取挂载点 /Volumes/<盘>(而非 /)", () => {
+    expect(mountRootOf("/Volumes/WININSTALL/养老")).toBe("/Volumes/WININSTALL")
+    expect(mountRootOf("/Volumes/USB/a/b/c")).toBe("/Volumes/USB")
+    expect(mountRootOf("/Volumes/USB")).toBe("/Volumes/USB")
+  })
+  test.if(onMac)("mac: 系统盘路径 → 文件系统根 /(目录真删仍应 missing)", () => {
+    expect(mountRootOf("/Users/x/proj")).toBe("/")
+  })
+})
+
+// FORK: REQ-072 改名 relocate — 兄弟目录 .deskfox/id 锚扫描单测(注入 fs,平台无关) 2026-07-05
+describe("findRelocatedWithFs (REQ-072 改名 relocate 锚扫描)", () => {
+  // 目录树用 map 模拟:parent 下若干兄弟,各自可能有 .deskfox/id
+  const make = (siblings: Record<string, string | undefined>) => {
+    const listDirs = async (_dir: string) => Object.keys(siblings)
+    const readAnchor = async (candidateDir: string) => {
+      const name = candidateDir.split("/").pop()!
+      return siblings[name]
+    }
+    return { listDirs, readAnchor }
+  }
+
+  test("同父目录内改名 → 命中新名字目录(锚 id 相同)", async () => {
+    const { listDirs, readAnchor } = make({ "proj-renamed": "fld_abc", other: "fld_zzz" })
+    expect(await findRelocatedWithFs("/Users/x/proj", "fld_abc", listDirs, readAnchor)).toBe("/Users/x/proj-renamed")
+  })
+
+  test("git 项目(id=commit hash)同理命中", async () => {
+    const { listDirs, readAnchor } = make({ "myrepo-2": "8b8962650cee", nope: undefined })
+    expect(await findRelocatedWithFs("/w/myrepo", "8b8962650cee", listDirs, readAnchor)).toBe("/w/myrepo-2")
+  })
+
+  test("没有匹配锚 → null(跨父目录挪出去 / 目标无锚)", async () => {
+    const { listDirs, readAnchor } = make({ a: "fld_1", b: "fld_2" })
+    expect(await findRelocatedWithFs("/p/gone", "fld_target", listDirs, readAnchor)).toBeNull()
+  })
+
+  test("id 为空 → null(未持久化 id,不误扫)", async () => {
+    const { listDirs, readAnchor } = make({ a: "fld_1" })
+    expect(await findRelocatedWithFs("/p/gone", "", listDirs, readAnchor)).toBeNull()
+  })
+
+  test("跳过与旧目录同名的项 → 只命中真正的新目录", async () => {
+    const { listDirs, readAnchor } = make({ proj: "fld_stale", "proj-new": "fld_abc" })
+    expect(await findRelocatedWithFs("/Users/x/proj", "fld_abc", listDirs, readAnchor)).toBe("/Users/x/proj-new")
+  })
+
+  test("readdir 出错(父目录不可读)→ null 不抛", async () => {
+    const listDirs = async () => {
+      throw new Error("EACCES")
+    }
+    expect(await findRelocatedWithFs("/p/gone", "fld_x", listDirs, async () => undefined)).toBeNull()
   })
 })

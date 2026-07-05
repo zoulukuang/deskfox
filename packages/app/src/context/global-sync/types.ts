@@ -125,7 +125,14 @@ export type DisposeCheck = {
 export type RootLoadArgs = {
   directory: string
   limit: number
-  list: (query: { directory: string; roots: true; limit?: number }) => Promise<{ data?: Session[] }>
+  // REQ-072: 侧栏加载显式传 scope=project,让后端按项目身份列会话(改名/挪位/复制跟随);
+  // 后端对无独立身份的 global 哨兵自动降级回 directory 过滤(守大杂烩)。
+  list: (query: {
+    directory: string
+    roots: true
+    limit?: number
+    scope?: "project"
+  }) => Promise<{ data?: Session[] }>
 }
 
 export type RootLoadResult = {

@@ -6,6 +6,7 @@ import {
   isTransientServerError,
   isRetryableListError,
   isBackendUnreachableError,
+  isUnservableDirError,
 } from "./server-errors"
 
 function fill(text: string, vars?: Record<string, string | number>) {
@@ -174,5 +175,30 @@ describe("cold-start file.list transient error classification", () => {
     expect(isTransientServerError("")).toBe(false)
     expect(isTransientServerError(null)).toBe(false)
     expect(isRetryableListError(undefined)).toBe(false)
+  })
+})
+
+// FORK: REQ-072 切到缺失目录项目 503 空 body 识别(suppress 冗余 toast) [feat: project-continuity-v2026-8-4]
+describe("isUnservableDirError (切缺失目录项目 503 空 body)", () => {
+  test("Server returned 503 with empty body → true(缺失目录签名)", () => {
+    const err = new Error("Server returned 503 with empty body: http://127.0.0.1:57684/file?path=&directory=%2FUsers%2Fx%2Frtgit-renamed")
+    expect(isUnservableDirError(err)).toBe(true)
+  })
+  test("纯字符串同样识别", () => {
+    expect(isUnservableDirError("Server returned 503 with empty body: ...")).toBe(true)
+  })
+  test("真实业务 5xx(带具体信息)不误判 → 照常 surface", () => {
+    expect(isUnservableDirError(new Error("ripgrep exited with code 2: invalid glob"))).toBe(false)
+    expect(isUnservableDirError(new Error("Server returned 500: file too large"))).toBe(false)
+  })
+  test("非可重试(目录真没了,重试无用)—— 独立于 isRetryableListError", () => {
+    const err = new Error("Server returned 503 with empty body: http://.../file")
+    expect(isUnservableDirError(err)).toBe(true)
+    expect(isRetryableListError(err)).toBe(false)
+  })
+  test("空/null 安全", () => {
+    expect(isUnservableDirError("")).toBe(false)
+    expect(isUnservableDirError(null)).toBe(false)
+    expect(isUnservableDirError(undefined)).toBe(false)
   })
 })

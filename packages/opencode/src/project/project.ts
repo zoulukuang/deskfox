@@ -23,6 +23,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 // FORK: REQ-061 M5 三态重绑判定 [feat: stale-path-hardening]
 import { isWorktreeConfirmedMissing, keepSandboxUnlessConfirmedGone } from "./project-rebind"
+import { healStaleSessionDirectories } from "./session-dir-heal"
 // FORK: REQ-069 非git 文件夹稳定身份 — 锚铸造/写侧编排 2026-07-05
 import { mintId, writeAnchor, appendToInfoExclude, ANCHOR_DIR } from "@opencode-ai/core/project/anchor"
 
@@ -286,6 +287,15 @@ export const layer = Layer.effect(
 
       const data = yield* projectV2.resolve(AbsolutePath.make(directory))
 
+      // FORK: REQ-072 — 打开目录确切不存在(被改名/删除)时,绝不 mint/writeAnchor 把它「重建」出来。
+      //   否则:childStoreManager 后台 bootstrap stale 条目 → fromDirectory(缺失路径) → M6 恢复旧 id +
+      //   writeAnchor 重建空目录 → pre-check 又通过、relocate 不触发、打开空项目丢会话(REQ-072 自测实锤)。
+      //   仅「确切 ENOENT」才判缺失(检查出错/离线盘保守当存在,不误伤);判定复用 isWorktreeConfirmedMissing。
+      //   2026-07-05 [feat: project-continuity-v2026-8-4]
+      const openDirMissing = yield* isWorktreeConfirmedMissing(
+        fs.exists(AbsolutePath.make(FSUtil.resolve(directory))),
+      )
+
       // FORK-BEGIN: REQ-069 非git 文件夹稳定身份 — fromDirectory 编排(唯一显式打开项目点) 2026-07-05
       // 治理: [override-blacklist: REQ-069 fromDirectory 编排] — fromDirectory 是 migrateProjectId/DB 持久化
       //       所在的唯一「显式打开项目」编排点,铸造触发与 flag 门控无法外置(B4/R1 裁决);写锚主体在 core
@@ -298,7 +308,7 @@ export const layer = Layer.effect(
       // ② 铸锚判定钉死:flag 开 && data.vcs === undefined && data.id === global(= 无锚非git;
       //    git init 未 commit 的目录 data.vcs 有值,绝不触发 mint)→ mintId() → 析出行 worktree = data.directory
       //    (真实目录,B5 裁决:建行即真实 worktree,不沿用 global 的 "/"、不依赖盘根重绑机制)。
-      const shouldMint = flagOn && data.vcs === undefined && data.id === ProjectV2.ID.global
+      const shouldMint = flagOn && data.vcs === undefined && data.id === ProjectV2.ID.global && !openDirMissing
       // ②-M6 锚丢失软恢复(REQ-069 M6):进入 mint 判定前,先反查 ProjectDirectoryTable —— 若该打开目录
       //    历史上曾以某 project_id(type=main 优先)落过 directory 行、且该 project 行仍在,说明「同一目录
       //    只是锚文件丢了」(用户误删 .deskfox / 清理工具扫掉)。此时沿用旧 id(不 mint)、重写锚、发恢复日志,
@@ -361,12 +371,27 @@ export const layer = Layer.effect(
         vcs: data.vcs?.type ?? fakeVcs,
         time: { ...existing.time, updated: Date.now() },
       }
-      if (
-        projectID !== ProjectV2.ID.global &&
-        effectiveDir !== result.worktree &&
-        !result.sandboxes.includes(effectiveDir)
-      )
-        result.sandboxes.push(effectiveDir)
+      // FORK-BEGIN: REQ-072 复制项目独立展示 — 副本根目录不是 sandbox 2026-07-05
+      // 复制(cp -R)出的目录与原项目同身份(同锚/同 git 首commit),打开时 effectiveDir ≠ 行 worktree,
+      // 上游会把它当 sandbox 登记 → 前端按 sandbox→root 折叠 → 打开副本整体跳回原目录(真机实锤)。
+      // 判「独立根」:git → effectiveDir/.git/HEAD 真实可达(链接 git worktree 的 .git 是文件,不命中,
+      // 保持上游折叠);非 git → 锚在目录内,恒独立。独立根不登记,且清掉旧版误登记(自愈)。
+      if (projectID !== ProjectV2.ID.global && effectiveDir !== result.worktree) {
+        // 不走 FSUtil.resolve(realpathSync 对「.git 是文件」的穿透路径同步抛 ENOTDIR);
+        // 直接拼路径,存在性错误(ENOTDIR 等)由 Effect 错误通道兜为 false(= 非独立根,保守走上游行为)。
+        const standaloneRoot =
+          data.vcs?.type === "git"
+            ? yield* fs
+                .exists(AbsolutePath.make(`${effectiveDir}/.git/HEAD`))
+                .pipe(Effect.orElseSucceed(() => false))
+            : true
+        if (standaloneRoot) {
+          result.sandboxes = result.sandboxes.filter((s) => s !== effectiveDir)
+        } else if (!result.sandboxes.includes(effectiveDir)) {
+          result.sandboxes.push(effectiveDir)
+        }
+      }
+      // FORK-END
       // FORK: REQ-064 加固 — 沙箱存在性检查出错(离线盘/U盘暂拔)保守保留,不再 Effect.orDie→update 500
       // (与上方 worktree 三态判定一致;判定抽到 keepSandboxUnlessConfirmedGone 便于单测)。
       // 2026-06-26 [feat: stale-path-hardening]
@@ -419,6 +444,23 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
       }
 
+      // FORK-BEGIN: REQ-072 follow-up — session.directory 跟随项目身份自愈 2026-07-05
+      // 真机实锤:项目彻底改名重开后身份/查询都对,但 session.directory 仍指死路径 → 前端渲染层按
+      // 「session.directory === 当前目录」过滤 → 会话不可见(改回原名才回来)。数据单点自愈:
+      // 重绑前缀重写 + 存量孤儿清扫,编排在 fork-only session-dir-heal.ts(Session.list scope=project
+      // 兜底路径共用同一函数,处理实例缓存跳过 fromDirectory 的改名往返)。global 项目不清扫
+      // (directory 维度正是其身份,清扫=大杂烩)。
+      if (projectID !== ProjectV2.ID.global && !openDirMissing) {
+        yield* healStaleSessionDirectories({
+          db,
+          projectID,
+          worktree: result.worktree,
+          oldWorktree: existingWorktreeMissing ? existing.worktree : undefined,
+          confirmedMissing: (dir) => isWorktreeConfirmedMissing(fs.exists(dir)),
+        })
+      }
+      // FORK-END
+
       yield* saveProjectDirectory({
         projectID,
         directory: effectiveDir,
@@ -429,7 +471,8 @@ export const layer = Layer.effect(
       // FORK-BEGIN: REQ-069 两路写锚(连续性令牌) 2026-07-05
       // flag 开且 projectID !== global 时,git/非git 分支都写锚(effectiveDir ← projectID);写锚失败降级不抛(U2)。
       // git 分支:现有 projectV2.commit({store,id}) 保持不变,并加 appendToInfoExclude 防污染 git status。
-      if (flagOn && projectID !== ProjectV2.ID.global) {
+      if (flagOn && projectID !== ProjectV2.ID.global && !openDirMissing) {
+        // FORK: REQ-072 — 目录确切不存在时不写锚(防重建已删/改名的文件夹,见上 openDirMissing 注释)
         yield* writeAnchor(effectiveDir, projectID).pipe(Effect.provideService(FSUtil.Service, fs))
       }
       if (projectID !== ProjectV2.ID.global && data.vcs?.type === "git") {

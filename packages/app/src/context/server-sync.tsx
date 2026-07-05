@@ -24,7 +24,7 @@ import { trimSessions } from "./global-sync/session-trim"
 import type { ProjectMeta } from "./global-sync/types"
 import { SESSION_RECENT_LIMIT } from "./global-sync/types"
 // FORK: 后端不可达守卫(coldstart-toast-race)[feat: electron-replatform]
-import { formatServerError, isBackendUnreachableError } from "@/utils/server-errors"
+import { formatServerError, isBackendUnreachableError, isUnservableDirError } from "@/utils/server-errors"
 import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/solid-query"
 import { createRefreshQueue } from "./global-sync/queue"
 import { directoryKey } from "./global-sync/utils"
@@ -232,6 +232,8 @@ export function createServerSyncContextInner(_serverSDK?: ServerSDK) {
           .command.list()
           .then((x) => setStore("command", x.data ?? [])),
       ).catch((err) => {
+        // FORK: 切到缺失目录项目(/command 503 空 body)不弹冗余 toast [feat: project-continuity-v2026-8-4] 2026-07-05
+        if (isUnservableDirError(err)) return
         showToast({
           variant: "error",
           title: language.t("toast.project.reloadFailed.title", { project: getFilename(directory) }),

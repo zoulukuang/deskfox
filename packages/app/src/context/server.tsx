@@ -4,7 +4,8 @@ import { createStore, type SetStoreFunction, type Store } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
 import { ServerScope } from "@/utils/server-scope"
 
-type StoredProject = { worktree: string; expanded: boolean }
+// FORK: REQ-072 — 持久化 id,供改名后 stale 条目锚扫描 relocate(旧文件夹已消失、读不到锚,靠这个记住身份)
+type StoredProject = { worktree: string; expanded: boolean; id?: string }
 type StoredServer = string | ServerConnection.HttpBase | ServerConnection.Http
 type ServerProjectState = { projects: Record<string, StoredProject[]>; lastProject: Record<string, string> }
 const HEALTH_POLL_INTERVAL_MS = 10_000
@@ -113,6 +114,31 @@ export function createServerProjects<T extends ServerProjectState>(input: {
     forget(directory: string) {
       if (input.store.lastProject[input.scope()] === directory) {
         setStore("lastProject", input.scope(), undefined as unknown as string)
+      }
+    },
+    // FORK: REQ-072 — 记住项目 id(打开成功后回写),供改名后 stale 条目锚扫描 relocate。仅在变化时写。
+    setId(directory: string, id: string) {
+      if (!id || id === "global") return
+      const index = current().findIndex((project) => project.worktree === directory)
+      if (index === -1) return
+      if (current()[index]?.id === id) return
+      setStore("projects", input.scope(), index, "id", id)
+    },
+    // FORK: REQ-072 — 项目文件夹改名后,把 stale 旧路径条目就地改成新路径(保留 expanded/id);
+    // 若该目录正是 lastProject 也一并改,避免下次启动又加载死路径。
+    relocate(oldDirectory: string, newDirectory: string) {
+      const scope = input.scope()
+      const index = current().findIndex((project) => project.worktree === oldDirectory)
+      if (index !== -1) {
+        if (current().some((project) => project.worktree === newDirectory)) {
+          // 新路径已有条目(用户已 Open Folder 过)→ 直接删旧 stale 条目去重
+          setStore("projects", scope, current().filter((project) => project.worktree !== oldDirectory))
+        } else {
+          setStore("projects", scope, index, "worktree", newDirectory)
+        }
+      }
+      if (input.store.lastProject[scope] === oldDirectory) {
+        setStore("lastProject", scope, newDirectory)
       }
     },
   }

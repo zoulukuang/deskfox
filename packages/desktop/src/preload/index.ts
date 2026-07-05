@@ -69,6 +69,8 @@ const api: ElectronAPI = {
   resolveAppPath: (appName) => ipcRenderer.invoke("resolve-app-path", appName),
   // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
   pathExists: (target) => ipcRenderer.invoke("path-exists", target),
+  // FORK: REQ-072 改名 relocate [feat: project-continuity-v2026-8-4]
+  findRelocatedProject: (missingDir, id) => ipcRenderer.invoke("find-relocated-project", missingDir, id),
   storeGet: (name, key) => ipcRenderer.invoke("store-get", name, key),
   storeSet: (name, key, value) => ipcRenderer.invoke("store-set", name, key, value),
   storeDelete: (name, key) => ipcRenderer.invoke("store-delete", name, key),

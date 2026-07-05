@@ -123,6 +123,13 @@ type PlatformBase = {
    */
   pathExists?(target: string): Promise<PathProbeResult>
 
+  /**
+   * REQ-072 改名 relocate:项目文件夹改名/挪位(同父目录内)后,已知旧路径 + 项目 id,
+   * 扫兄弟目录 .deskfox/id 锚找改名后的新位置(desktop only)。返回新目录绝对路径或 null。
+   * FORK [feat: project-continuity-v2026-8-4] 2026-07-05
+   */
+  findRelocatedProject?(missingDir: string, id: string): Promise<string | null>
+
   /** Read image from clipboard (desktop only) */
   readClipboardImage?(): Promise<File | null>
 

@@ -1147,13 +1147,33 @@ function LegacyHome() {
     const serverCtx = global.createServerCtx(server)
     const status = await checkProjectAvailable(platform.pathExists, directory)
     if (!status.available) {
-      if (status.forget) serverCtx.projects.forget(directory)
-      showToast({
-        variant: "error",
-        title: language.t(status.titleKey),
-        description: language.t(status.descKey, { directory }),
-      })
-      return
+      // FORK: REQ-072 — 点击 stale 条目(文件夹已改名/挪位)时,先用持久化的 id 扫兄弟目录 .deskfox/id
+      // relocate 到新路径,成功则打开新路径(不再"打不开")。找不到才 forget + 报错。
+      let effective: string | undefined
+      if (status.reason === "missing") {
+        const find = platform.findRelocatedProject
+        // 优先后端权威项目列表(sync.data.project,id 与磁盘锚一致),回退持久化 StoredProject.id
+        const id =
+          sync.data.project.find((p) => p.worktree === directory)?.id ??
+          serverCtx.projects.list().find((p) => p.worktree === directory)?.id
+        if (find && id && id !== "global") {
+          const relocated = await find(directory, id).catch(() => null)
+          if (relocated) {
+            serverCtx.projects.relocate(directory, relocated)
+            effective = relocated
+          }
+        }
+      }
+      if (!effective) {
+        if (status.forget) serverCtx.projects.forget(directory)
+        showToast({
+          variant: "error",
+          title: language.t(status.titleKey),
+          description: language.t(status.descKey, { directory }),
+        })
+        return
+      }
+      directory = effective
     }
     serverCtx.projects.open(directory)
     serverCtx.projects.touch(directory)

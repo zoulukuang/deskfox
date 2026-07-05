@@ -87,6 +87,11 @@ function prepareSidecarEnv(password: string, userDataPath: string) {
     OPENCODE_SERVER_USERNAME: "opencode",
     OPENCODE_SERVER_PASSWORD: password,
     XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? userDataPath,
+    // FORK: REQ-069/072 放开非 git 文件夹稳定身份 flag(版本计划 v2026-07-05 D 决策)。 2026-07-05
+    //   开启后:普通文件夹改名/挪位仍认得同一项目(锚 .deskfox/id),且 git+非git 项目打开时都写锚
+    //   → 会话侧栏按 project_id 跟随身份(REQ-072)、改名后可锚扫描 relocate(见 desktop main relocate IPC)。
+    //   用户已显式设则尊重不覆盖(便于回退/灰度)。M8 存量 global 析出按 v2026.6.25 灰度预案。
+    OPENCODE_EXPERIMENTAL_NONGIT_IDENTITY: process.env.OPENCODE_EXPERIMENTAL_NONGIT_IDENTITY ?? "1",
   })
   // FORK: 国内用户装插件走国内镜像(npm_config_registry 由 @npmcli/config 读),官方用户不注入
   //   [feat: npm-registry-cn-mirror] 2026-06-13。用户已显式设了 registry 则尊重不覆盖。

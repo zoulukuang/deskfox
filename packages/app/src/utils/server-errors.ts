@@ -63,6 +63,19 @@ export function isRetryableListError(error: unknown): boolean {
   return isBackendUnreachableError(error) || isTransientServerError(error)
 }
 
+// FORK: 目录不可服务识别 [feat: project-continuity-v2026-8-4] 2026-07-05
+// 切到目录已被删除/改名/挪走(且无法 relocate)的项目时,后端为该缺失目录 boot 实例失败,
+// /file 返回「Server returned 503 with empty body」。文件树已就地显「加载文件树失败 · 重试」占位,
+// 右下角再弹一条原始 503 toast = 冗余噪音(且每次切项目都弹)→ suppress 该 toast(仍 console 记录、
+// 占位保留可重试)。仅匹配 503 空 body 这一「缺失目录」签名 —— 真实业务 5xx 带具体错误信息不命中,照常 surface。
+// 非「可重试」:目录真没了,重试也不会好,故独立于 isRetryableListError(不触发无谓退避重试)。
+const UNSERVABLE_DIR_RE = /returned 503 with empty body/i
+export function isUnservableDirError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  if (!msg) return false
+  return UNSERVABLE_DIR_RE.test(msg)
+}
+
 type Translator = (key: string, vars?: Record<string, string | number>) => string
 
 function tr(translator: Translator | undefined, key: string, text: string, vars?: Record<string, string | number>) {
