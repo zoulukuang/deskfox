@@ -33,12 +33,31 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 - **U1 测试实现为「内存复用」而非「store 回读」**:第 2 项跨重启接续的 store 回读被**刻意推迟**到「施工前待钉死①」的 auth 运行时实验有结论后再补 —— 避免历史 session 若返 401 造成续聊回归。`getOrCreateSession` 已预留回读点(注释标注)。
 
-## 待续(需真飞书 / 真机,阻塞在钉死实验)
+## 第二批:钉死实验 + 第 2 项(commit `7a1076d143`)— 真机(投资CFO 账号)
 
-- 第 2 项跨重启接续:待 ① 10 分钟 auth 实验 → 补 store 回读。
-- 第 6 项 + REQ-055 群/合并转发昵称:待 ⑥ 通讯录端点真凭证实测钉死 → 建 `contact-name-resolver.ts`。
+2026-07-06 user 提供真飞书环境(投资CFO,accountId `cli_a916d5631f619bc7`),跑通 ①⑥ 钉死实验。
+
+### 钉死① 跨重启接续(auth vs 读盘)— 定案
+
+- 手段:`GET /debug/fetch-messages`(走 adapter 真实 opencodeClient + directory 调 `session.messages`)。
+- 结果:历史 session `ses_0d8aeee8dffe…` 返 **404 NotFoundError**,**非 401**;authHeader 被接受。
+- 归因:404 系**跨-DB 假象** —— 本地版 sidecar 查 `opencode-local.db`,而该 session 在**正式版 `opencode.db`**(实测该 DB 有 1 行 + message 2 行,`time_archived` 非 0 印证自动归档)。
+- **结论**:旧注释「因 InstanceState 不预 load 而 401」经实证是**误判**;真凶只是查找不回读 store,与 auth 无关。store 回读纯读盘、安全。
+- 落地:`getOrCreateSession` 内存 miss 时回读 `chatSessionStore.get` 复用旧 session(第 2 项完成)。
+- ⚠️ 测试注意:**本地版/正式版 DB 隔离**,真机端到端验第 2/3 项须在实际桥接该账号的实例做。
+
+### 钉死⑥ 通讯录端点 — 定案
+
+- **正确端点**:`GET /contact/v3/users/batch?user_ids=…&user_id_type=open_id`(批量 ≤50)或单个 `.../users/{id}`,吃 open_id、可返 `name`。
+- **`batch_get_id` 确认是反向接口**(email/mobile→id,需 `contact:user.id:readonly`),做不了 open_id→昵称。
+- **⚠️ blocker**:投资CFO app 当前**缺 `contact:user.base:readonly` scope** → 调用 code 0 但只返 `open_id/union_id/mobile_visible`,`name` 被字段级 scope 门控挡空。需 user 在飞书后台开通该 scope + 发布版本。
+- **捷径**:`GET /im/v1/chats/{chat_id}/members` **无需额外 scope 即返 name**(实测拿到「搞量化的小贝」)→ 群 session 发送者昵称(第 6 项)可优先走此接口,通讯录 API(+scope)留给合并转发任意用户(REQ-055 面)。
+
+## 待续
+
+- 第 6 项 + REQ-055 群/合并转发昵称:端点已钉死,待设计定夺(chat-members 优先 vs 通讯录 API)+ scope 开通;可先建带 graceful 回落的 `contact-name-resolver.ts`。
 - 第 3 项桌面续聊:待真机验证 0 前端改动。
-- 全部 🔴 真机验收(E1-E8)。
+- 全部 🔴 真机验收(E1-E8);⚠️ 须在实际桥接账号的实例(注意 DB 隔离)。
 
 ## 回退方法
 
