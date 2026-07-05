@@ -634,15 +634,26 @@ export class MessagePipeline {
    *      session、进桌面侧栏;归档改由 user 在 GUI 操作驱动。
    *   2. title 加 bot 昵称前缀(REQ-073-④):`[botName] Feishu group/xxx`,多 bot 同群不撞脸;
    *      botName 缺省时回落无前缀(与旧 title 一致)。
-   *   3. 跨重启接续(REQ-073-②)—— 待钉死①(auth 运行时实验)后再补:届时内存 miss 应回读
-   *      this.opts.chatSessionStore.get(accountId, chatId) 复用旧 session。现阶段暂不回读,
-   *      避免历史 session 若返 401 造成续聊回归。
+   *   3. 跨重启接续(REQ-073-②):内存 miss 时回读已落盘的 chatSessionStore 复用旧 session,
+   *      不再每次重启开新 session。钉死①运行时实验已实证:历史 session 数据完整存于全局 DB、
+   *      同实例查询正常返回(旧注释「因 InstanceState 不预 load 而 401」系误判 —— 真凶只是
+   *      查找从不回读 store,与 auth 无关),故纯读盘复用安全。
    *
    * @returns 成功返回 sessionID;创建失败已发飞书友好错误并返回 null(调用点应 return)。
    */
   private async getOrCreateSession(event: ImMessageEvent): Promise<string | null> {
     const cached = this.chatToSession.get(event.chatId)
     if (cached) return cached
+    // 跨重启接续:回读落盘映射,命中则回填内存两张表(sessionToChat 供 permission 路由用)
+    const persisted = this.opts.chatSessionStore.get(this.opts.accountId, event.chatId)
+    if (persisted) {
+      this.chatToSession.set(event.chatId, persisted)
+      this.sessionToChat.set(persisted, event.chatId)
+      console.log(
+        `[pipeline ${this.opts.accountId}] reuse persisted session ${persisted} for chat=${event.chatId}`,
+      )
+      return persisted
+    }
     try {
       const botName = this.opts.account.botName?.trim()
       const titlePrefix = botName ? `[${botName}] ` : ""

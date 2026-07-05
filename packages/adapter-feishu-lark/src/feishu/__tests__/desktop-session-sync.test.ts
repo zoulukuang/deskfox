@@ -164,6 +164,17 @@ describe("getOrCreateSession(REQ-073-①④)", () => {
     expect(fakes.created).toHaveLength(1)
   })
 
+  test("U1b 内存 miss + store 命中 → 回读复用旧 session,不新建(REQ-073-② 跨重启接续)", async () => {
+    // 模拟重启:内存空,但落盘 store 有历史映射(钉死①实证纯读盘安全)
+    store.set("acc1", "oc_group_123456789", "ses_persisted_old")
+    const pipeline = makePipeline("DeskFox-Mac")
+    const id = await (pipeline as any).getOrCreateSession(makeEvent())
+    expect(id).toBe("ses_persisted_old")
+    expect(fakes.created).toHaveLength(0) // 没新建
+    // 回填 sessionToChat 供 permission 路由
+    expect((pipeline as any).hasSession("ses_persisted_old")).toBe(true)
+  })
+
   test("U4 session.create 抛错 → 发飞书友好错误并返回 null", async () => {
     const pipeline = makePipeline("DeskFox-Mac")
     fakes.setCreateThrow(true)
