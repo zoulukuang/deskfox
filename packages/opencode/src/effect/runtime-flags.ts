@@ -53,6 +53,8 @@ export class Service extends ConfigService.Service<Service>()("@opencode/Runtime
   experimentalNativeLlm: bool("OPENCODE_EXPERIMENTAL_NATIVE_LLM"),
   experimentalWebSockets: bool("OPENCODE_EXPERIMENTAL_WEBSOCKETS"),
   client: Config.string("OPENCODE_CLIENT").pipe(Config.withDefault("cli")),
+  // FORK: REQ-069 非git 身份灰度 flag 2026-07-05
+  nonGitFolderIdentity: bool("OPENCODE_EXPERIMENTAL_NONGIT_IDENTITY"),
 }) {}
 
 export type Info = Context.Service.Shape<typeof Service>
