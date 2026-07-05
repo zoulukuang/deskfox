@@ -143,6 +143,27 @@ export const FeishuBridgePlugin = async (input: PluginInput): Promise<Hooks> => 
         // 如果没 pipeline 拥有这个 session(主 GUI / TUI session)→ 不动,
         // opencode 走原 GUI 对话框路径,user 在主 GUI 处理
       }
+
+      // [feat: feishu-desktop-session-sync REQ-073-⑤] permission.replied 事件
+      // → 桌面 GUI / TUI 已解决该权限 → 让拥有该 session 的 pipeline 把飞书卡片反向失效。
+      if (evt.type === "permission.replied" && evt.properties) {
+        const req = evt.properties as {
+          sessionID?: string
+          requestID?: string
+          reply?: "once" | "always" | "reject"
+        }
+        if (!req.sessionID || !req.requestID || !req.reply) return
+        for (const pipeline of pipelines.values()) {
+          if (pipeline.hasSession(req.sessionID)) {
+            try {
+              await pipeline.handlePermissionReplied(req.sessionID, req.requestID, req.reply)
+            } catch (err) {
+              console.error(`[feishu-plugin] handlePermissionReplied error:`, err)
+            }
+            break
+          }
+        }
+      }
     },
   }
 }

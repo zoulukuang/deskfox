@@ -31,6 +31,7 @@ import { createGroup, getShareLink } from "./group-creator"
 import {
   PermissionCardController,
   type ParsedCardAction,
+  type PermissionReply,
   type PermissionRequest,
 } from "./permission-card"
 import {
@@ -594,6 +595,20 @@ export class MessagePipeline {
   }
 
   /**
+   * [feat: feishu-desktop-session-sync REQ-073-⑤] 收到 permission.replied event
+   * (桌面 GUI / TUI 已解决该权限)→ 让本 pipeline 对应的飞书卡片反向失效。
+   * sessionID 不属于本 pipeline 时静默 noop(plugin 已按 hasSession 路由,这里再防御一次)。
+   */
+  async handlePermissionReplied(
+    sessionID: string,
+    requestID: string,
+    reply: PermissionReply,
+  ): Promise<void> {
+    if (!this.hasSession(sessionID)) return
+    await this.permissionController.handleExternalResolve(requestID, reply)
+  }
+
+  /**
    * [feat: feishu-bridge-light] 收到 confirm 卡片(yes/no)→ 路由到 ConfirmCardController。
    * plugin.ts 在 onCardAction 里先尝试 parseCardAction(permission),再 parseConfirmAction(confirm)。
    */
@@ -607,6 +622,51 @@ export class MessagePipeline {
    */
   async handleCardActionReply(parsed: ParsedCardAction): Promise<void> {
     await this.permissionController.handleReply(parsed)
+  }
+
+  /**
+   * 获取 / 创建 chat 对应的 opencode session,统一 4 条消息路径(主文本 / merge_forward /
+   * 文件消息 / 图片文件)此前近乎逐字重复的「查找 → 创建 → 落盘 → archive」块。
+   * [feat: feishu-desktop-session-sync] 2026-07-06
+   *
+   * 与旧逻辑的三点差异:
+   *   1. 停止自动归档(REQ-073-①):新建 session 不再 archiveSession,飞书会话保持普通可见
+   *      session、进桌面侧栏;归档改由 user 在 GUI 操作驱动。
+   *   2. title 加 bot 昵称前缀(REQ-073-④):`[botName] Feishu group/xxx`,多 bot 同群不撞脸;
+   *      botName 缺省时回落无前缀(与旧 title 一致)。
+   *   3. 跨重启接续(REQ-073-②)—— 待钉死①(auth 运行时实验)后再补:届时内存 miss 应回读
+   *      this.opts.chatSessionStore.get(accountId, chatId) 复用旧 session。现阶段暂不回读,
+   *      避免历史 session 若返 401 造成续聊回归。
+   *
+   * @returns 成功返回 sessionID;创建失败已发飞书友好错误并返回 null(调用点应 return)。
+   */
+  private async getOrCreateSession(event: ImMessageEvent): Promise<string | null> {
+    const cached = this.chatToSession.get(event.chatId)
+    if (cached) return cached
+    try {
+      const botName = this.opts.account.botName?.trim()
+      const titlePrefix = botName ? `[${botName}] ` : ""
+      const res = await this.opts.opencodeClient.session.create({
+        query: { directory: this.workspaceDir() },
+        body: {
+          title: `${titlePrefix}Feishu ${event.chatType}/${event.chatId.slice(-8)}`,
+        },
+      })
+      const id = (res as { data?: { id?: string } }).data?.id
+      if (!id) throw new Error("session.create returned no id")
+      this.chatToSession.set(event.chatId, id)
+      this.sessionToChat.set(id, event.chatId)
+      // 落盘:plugin 重启后同 chat 仍能复用此 session(第 2 项接续的持久化基础)
+      this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, id)
+      console.log(
+        `[pipeline ${this.opts.accountId}] new opencode session ${id} (持久化,可见) for chat=${event.chatId}`,
+      )
+      return id
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
+      await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+      return null
+    }
   }
 
   async handle(event: ImMessageEvent): Promise<void> {
@@ -873,44 +933,9 @@ export class MessagePipeline {
       ),
     )
 
-    // 仅复用 *本 sidecar lifecycle 内* 创建的 session(in-memory cache)。
-    // 历史 session(sidecar 上次启动前创建的)因 opencode 内部 InstanceState 不预 load
-    // 而对 GET /session/{id}/message 路由返 401,导致拉不到 reply。
-    // 短期 trade-off:sidecar 重启后所有 chat 第一条消息开新 session(无跨重启 multi-turn memory),
-    // 但同 sidecar lifetime 内 chat 仍 multi-turn 复用 session。
-    // FUTURE:让旧 session 也能拉(可能改走 /api/session/{id}/message 或 reload state)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: {
-            title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}`,
-          },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        // 落盘:plugin 重启后同 chat 仍能复用此 session
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        // 🚨 立即 archive 飞书 plugin 创建的 session,user GUI sidebar 不显示
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] archive session ${sessionID} failed (会显示在 GUI):`,
-            archErr,
-          )
-        })
-        console.log(
-          `[pipeline ${this.opts.accountId}] new opencode session ${sessionID} (archived,持久化) for chat=${event.chatId}`,
-        )
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // session 复用 / 新建(REQ-073-①④:停归档 + bot 昵称 title;跨重启接续见 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     // FORK-BEGIN: REQ-036 引用/回复原文注入 2026-06-02
     // 架构说明:注入在 user message parts(text part),对所有 agent 均有效
@@ -1065,35 +1090,9 @@ export class MessagePipeline {
       ),
     )
 
-    // 9. session create / 复用(跟 handle 主流程同款)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] archive session ${sessionID} failed:`,
-            archErr,
-          )
-        })
-        console.log(
-          `[pipeline ${this.opts.accountId}] new opencode session ${sessionID} (merge_forward) for chat=${event.chatId}`,
-        )
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // 9. session create / 复用(REQ-073-①④,统一走 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     // 10. runOpencode(text + N file part)
     let reply: string
@@ -1320,35 +1319,9 @@ export class MessagePipeline {
     ].join("\n")
     // FORK-END
 
-    // 获取 / 创建 session(跟 handle() 主路径同款)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] archive session ${sessionID} (file) failed:`,
-            archErr,
-          )
-        })
-        console.log(
-          `[pipeline ${this.opts.accountId}] new session ${sessionID} (file:${fileName}) for chat=${event.chatId}`,
-        )
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed (file):`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // 获取 / 创建 session(REQ-073-①④,统一走 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     // runOpencode
     let reply: string
@@ -1572,30 +1545,9 @@ export class MessagePipeline {
       return
     }
 
-    // 获取 / 创建 session(同 handleFileMessage)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(`[pipeline ${this.opts.accountId}] archive session (image file) failed:`, archErr)
-        })
-        console.log(`[pipeline ${this.opts.accountId}] new session ${sessionID} (image file:${fileName})`)
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed (image file):`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // 获取 / 创建 session(REQ-073-①④,统一走 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     let reply: string
     try {
@@ -2046,27 +1998,6 @@ export class MessagePipeline {
       requestMethod: wrap.request?.method,
       authHeader: auth ? `${auth.slice(0, 20)}...` : "(none)",
     }
-  }
-
-  /**
-   * Archive 一个 opencode session(plugin 创建的 system session 用,GUI sidebar 默认不显)。
-   *
-   * 通过 v1 SDK 的 raw `_client.patch`(其 update 类型 schema stale 不含 time.archived,
-   * 但 server 端实际接受 — 用 cast 绕过 type 限制)。
-   */
-  private async archiveSession(sessionID: string): Promise<void> {
-    const rawClient = (this.opts.opencodeClient as unknown as { _client?: unknown })._client
-    if (!rawClient || typeof (rawClient as { patch?: unknown }).patch !== "function") {
-      throw new Error("opencode SDK client missing internal _client.patch")
-    }
-    await (rawClient as { patch: (req: unknown) => Promise<unknown> }).patch({
-      url: "/session/{id}",
-      path: { id: sessionID },
-      query: { directory: this.workspaceDir() },
-      body: {
-        time: { archived: Date.now() },
-      },
-    })
   }
 
   /**

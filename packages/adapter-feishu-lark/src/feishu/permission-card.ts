@@ -391,6 +391,28 @@ export class PermissionCardController {
     await this.replyToOpencode(parsed.requestID, entry.sessionID, parsed.reply)
   }
 
+  /**
+   * [feat: feishu-desktop-session-sync REQ-073-⑤] 授权双端反向失效。
+   *
+   * 桌面 GUI / TUI 先解决了这条权限(opencode 广播 permission.replied)→ 把对应飞书卡片
+   * 改成 settled 态并从 pending 删除,让 user 在飞书侧看到「已在别处处理」而非留一张活卡。
+   *
+   * 与 handleReply 的关键差异:**不调 replyToOpencode** —— 解决动作已源自 opencode 侧,
+   * 后端 permission 幂等,二次 reply 会返 NotFoundError,没有必要也不应再回放。
+   *
+   * pending 无此 requestID = no-op:要么本端已处理过(handleReply 已 cleanup),
+   * 要么这条权限的卡片从没在本 pipeline 弹过。静默返回。
+   */
+  async handleExternalResolve(requestID: string, reply: PermissionReply): Promise<void> {
+    const entry = this.pending.get(requestID)
+    if (!entry) return
+    await this.replaceWithSettledCard(entry, reply)
+    this.cleanup(requestID)
+    console.log(
+      `[permission-card] external resolve ${reply} for ${requestID} (chat=${entry.chatId}) — 飞书卡片已失效`,
+    )
+  }
+
   /** 5min 超时兜底:自动 reject + 撤回原卡片 + 发"已超时"卡片。 */
   private async handleTimeout(requestID: string): Promise<void> {
     const entry = this.pending.get(requestID)
