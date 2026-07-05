@@ -11,6 +11,8 @@ import { Git } from "./git"
 import { LayerNode } from "./effect/layer-node"
 import { Hash } from "./util/hash"
 import { ProjectDirectoryTable } from "./project/sql"
+// FORK: REQ-069 锚读桥接 — resolve 读锚以支撑非 git 文件夹稳定身份 2026-07-05
+import { readAnchor } from "./project/anchor"
 
 export const ID = Schema.String.pipe(
   Schema.brand("Project.ID"),
@@ -134,17 +136,34 @@ export const layer = Layer.effect(
     })
 
     const resolve = Effect.fn("Project.resolve")(function* (input: AbsolutePath) {
-      const repo = yield* git.find(input)
-      if (!repo) return { id: ID.global, directory: AbsolutePath.make(path.parse(input).root), vcs: undefined }
+      // FORK-BEGIN: REQ-069 锚读+桥接优先级 2026-07-05
+      // resolve 无条件读锚(B4 裁决:flag 门控不下沉 core,core 无法访问 opencode 的 RuntimeFlags;
+      // 「flag 关时项目身份仍按 global」由 U4 编排层强制)。resolve 保持纯读,绝不 mintId/writeAnchor(铸写在 U4)。
+      // 用 layer 闭包内已解析的 fs 满足 readAnchor 的 FSUtil.Service 需求(与 cached/commit 同源)。
+      const anchor = yield* readAnchor(input).pipe(Effect.provideService(FSUtil.Service, fs))
 
-      const previous = yield* cached(repo.store)
-      const id = (yield* remote(repo)) ?? previous ?? (yield* root(repo))
+      const repo = yield* git.find(input)
+      if (!repo) {
+        // 【有锚】返锚 id + 真实打开目录(B2 裁决:真实目录修复仅在绑定锚存在时生效,不无条件生效)
+        if (anchor) return { previous: anchor, id: anchor, directory: input, vcs: undefined }
+        // 【无锚】bit-identical 现状 — 保证 session.ts:204 / location.ts:37 / move-session.ts:81-82 三个
+        // 非 fromDirectory 调用方在「从未开过 flag」的存量环境零行为变化
+        return { id: ID.global, directory: AbsolutePath.make(path.parse(input).root), vcs: undefined }
+      }
+
+      // git 分支:previous 链 = cached(.git/opencode) ?? 锚id;
+      // id 全序 remote > .git/opencode(cached) > 锚id > root(即 remote ?? cached ?? 锚id ?? root)。
+      // .git/opencode 与锚不一致时 cached 优先(钉死3);git init 未 commit(remote/cached/root 全无)有锚 → id=锚id 不掉 global。
+      const cachedId = yield* cached(repo.store)
+      const previous = cachedId ?? anchor
+      const id = (yield* remote(repo)) ?? cachedId ?? anchor ?? (yield* root(repo))
       return {
         previous,
         id: id ?? ID.global,
         directory: repo.directory,
         vcs: { type: "git" as const, store: repo.store },
       }
+      // FORK-END
     })
 
     const commit = Effect.fn("Project.commit")(function* (input: { store: AbsolutePath; id: ID }) {

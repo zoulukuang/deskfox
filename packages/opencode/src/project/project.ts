@@ -23,6 +23,8 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 // FORK: REQ-061 M5 三态重绑判定 [feat: stale-path-hardening]
 import { isWorktreeConfirmedMissing, keepSandboxUnlessConfirmedGone } from "./project-rebind"
+// FORK: REQ-069 非git 文件夹稳定身份 — 锚铸造/写侧编排 2026-07-05
+import { mintId, writeAnchor, appendToInfoExclude, ANCHOR_DIR } from "@opencode-ai/core/project/anchor"
 
 const ProjectVcs = Schema.Literal("git")
 
@@ -251,15 +253,77 @@ export const layer = Layer.effect(
         )
     })
 
+    // FORK-BEGIN: REQ-069 M6 锚丢失软恢复 — 反查 ProjectDirectoryTable 2026-07-05
+    // 治理: [override-blacklist: REQ-069 M6 软恢复] — 反查落 opencode 项目层 + core DB(黑名单);
+    //       复用现有 ProjectDirectoryTable(saveProjectDirectory 已在写),不新建存储、不改 sql.ts schema、
+    //       不加索引(表量级小,全表扫可接受,钉死5)。
+    // 入参 opened = 已 resolve 的真实打开目录(绝对路径)。返回:命中且 project 行仍在 → 旧 id;否则 undefined。
+    // main 优先:同目录可能落过多类型行(main/root/git_worktree),按 type=main 优先取,再回落任意类型。
+    // 该 project 行必须仍存在(inner join 语义),否则复用一个已删 id 会造出悬空引用。
+    const recoverAnchorFromDirectory = Effect.fn("Project.recoverAnchorFromDirectory")(function* (opened: string) {
+      const rows = yield* db
+        .select({ project_id: ProjectDirectoryTable.project_id, type: ProjectDirectoryTable.type })
+        .from(ProjectDirectoryTable)
+        .innerJoin(ProjectTable, eq(ProjectDirectoryTable.project_id, ProjectTable.id))
+        .where(eq(ProjectDirectoryTable.directory, opened))
+        .all()
+        .pipe(Effect.orDie)
+      if (rows.length === 0) return undefined
+      // global 是特殊哨兵 id,不参与析出恢复(saveProjectDirectory 也对 global 早退不落行,理论上不会命中,防御性排除)
+      const candidates = rows.filter((r) => r.project_id !== ProjectV2.ID.global)
+      if (candidates.length === 0) return undefined
+      const chosen = candidates.find((r) => r.type === "main") ?? candidates[0]
+      yield* Effect.logInfo("anchor recovery: reusing project id from directory table", {
+        directory: opened,
+        projectID: chosen.project_id,
+      })
+      return ProjectV2.ID.make(chosen.project_id)
+    })
+    // FORK-END
+
     const fromDirectory = Effect.fn("Project.fromDirectory")(function* (directory: string) {
       yield* Effect.logInfo("fromDirectory", { directory })
 
       const data = yield* projectV2.resolve(AbsolutePath.make(directory))
-      const worktree = data.id === ProjectV2.ID.make("global") && !data.vcs ? "/" : data.directory
+
+      // FORK-BEGIN: REQ-069 非git 文件夹稳定身份 — fromDirectory 编排(唯一显式打开项目点) 2026-07-05
+      // 治理: [override-blacklist: REQ-069 fromDirectory 编排] — fromDirectory 是 migrateProjectId/DB 持久化
+      //       所在的唯一「显式打开项目」编排点,铸造触发与 flag 门控无法外置(B4/R1 裁决);写锚主体在 core
+      //       anchor.ts(U2),此处仅编排注入。resolve 保持纯读,绝不 mint/writeAnchor。
+      //
+      // ① flag 门控(B4 裁决,编排层唯一门):flag 关时,对「!data.vcs 且 resolve 返回锚 id(非 global)」的目录,
+      //    强制按 global 处理 —— 忽略锚 id、行为=改造前(id=global、worktree="/"),不写锚、不铸 id。
+      const flagOn = flags.nonGitFolderIdentity
+      const anchorGatedOut = !flagOn && !data.vcs && data.id !== ProjectV2.ID.global
+      // ② 铸锚判定钉死:flag 开 && data.vcs === undefined && data.id === global(= 无锚非git;
+      //    git init 未 commit 的目录 data.vcs 有值,绝不触发 mint)→ mintId() → 析出行 worktree = data.directory
+      //    (真实目录,B5 裁决:建行即真实 worktree,不沿用 global 的 "/"、不依赖盘根重绑机制)。
+      const shouldMint = flagOn && data.vcs === undefined && data.id === ProjectV2.ID.global
+      // ②-M6 锚丢失软恢复(REQ-069 M6):进入 mint 判定前,先反查 ProjectDirectoryTable —— 若该打开目录
+      //    历史上曾以某 project_id(type=main 优先)落过 directory 行、且该 project 行仍在,说明「同一目录
+      //    只是锚文件丢了」(用户误删 .deskfox / 清理工具扫掉)。此时沿用旧 id(不 mint)、重写锚、发恢复日志,
+      //    旧会话不失联。未命中(全新目录 / 旧 project 行已删)→ 正常 mint。
+      //    仅全表小量级扫,不改 sql.ts schema、不加索引(钉死5)。
+      //    ⚠️ 边界(可接受,与 git previous 缓存语义一致):同一磁盘路径若已被无关新文件夹替换,反查会误复用旧 id。
+      const recoveredID = shouldMint
+        ? yield* recoverAnchorFromDirectory(AbsolutePath.make(FSUtil.resolve(directory)))
+        : undefined
+      const mintedID = shouldMint ? (recoveredID ?? mintId()) : undefined
+
+      // 有效身份:mint 时用新 id;flag 关门控出时强制 global;否则 resolve 返回的 id。
+      const effectiveID = mintedID ?? (anchorGatedOut ? ProjectV2.ID.global : ProjectV2.ID.make(data.id))
+      // 门控出时 previous 也须回退(不迁移锚 id 对应的旧行);mint 时无 previous(全新身份)。
+      const effectivePrevious = anchorGatedOut || mintedID ? undefined : data.previous
+      // 有效目录:mint 时 resolve 返 global → data.directory 是盘根 "/",此处必须用真实打开路径
+      //   (B5 裁决:析出行建行即真实 worktree)。非 mint 沿用 resolve 的 data.directory(git repo 根 / 有锚真实目录)。
+      const effectiveDir = mintedID ? AbsolutePath.make(FSUtil.resolve(directory)) : data.directory
+      // worktree 基线:global(且非git)→ 盘根 "/";析出行(mint)/有锚/git → 真实目录。
+      const worktree = effectiveID === ProjectV2.ID.global && !data.vcs ? "/" : effectiveDir
 
       // Phase 2: upsert
-      const projectID = ProjectV2.ID.make(data.id)
-      yield* migrateProjectId(data.previous ? ProjectV2.ID.make(data.previous) : undefined, projectID)
+      const projectID = effectiveID
+      yield* migrateProjectId(effectivePrevious ? ProjectV2.ID.make(effectivePrevious) : undefined, projectID)
+      // FORK-END
       const row = yield* db.select().from(ProjectTable).where(eq(ProjectTable.id, projectID)).get().pipe(Effect.orDie)
       const existing = row
         ? fromRow(row)
@@ -281,26 +345,28 @@ export const layer = Layer.effect(
       // (EACCES/网络盘离线/U盘暂拔/超时)保守当作仍存在、不重绑。原 orElseSucceed(()=>false) 会把检查
       // 出错也误判 missing → 把暂不可达的有效 worktree 改掉。判定抽到 isWorktreeConfirmedMissing 便于单测。
       // 2026-06-25 [feat: stale-path-hardening]
+      // FORK: REQ-069 — 用 effectiveDir(mint 时为真实打开路径,非 mint === data.directory)替代 data.directory,
+      //   保证析出行重绑/沙箱/迁移全部锚在真实目录而非盘根 "/"。非 mint 路径与改造前 bit-identical。2026-07-05
       const existingWorktreeMissing =
         projectID !== ProjectV2.ID.global &&
-        existing.worktree !== data.directory &&
+        existing.worktree !== effectiveDir &&
         (yield* isWorktreeConfirmedMissing(fs.exists(existing.worktree)))
       if (existingWorktreeMissing)
-        yield* Effect.logInfo("rebinding stale worktree", { from: existing.worktree, to: data.directory })
+        yield* Effect.logInfo("rebinding stale worktree", { from: existing.worktree, to: effectiveDir })
 
       const result: Info = {
         ...existing,
         worktree:
-          projectID === ProjectV2.ID.global ? worktree : existingWorktreeMissing ? data.directory : existing.worktree,
+          projectID === ProjectV2.ID.global ? worktree : existingWorktreeMissing ? effectiveDir : existing.worktree,
         vcs: data.vcs?.type ?? fakeVcs,
         time: { ...existing.time, updated: Date.now() },
       }
       if (
         projectID !== ProjectV2.ID.global &&
-        data.directory !== result.worktree &&
-        !result.sandboxes.includes(data.directory)
+        effectiveDir !== result.worktree &&
+        !result.sandboxes.includes(effectiveDir)
       )
-        result.sandboxes.push(data.directory)
+        result.sandboxes.push(effectiveDir)
       // FORK: REQ-064 加固 — 沙箱存在性检查出错(离线盘/U盘暂拔)保守保留,不再 Effect.orDie→update 500
       // (与上方 worktree 三态判定一致;判定抽到 keepSandboxUnlessConfirmedGone 便于单测)。
       // 2026-06-26 [feat: stale-path-hardening]
@@ -348,20 +414,32 @@ export const layer = Layer.effect(
         yield* db
           .update(SessionTable)
           .set({ project_id: projectID })
-          .where(and(eq(SessionTable.project_id, ProjectV2.ID.global), eq(SessionTable.directory, data.directory)))
+          .where(and(eq(SessionTable.project_id, ProjectV2.ID.global), eq(SessionTable.directory, effectiveDir)))
           .run()
           .pipe(Effect.orDie)
       }
 
       yield* saveProjectDirectory({
         projectID,
-        directory: data.directory,
+        directory: effectiveDir,
       })
 
       yield* emitUpdated(result)
+
+      // FORK-BEGIN: REQ-069 两路写锚(连续性令牌) 2026-07-05
+      // flag 开且 projectID !== global 时,git/非git 分支都写锚(effectiveDir ← projectID);写锚失败降级不抛(U2)。
+      // git 分支:现有 projectV2.commit({store,id}) 保持不变,并加 appendToInfoExclude 防污染 git status。
+      if (flagOn && projectID !== ProjectV2.ID.global) {
+        yield* writeAnchor(effectiveDir, projectID).pipe(Effect.provideService(FSUtil.Service, fs))
+      }
       if (projectID !== ProjectV2.ID.global && data.vcs?.type === "git") {
         yield* projectV2.commit({ store: data.vcs.store, id: data.id })
+        if (flagOn)
+          yield* appendToInfoExclude(data.vcs.store, `${ANCHOR_DIR}/`).pipe(
+            Effect.provideService(FSUtil.Service, fs),
+          )
       }
+      // FORK-END
       return { project: result, sandbox: data.vcs ? data.directory : worktree }
     })
 
