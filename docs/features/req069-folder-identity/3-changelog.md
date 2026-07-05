@@ -44,6 +44,12 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 真实触发(真磁盘、真 git 二进制、非 mock)PASS;全包 bun test 失败项逐一甄别为已知环境型假失败(main 上复现,memory「本地测试环境型假失败速查」在册)
 - 无渲染层改动,L2 e2e 不适用
 
+## 已知边界(超出本 REQ 范围,2026-07-05 本地测试版实测确认)
+
+- **改名后旧会话不在默认侧栏显示**(数据未丢)。本地测试版实测(产线 `fromDirectory` + 真 DB):非 git 文件夹建会话 → 磁盘改名 → 重开,**项目 id 不变、worktree 正确重绑**(本 REQ 目标达成),但默认会话侧栏按 `directory` 过滤(`session-load.ts` → `listByProject` 的 `scope!=="project"` 叠加 `eq(SessionTable.directory, …)`),而改名重绑**不改写 `session.directory`**(migrate 只动 project_id 且 id 不变=no-op)→ 旧会话(directory=旧路径)在新路径的默认视图缺席;`scope=project` 仍能查到,**数据没丢**。
+- **判定**:此「会话按目录钉死」是**上游既有行为,非本 REQ 引入**(改造前非 git 文件夹一律 global、本就按目录列会话),只是被「项目身份稳定」显性化。本 REQ 验收命题「项目身份跨改名连续」已达标,不在此扩范围。
+- **已另立需求**:[OPENCODE-PLAN REQ-072 会话侧栏改用项目维度](../../../../OPENCODE-PLAN/需求池/会话侧栏改项目维度.md)(方案 `scope=project`,须守 global 不退化成「全局大杂烩」反例),user 拍板另版处理。
+
 ## 回退方法
 
 - 合 main 前:直接删 feat 分支
