@@ -48,6 +48,7 @@ import {
   ensureDeskfoxDir,
   resolveWorkspace,
 } from "./deskfox-dir"
+import { resolveOpenIdNames } from "./contact-name-resolver"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
   flattenMergeForward,
@@ -1060,11 +1061,21 @@ export class MessagePipeline {
     // OPENCODE-PLAN/需求池/飞书合并转发子图下载-400-bug.md)→ maxImages=0:不建下载列表、
     // 不假装"已展开识别";含图时改在回复头部给用户诚实提示(步骤 11)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
+    // REQ-055:群场景解析 sender open_id → 真实昵称(graceful 回落前缀,缺 scope 不报错)
+    const withSender = event.chatType !== "p2p"
+    const senderNames = withSender
+      ? await resolveOpenIdNames(
+          items.map((i) => i.sender?.id).filter((x): x is string => !!x),
+          this.larkClient,
+        )
+      : undefined
+
     const flatten = flattenMergeForward(items, {
-      withSender: event.chatType !== "p2p",
+      withSender,
       maxSubMessages: MAX_SUB_MESSAGES,
       maxImages: 0,
       depth: 0,
+      senderNames,
     })
 
     // 5. 嵌套递归 1 层(D4) — depth=0 flatten 后,把嵌套占位替换为子内容
@@ -1074,7 +1085,8 @@ export class MessagePipeline {
       flatten.text,
       items,
       0, // 嵌套层的图同样不可下载(同 234043),不下载
-      event.chatType !== "p2p",
+      withSender,
+      senderNames,
     )
 
     // 6. 合并转发的图片【不下载】— 飞书 API 不支持读取合并转发内的资源(234043),下载必 400。
@@ -1165,6 +1177,7 @@ export class MessagePipeline {
     items: SubMessage[],
     remainingImageQuota: number,
     withSender: boolean,
+    senderNames?: Map<string, string>,
   ): Promise<{ flat: () => string; nestedCount: number }> {
     const nestedItems = items.filter((i) => i.msg_type === "merge_forward")
     if (nestedItems.length === 0) {
@@ -1185,6 +1198,7 @@ export class MessagePipeline {
           maxSubMessages: MAX_SUB_MESSAGES,
           maxImages: remaining,
           depth: MAX_NEST_DEPTH, // depth=1 — 再嵌套的占位 "深度超限"
+          senderNames, // 顶层解析的映射复用;嵌套独有的 sender 未命中则回落前缀
         })
         remaining -= subFlatten.images.length
 

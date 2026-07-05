@@ -7,13 +7,15 @@
 //   - getOrCreateSession 共用 helper:in-memory 复用 / 创建失败回落
 //   - REQ-073-⑤ 授权双端反向失效:handleExternalResolve 使卡片 settled 且不回放 opencode
 
-import { beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { FeishuAccount } from "../../core/config-schema"
 import { ChatSessionStore } from "../chat-session-store"
+import { resolveOpenIdNames } from "../contact-name-resolver"
 import { MessagePipeline } from "../message-pipeline"
+import { flattenMergeForward, type SubMessage } from "../merge-forward-flatten"
 import { PermissionCardController, type PermissionRequest } from "../permission-card"
 import { PromptDispatcher } from "../prompt-dispatcher"
 import type { ImMessageEvent } from "../wss-client"
@@ -263,5 +265,78 @@ describe("PermissionCardController.handleExternalResolve(REQ-073-⑤)", () => {
     await ctrl.handleExternalResolve("nonexistent", "reject")
     expect(ctrl.size).toBe(0)
     expect(f.opencodeReplies).toHaveLength(0)
+  })
+})
+
+// ============================================================
+// REQ-055 + REQ-073-⑥ open_id → 昵称(flatten 查表 + resolver)
+// ============================================================
+
+describe("merge-forward senderTag 查表(REQ-055)", () => {
+  function makeSub(id: string, text: string): SubMessage {
+    return { message_id: `m_${id}`, msg_type: "text", sender: { id }, body: { content: JSON.stringify({ text }) }, create_time: "1" }
+  }
+  const baseOpts = { withSender: true, maxSubMessages: 50, maxImages: 0, depth: 0 }
+
+  test("U9 nameMap 命中 → 显示真实昵称;未命中 → 回落 open_id 前 6 位", () => {
+    const items = [makeSub("ou_alice0000", "hi"), makeSub("ou_bob111111", "yo")]
+    const names = new Map([["ou_alice0000", "爱丽丝"]])
+    const r = flattenMergeForward(items, { ...baseOpts, senderNames: names })
+    expect(r.text).toContain("[爱丽丝]: hi") // 命中真名
+    expect(r.text).toContain("[ou_bob]: yo") // 未命中回落前 6 位
+  })
+
+  test("U9b 不传 senderNames → 全回落前缀(与旧行为一致)", () => {
+    const items = [makeSub("ou_alice0000", "hi")]
+    const r = flattenMergeForward(items, baseOpts)
+    expect(r.text).toContain("[ou_ali]: hi")
+  })
+
+  test("U9c p2p(withSender=false)→ 无 sender 前缀", () => {
+    const items = [makeSub("ou_alice0000", "hi")]
+    const r = flattenMergeForward(items, { ...baseOpts, withSender: false })
+    expect(r.text).toBe("hi")
+  })
+})
+
+describe("resolveOpenIdNames(REQ-055 底座)", () => {
+  const realFetch = globalThis.fetch
+  const fakeClient = { domain: "https://open.feishu.cn", tokenManager: { getTenantAccessToken: async () => "tok" } } as any
+
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  test("U7 命中 → 返 open_id→name 映射", async () => {
+    globalThis.fetch = (async () => ({
+      json: async () => ({ code: 0, data: { items: [{ open_id: "ou_a", name: "阿呆" }, { open_id: "ou_b", name: "阿瓜" }] } }),
+    })) as any
+    const m = await resolveOpenIdNames(["ou_a", "ou_b"], fakeClient)
+    expect(m.get("ou_a")).toBe("阿呆")
+    expect(m.get("ou_b")).toBe("阿瓜")
+  })
+
+  test("U8 缺 scope:code=0 但 name 空 → 不入表(caller 回落前缀)", async () => {
+    globalThis.fetch = (async () => ({
+      json: async () => ({ code: 0, data: { items: [{ open_id: "ou_a" }] } }), // name 被字段门控挡空
+    })) as any
+    const m = await resolveOpenIdNames(["ou_a"], fakeClient)
+    expect(m.size).toBe(0)
+  })
+
+  test("U8b code≠0(如缺权限)→ 空表,不抛", async () => {
+    globalThis.fetch = (async () => ({
+      json: async () => ({ code: 99991672, msg: "Access denied" }),
+    })) as any
+    const m = await resolveOpenIdNames(["ou_a"], fakeClient)
+    expect(m.size).toBe(0)
+  })
+
+  test("U8c 空输入 → 不发请求,返空", async () => {
+    let called = false
+    globalThis.fetch = (async () => { called = true; return { json: async () => ({}) } }) as any
+    const m = await resolveOpenIdNames([], fakeClient)
+    expect(m.size).toBe(0)
+    expect(called).toBe(false)
   })
 })
