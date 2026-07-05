@@ -53,11 +53,19 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **⚠️ blocker**:投资CFO app 当前**缺 `contact:user.base:readonly` scope** → 调用 code 0 但只返 `open_id/union_id/mobile_visible`,`name` 被字段级 scope 门控挡空。需 user 在飞书后台开通该 scope + 发布版本。
 - **捷径**:`GET /im/v1/chats/{chat_id}/members` **无需额外 scope 即返 name**(实测拿到「搞量化的小贝」)→ 群 session 发送者昵称(第 6 项)可优先走此接口,通讯录 API(+scope)留给合并转发任意用户(REQ-055 面)。
 
+## 第三批:昵称底座 + REQ-055 合并转发面(commit `350e8773cf`)
+
+- 新增 `contact-name-resolver.ts`:`resolveOpenIdNames(openIds, client)` — tokenManager 取 token + Bun-native fetch 打 `GET /contact/v3/users/batch?user_id_type=open_id`(SDK 此构建不暴露 contact 模块,复用 `file-uploader` 既有模式)。全程 graceful:name 非空才入表 → 缺 `contact:user.base:readonly` scope / 不在可用范围 / 请求失败 均回落 open_id 前缀。
+- `merge-forward-flatten.ts`:`FlattenOptions` 加可选 `senderNames`,`senderTag`/`renderSubMessage`/`flattenMergeForward` 透传(纯函数保持可测),命中真名否则回落前 6 位。
+- `message-pipeline.ts` `handleMergeForward`:群场景解析 sender 真名传入 flatten + 嵌套复用。
+- +7 单测(U7/U8/U8b/U8c resolver 各态 + U9/U9b/U9c flatten 查表)。**adapter 755 全量回归绿**。
+
 ## 待续
 
-- 第 6 项 + REQ-055 群/合并转发昵称:端点已钉死,待设计定夺(chat-members 优先 vs 通讯录 API)+ scope 开通;可先建带 graceful 回落的 `contact-name-resolver.ts`。
+- **REQ-073-⑥ 群 session 呈现面**(呈现落点):底座已就绪,但「群主路径把 sender 真名注入 session」这一落点会改 LLM 看到的 prompt 内容(影响 bot 行为),待 user 定夺方案后落地。可选:chat-members 免 scope 接口取名。
+- **scope 开通**(user 侧):投资CFO app 开通 `contact:user.base:readonly` + 发布 → REQ-055 合并转发真名自动点亮(现回落前缀)。
 - 第 3 项桌面续聊:待真机验证 0 前端改动。
-- 全部 🔴 真机验收(E1-E8);⚠️ 须在实际桥接账号的实例(注意 DB 隔离)。
+- 全部 🔴 真机验收(E1-E8);⚠️ 须在实际桥接账号的实例(注意本地版/正式版 DB 隔离),需重建本地版 sidecar 载入新代码。
 
 ## 回退方法
 
