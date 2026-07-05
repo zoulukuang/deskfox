@@ -30,6 +30,18 @@ export const roots = (store: SessionStore) =>
 
 export const sortedRootSessions = (store: SessionStore, now: number) => roots(store).sort(sortSessions(now))
 
+// FORK-BEGIN: REQ-072 复制项目独立展示 — 无人认领的项目会话归主分节 2026-07-05
+// scope=project 后每个目录 store 都持有全项目会话,分节靠 directory 认领去重;副本目录打开时,
+// 共享会话的 directory 指向原目录(不在任何可见分节)→ 全部被滤掉 = "打开副本看不到会话"。
+// 把可见分节都认领不了的根会话归入主分节,副本/原本双向都能看到共享会话,多工作区分节不重复。
+export const orphanRootSessions = (store: SessionStore, claimedDirs: string[], now: number) => {
+  const claimed = new Set(claimedDirs.map(pathKey))
+  return (store.session ?? [])
+    .filter((session) => !session.parentID && !session.time?.archived && !claimed.has(pathKey(session.directory)))
+    .sort(sortSessions(now))
+}
+// FORK-END
+
 export const latestRootSession = (stores: SessionStore[], now: number) =>
   stores.flatMap(roots).sort(sortSessions(now))[0]
 
@@ -109,12 +121,24 @@ export function projectForSession<T extends { id?: string; worktree: string; san
 ) {
   const direct = byID.get(session.projectID)
   if (direct) return direct
-  const directory = pathKey(session.directory)
-  return projects.find(
-    (project) =>
-      pathKey(project.worktree) === directory || project.sandboxes?.some((sandbox) => pathKey(sandbox) === directory),
-  )
+  return projectForDirectory(projects, session.directory)
 }
+
+// FORK-BEGIN: REQ-072 复制项目独立展示 — 目录→项目条目解析,自身条目优先 2026-07-05
+// 复制出的目录与原项目共享身份(同锚/同 git 首commit),后端把它登记为原项目的 sandbox 目录。
+// 若 sandbox 归属先于精确 worktree 匹配,打开副本会被解析成原项目条目 → 界面整体跳回原目录。
+// 两段式:precise worktree 条目在(openProject 为所选目录建了条目)就留在所选目录;
+// 纯 workspace sandbox(无独立条目,git worktrees 功能)仍走第二段归属原项目,不回归。
+export function projectForDirectory<T extends { worktree: string; sandboxes?: string[] }>(
+  projects: T[],
+  directory: string,
+): T | undefined {
+  const key = pathKey(directory)
+  const direct = projects.find((project) => pathKey(project.worktree) === key)
+  if (direct) return direct
+  return projects.find((project) => project.sandboxes?.some((sandbox) => pathKey(sandbox) === key))
+}
+// FORK-END
 
 export const errorMessage = (err: unknown, fallback: string) => {
   if (err && typeof err === "object" && "data" in err) {

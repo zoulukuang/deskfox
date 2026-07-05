@@ -18,7 +18,7 @@ import type { State, VcsCache } from "./types"
 import { applyReconciledSessionStatus, healClearedSessionOrphans } from "./session-status-reconcile"
 import { cmp, normalizeAgentList, normalizeProviderList } from "./utils"
 // FORK: 加 isTransientStartupError(coldstart 守卫)+ skipToken [feat: electron-replatform]
-import { formatServerError, isTransientStartupError } from "@/utils/server-errors"
+import { formatServerError, isTransientStartupError, isUnservableDirError } from "@/utils/server-errors"
 import { QueryClient, queryOptions, skipToken } from "@tanstack/solid-query"
 import { loadMcpQuery } from "../server-sync"
 import { NormalizedProviderListResponse } from "@opencode-ai/ui/context"
@@ -324,8 +324,9 @@ export async function bootstrapDirectory(input: {
       () =>
         input.queryClient.fetchQuery(loadProvidersQuery(input.scope, input.directory, input.sdk)).catch((err) => {
           // FORK: 冷启动重载竞态(sdk/后端未 ready)不弹 toast — transient,ready 后重跑即恢复 [feat: coldstart-project-reload-toast]
-          if (isTransientStartupError(err)) {
-            console.error("bootstrap providers reload (transient, suppressed)", err)
+          //   + 切到缺失目录项目(503 空 body)也不弹 [feat: project-continuity-v2026-8-4] 2026-07-05
+          if (isTransientStartupError(err) || isUnservableDirError(err)) {
+            console.error("bootstrap providers reload (transient/unservable, suppressed)", err)
             return
           }
           const project = getFilename(input.directory)
@@ -343,7 +344,7 @@ export async function bootstrapDirectory(input: {
       console.error("Failed to finish bootstrap instance", slowErrs[0])
       // FORK: 冷启动重载竞态全是 transient(连接级不可达 / Missing queryFn)时不弹 toast —
       // ready 后重跑即恢复;只有含真错才 surface [feat: coldstart-project-reload-toast] 2026-06-09
-      const realErr = slowErrs.find((e) => !isTransientStartupError(e))
+      const realErr = slowErrs.find((e) => !isTransientStartupError(e) && !isUnservableDirError(e))
       if (realErr) {
         const project = getFilename(input.directory)
         showToast({

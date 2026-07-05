@@ -38,6 +38,8 @@ type Deps = {
   resolveAppPath: (appName: string) => Promise<string | null>
   // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
   pathExists: (target: string) => Promise<PathProbeResult>
+  // FORK: REQ-072 改名 relocate — 扫兄弟目录 .deskfox/id 找项目改名后的新位置 [feat: project-continuity-v2026-8-4]
+  findRelocatedProject: (missingDir: string, id: string) => Promise<string | null>
   updater: UpdaterController
   showUpdater: () => Promise<void> | void
   setBackgroundColor: (color: string) => void
@@ -64,6 +66,10 @@ export function registerIpcHandlers(deps: Deps) {
   ipcMain.handle("check-app-exists", (_event: IpcMainInvokeEvent, appName: string) => deps.checkAppExists(appName))
   // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
   ipcMain.handle("path-exists", (_event: IpcMainInvokeEvent, target: string) => deps.pathExists(target))
+  // FORK: REQ-072 改名 relocate [feat: project-continuity-v2026-8-4]
+  ipcMain.handle("find-relocated-project", (_event: IpcMainInvokeEvent, missingDir: string, id: string) =>
+    deps.findRelocatedProject(missingDir, id),
+  )
   ipcMain.handle("resolve-app-path", (_event: IpcMainInvokeEvent, appName: string) => deps.resolveAppPath(appName))
   ipcMain.handle("updater-subscribe", (event) => {
     const id = event.sender.id

@@ -87,7 +87,7 @@ import { useQueries } from "@tanstack/solid-query"
 import { useQueryOptions } from "@/context/server-sync"
 import { pathKey } from "@/utils/path-key"
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { displayName } from "@/pages/layout/helpers"
+import { displayName, projectForDirectory as resolveProjectForDirectory } from "@/pages/layout/helpers"
 
 interface PromptInputProps {
   class?: string
@@ -825,9 +825,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     renderEditorWithCursor(input)
   }
 
+  // FORK: REQ-072/071 会话切换草稿再水合 — 依赖也纳入 prompt.ready() 的 resolve 信号。
+  // 上游自带 bug(merge-base be227503af 与 upstream/dev 逐点核对未修):切项目时 keyed
+  // <Show> 拆掉整棵子树 → PromptProvider 重挂 → 新 PromptSession 走 makePersisted 异步读盘。
+  // 编辑器 reconcile 效应初次跑在 ready resolve 前拿到 DEFAULT(空),而 store 随后被异步水合
+  // 成草稿时,原 on 只跟 prompt.current() —— 若水合的 store 变更未触发重跑(重挂特有的时序/
+  // 响应式失效,冷启动同值却能灌回),草稿就永久不回填编辑器 DOM。把 ready 的布尔纳入依赖:
+  // ready false→true(水合完成)强制再 reconcile 一次,用已水合的 current 灌回,与冷启动路径统一。
+  // 不动 keyed 结构、不改持久化格式(存储写/读已证实正常)。修复拟回贡上游。 2026-07-05
   createEffect(
     on(
-      () => prompt.current(),
+      () => (prompt.ready()(), prompt.current()),
       (parts) => {
         if (composing()) return
         reconcile(parts.filter((part) => part.type !== "image"))
@@ -1406,10 +1414,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const projects = createMemo(() => layout.projects.list())
   const projectForDirectory = (directory: string | undefined) => {
     if (!directory) return
-    const key = pathKey(directory)
-    return projects().find(
-      (project) => pathKey(project.worktree) === key || project.sandboxes?.some((sandbox) => pathKey(sandbox) === key),
-    )
+    // FORK: REQ-072 复制项目独立展示 — 自身条目优先于 sandbox 归属(逻辑见 helpers.projectForDirectory)2026-07-05
+    return resolveProjectForDirectory(projects(), directory)
   }
   const selectedProject = createMemo(() => projectForDirectory(sdk.directory))
   const projectResults = createMemo(() => {

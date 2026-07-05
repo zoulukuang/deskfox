@@ -41,7 +41,7 @@ import {
 // FORK: 大文件预览统一防护 — L1 size pre-check [feat: large-file-preview-guard] 2026-05-21
 import { invoke } from "@/utils/native"
 import { categoryOf, SIZE_LIMITS } from "@/utils/file-size-guard"
-import { isBackendUnreachableError, isRetryableListError } from "@/utils/server-errors"
+import { isBackendUnreachableError, isRetryableListError, isUnservableDirError } from "@/utils/server-errors"
 
 export type { FileSelection, SelectedLineRange, FileViewState, FileState }
 export { selectionFromLines }
@@ -112,6 +112,9 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
         //   listWithRetry 已尽力重试,仍失败则交后续 list/看门狗自愈,避免启动一闪而过的红条
         //   [feat: coldstart-toast-race / coldstart-list-500-retry] 2026-06-08 / 2026-06-13
         if (isRetryableListError(message)) return
+        // FORK: 目录已删/改名走(切到缺失目录项目)→ /file 503 空 body。文件树已就地显失败占位,
+        //   不再右下角弹冗余原始 503 toast(每次切项目都弹)[feat: project-continuity-v2026-8-4] 2026-07-05
+        if (isUnservableDirError(message)) return
         showToast({
           variant: "error",
           title: language.t("toast.file.listFailed.title"),

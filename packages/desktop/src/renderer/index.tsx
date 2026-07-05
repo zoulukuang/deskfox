@@ -288,6 +288,11 @@ const createPlatform = (): Platform => {
       return window.api.pathExists(target)
     },
 
+    // FORK: REQ-072 改名 relocate — 扫兄弟目录 .deskfox/id 找项目新位置 [feat: project-continuity-v2026-8-4]
+    findRelocatedProject: async (missingDir: string, id: string) => {
+      return window.api.findRelocatedProject(missingDir, id)
+    },
+
     async readClipboardImage() {
       const image = await window.api.readClipboardImage().catch(() => null)
       if (!image) return null

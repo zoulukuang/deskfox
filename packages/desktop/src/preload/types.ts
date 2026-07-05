@@ -59,6 +59,8 @@ export type ElectronAPI = {
   resolveAppPath: (appName: string) => Promise<string | null>
   // FORK: REQ-068 路径存在性/可达性探测 [feat: stale-path-hardening]
   pathExists: (target: string) => Promise<PathProbeResult>
+  // FORK: REQ-072 改名 relocate — 扫兄弟目录 .deskfox/id 找项目新位置 [feat: project-continuity-v2026-8-4]
+  findRelocatedProject: (missingDir: string, id: string) => Promise<string | null>
   storeGet: (name: string, key: string) => Promise<string | null>
   storeSet: (name: string, key: string, value: string) => Promise<void>
   storeDelete: (name: string, key: string) => Promise<void>

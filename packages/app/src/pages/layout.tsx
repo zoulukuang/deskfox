@@ -76,6 +76,8 @@ import {
   effectiveWorkspaceOrder,
   errorMessage,
   latestRootSession,
+  orphanRootSessions,
+  projectForDirectory,
   sortedRootSessions,
 } from "./layout/helpers"
 import {
@@ -528,15 +530,12 @@ export default function Layout(props: ParentProps) {
   const currentProject = createMemo(() => {
     const directory = currentDir()
     if (!directory) return
-    const key = pathKey(directory)
 
     const projects = layout.projects.list()
 
-    const sandbox = projects.find((p) => p.sandboxes?.some((item) => pathKey(item) === key))
-    if (sandbox) return sandbox
-
-    const direct = projects.find((p) => pathKey(p.worktree) === key)
-    if (direct) return direct
+    // FORK: REQ-072 复制项目独立展示 — 自身条目优先于 sandbox 归属(逻辑见 projectForDirectory)2026-07-05
+    const resolved = projectForDirectory(projects, directory)
+    if (resolved) return resolved
 
     const [child] = serverSync.child(directory, { bootstrap: false })
     const id = child.project
@@ -552,16 +551,39 @@ export default function Layout(props: ParentProps) {
   // FORK: REQ-068 — 启动自动加载默认项目前,先探测目录是否存在/可达。不存在/不可达则不进 openProject
   // (否则首请求 session.list 静默返 200 空 → 空白无引导,触达 /file 才 500),按模态清记录 + 提示 + 落选择器。
   // 2026-06-25 [feat: stale-path-hardening]
-  const ensureProjectAvailable = async (directory: string): Promise<boolean> => {
+  // FORK: REQ-072 — 项目文件夹改名/挪位(同父目录内)后,旧路径 stale。用已持久化的项目 id 扫兄弟目录
+  // .deskfox/id 锚找到新位置,就地 relocate 条目并返回新路径。找不到(跨父目录挪 / 无 id / 非桌面)返 null。
+  const tryRelocate = async (directory: string): Promise<string | null> => {
+    const find = platform.findRelocatedProject
+    if (!find) return null
+    // 拿该 stale 路径的项目 id:优先后端权威项目列表(serverSync.data.project,worktree=改名前旧路径、
+    // id=真实身份),回退前端持久化(StoredProject.id,跨重启兜底)。用后端 id 保证与磁盘锚一致(锚也写的这个 id)。
+    const id =
+      serverSync.data.project.find((p) => p.worktree === directory)?.id ??
+      server.projects.list().find((p) => p.worktree === directory)?.id
+    if (!id || id === "global") return null
+    const relocated = await find(directory, id).catch(() => null)
+    if (!relocated) return null
+    server.projects.relocate(directory, relocated)
+    return relocated
+  }
+
+  // 返回「实际应打开的目录」(可能因改名 relocate 到新路径),或 null(不可用)。
+  const ensureProjectAvailable = async (directory: string): Promise<string | null> => {
     const status = await checkProjectAvailable(platform.pathExists, directory)
-    if (status.available) return true
+    if (status.available) return directory
+    // FORK: REQ-072 — missing(目录被改名/移动)先试锚扫描 relocate;成功则开新路径,不 forget、不弹错。
+    if (status.reason === "missing") {
+      const relocated = await tryRelocate(directory)
+      if (relocated) return relocated
+    }
     if (status.forget) server.projects.forget(directory)
     showToast({
       variant: "error",
       title: language.t(status.titleKey),
       description: language.t(status.descKey, { directory }),
     })
-    return false
+    return null
   }
 
   const [autoselecting] = createResource(async () => {
@@ -574,13 +596,15 @@ export default function Layout(props: ParentProps) {
 
     if (list.length === 0) {
       if (!last) return
-      if (!(await ensureProjectAvailable(last))) return
-      await openProject(last, true)
+      const target = await ensureProjectAvailable(last) // FORK: REQ-072 可能 relocate 到新路径
+      if (!target) return
+      await openProject(target, true)
     } else {
       const next = list.find((project) => project.worktree === last) ?? list[0]
       if (!next) return
-      if (!(await ensureProjectAvailable(next.worktree))) return
-      await openProject(next.worktree, true)
+      const target = await ensureProjectAvailable(next.worktree) // FORK: REQ-072 可能 relocate 到新路径
+      if (!target) return
+      await openProject(target, true)
     }
   })
 
@@ -633,10 +657,8 @@ export default function Layout(props: ParentProps) {
     const projects = layout.projects.list()
     for (const [directory, expanded] of Object.entries(store.workspaceExpanded)) {
       if (!expanded) continue
-      const key = pathKey(directory)
-      const project = projects.find(
-        (item) => pathKey(item.worktree) === key || item.sandboxes?.some((sandbox) => pathKey(sandbox) === key),
-      )
+      // FORK: REQ-072 复制项目独立展示 — 统一走 projectForDirectory(自身条目优先)2026-07-05
+      const project = projectForDirectory(projects, directory)
       if (!project) continue
       if (project.vcs === "git" && layout.sidebar.workspaces(project.worktree)()) continue
       setStore("workspaceExpanded", directory, false)
@@ -654,6 +676,10 @@ export default function Layout(props: ParentProps) {
       const dirSessions = sortedRootSessions(dirStore, now)
       result.push(...dirSessions)
     }
+    // FORK: REQ-072 复制项目独立展示 — 可见分节都认领不了的项目会话(如共享自原目录的)归主分节,
+    // 否则打开副本目录看不到共享会话(逻辑见 helpers.orphanRootSessions)。2026-07-05
+    const [primaryStore] = serverSync.child(dirs[0], { bootstrap: false })
+    result.push(...orphanRootSessions(primaryStore, dirs, now))
     return result
   })
 
@@ -1250,9 +1276,8 @@ export default function Layout(props: ParentProps) {
 
   function projectRoot(directory: string) {
     const key = pathKey(directory)
-    const project = layout.projects
-      .list()
-      .find((item) => pathKey(item.worktree) === key || item.sandboxes?.some((sandbox) => pathKey(sandbox) === key))
+    // FORK: REQ-072 复制项目独立展示 — 自身条目优先,副本目录的 root 是它自己而非原项目 worktree 2026-07-05
+    const project = projectForDirectory(layout.projects.list(), directory)
     if (project) return project.worktree
 
     const known = Object.entries(store.workspaceOrder).find(
@@ -1300,6 +1325,14 @@ export default function Layout(props: ParentProps) {
 
   async function navigateToProject(directory: string | undefined) {
     if (!directory) return
+    // FORK: REQ-072 — 切到已改名/挪位(stale)项目时,静默 relocate 到新路径。仅在「确切缺失」时才扫锚,
+    // 正常项目只多一次快速 stat、行为不变。此处**不 forget/不 toast**(那些交给 autoselect/openProject 的
+    // ensureProjectAvailable),避免与 autoselect→openProject→navigateToProject 调用链重复 forget 打断好路径。
+    const probe = await checkProjectAvailable(platform.pathExists, directory)
+    if (!probe.available && probe.reason === "missing") {
+      const relocated = await tryRelocate(directory)
+      if (relocated) directory = relocated
+    }
     const root = projectRoot(directory)
     server.projects.touch(root)
     const project = layout.projects.list().find((item) => item.worktree === root)
@@ -1413,6 +1446,18 @@ export default function Layout(props: ParentProps) {
 
     handleDeepLinks(drainPendingDeepLinks(window))
     makeEventListener(window, deepLinkEvent, handler as EventListener)
+  })
+
+  // FORK: REQ-072 复制项目独立展示 — 折叠竞态自愈:旧版把副本目录误登记进 sandboxes,reconciler 会在
+  // 实例 boot 前把刚打开的副本条目折叠掉;boot 后实例上报自身 worktree === 当前路由目录(= 该目录本身
+  // 就是项目根)时,条目应存在 → 补回。后端打开时已清误登记,此效应只在首次打开旧污染行时兜竞态。2026-07-05
+  createEffect(() => {
+    const directory = currentDir()
+    if (!directory) return
+    const [child] = serverSync.child(directory, { bootstrap: false })
+    if (child.path?.worktree !== directory) return
+    if (layout.projects.list().some((p) => pathKey(p.worktree) === pathKey(directory))) return
+    layout.projects.open(directory)
   })
 
   async function renameProject(project: LocalProject, next: string) {

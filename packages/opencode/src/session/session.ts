@@ -31,6 +31,8 @@ import { PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { MessageV2 } from "./message-v2"
 import type { InstanceContext } from "../project/instance-context"
+// FORK: REQ-072 follow-up — session.directory 自愈兜底(见 list 内调用点)2026-07-05
+import { healStaleSessionDirectories } from "../project/session-dir-heal"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
 import { ProjectV2 } from "@opencode-ai/core/project"
@@ -587,10 +589,16 @@ export const layer: Layer.Layer<
 
     const list = Effect.fn("Session.list")(function* (input?: ListInput) {
       const ctx = yield* InstanceState.context
+      // FORK: REQ-072 会话侧栏项目维度 — 按项目身份门控 scope=project(逻辑见 gateProjectScope)
+      const gated = gateProjectScope(input, { projectID: ctx.project.id, directory: ctx.directory })
+      // FORK: REQ-072 follow-up — 改名后 session.directory 自愈兜底(实例缓存跳过 fromDirectory 的
+      // 改名往返场景;gated.scope==="project" 即非 global,收敛后 ≈ 一次 groupBy)。编排见 session-dir-heal.ts。
+      if (gated?.scope === "project")
+        yield* healStaleSessionDirectories({ db, projectID: ctx.project.id, worktree: ctx.worktree })
       return yield* listByProject(db, {
         projectID: ctx.project.id,
         experimentalWorkspaces: flags.experimentalWorkspaces,
-        ...input,
+        ...gated,
       })
     })
 
@@ -988,6 +996,25 @@ const cancelBackgroundJobs = Effect.fn("Session.cancelBackgroundJobs")(function*
     { concurrency: "unbounded", discard: true },
   )
 })
+
+// FORK-BEGIN: REQ-072 会话侧栏项目维度 — global 门控(纯函数,便于 Logic 清单单测)
+//   侧栏显式传 scope=project(见 packages/app session-load.ts)。有真实身份(git remote/
+//   commit 或非 git 锚 .deskfox/id,projectID≠global)→ 原样按 project_id 列,改名/挪位/复制
+//   均跟随(不变量);global 哨兵(无独立身份)→ 把 scope 降级为 undefined,回落 directory 过滤,
+//   守「全局会话大杂烩」反例。门控落此:handler(handlers/session.ts)拿不到 resolve 后的
+//   projectID,只有 InstanceState.context 才握 ctx.project.id + ctx.directory。
+//   注:handler 在 scope=project 时把 directory 置 undefined(上游 #25215),故 global 分支
+//   须回填 ctx.directory,否则 directory 过滤失效退化成大杂烩(见测试 TC-B4)。
+export function gateProjectScope(
+  input: ListInput | undefined,
+  ctx: { projectID: ProjectV2.ID; directory: string },
+): ListInput | undefined {
+  if (input?.scope === "project" && ctx.projectID === ProjectV2.ID.global) {
+    return { ...input, scope: undefined, directory: input.directory ?? ctx.directory }
+  }
+  return input
+}
+// FORK-END
 
 function listByProject(
   db: Database.Interface["db"],

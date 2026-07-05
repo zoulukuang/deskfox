@@ -98,6 +98,40 @@ describe("session.list", () => {
     { git: true },
   )
 
+  // REQ-072 会话侧栏项目维度:scope=project 端到端 wiring(list → gateProjectScope → listByProject)
+  // git 项目(真实 project_id)下,不同子目录的会话应全部返回,证明「按项目身份不按目录」不变量。
+  it.instance(
+    "REQ-072: scope=project ignores directory for real project identity (cross-directory follow)",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        yield* Effect.promise(() => mkdir(path.join(test.directory, "packages", "opencode"), { recursive: true }))
+        yield* Effect.promise(() => mkdir(path.join(test.directory, "packages", "app"), { recursive: true }))
+
+        const current = yield* withSession({ title: "current" }).pipe(
+          provideInstance(path.join(test.directory, "packages", "opencode")),
+        )
+        const sibling = yield* withSession({ title: "sibling" }).pipe(
+          provideInstance(path.join(test.directory, "packages", "app")),
+        )
+
+        // 无 scope:仅命中当前目录(对照 — 上游既有 directory 维度)
+        const dirOnly = (yield* SessionNs.Service.use((session) =>
+          session.list({ directory: path.join(test.directory, "packages", "opencode") }),
+        )).map((s) => s.id)
+        expect(dirOnly).toContain(current.id)
+        expect(dirOnly).not.toContain(sibling.id)
+
+        // scope=project:真实身份 → 忽略 directory,跨子目录全部返回(改名/挪位跟随的根据)
+        const projectScoped = (yield* SessionNs.Service.use((session) =>
+          session.list({ scope: "project", directory: path.join(test.directory, "packages", "opencode") }),
+        )).map((s) => s.id)
+        expect(projectScoped).toContain(current.id)
+        expect(projectScoped).toContain(sibling.id)
+      }),
+    { git: true },
+  )
+
   itWorkspaces.instance(
     "filters by directory when experimental workspaces are enabled",
     () =>

@@ -137,7 +137,9 @@ describe("REQ-069 fromDirectory non-git folder identity orchestration", () => {
 
   // ─── ③ 复制对齐 git:副本同锚共享,worktree/sandboxes 钉死 ─────────────────────
   describe("copy shares identity (aligns with git double-clone)", () => {
-    itOn.live("flag ON: copying a minted folder shares id; original worktree kept, copy → sandboxes", () =>
+    // FORK: REQ-072 复制项目独立展示改判 — 副本自身是身份根,不再登记 sandboxes(否则前端折叠跳回原目录);
+    // 独立展示 + session 因同 id 共享。详见 project-copy-standalone.test.ts 全景用例。2026-07-05
+    itOn.live("flag ON: copying a minted folder shares id; original worktree kept, copy stays standalone", () =>
       Effect.gen(function* () {
         const project = yield* Project.Service
         const root = yield* tmpdirScoped()
@@ -154,10 +156,10 @@ describe("REQ-069 fromDirectory non-git folder identity orchestration", () => {
         yield* Effect.promise(() => $`cp -R ${orig} ${copy}`.quiet())
 
         const second = yield* project.fromDirectory(copy)
-        // 三者钉死:同 id / worktree 保持首开路径(不重绑,orig 仍在)/ 副本路径进 sandboxes
+        // 三者钉死:同 id / worktree 保持首开路径(不重绑,orig 仍在)/ 副本独立不进 sandboxes(REQ-072)
         expect(second.project.id).toBe(id)
         expect(second.project.worktree).toBe(orig)
-        expect(second.project.sandboxes).toContain(copy)
+        expect(second.project.sandboxes).not.toContain(copy)
         expect(second.project.worktree).not.toBe(copy)
       }),
     )

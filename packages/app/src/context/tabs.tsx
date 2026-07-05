@@ -1,6 +1,4 @@
-import type { Session } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { base64Encode } from "@opencode-ai/core/util/encode"
 import { createStore, produce } from "solid-js/store"
 import { Persist, persisted, removePersisted, draftPersistedKeys } from "@/utils/persist"
 import { ServerConnection, useServer } from "./server"
@@ -34,13 +32,8 @@ export const tabHref = (tab: Tab) =>
 
 export const tabKey = (tab: Tab) => (tab.type === "draft" ? `draft:${tab.draftID}` : `${tab.server}\n${tabHref(tab)}`)
 
-export function sessionHasOpenTab(tabs: Tab[], server: ServerConnection.Key, session: Session) {
-  const dirBase64 = base64Encode(session.directory)
-  return tabs.some(
-    (tab) =>
-      tab.type === "session" && tab.server === server && tab.dirBase64 === dirBase64 && tab.sessionId === session.id,
-  )
-}
+// FORK: REQ-072 sessionHasOpenTab 抽到纯模块 tabs-dedup.ts 便于单测(实现+根因见该文件) 2026-07-05
+export { sessionHasOpenTab } from "./tabs-dedup"
 
 export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
   name: "Tabs",

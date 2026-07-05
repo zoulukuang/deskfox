@@ -18,6 +18,9 @@ import {
   homeProjectDirectories,
   homeSessionServerStatus,
   latestRootSession,
+  orphanRootSessions,
+  projectForDirectory,
+  projectForSession,
   toggleHomeProjectSelection,
 } from "./helpers"
 import { pathKey } from "@/utils/path-key"
@@ -317,5 +320,75 @@ describe("layout workspace helpers", () => {
     expect(errorMessage({ data: { message: "boom" } }, "fallback")).toBe("boom")
     expect(errorMessage(new Error("broken"), "fallback")).toBe("broken")
     expect(errorMessage("unknown", "fallback")).toBe("fallback")
+  })
+})
+
+// FORK: REQ-072 复制项目独立展示 — projectForDirectory 解析优先级
+describe("projectForDirectory", () => {
+  const original = {
+    id: "shared-id",
+    worktree: "/Users/u/Projects/original",
+    sandboxes: ["/Users/u/copy"],
+    expanded: true,
+  }
+  const copy = { id: "shared-id", worktree: "/Users/u/copy", sandboxes: ["/Users/u/copy"], expanded: true }
+
+  test("自身条目优先:副本目录有独立条目时解析到副本,不跳回原项目", () => {
+    // 副本被后端登记为原项目 sandbox;两个条目都在(顺序不限)
+    expect(projectForDirectory([original, copy], "/Users/u/copy")).toBe(copy)
+    expect(projectForDirectory([copy, original], "/Users/u/copy")).toBe(copy)
+  })
+
+  test("sandbox 兜底:纯 workspace sandbox(无独立条目)仍归属原项目", () => {
+    expect(projectForDirectory([original], "/Users/u/copy")).toBe(original)
+  })
+
+  test("原项目路径解析不受副本条目影响", () => {
+    expect(projectForDirectory([copy, original], "/Users/u/Projects/original")).toBe(original)
+  })
+
+  test("未命中返回 undefined", () => {
+    expect(projectForDirectory([original, copy], "/Users/u/elsewhere")).toBeUndefined()
+  })
+
+  test("projectForSession 目录兜底同样自身条目优先", () => {
+    const s = session({ id: "ses_x", directory: "/Users/u/copy", projectID: "unknown-id" as never })
+    expect(projectForSession(s, [original, copy])).toBe(copy)
+  })
+})
+
+// FORK: REQ-072 复制项目独立展示 — 无人认领会话归主分节
+describe("orphanRootSessions", () => {
+  const now = 1000000
+  const mk = (id: string, directory: string, extra: Partial<Session> = {}) =>
+    session({ id, directory, ...extra })
+
+  test("共享自原目录的会话(不在可见分节)归主分节显示", () => {
+    const store = {
+      session: [mk("ses_orig", "/Users/u/Projects/original"), mk("ses_here", "/Users/u/copy")],
+      path: { directory: "/Users/u/copy" },
+    }
+    const orphans = orphanRootSessions(store, ["/Users/u/copy"], now)
+    expect(orphans.map((s) => s.id)).toEqual(["ses_orig"])
+  })
+
+  test("被可见分节认领的会话不重复出现", () => {
+    const store = {
+      session: [mk("ses_a", "/w"), mk("ses_b", "/w/sandbox")],
+      path: { directory: "/w" },
+    }
+    expect(orphanRootSessions(store, ["/w", "/w/sandbox"], now)).toEqual([])
+  })
+
+  test("子会话与已归档会话不进主分节", () => {
+    const store = {
+      session: [
+        mk("ses_child", "/elsewhere", { parentID: "ses_x" as never }),
+        mk("ses_archived", "/elsewhere", { time: { created: 1, updated: 2, archived: 3 } as never }),
+        mk("ses_live", "/elsewhere"),
+      ],
+      path: { directory: "/w" },
+    }
+    expect(orphanRootSessions(store, ["/w"], now).map((s) => s.id)).toEqual(["ses_live"])
   })
 })

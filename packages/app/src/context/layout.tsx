@@ -485,6 +485,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           const root = rootFor(project.worktree)
           if (root === project.worktree) continue
 
+          // FORK: REQ-072 复制项目独立展示 — 实例已实证该目录自身就是项目根(副本自带 .git/锚,
+          // /path 上报 worktree === 目录)→ 不折叠进原项目;旧版误登记的 sandboxes 由后端打开时自愈。2026-07-05
+          const [child] = serverSync.child(project.worktree, { bootstrap: false })
+          if (child.path?.worktree === project.worktree) continue
+
           server.projects.close(project.worktree)
 
           if (!seen.has(root)) {
@@ -498,6 +503,16 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     })
 
     const enriched = createMemo(() => server.projects.list().map(enrich))
+
+    // FORK: REQ-072 — 项目打开后其 id 已知(enrich 从 childStore.project + 后端 metadata 合出),
+    // 回写持久化到 StoredProject.id。改名后旧文件夹消失读不到锚,靠这个记住身份做兄弟目录锚扫描 relocate。
+    // setId 内部仅在 id 变化时写,避免反复 setStore。 [feat: project-continuity-v2026-8-4] 2026-07-05
+    createEffect(() => {
+      for (const project of enriched()) {
+        if (project.id && project.id !== "global") server.projects.setId(project.worktree, project.id)
+      }
+    })
+
     const list = createMemo(() => {
       const projects = enriched()
       return projects.map((project) => {

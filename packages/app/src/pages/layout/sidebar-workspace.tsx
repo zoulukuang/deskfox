@@ -20,7 +20,7 @@ import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
 import { pathKey } from "@/utils/path-key"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
-import { sortedRootSessions } from "./helpers"
+import { orphanRootSessions, sortedRootSessions } from "./helpers"
 import { useIsFetching } from "@tanstack/solid-query"
 
 type InlineEditorComponent = (props: {
@@ -467,7 +467,14 @@ export const LocalWorkspace = (props: {
     return { store, setStore }
   })
   const slug = createMemo(() => base64Encode(props.project.worktree))
-  const sessions = createMemo(() => sortedRootSessions(workspace().store, props.sortNow()))
+  // FORK: REQ-072 复制项目独立展示 — 副本目录 store 经 scope=project 持有共享会话,但这些会话的
+  //   directory 指向原目录,sortedRootSessions 的 directory 精确匹配会把它们滤掉 → "打开副本看不到会话"。
+  //   补 orphanRootSessions 认领本目录分节之外的项目会话(逻辑见 helpers),副本/原本双向共享会话都可见。2026-07-05
+  const sessions = createMemo(() => {
+    const store = workspace().store
+    const now = props.sortNow()
+    return [...sortedRootSessions(store, now), ...orphanRootSessions(store, [props.project.worktree], now)]
+  })
   const count = createMemo(() => sessions()?.length ?? 0)
   const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.project.worktree)))
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
