@@ -31,4 +31,5 @@ U1/U6 无依赖可并行;U4 汇聚 U2/U3/U6;U5 收尾。
 
 ## 踩坑记录
 
-(开发中追加)
+- **2026-07-05 phase2 跑完(wf_fdb10277-360)**:6 单元按拓扑序全过对抗验收;opus 集成终关全绿(交付测试 102/102、触及包全量失败项全部甄别为 pre-existing 环境型假失败并在 main 复现佐证、turbo fork 范围 22 包 typecheck 绿、pre-push backstop 三包绿、真磁盘真实触发 PASS)。主控独立复跑 102 测试 + 双包 tsgo 二次确认。
+- **R4 squash 落地**:6 笔单元 commit(带各自 override 标)压成 `75ca4f573d` 单笔,树与 squash 前逐字节一致(`git diff` 空);临时备份指针 `req069-presquash-backup`,合 main 后删。
