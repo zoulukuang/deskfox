@@ -176,6 +176,18 @@ user 转发「笑南与李哲的会话记录」合并卡片到「投资CFO」bot
 
 **测试**:+4 单测(U3g 竞态复现:gen 迟到覆盖→轮询补回前缀不停在无前缀 / U3h 轮询到头 hint 兜底 / U14 群昵称回落 open_id 前缀 / U14b p2p 返 null);更新 1 处群 mention 测试断言(群消息现带发言人前缀)。adapter **775 全量 0 fail** + typecheck 绿。
 
+## bug 修复:P2 桌面授权 404 —— 方案 A 优雅降级(真机复现 + CDP 自测通过)
+
+真机复现(测试用的一个群 + InveM🐼-Mac):桌面 GUI 点权限卡「允许一次」→ 弹「请求失败 Permission request not found: per_xxx」;同一条在飞书点则成功。
+
+**根因(实证钉死)**:opencode 是**每个目录 instance 一个独立 server + 独立 permission store**(内存态,证据:进程环境里 ~90 个不同 `OPENCODE_SERVER_PASSWORD`;`permission/index.ts` pending 走 `InstanceState.make`)。而飞书 plugin 在 `plugin.ts:99` 写死「第一个 instance 的 client 用作所有 pipeline」→ 飞书权限创建在 plugin 宿主 instance;桌面 GUI 按 session 目录连的是另一个 instance server → 桌面 respond 打到的 pending 里没这条 → 404。`permission.asked` 是全局广播,所以卡片能在桌面**显示**、但**响应**打错 instance。飞书自己 in-process client resolve 命中同 instance → ✅。
+
+**方案 A(user 拍板,先治标)**:桌面 GUI `decide` 的 `.catch` 对 "Permission request not found" **静默降级**,不弹吓人的错误 toast(权限本应在发起端飞书确认,且会随 `permission.replied` 全局事件让桌面卡片自动消失)。改 `packages/app/src/pages/session/composer/session-composer-state.ts` 一处 `.catch`(+FORK marker,~6 行)。
+
+**CDP 端到端自测通过**:重建本地版(renderer 进 asar)→ simulate 触发真权限 → GUI live 收事件弹卡 → 点「允许一次」→ **无错误 toast**(修前有);该权限仍 pending(证明桌面 404 跨-instance 路径确被走到、被静默吞掉)。截图 `/tmp/verify_before.png`(卡片在)/`/tmp/verify_after.png`(点后无 toast)。
+
+**未做(方案 B,follow-up)**:让桌面能**真授权**飞书权限,需飞书 pipeline 改用每账号目录 scoped 的 client(让权限落在 GUI 能到的 instance),触及飞书桥核心 client 路由、稳定性风险高,`稳定 > 一切` 下另立结构改任务。现形态:**权限统一在飞书授**,桌面不再报错、卡片正常消失。
+
 ## 待办(仅剩流程)
 
 - **P2 桌面授权 404**(飞书 resolve 后桌面 GUI 卡片不撤 → 再点报 "Permission request not found"):疑 opencode 原生 GUI 未响应外部 `permission.replied` 自动撤卡(纯 opencode GUI+TUI 双端也会),不在 adapter 修复范围,待查上游 GUI。

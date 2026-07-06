@@ -82,6 +82,13 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
       .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
+        // FORK: 飞书桥接权限跨-instance 优雅降级 2026-07-06
+        // opencode 每个目录 instance 有独立 permission store;飞书桥接的权限创建在 plugin 宿主
+        // instance,而本 GUI 按 session 目录连的是另一个 instance server → 这里 respond 会返
+        // "Permission request not found"(权限不在本 instance 的 pending 里)。这是良性情况:
+        // 权限本应在发起端(飞书)确认,且会随 permission.replied 全局事件让本卡片自动消失。
+        // 故对该 NotFound 静默降级,不弹吓人的错误 toast(避免用户误以为授权坏了)。
+        if (/permission request not found/i.test(description)) return
         showToast({ title: language.t("common.requestFailed"), description })
       })
       .finally(() => {
