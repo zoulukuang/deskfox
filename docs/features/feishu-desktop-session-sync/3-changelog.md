@@ -146,6 +146,25 @@ user 反馈静态标题 `[botName] Feishu p2p/<chatId尾8位>` 的 chatId 尾号
 - +6 单测(U3/U3b-U3f)。adapter **768 全量绿**。
 - ⚠️ **存量旧会话不回改**(已是非默认标题,`ensureBotTitlePrefix` 跳过);仅新建会话享描述性标题。如需批量修旧标题另说。
 
+## bug-repro:合并转发发言人昵称在两条路径都没识别出来(user 真机反馈,截图 + session `ses_0ca151cd9ffe6N6nN9ENlNBTV3`)
+
+user 转发「笑南与李哲的会话记录」合并卡片到「投资CFO」bot 后追问,发现**没把发言人昵称/id 识别出来,未达需求目标**。dump session 定位到两条独立 bug:
+
+- **问题①(引用/回复路径,内容整个丢失)**:引用那张合并卡片再追问时,`fetchParentMessageText`(message-pipeline.ts)对 `merge_forward` 类型父消息只走 fallback `return [${msgType}]` → 吐字面量 `[merge_forward]` 空壳,**从不调 `fetchMergeForwardItems` 展开子消息**。session `[4]/[6]` 实证 LLM 收到的就是 `[引用原文]\n[merge_forward]\n[/引用原文]`,bot 读不到内容还误判"转发没粘上"。
+- **问题②(直接转发路径,昵称被剥光)**:`withSender = event.chatType !== "p2p"`。跟 bot 单聊(p2p)时 `withSender=false` → flatten 不加发言人前缀 → REQ-055 的 sender 名解析根本没被触发。session `[2]` 实证 4 行纯正文无 `[笑南]:`/`[李哲]:`,bot 在 `[9]` 只能"猜至少两个人"。判断逻辑本身错:合并转发内容天生是"多人会话记录",发言人姓名与外层是否 p2p 无关。
+
+**修法**(全 fork-only,`packages/adapter-feishu-lark/src/feishu/message-pipeline.ts`,0 上游侵入):
+- 抽出纯函数 `parseQuotedMessageText(msg)`(从 `fetchParentMessageText` 剥离 text/post/image/file 解析,Q1-Q5 单测不变);
+- 新增 `resolveQuotedContext(event)` 统一引用入口:**一次 `message.get`** 拿父消息,`merge_forward` → 复用同一次 get 结果的子消息 + `flattenForwardConversation` 展开(问题①);其余走 `parseQuotedMessageText`;全程 graceful;
+- 新增 `flattenForwardConversation(items, event)` 共享底座(handleMergeForward + 引用路径共用),**`withSender` 恒 true**(问题②);昵称走 `resolveSenderNames`(chat-members 免 scope → contact API 兜底 → 回落 open_id 前缀);
+- `handleMergeForward` 改用该底座(删掉 `withSender = chatType!=="p2p"` 分支 + 重复的 flatten/expandNested 拼装),step 11 图片计数 `flatten.imageCount` → `conv.imageCount`。
+
+**测试**:+3 集成复现单测(MF-Q1 引用 merge_forward 展开内容不再空壳 / MF-Q2 引用带发言人前缀 / MF-Q3 p2p 直接转发发言人不再被剥光)。adapter **771 全量 0 fail** + typecheck 绿。
+
+**真机验证(2026-07-06,本地版 + 投资CFO)**:重打插件包换进本地版 → 飞书 WSS `synced 5/5`。同一张「笑南与李哲的会话记录」卡片:① 直接转发 → 回复带发言人标注(不再"猜两个人");② 引用/回复再追问 → bot 读到内容并带发言人(不再吐 `[merge_forward]` 空壳)。user 确认通过。
+
+**能力边界(问题③,待真机确认)**:飞书 `message.get` 的 sub-message 只带 `sender.id`,不带 display name。当前 chat 成员(如笑南)走 chat-members 免 scope 拿真名;群外/陌生人(如李哲)需 `contact:user.base:readonly` scope,未授权回落 open_id 前缀 —— 本修复已把该拿到的都拿到,陌生人真名点亮取决于 scope,留真机验证。
+
 ## 待办(仅剩流程)
 
 - 可选:contact scope 若确认线上生效,合并转发陌生人真名自动点亮(现同群转发已用 chat-members 显示,陌生人回落前缀)。

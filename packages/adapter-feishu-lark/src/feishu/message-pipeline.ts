@@ -231,6 +231,22 @@ export async function fetchParentMessageText(
   const msg = items?.[0]
   if (!msg) return null
 
+  return parseQuotedMessageText(msg)
+}
+
+/**
+ * 把一条(已 get 到的)父消息解析成引用原文文本。纯函数,不做 IO。
+ * [feat: feishu-desktop-session-sync] 从 fetchParentMessageText 抽出,供引用/回复统一入口
+ * resolveQuotedContext 复用(merge_forward 分支单独在 pipeline 层展开,不走本函数)。
+ *
+ * 消息类型映射:
+ *   text / post → 抽取文本;image(纯图无 caption)→ "[图片]"
+ *   file → "[文件:{file_name}]";其他 → "[{msg_type}]"
+ */
+export function parseQuotedMessageText(msg: {
+  msg_type?: string
+  body?: { content?: string }
+}): string | null {
   const msgType = msg.msg_type ?? ""
   const content = msg.body?.content ?? ""
 
@@ -1158,9 +1174,9 @@ export class MessagePipeline {
     // (包括 claude-code plugin 等不读 system prompt 的 plugin agent)。
     let quotedContext: string | null = null
     if (event.parentId) {
-      quotedContext = await fetchParentMessageText(event.parentId, this.larkClient).catch(
-        () => null,
-      )
+      // [feat: feishu-desktop-session-sync] 统一入口:merge_forward 父消息展开子消息 + 发言人昵称,
+      // 其余走纯文本抽取(此前 fetchParentMessageText 对 merge_forward 只吐 [merge_forward] 空壳)。
+      quotedContext = await this.resolveQuotedContext(event).catch(() => null)
       if (quotedContext !== null) {
         console.log(
           `[pipeline ${this.opts.accountId}] quote parent=${event.parentId}: "${quotedContext.slice(0, 60)}"`,
@@ -1225,6 +1241,89 @@ export class MessagePipeline {
   }
 
   /**
+   * [feat: feishu-desktop-session-sync] 引用/回复原文解析统一入口。
+   *
+   * 一次 message.get 拿父消息(merge_forward 容器的 get 会一并返回全部子消息):
+   *   - merge_forward → 展开子消息 + 发言人昵称(问题①修复:此前只吐 `[merge_forward]` 空壳,
+   *     引用合并转发再追问时 bot 完全读不到内容,还会误判"转发没粘上")
+   *   - 其它类型 → parseQuotedMessageText 纯文本抽取(text/post/image/file)
+   *
+   * 全程 graceful:get 失败 / 无父消息 → null,调用点降级为"不带引用块"正常走 LLM。
+   */
+  private async resolveQuotedContext(event: ImMessageEvent): Promise<string | null> {
+    const parentId = event.parentId
+    if (!parentId) return null
+    let items: SubMessage[]
+    try {
+      const r = await this.larkClient.im.v1.message.get({ path: { message_id: parentId } })
+      items = (r as { data?: { items?: SubMessage[] } }).data?.items ?? []
+    } catch {
+      return null
+    }
+    const container = items[0]
+    if (!container) return null
+
+    if (container.msg_type === "merge_forward") {
+      // 子消息 = 带 upper_message_id 的项(同 fetchMergeForwardItems 语义,复用同一次 get 结果,不再多打一次 API)
+      const subs = items.filter(
+        (i) => typeof i.upper_message_id === "string" && i.upper_message_id !== "",
+      )
+      if (subs.length === 0) return "[合并转发消息(空)]"
+      const conv = await this.flattenForwardConversation(subs, event)
+      const header = `合并转发的会话记录(共 ${subs.length} 条子消息${conv.nestedCount > 0 ? `,含 ${conv.nestedCount} 个嵌套合并消息` : ""}):`
+      let text = `${header}\n${conv.text}`
+      if (conv.imageCount > 0) {
+        text += `\n(注:另含 ${conv.imageCount} 张图片,飞书接口不支持读取合并转发内的图片。)`
+      }
+      return text
+    }
+
+    return parseQuotedMessageText(container)
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync] 合并转发子消息 → 带发言人昵称的对话文本(共享底座)。
+   * handleMergeForward(直接转发)与 resolveQuotedContext(引用/回复)共用同一套展开逻辑。
+   *
+   * 问题②修复:**withSender 恒 true** —— 合并转发内容天生是"多人会话记录",发言人姓名是核心
+   * 信息,与外层 chat 是否 p2p 无关。旧逻辑 `withSender = chatType !== "p2p"` 会在私聊(跟 bot
+   * 单聊)里把发言人全部剥光,LLM 只能"猜有几个人",这正是"没识别出昵称"的根因。
+   *
+   * 昵称走 resolveSenderNames:chat-members(免 scope,当前 chat 成员立即拿真名)→ contact API
+   * 兜底(群外/陌生人需 contact:user.base:readonly scope);两层都未命中回落 open_id 前缀。
+   */
+  private async flattenForwardConversation(
+    items: SubMessage[],
+    event: ImMessageEvent,
+  ): Promise<{ text: string; imageCount: number; nestedCount: number }> {
+    const withSender = true
+    const senderNames = await this.resolveSenderNames(
+      event.chatId,
+      items.map((i) => i.sender?.id).filter((x): x is string => !!x),
+    )
+    const flatten = flattenMergeForward(items, {
+      withSender,
+      maxSubMessages: MAX_SUB_MESSAGES,
+      // 合并转发内图片飞书 API 不支持读取(234043),恒不下载;含图诚实提示由 caller 处理
+      maxImages: 0,
+      depth: 0,
+      senderNames,
+    })
+    const expanded = await this.expandNestedMergeForward(
+      flatten.text,
+      items,
+      0,
+      withSender,
+      senderNames,
+    )
+    return {
+      text: expanded.flat(),
+      imageCount: flatten.imageCount,
+      nestedCount: expanded.nestedCount,
+    }
+  }
+
+  /**
    * [feat: feishu-merge-forward] 2026-05-26
    * merge_forward 独立处理路径(跟 text/image/post 的 handle 主流程并列)。
    *
@@ -1266,39 +1365,14 @@ export class MessagePipeline {
       return
     }
 
-    // 3. flatten 顶层(depth=0)
+    // 3. flatten 顶层(depth=0)+ 嵌套递归 + 发言人昵称 — 统一走 flattenForwardConversation
     // FORK: 合并转发里的图片飞书 API 不支持读取(错误码 234043 / HTTP 400,见
     // OPENCODE-PLAN/需求池/飞书合并转发子图下载-400-bug.md)→ maxImages=0:不建下载列表、
     // 不假装"已展开识别";含图时改在回复头部给用户诚实提示(步骤 11)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
-    // REQ-055:群场景解析 sender open_id → 真实昵称
-    // chat-members 优先(免 scope,同群转发立即拿名)→ contact API 兜底;全程 graceful 回落前缀
-    const withSender = event.chatType !== "p2p"
-    const senderNames = withSender
-      ? await this.resolveSenderNames(
-          event.chatId,
-          items.map((i) => i.sender?.id).filter((x): x is string => !!x),
-        )
-      : undefined
-
-    const flatten = flattenMergeForward(items, {
-      withSender,
-      maxSubMessages: MAX_SUB_MESSAGES,
-      maxImages: 0,
-      depth: 0,
-      senderNames,
-    })
-
-    // 5. 嵌套递归 1 层(D4) — depth=0 flatten 后,把嵌套占位替换为子内容
-    // 实现:遍历 items 找 msg_type=merge_forward 的,深度递归 fetch + flatten depth=1
-    // 然后把"[嵌套合并消息(展开中)]"占位文本替换成 "  ↳ {嵌套 flatten text}"
-    const expandedText = await this.expandNestedMergeForward(
-      flatten.text,
-      items,
-      0, // 嵌套层的图同样不可下载(同 234043),不下载
-      withSender,
-      senderNames,
-    )
+    // REQ-055 + 问题②:sender open_id → 真实昵称,withSender 恒 true(移入 flattenForwardConversation,
+    // p2p 转发不再剥掉发言人);chat-members 优先(免 scope)→ contact API 兜底,全程 graceful 回落前缀
+    const conv = await this.flattenForwardConversation(items, event)
 
     // 6. 合并转发的图片【不下载】— 飞书 API 不支持读取合并转发内的资源(234043),下载必 400。
     // imageParts 恒空(maxImages=0 → flatten.images 也为空);含图时在回复头部给用户诚实提示(步骤 11)。
@@ -1306,12 +1380,11 @@ export class MessagePipeline {
     const imageParts: Array<{ mime: string; filename: string; absolutePath: string }> = []
 
     // 7. 组装最终 text(flatten + nested expanded + vision-incapable warning)
-    let finalText = expandedText.flat()
-    finalText = `(以下是用户合并转发给你的对话内容,共 ${items.length} 条子消息${expandedText.nestedCount > 0 ? `,含 ${expandedText.nestedCount} 个嵌套合并消息` : ""})\n\n${finalText}\n\n请基于这些内容回答用户的问题或给出总结/建议。`
+    let finalText = `(以下是用户合并转发给你的对话内容,共 ${items.length} 条子消息${conv.nestedCount > 0 ? `,含 ${conv.nestedCount} 个嵌套合并消息` : ""})\n\n${conv.text}\n\n请基于这些内容回答用户的问题或给出总结/建议。`
 
     // FORK: 合并转发含图 → 告诉 LLM 图读不了(只基于文字回答),且无需在回复里重复说明
     //(用户侧的诚实提示由步骤 11 在回复头部统一加,避免重复)。[feat: feishu-merge-forward-image-400]
-    if (flatten.imageCount > 0) {
+    if (conv.imageCount > 0) {
       finalText +=
         "\n\n(注:这条合并转发里有图片,但飞书接口不支持读取合并转发内的图片,你看不到图片内容,只基于文字回答即可,无需在回复中说明这一点。)"
     }
@@ -1355,9 +1428,9 @@ export class MessagePipeline {
     }
     // FORK: 合并转发含图 → 回复头部加一行诚实提示(飞书 API 不支持读取合并转发内图片)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
-    if (flatten.imageCount > 0) {
+    if (conv.imageCount > 0) {
       finalReply =
-        `📷 合并转发里的 ${flatten.imageCount} 张图片我读不了(飞书接口限制),需要识别请直接把图转发给我。\n\n` +
+        `📷 合并转发里的 ${conv.imageCount} 张图片我读不了(飞书接口限制),需要识别请直接把图转发给我。\n\n` +
         finalReply
     }
     try {
