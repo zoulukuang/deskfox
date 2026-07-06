@@ -46,4 +46,20 @@ describe("sameDirectory", () => {
     expect(sameDirectoryKey("D:\\Foo") as string).toBe("d:/foo")
     expect(sameDirectoryKey("/Foo/Bar") as string).toBe("/Foo/Bar")
   })
+
+  // 复现真机 QA 2B:boot autoselect `list.find(worktree === lastProject) ?? list[0]`,
+  // lastProject 小写盘符 vs StoredProject 大写盘符 → 裸 === 落空 → 误开 list[0]。
+  // sameDirectory 修复:大小写失配下仍命中正确项目(layout.tsx:605 / home.tsx:165 同款逻辑)。
+  test("boot autoselect finds right project by lastProject despite case mismatch", () => {
+    const list = [
+      { worktree: "D:\\qa\\git-proj" },
+      { worktree: "D:\\qa\\proj-a" },
+    ]
+    const last = "d:\\qa\\proj-a" // 小写盘符(持久化不受控)
+    // 裸 === 会落空 → list[0](git-proj);sameDirectory 命中 proj-a
+    const rawPick = list.find((p) => p.worktree === last) ?? list[0]
+    const foldedPick = list.find((p) => sameDirectory(p.worktree, last)) ?? list[0]
+    expect(rawPick.worktree).toBe("D:\\qa\\git-proj") // bug 现场
+    expect(foldedPick.worktree).toBe("D:\\qa\\proj-a") // 修复后
+  })
 })

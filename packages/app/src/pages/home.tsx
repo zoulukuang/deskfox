@@ -162,7 +162,8 @@ function HomeDesign() {
   const newSessionProject = createMemo(
     () =>
       selectedProject() ??
-      projects().find((project) => project.worktree === focusedServerCtx()?.projects.last()) ??
+      // FORK: win-anchor-hide-case-fold — 按 lastProject(持久化,大小写不受控)匹配用 sameDirectory 2026-07-07
+      projects().find((project) => sameDirectory(project.worktree, focusedServerCtx()?.projects.last() ?? "")) ??
       projects()[0],
   )
   const directories = (project: LocalProject) => [project.worktree, ...(project.sandboxes ?? [])]

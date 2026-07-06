@@ -50,6 +50,43 @@ Windows clone 实读 + 兼容性审计发现:REQ-069/072 的 flag 已在 `sideca
 
 ---
 
+# Windows 真桌面 QA(local 本地版,CDP 驱动)
+
+> 2026-07-07 打 local 本地版(`DeskFox 本地版.exe`,独立身份 `ai.deskfox.app.local` + 隔离
+> `opencode-local.db`),用 `opencode://open-project` 深链(绕原生对话框)+ 直接编辑 `opencode.global.dat`
+> seed 持久化态 + CDP 读 DOM 驱动真机验收。
+
+## 缺口1 真机验证(✅ 全过)
+| 场景 | `.deskfox` 隐藏属性 | 锚身份 | git status |
+|---|---|---|---|
+| proj-a(非 git) | `attrib` 含 `H` ✓ | `fld_6d4ae6…` | — |
+| git-proj | `attrib` 含 `H` ✓ | git commit sha ✓ | 干净 ✓(`.deskfox/` 进 info/exclude)|
+- 对照:普通文件 `note.txt` 仅 `A` 无 `H` → hideAnchorDir 精准只隐藏 `.deskfox`,不误伤。
+
+## 缺口2 真机验证
+- **Test 2A(同大小写改名 relocate)✅**:proj-a 改名 proj-a-renamed → 冷启动 autoselect stale lastProject
+  → tryRelocate 锚扫描命中 → 打开 proj-a-renamed(非「打不开」)、持久化条目就地更新、id 保持。
+- **Test 2B(大小写失配 relocate)**:lastProject 小写盘符 `d:\…` vs StoredProject 大写 `D:\…`。
+  - **首轮暴露真 bug**:app 误开 `git-proj`(而非 relocate proj-a)。定位 = **boot autoselect
+    `layout.tsx:605` `list.find(worktree === last)` 仍用裸 `===`**,大小写失配落空 → `?? list[0]`。
+    这是上一轮 gap2 修复**漏网**的同类点(只改了 relocate 取 id 处,漏了 autoselect + home newSessionProject)。
+  - **修复**:`layout.tsx:605` + `home.tsx:165`(newSessionProject 回退找 lastProject)改 `sameDirectory`;
+    加复现单测(same-directory.test.ts「boot autoselect …case mismatch」)。
+  - **重打包 local 版复验 ✅**:同场景 app 正确 relocate 打开 `proj-a-final`(修复前 git-proj)、
+    持久化 relocate 到位、id 保持。
+
+## QA 追加修复(commit 2,feat 分支内)
+- `packages/app/src/pages/layout.tsx`:boot autoselect `worktree === last` → `sameDirectory`
+- `packages/app/src/pages/home.tsx`:newSessionProject 回退 `worktree === last()` → `sameDirectory`
+- `packages/app/src/utils/same-directory.test.ts`:+1 复现测试(app 全量 501→502 pass)
+- **非黑名单文件,无新 R4**;`[bug-repro]` = 真机 2B + 新复现单测。
+
+## QA 结论
+两缺口在真 Windows 桌面端到端验证通过;QA 过程额外抓到并修复一个单测未覆盖的 boot-autoselect 大小写
+漏网点(真桌面 QA ≠ CDP 自测/单测的价值实证)。
+
+---
+
 # R4 黑名单 override 复核报告
 
 > 触发文件:`packages/core/src/project/anchor.ts` + `packages/core/test/project-anchor.test.ts`

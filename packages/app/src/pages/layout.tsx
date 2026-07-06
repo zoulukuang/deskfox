@@ -602,7 +602,9 @@ export default function Layout(props: ParentProps) {
       if (!target) return
       await openProject(target, true)
     } else {
-      const next = list.find((project) => project.worktree === last) ?? list[0]
+      // FORK: win-anchor-hide-case-fold — 按 lastProject(持久化,大小写不受控)匹配用 sameDirectory,
+      //   否则 Win 上盘符/大小写差一位即 find 落空 → ?? list[0] 开成别的项目(真机 QA 2B 实锤)。2026-07-07
+      const next = list.find((project) => sameDirectory(project.worktree, last ?? "")) ?? list[0]
       if (!next) return
       const target = await ensureProjectAvailable(next.worktree) // FORK: REQ-072 可能 relocate 到新路径
       if (!target) return
