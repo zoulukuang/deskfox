@@ -642,24 +642,31 @@ export class MessagePipeline {
    *   2. title 加 bot 昵称前缀(REQ-073-④):`[botName] Feishu group/xxx`,多 bot 同群不撞脸;
    *      botName 缺省时回落无前缀(与旧 title 一致)。
    *   3. 跨重启接续(REQ-073-②):内存 miss 时回读已落盘的 chatSessionStore 复用旧 session,
-   *      不再每次重启开新 session。钉死①运行时实验已实证:历史 session 数据完整存于全局 DB、
-   *      同实例查询正常返回(旧注释「因 InstanceState 不预 load 而 401」系误判 —— 真凶只是
-   *      查找从不回读 store,与 auth 无关),故纯读盘复用安全。
+   *      不再每次重启开新 session。**但回读的 session 必须先校验在当前实例 DB 存在**
+   *      —— chatSessionStore 按 chatId 存全局共享,而 sessionID 是 DB 作用域:local 渠道用
+   *      opencode-local.db、发布三档共享 opencode.db(见《版本号与发布渠道规范》§3.11),
+   *      同账号被不同 DB 的实例桥接过时(如 local 版接手了 prod 建的 chat),回读会拿到本 DB
+   *      不存在的 dangling id → promptAsync 挂死 240s 超时(bug-repro)。故存在才复用,否则弃用新建。
    *
    * @returns 成功返回 sessionID;创建失败已发飞书友好错误并返回 null(调用点应 return)。
    */
   private async getOrCreateSession(event: ImMessageEvent): Promise<string | null> {
     const cached = this.chatToSession.get(event.chatId)
     if (cached) return cached
-    // 跨重启接续:回读落盘映射,命中则回填内存两张表(sessionToChat 供 permission 路由用)
+    // 跨重启接续:回读落盘映射,**校验在当前 DB 存在**后才复用(防跨-DB dangling id 挂死)
     const persisted = this.opts.chatSessionStore.get(this.opts.accountId, event.chatId)
-    if (persisted) {
+    if (persisted && (await this.sessionExists(persisted))) {
       this.chatToSession.set(event.chatId, persisted)
       this.sessionToChat.set(persisted, event.chatId)
       console.log(
         `[pipeline ${this.opts.accountId}] reuse persisted session ${persisted} for chat=${event.chatId}`,
       )
       return persisted
+    }
+    if (persisted) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] persisted session ${persisted} 不在当前 DB(跨渠道/DB 隔离),弃用改新建 for chat=${event.chatId}`,
+      )
     }
     try {
       const botName = this.opts.account.botName?.trim()
@@ -684,6 +691,31 @@ export class MessagePipeline {
       console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
       return null
+    }
+  }
+
+  /**
+   * 校验 sessionID 在**当前实例 DB** 存在(第 2 项 store 回读的安全闸)。
+   * [bug-repro: local 版回读到 prod-db 的 session id(chatSessionStore 全局共享但 DB 隔离)
+   *  → promptAsync 挂死 240s 超时] 2026-07-06
+   *
+   * 走 session.messages(同 debugFetchMessages 路径),仅看 HTTP 状态:200=存在(空消息也算);
+   * 404 / 任何非 200 / 抛异常 → 一律当"不存在"(**宁可新建也不冒挂死风险**;跨-DB dangling id
+   * 与瞬时异常都归此路,损失至多是丢一次跨重启上下文,远好于 240s 无响应)。
+   */
+  private async sessionExists(sessionID: string): Promise<boolean> {
+    try {
+      const r = await this.opts.opencodeClient.session.messages({
+        path: { id: sessionID },
+        query: { directory: this.workspaceDir() },
+      })
+      const wrap = r as { error?: unknown; response?: { status?: number } }
+      const status = wrap.response?.status
+      if (typeof status === "number") return status >= 200 && status < 300
+      // 某些 SDK 形态不带 response.status:有 error 视为不存在,否则乐观视为存在
+      return !wrap.error
+    } catch {
+      return false
     }
   }
 

@@ -50,6 +50,7 @@ function makeFakes() {
     },
   } as any
 
+  let messagesStatus = 200 // sessionExists 校验:200=存在 / 404=当前 DB 不存在(跨-DB dangling)
   const opencodeClient = {
     session: {
       create: async (args: CreateCall) => {
@@ -57,7 +58,10 @@ function makeFakes() {
         created.push(args)
         return { data: { id: `ses_new_${created.length}` } }
       },
-      messages: async () => ({ data: [] }),
+      messages: async () =>
+        messagesStatus === 200
+          ? { data: [], response: { status: 200 } }
+          : { error: { name: "NotFoundError" }, response: { status: messagesStatus } },
       promptAsync: async () => ({ data: {} }),
     },
     // 停归档后不应有人调 _client.patch;保留 spy 证明 archive 已彻底移除
@@ -77,6 +81,9 @@ function makeFakes() {
     opencodeClient,
     setCreateThrow: (v: boolean) => {
       createShouldThrow = v
+    },
+    setMessagesStatus: (s: number) => {
+      messagesStatus = s
     },
   }
 }
@@ -166,8 +173,8 @@ describe("getOrCreateSession(REQ-073-①④)", () => {
     expect(fakes.created).toHaveLength(1)
   })
 
-  test("U1b 内存 miss + store 命中 → 回读复用旧 session,不新建(REQ-073-② 跨重启接续)", async () => {
-    // 模拟重启:内存空,但落盘 store 有历史映射(钉死①实证纯读盘安全)
+  test("U1b 内存 miss + store 命中(且当前 DB 存在)→ 回读复用旧 session,不新建", async () => {
+    // 模拟重启:内存空,但落盘 store 有历史映射;sessionExists 校验返 200=存在
     store.set("acc1", "oc_group_123456789", "ses_persisted_old")
     const pipeline = makePipeline("DeskFox-Mac")
     const id = await (pipeline as any).getOrCreateSession(makeEvent())
@@ -175,6 +182,31 @@ describe("getOrCreateSession(REQ-073-①④)", () => {
     expect(fakes.created).toHaveLength(0) // 没新建
     // 回填 sessionToChat 供 permission 路由
     expect((pipeline as any).hasSession("ses_persisted_old")).toBe(true)
+  })
+
+  test("U13 [bug-repro] store 命中但 session 不在当前 DB(404)→ 弃用改新建,不复用 dangling id", async () => {
+    // 复现:local 版回读到 prod-db 的 session id,当前 opencode-local.db 没有该 session
+    // 旧行为:直接复用 → promptAsync 挂死 240s 超时;修复后:校验 404 → 新建
+    store.set("acc1", "oc_group_123456789", "ses_prod_only_dangling")
+    fakes.setMessagesStatus(404) // 当前 DB 查该 session 返 404
+    const pipeline = makePipeline("DeskFox-Mac")
+    const id = await (pipeline as any).getOrCreateSession(makeEvent())
+    expect(id).toBe("ses_new_1") // 新建,不是 dangling id
+    expect(id).not.toBe("ses_prod_only_dangling")
+    expect(fakes.created).toHaveLength(1)
+    // store 被新 id 覆盖(下次不再撞 dangling)
+    expect(store.get("acc1", "oc_group_123456789")).toBe("ses_new_1")
+  })
+
+  test("U13b sessionExists:messages 抛异常也当不存在 → 新建(宁可新建不冒挂死)", async () => {
+    store.set("acc1", "oc_group_123456789", "ses_x")
+    fakes.opencodeClient.session.messages = async () => {
+      throw new Error("network blip")
+    }
+    const pipeline = makePipeline("DeskFox-Mac")
+    const id = await (pipeline as any).getOrCreateSession(makeEvent())
+    expect(id).toBe("ses_new_1")
+    expect(fakes.created).toHaveLength(1)
   })
 
   test("U4 session.create 抛错 → 发飞书友好错误并返回 null", async () => {
