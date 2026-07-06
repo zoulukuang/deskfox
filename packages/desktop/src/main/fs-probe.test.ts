@@ -146,21 +146,28 @@ describe("findRelocatedWithFs (REQ-072 改名 relocate 锚扫描)", () => {
   // 目录树用 map 模拟:parent 下若干兄弟,各自可能有 .deskfox/id
   const make = (siblings: Record<string, string | undefined>) => {
     const listDirs = async (_dir: string) => Object.keys(siblings)
+    // FORK: win-anchor-hide-case-fold — 用 path.basename(而非 split("/"))取名,兼容 Windows 反斜杠候选路径
+    //   (生产 findRelocatedWithFs 用 path.join 产平台分隔符;原 split("/") 在 Win 上取不到名 → 假失败)。2026-07-07
     const readAnchor = async (candidateDir: string) => {
-      const name = candidateDir.split("/").pop()!
+      const name = path.basename(candidateDir)
       return siblings[name]
     }
     return { listDirs, readAnchor }
   }
 
+  // FORK: win-anchor-hide-case-fold — 期望值用 path.join(而非硬编码正斜杠),兼容 Windows path.join 反斜杠输出。2026-07-07
   test("同父目录内改名 → 命中新名字目录(锚 id 相同)", async () => {
     const { listDirs, readAnchor } = make({ "proj-renamed": "fld_abc", other: "fld_zzz" })
-    expect(await findRelocatedWithFs("/Users/x/proj", "fld_abc", listDirs, readAnchor)).toBe("/Users/x/proj-renamed")
+    expect(await findRelocatedWithFs("/Users/x/proj", "fld_abc", listDirs, readAnchor)).toBe(
+      path.join("/Users/x", "proj-renamed"),
+    )
   })
 
   test("git 项目(id=commit hash)同理命中", async () => {
     const { listDirs, readAnchor } = make({ "myrepo-2": "8b8962650cee", nope: undefined })
-    expect(await findRelocatedWithFs("/w/myrepo", "8b8962650cee", listDirs, readAnchor)).toBe("/w/myrepo-2")
+    expect(await findRelocatedWithFs("/w/myrepo", "8b8962650cee", listDirs, readAnchor)).toBe(
+      path.join("/w", "myrepo-2"),
+    )
   })
 
   test("没有匹配锚 → null(跨父目录挪出去 / 目标无锚)", async () => {
@@ -175,7 +182,9 @@ describe("findRelocatedWithFs (REQ-072 改名 relocate 锚扫描)", () => {
 
   test("跳过与旧目录同名的项 → 只命中真正的新目录", async () => {
     const { listDirs, readAnchor } = make({ proj: "fld_stale", "proj-new": "fld_abc" })
-    expect(await findRelocatedWithFs("/Users/x/proj", "fld_abc", listDirs, readAnchor)).toBe("/Users/x/proj-new")
+    expect(await findRelocatedWithFs("/Users/x/proj", "fld_abc", listDirs, readAnchor)).toBe(
+      path.join("/Users/x", "proj-new"),
+    )
   })
 
   test("readdir 出错(父目录不可读)→ null 不抛", async () => {
