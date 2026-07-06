@@ -93,11 +93,35 @@ user 拍板走**注入式**(把发送者真名前缀进 user message,桌面见�
 
 ⚠️ 验收在本地版(`opencode-local.db`),与正式版 DB 隔离;测试 chat 条目已从共享 store 清理。
 
-## 待续
+## 第五批:合并转发 chat-members 优先增强(commit `22140bb4af`)
 
-- 第 3 项桌面续聊 / ⑤⑥ 真机 permission+真群 e2e:留待 user 在实际桥接实例抽查(可选;逻辑均单测+真 API 证)。
-- REQ-055 合并转发真名 scope **可选**:user 开通 `contact:user.base:readonly` 则点亮,否则回落前缀。
-- merge 前:1-spec R8 清单回填实际单测编号;feat 分支 push / 合 main 待 user。
+真机实测发现 contact/v3/users 对**全部在可见范围内**用户仍返 `name=None`(chat-members 同人返真名),疑线上版本未含 `contact:user.base:readonly` 或管理后台字段可见性限制(后台开关看着开,API 不返 name)。user 拍板**不阻塞此问题**,加一层免-scope 兜底:
+
+- 抽 `getChatMemberNames`(TTL 缓存)+ `resolveSenderNames`:**chat-members 优先(免 scope,同群转发立即拿真名)→ 剩余非当前 chat 成员才落 contact/v3/users 兜底**;两层全 graceful。
+- 合并转发 `senderNames` 改走 `resolveSenderNames`。+2 单测(U12/U12b)。762 全量绿。
+
+## 第 3 项桌面续聊 — 0 前端改动确认
+
+前端**无任何按 Feishu/来源过滤会话**;侧栏唯一过滤 `server-sync.tsx:297 .filter((s) => !s.time?.archived)`。第 1 项停归档后飞书会话自动过此过滤进侧栏;续聊 = 普通 prompt(不回推飞书天然成立,桌面 prompt 走 opencode 原生无飞书出站)。→ **第 3 项 0 前端改动成立**。
+
+## 六项落地汇总(全 fork-only,0 上游 / 0 R4)
+
+| 项 | 落地 commit | 测试 | 真机 |
+|---|---|---|---|
+| ① 停归档 | `5fb269166c` | U2 | ✅ e2e |
+| ② 跨重启接续 | `7a1076d143` | U1b | ✅ e2e |
+| ③ 桌面续聊 | 0 改动(①派生) | 前端过滤分析 | ✅ |
+| ④ bot title | `5fb269166c` | U3/U3b | ✅ e2e |
+| ⑤ 授权反向失效 | `5fb269166c` | U5/U6 | 单测 |
+| ⑥ 群+合并转发昵称 | `350e/24e3/22140` | U7-U12b | 真 API + 单测 |
+
+**22 专属单测 + adapter 762 全量 0 fail + typecheck 绿。**
+
+## 待办(仅剩流程)
+
+- 可选:contact scope 若确认线上生效,合并转发陌生人真名自动点亮(现同群转发已用 chat-members 显示,陌生人回落前缀)。
+- ⑤⑥ 真机 permission 流 / 真群 e2e 可 user 亲自抽查(逻辑单测+真 API 已证)。
+- feat 分支 push / 合 main 待 user 拍板。
 
 ## 回退方法
 
