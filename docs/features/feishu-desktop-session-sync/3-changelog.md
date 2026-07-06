@@ -165,10 +165,23 @@ user 转发「笑南与李哲的会话记录」合并卡片到「投资CFO」bot
 
 **能力边界(问题③,待真机确认)**:飞书 `message.get` 的 sub-message 只带 `sender.id`,不带 display name。当前 chat 成员(如笑南)走 chat-members 免 scope 拿真名;群外/陌生人(如李哲)需 `contact:user.base:readonly` scope,未授权回落 open_id 前缀 —— 本修复已把该拿到的都拿到,陌生人真名点亮取决于 scope,留真机验证。
 
+## bug 修复:真群 e2e 暴露的两个确定性 bug(P1 标题竞态 + P3 群昵称回落,真机「测试用的一个群」+ InveM🐼-Mac)
+
+2026-07-06 user 真群跑 ⑤⑥,dump session `ses_0c9b77dfeffe...` + 读本地版 DB 坐实两个 adapter bug:
+
+- **P1 标题竞态**(`[fix: feishu-title-prefix-race]`):群 session 当前标题 = `日常闲聊`,**丢了 `[InveM🐼-Mac]` 前缀**。根因:旧 `scheduleTitlePrefix` 只 6s 后**一次性**——那时 gen 未完成就设 `[botName] <hint>` 并置 `titlePrefixDone`;之后 opencode 的 LLM 自动生成标题**迟到**把标题覆盖成无前缀的 `日常闲聊`,因 done 已置 → `ensureBotTitlePrefix` 短路 → 前缀永久丢失。**修法**:`scheduleTitlePrefix` 改为**轮询等 gen**(累积 ~90s):每 tick 调 `ensureBotTitlePrefix`,仍默认 → 不 done 继续等;gen 完成变描述性 → 补前缀并 done;**只有轮询到头 gen 仍没来才用 hint 兜底**。消除"先设 hint 再被 gen 冲掉"的竞态。重试节奏 `titleRetryDelays` 可实例覆盖供单测。
+
+- **P3 群昵称回落**(`[fix: feishu-group-sender-fallback]`):DB 铁证群消息存的是纯 `说句话吧`,**无 `[笑南]:`**。根因:chat-members API 返 `code=99991672 Access denied` —— **InveM🐼-Mac bot 没开 `im:chat*` scope**(`im:chat:readonly`/`im:chat.members:read` 任一)。旧 `getGroupSenderName` 查不到 → 返 null → 群消息**完全无前缀** → 多人群全员匿名。**修法**:查不到时**回落 open_id 前 6 位**(对齐合并转发 senderTag),保证多人群每条消息至少带可区分标签。
+  - ⚠️ **纠正旧结论**:此前"chat-members 免 scope"不准——它**需要 `im:chat*` scope**,之前测的投资CFO 恰好开了、InveM 没开。**真名点亮需 user 给 bot 开 `im:chat:readonly`**(飞书后台),回落前缀是缺 scope 时的 graceful 兜底。
+
+**测试**:+4 单测(U3g 竞态复现:gen 迟到覆盖→轮询补回前缀不停在无前缀 / U3h 轮询到头 hint 兜底 / U14 群昵称回落 open_id 前缀 / U14b p2p 返 null);更新 1 处群 mention 测试断言(群消息现带发言人前缀)。adapter **775 全量 0 fail** + typecheck 绿。
+
 ## 待办(仅剩流程)
 
-- 可选:contact scope 若确认线上生效,合并转发陌生人真名自动点亮(现同群转发已用 chat-members 显示,陌生人回落前缀)。
-- ⑤⑥ 真机 permission 流 / 真群 e2e 可 user 亲自抽查(逻辑单测+真 API 已证)。
+- **P2 桌面授权 404**(飞书 resolve 后桌面 GUI 卡片不撤 → 再点报 "Permission request not found"):疑 opencode 原生 GUI 未响应外部 `permission.replied` 自动撤卡(纯 opencode GUI+TUI 双端也会),不在 adapter 修复范围,待查上游 GUI。
+- **P4 bot 幻觉**(问 meta 问题时 glob `**/*` 读了 OpenClaw 源码 `/Users/openclaw/openclaw` 给错答案):偏 agent 行为/prompt,待评估轻量缓解(收紧 imbot 项目外读 / 加提示)。
+- **P3 真名**:待 user 给相关 bot 开 `im:chat:readonly` scope 后真名自动点亮(现回落 open_id 前缀)。
+- 问题③(合并转发陌生人真名):同理需 `contact:user.base:readonly`,user 已拍板先不处理。
 - feat 分支 push / 合 main 待 user 拍板。
 
 ## 回退方法

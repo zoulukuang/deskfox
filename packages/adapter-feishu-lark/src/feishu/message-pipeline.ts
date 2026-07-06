@@ -734,14 +734,36 @@ export class MessagePipeline {
   }
 
   /**
-   * 延迟触发一次 title 补齐(给 opencode 异步生成描述性标题的时间)。
-   * gen 完成 → 补 `[botName]` 前缀;6s 后仍是默认标题(gen 未完成/失败,如 provider 超时)
-   * → 用确定性 hint 兜底 `[botName] <hint>`,避免标题永久停在 "New session - …"。
+   * 轮询节奏(累积 ~90s):**等** opencode 异步生成描述性标题。导出供单测覆盖(可实例覆盖成短值)。
+   * [fix: feishu-title-prefix-race] 2026-07-06
+   */
+  static readonly TITLE_PREFIX_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000, 30000, 30000]
+  private titleRetryDelays: readonly number[] = MessagePipeline.TITLE_PREFIX_RETRY_DELAYS_MS
+
+  /**
+   * 轮询触发 title 补齐(给 opencode 异步生成描述性标题的时间)。
+   *
+   * [fix: feishu-title-prefix-race] 2026-07-06 —— 旧实现只 6s 后**一次性**:若那时 gen 未完成
+   * 就设 `[botName] <hint>` 并标记 titlePrefixDone;之后 gen 迟到把标题覆盖成无前缀的描述性标题
+   * (如「日常闲聊」),因 done 已置 → ensureBotTitlePrefix 短路,前缀**永久丢失**(P1 真机复现)。
+   *
+   * 新实现**先等 gen**:每个 tick 调 `ensureBotTitlePrefix`——仍是默认标题(gen 未完成)→ 不 done、
+   * 继续下一 tick;gen 完成变描述性 → 补 `[botName]` 前缀并 done、停。**只有轮询到头 gen 仍没来**
+   * (provider 超时等)才用确定性 hint 兜底,避免标题永久停在 "New session -"。这样正常路径先拿到
+   * gen 的真标题再补前缀,不存在"先设 hint 再被 gen 冲掉"的竞态。
    */
   private scheduleTitlePrefix(sessionID: string, hint: string): void {
-    setTimeout(async () => {
+    const delays = this.titleRetryDelays
+    const tick = async (attempt: number): Promise<void> => {
+      if (this.titlePrefixDone.has(sessionID)) return
+      // gen 完成(标题变描述性)→ ensureBotTitlePrefix 补前缀并置 done;仍默认 → 不 done,继续轮询
       await this.ensureBotTitlePrefix(sessionID)
       if (this.titlePrefixDone.has(sessionID)) return
+      if (attempt + 1 < delays.length) {
+        setTimeout(() => void tick(attempt + 1), delays[attempt + 1])
+        return
+      }
+      // 轮询到头 gen 仍没来 → 确定性 hint 兜底(不再等,避免永久停在 "New session -")
       const botName = this.opts.account.botName?.trim()
       const fallback = botName ? `[${botName}] ${hint}` : hint
       try {
@@ -758,7 +780,7 @@ export class MessagePipeline {
             body: { title: fallback },
           })
           this.titlePrefixDone.add(sessionID)
-          console.log(`[pipeline ${this.opts.accountId}] title 兜底(gen 未完成)→ ${fallback}`)
+          console.log(`[pipeline ${this.opts.accountId}] title 兜底(gen 超时未完成)→ ${fallback}`)
         }
       } catch (err) {
         console.warn(
@@ -766,7 +788,8 @@ export class MessagePipeline {
           (err as Error).message,
         )
       }
-    }, 6000)
+    }
+    setTimeout(() => void tick(0), delays[0])
   }
 
   /**
@@ -842,16 +865,20 @@ export class MessagePipeline {
   }
 
   /**
-   * [feat: feishu-desktop-session-sync REQ-073-⑥] 群消息发送者真实昵称。
+   * [feat: feishu-desktop-session-sync REQ-073-⑥] 群消息发送者昵称(真名优先,回落 open_id 前缀)。
    *
-   * 走**免-scope 的 chat-members**(区别于合并转发陌生人才用的通讯录 API + scope),
-   * 带 10min TTL 的 per-chat 缓存,免每条群消息翻页。p2p / 无 senderOpenId / 查不到 → null
-   * (调用点不注入前缀,graceful)。
+   * 走 chat-members 拿真名(带 10min TTL per-chat 缓存,免每条群消息翻页)。
+   *
+   * [fix: feishu-group-sender-fallback] 2026-07-06 —— chat-members **需要 `im:chat*` scope**
+   * (旧注释"免-scope"不准:实测缺 scope 时飞书返 code=99991672 Access denied → 拿不到任何名字)。
+   * **缺 scope / 查不到时回落 open_id 前 6 位**(对齐合并转发 senderTag),保证多人群里每条消息
+   * 至少带**可区分**的发言人标签,而非旧行为「返 null → 完全无前缀 → 全员匿名 → bot 分不清谁是谁」。
+   * 仅 p2p / 无 senderOpenId 才返 null(单聊跟 bot 一对一,无需前缀)。
    */
   private async getGroupSenderName(event: ImMessageEvent): Promise<string | null> {
     if (event.chatType === "p2p" || !event.senderOpenId) return null
     const names = await this.getChatMemberNames(event.chatId)
-    return names.get(event.senderOpenId) ?? null
+    return names.get(event.senderOpenId) ?? event.senderOpenId.slice(0, 6)
   }
 
   /**

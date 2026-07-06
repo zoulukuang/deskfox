@@ -833,7 +833,9 @@ describe("requireMention enforcement (feat: feishu-group-mention-policy)", () =>
     )
     // 给 fire-and-forget promptAsync 一点时间被调到
     await new Promise((r) => setTimeout(r, 100))
-    expect(capturedText).toBe("说句话")
+    // mention 占位符仍被 strip(本 case 主旨);群消息现带发言人前缀([fix: feishu-group-sender-fallback]:
+    // chat-members 缺 scope → 回落 open_id 前 6 位 ou_sen),多人群里保留可区分的发言人标签
+    expect(capturedText).toBe("[ou_sen]: 说句话")
     expect(capturedText).not.toContain("@_user_1")
   })
 

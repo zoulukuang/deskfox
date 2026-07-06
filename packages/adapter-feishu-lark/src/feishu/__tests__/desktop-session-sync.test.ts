@@ -213,6 +213,53 @@ describe("getOrCreateSession(REQ-073-①④)", () => {
     expect(h(makeEvent({ chatType: "group", content: "not-json" }))).toBe("Feishu group")
   })
 
+  // [fix: feishu-title-prefix-race] 2026-07-06
+  // [bug-repro: 6s 兜底先设 [botName] hint 并置 done → gen 迟到把标题覆盖成无前缀描述性标题
+  //  (日常闲聊)→ done 已置 ensureBotTitlePrefix 短路 → bot 前缀永久丢失(群 session 真机复现)]
+  test("U3g scheduleTitlePrefix:gen 迟到覆盖 → 轮询等到 gen 再补前缀,不停在无前缀", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    ;(pipeline as any).titleRetryDelays = [5, 5, 5, 5, 5, 5] // 测试用短轮询
+    fakes.setGetTitle("New session - 2026-07-06T00:00:00.000Z") // gen 未完成
+    ;(pipeline as any).scheduleTitlePrefix("ses_x", "说句话吧")
+    // 模拟 gen 在首个 tick 之后才完成(把默认标题覆盖成描述性,无前缀)
+    setTimeout(() => fakes.setGetTitle("日常闲聊"), 12)
+    await new Promise((r) => setTimeout(r, 80))
+    // 补的是 gen 的真标题带前缀,而非过早用 hint 兜底
+    expect(fakes.titleUpdates).toContain("[DeskFox-Mac] 日常闲聊")
+    expect(fakes.titleUpdates).not.toContain("[DeskFox-Mac] 说句话吧")
+  })
+
+  test("U3h scheduleTitlePrefix:轮询到头 gen 仍没来 → 用确定性 hint 兜底(不永久停在默认)", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    ;(pipeline as any).titleRetryDelays = [4, 4, 4]
+    fakes.setGetTitle("New session - 2026-07-06T00:00:00.000Z") // 全程默认(provider 超时)
+    ;(pipeline as any).scheduleTitlePrefix("ses_x", "帮我梳理组合")
+    await new Promise((r) => setTimeout(r, 60))
+    expect(fakes.titleUpdates).toContain("[DeskFox-Mac] 帮我梳理组合")
+  })
+
+  // [fix: feishu-group-sender-fallback] 2026-07-06
+  // [bug-repro: 群里 chat-members 缺 im:chat scope → 返 Access denied → getGroupSenderName 返 null
+  //  → 群消息完全无发言人前缀 → 多人群全员匿名 bot 分不清谁是谁(测试群真机复现)]
+  test("U14 getGroupSenderName:chat-members 查不到(缺 scope)→ 回落 open_id 前 6 位", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    // fakes.larkClient 无 tokenManager → getClientAuthContext 抛 → resolveChatMemberNames 返空 → 回落
+    const name = await (pipeline as any).getGroupSenderName(
+      makeEvent({ chatType: "group", senderOpenId: "ou_85a82c9fa7d7359062991fc521e879cb" }),
+    )
+    expect(name).toBe("ou_85a") // slice(0,6),与合并转发 senderTag 一致
+  })
+
+  test("U14b getGroupSenderName:p2p / 无 senderOpenId → null(单聊不加前缀)", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    expect(
+      await (pipeline as any).getGroupSenderName(makeEvent({ chatType: "p2p", senderOpenId: "ou_x" })),
+    ).toBeNull()
+    expect(
+      await (pipeline as any).getGroupSenderName(makeEvent({ chatType: "group", senderOpenId: undefined as any })),
+    ).toBeNull()
+  })
+
   test("U1 同 chat 二次调用复用内存 session,不重复新建", async () => {
     const pipeline = makePipeline("DeskFox-Mac")
     const first = await (pipeline as any).getOrCreateSession(makeEvent())
