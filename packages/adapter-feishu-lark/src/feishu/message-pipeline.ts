@@ -696,15 +696,55 @@ export class MessagePipeline {
    */
   private async getGroupSenderName(event: ImMessageEvent): Promise<string | null> {
     if (event.chatType === "p2p" || !event.senderOpenId) return null
+    const names = await this.getChatMemberNames(event.chatId)
+    return names.get(event.senderOpenId) ?? null
+  }
+
+  /**
+   * 取某 chat 全体成员 open_id→昵称(免-scope chat-members),带 10min TTL per-chat 缓存。
+   * [feat: feishu-desktop-session-sync]
+   */
+  private async getChatMemberNames(chatId: string): Promise<Map<string, string>> {
     const NAME_TTL_MS = 10 * 60 * 1000
     const now = Date.now()
-    let entry = this.chatMemberNameCache.get(event.chatId)
+    let entry = this.chatMemberNameCache.get(chatId)
     if (!entry || now - entry.checkedAt > NAME_TTL_MS) {
-      const names = await resolveChatMemberNames(event.chatId, this.larkClient)
+      const names = await resolveChatMemberNames(chatId, this.larkClient)
       entry = { names, checkedAt: now }
-      this.chatMemberNameCache.set(event.chatId, entry)
+      this.chatMemberNameCache.set(chatId, entry)
     }
-    return entry.names.get(event.senderOpenId) ?? null
+    return entry.names
+  }
+
+  /**
+   * 解析一组 sender open_id → 昵称,**chat-members 优先(免 scope)→ contact API 兜底**。
+   * [feat: feishu-desktop-session-sync REQ-055]
+   *
+   * 合并转发的 sender 若是当前 chat 成员(同群转发),chat-members 立刻拿到真名、不依赖任何
+   * scope;非当前 chat 成员(跨群/陌生人)才落 contact/v3/users(需 contact:user.base:readonly,
+   * 未生效则回落前缀)。两层都 graceful。
+   */
+  private async resolveSenderNames(
+    chatId: string,
+    openIds: string[],
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>()
+    const unique = [...new Set(openIds.filter((x) => !!x))]
+    if (unique.length === 0) return result
+    // 第一层:chat-members(免 scope)
+    const memberNames = await this.getChatMemberNames(chatId)
+    const unresolved: string[] = []
+    for (const id of unique) {
+      const n = memberNames.get(id)
+      if (n) result.set(id, n)
+      else unresolved.push(id)
+    }
+    // 第二层:剩余(非当前 chat 成员)走 contact API
+    if (unresolved.length > 0) {
+      const contactNames = await resolveOpenIdNames(unresolved, this.larkClient)
+      for (const [id, n] of contactNames) result.set(id, n)
+    }
+    return result
   }
 
   async handle(event: ImMessageEvent): Promise<void> {
@@ -1093,12 +1133,13 @@ export class MessagePipeline {
     // OPENCODE-PLAN/需求池/飞书合并转发子图下载-400-bug.md)→ maxImages=0:不建下载列表、
     // 不假装"已展开识别";含图时改在回复头部给用户诚实提示(步骤 11)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
-    // REQ-055:群场景解析 sender open_id → 真实昵称(graceful 回落前缀,缺 scope 不报错)
+    // REQ-055:群场景解析 sender open_id → 真实昵称
+    // chat-members 优先(免 scope,同群转发立即拿名)→ contact API 兜底;全程 graceful 回落前缀
     const withSender = event.chatType !== "p2p"
     const senderNames = withSender
-      ? await resolveOpenIdNames(
+      ? await this.resolveSenderNames(
+          event.chatId,
           items.map((i) => i.sender?.id).filter((x): x is string => !!x),
-          this.larkClient,
         )
       : undefined
 

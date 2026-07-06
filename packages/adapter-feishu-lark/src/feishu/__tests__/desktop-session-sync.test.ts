@@ -430,4 +430,30 @@ describe("getGroupSenderName 注入(REQ-073-⑥)", () => {
     expect(n).toBeNull()
     expect(calls).toBe(0)
   })
+
+  test("U12 resolveSenderNames:chat-members 命中的不再查 contact;未命中才落 contact 兜底", async () => {
+    // chat-members 返 ou_a=群友;contact 返 ou_b=陌生人
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes("/chats/")) return { json: async () => ({ code: 0, data: { items: [{ member_id: "ou_a", name: "群友" }], has_more: false } }) }
+      if (url.includes("/contact/v3/users/batch")) return { json: async () => ({ code: 0, data: { items: [{ open_id: "ou_b", name: "陌生人" }] } }) }
+      return { json: async () => ({ code: 0, data: {} }) }
+    }) as any
+    const pipeline = makePipeline()
+    const m = await (pipeline as any).resolveSenderNames("oc_g", ["ou_a", "ou_b"])
+    expect(m.get("ou_a")).toBe("群友") // chat-members 命中
+    expect(m.get("ou_b")).toBe("陌生人") // contact 兜底
+  })
+
+  test("U12b resolveSenderNames:全命中 chat-members → 不调 contact API", async () => {
+    let contactCalled = false
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes("/contact/v3/users/batch")) { contactCalled = true }
+      if (url.includes("/chats/")) return { json: async () => ({ code: 0, data: { items: [{ member_id: "ou_a", name: "群友" }], has_more: false } }) }
+      return { json: async () => ({ code: 0, data: {} }) }
+    }) as any
+    const pipeline = makePipeline()
+    const m = await (pipeline as any).resolveSenderNames("oc_g", ["ou_a"])
+    expect(m.get("ou_a")).toBe("群友")
+    expect(contactCalled).toBe(false)
+  })
 })
