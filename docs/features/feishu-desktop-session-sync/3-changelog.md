@@ -136,6 +136,16 @@ user 反馈 InveM🐼-Mac 账号在本地版发消息 → session 无最新记�
 - 日志扫查:REQ-073 相关 0 新异常;5 账号 WSS 全连。
 - **附带发现(非本版)**:`media-gen EADDRINUSE 51737` = 本地版/正式版双实例抢 media-gen 固定端口(既有多实例限制,另立条目)。
 
+## 标题改进:与桌面端一致的描述性标题(commit `bcfac7d0ef`,user 反馈)
+
+user 反馈静态标题 `[botName] Feishu p2p/<chatId尾8位>` 的 chatId 尾号对人无意义,看不出会话在聊啥。改为向桌面端命名方式对齐:
+
+- **根因**:opencode 标题自动生成(`prompt.ts` 用小模型 LLM 生成描述性标题)**仅当 title 是默认值("New session - <ISO>")时触发**(`isDefaultTitle` 门控);adapter 设了静态 title 就被跳过。
+- **修法**:① 创建时**不设 title** → opencode 用默认标题 → 触发桌面同款 LLM 自动生成;② `ensureBotTitlePrefix` 惰性给生成后的标题补 `[botName]` 前缀(多 bot 同群仍可区分,done Set 短路 + 幂等);③ 自动生成是 `forkIn` 异步不保证及时,`scheduleTitlePrefix` 6s 后仍默认标题(gen 未完成 / **provider 超时**,即问题 2)→ 用 `deriveTitleHint`(首条消息片段 / 文件名)**确定性兜底**,永不停在 "New session -"。
+- **真机验证**(投资CFO):`[投资CFO] Feishu p2p/83304075` → `[投资CFO] 帮我梳理一下2026年Q3的投资组合再平衡计划`(本次因问题 2 走了兜底路径,标题=首条消息;provider 给力时会是 LLM 摘要)。
+- +6 单测(U3/U3b-U3f)。adapter **768 全量绿**。
+- ⚠️ **存量旧会话不回改**(已是非默认标题,`ensureBotTitlePrefix` 跳过);仅新建会话享描述性标题。如需批量修旧标题另说。
+
 ## 待办(仅剩流程)
 
 - 可选:contact scope 若确认线上生效,合并转发陌生人真名自动点亮(现同群转发已用 chat-members 显示,陌生人回落前缀)。
