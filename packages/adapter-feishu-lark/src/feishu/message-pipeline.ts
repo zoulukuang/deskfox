@@ -515,6 +515,8 @@ export class MessagePipeline {
   } | null = null
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
+  /** [feat: feishu-desktop-session-sync REQ-073-④] 已补 [botName] 标题前缀的 session(短路避免重复 get）*/
+  private readonly titlePrefixDone = new Set<string>()
   /** [feat: feishu-desktop-session-sync REQ-073-⑥] 群成员 open_id→昵称缓存(免-scope chat-members)
    *  key: chatId,value: { names: Map<open_id,name>, checkedAt: ms }。TTL 10min,免每条群消息翻页 */
   private readonly chatMemberNameCache = new Map<
@@ -639,8 +641,10 @@ export class MessagePipeline {
    * 与旧逻辑的三点差异:
    *   1. 停止自动归档(REQ-073-①):新建 session 不再 archiveSession,飞书会话保持普通可见
    *      session、进桌面侧栏;归档改由 user 在 GUI 操作驱动。
-   *   2. title 加 bot 昵称前缀(REQ-073-④):`[botName] Feishu group/xxx`,多 bot 同群不撞脸;
-   *      botName 缺省时回落无前缀(与旧 title 一致)。
+   *   2. title 与桌面端一致(REQ-073-④ 改进):**不再设静态 `Feishu p2p/<chatId>` 标题**
+   *      (那串 chatId 尾号对人无意义)。改为创建时用 opencode 默认标题 → 触发桌面同款
+   *      LLM 自动生成描述性标题;再由 `ensureBotTitlePrefix` 惰性补 `[botName]` 前缀
+   *      (多 bot 同群仍可区分)。缺 botName 则纯描述性标题。
    *   3. 跨重启接续(REQ-073-②):内存 miss 时回读已落盘的 chatSessionStore 复用旧 session,
    *      不再每次重启开新 session。**但回读的 session 必须先校验在当前实例 DB 存在**
    *      —— chatSessionStore 按 chatId 存全局共享,而 sessionID 是 DB 作用域:local 渠道用
@@ -652,12 +656,16 @@ export class MessagePipeline {
    */
   private async getOrCreateSession(event: ImMessageEvent): Promise<string | null> {
     const cached = this.chatToSession.get(event.chatId)
-    if (cached) return cached
+    if (cached) {
+      void this.ensureBotTitlePrefix(cached) // 自动标题生成后惰性补 [botName] 前缀
+      return cached
+    }
     // 跨重启接续:回读落盘映射,**校验在当前 DB 存在**后才复用(防跨-DB dangling id 挂死)
     const persisted = this.opts.chatSessionStore.get(this.opts.accountId, event.chatId)
     if (persisted && (await this.sessionExists(persisted))) {
       this.chatToSession.set(event.chatId, persisted)
       this.sessionToChat.set(persisted, event.chatId)
+      void this.ensureBotTitlePrefix(persisted)
       console.log(
         `[pipeline ${this.opts.accountId}] reuse persisted session ${persisted} for chat=${event.chatId}`,
       )
@@ -669,13 +677,10 @@ export class MessagePipeline {
       )
     }
     try {
-      const botName = this.opts.account.botName?.trim()
-      const titlePrefix = botName ? `[${botName}] ` : ""
+      // 不设 title → opencode 用默认标题("New session - <ISO>"),触发桌面同款 LLM 自动生成
       const res = await this.opts.opencodeClient.session.create({
         query: { directory: this.workspaceDir() },
-        body: {
-          title: `${titlePrefix}Feishu ${event.chatType}/${event.chatId.slice(-8)}`,
-        },
+        body: {},
       })
       const id = (res as { data?: { id?: string } }).data?.id
       if (!id) throw new Error("session.create returned no id")
@@ -683,6 +688,9 @@ export class MessagePipeline {
       this.sessionToChat.set(id, event.chatId)
       // 落盘:plugin 重启后同 chat 仍能复用此 session(第 2 项接续的持久化基础)
       this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, id)
+      // 自动标题是 forkIn 异步生成,create 后不保证已完成;延迟一次 best-effort 补前缀
+      // (覆盖只发一条消息、不会再触发 cache-hit 路径的会话);gen 失败则用 hint 兜底
+      this.scheduleTitlePrefix(id, this.deriveTitleHint(event))
       console.log(
         `[pipeline ${this.opts.accountId}] new opencode session ${id} (持久化,可见) for chat=${event.chatId}`,
       )
@@ -691,6 +699,104 @@ export class MessagePipeline {
       console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
       return null
+    }
+  }
+
+  /**
+   * 从消息事件推导一个确定性标题 hint(自动生成失败时兜底,保证标题可读、含内容线索)。
+   * 优先首条消息文本片段 → 文件名 → 最末回落 `Feishu <chatType>`。
+   */
+  private deriveTitleHint(event: ImMessageEvent): string {
+    try {
+      const c = JSON.parse(event.content ?? "{}") as { text?: string; file_name?: string }
+      if (typeof c.text === "string" && c.text.trim()) return c.text.trim().slice(0, 24)
+      if (typeof c.file_name === "string" && c.file_name.trim()) return c.file_name.trim()
+    } catch {
+      // ignore
+    }
+    return `Feishu ${event.chatType}`
+  }
+
+  /**
+   * 延迟触发一次 title 补齐(给 opencode 异步生成描述性标题的时间)。
+   * gen 完成 → 补 `[botName]` 前缀;6s 后仍是默认标题(gen 未完成/失败,如 provider 超时)
+   * → 用确定性 hint 兜底 `[botName] <hint>`,避免标题永久停在 "New session - …"。
+   */
+  private scheduleTitlePrefix(sessionID: string, hint: string): void {
+    setTimeout(async () => {
+      await this.ensureBotTitlePrefix(sessionID)
+      if (this.titlePrefixDone.has(sessionID)) return
+      const botName = this.opts.account.botName?.trim()
+      const fallback = botName ? `[${botName}] ${hint}` : hint
+      try {
+        const r = await this.opts.opencodeClient.session.get({
+          path: { id: sessionID },
+          query: { directory: this.workspaceDir() },
+        })
+        const title = ((r as { data?: { title?: string } }).data?.title ?? "").trim()
+        // 仍是默认/空才兜底(别覆盖 gen 或用户后来产生的标题)
+        if (!title || title.startsWith("New session - ") || title.startsWith("Child session - ")) {
+          await this.opts.opencodeClient.session.update({
+            path: { id: sessionID },
+            query: { directory: this.workspaceDir() },
+            body: { title: fallback },
+          })
+          this.titlePrefixDone.add(sessionID)
+          console.log(`[pipeline ${this.opts.accountId}] title 兜底(gen 未完成)→ ${fallback}`)
+        }
+      } catch (err) {
+        console.warn(
+          `[pipeline ${this.opts.accountId}] scheduleTitlePrefix 兜底失败(忽略):`,
+          (err as Error).message,
+        )
+      }
+    }, 6000)
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync REQ-073-④ 改进] 给自动生成的描述性标题惰性补 `[botName]` 前缀。
+   *
+   * 时序:opencode 的标题自动生成是 `forkIn` 异步跑(prompt.ts),create/promptAsync 返回时
+   * 不保证已完成。故本方法在 create 后延迟触发 + 每次 cache-hit/reuse 再触发,直到标题非默认时补上一次:
+   *   - 默认标题("New session - …")= 生成未完成 → 跳过,下条消息/延迟再试(不加入 done)
+   *   - 已 `[` 开头 = 已带前缀 → 标记 done,跳过(幂等,防重复叠加)
+   *   - 无 botName → 标记 done(纯描述性标题,与桌面一致)
+   *   - 否则 → session.update 补 `[botName] <描述性标题>`,标记 done
+   * done Set 短路,避免每条消息都 session.get。全程 best-effort,失败忽略。
+   */
+  private async ensureBotTitlePrefix(sessionID: string): Promise<void> {
+    if (this.titlePrefixDone.has(sessionID)) return
+    const botName = this.opts.account.botName?.trim()
+    if (!botName) {
+      this.titlePrefixDone.add(sessionID)
+      return
+    }
+    try {
+      const r = await this.opts.opencodeClient.session.get({
+        path: { id: sessionID },
+        query: { directory: this.workspaceDir() },
+      })
+      const title = ((r as { data?: { title?: string } }).data?.title ?? "").trim()
+      if (!title) return
+      if (title.startsWith("New session - ") || title.startsWith("Child session - ")) return
+      if (title.startsWith("[")) {
+        this.titlePrefixDone.add(sessionID)
+        return
+      }
+      await this.opts.opencodeClient.session.update({
+        path: { id: sessionID },
+        query: { directory: this.workspaceDir() },
+        body: { title: `[${botName}] ${title}` },
+      })
+      this.titlePrefixDone.add(sessionID)
+      console.log(
+        `[pipeline ${this.opts.accountId}] title 补 bot 前缀 → [${botName}] ${title}`,
+      )
+    } catch (err) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] ensureBotTitlePrefix 失败(忽略):`,
+        (err as Error).message,
+      )
     }
   }
 

@@ -51,6 +51,8 @@ function makeFakes() {
   } as any
 
   let messagesStatus = 200 // sessionExists 校验:200=存在 / 404=当前 DB 不存在(跨-DB dangling)
+  let getTitle = "New session - 2026-07-06T00:00:00.000Z" // session.get 返回的当前 title
+  const titleUpdates: string[] = [] // 记录 session.update 写入的 title
   const opencodeClient = {
     session: {
       create: async (args: CreateCall) => {
@@ -63,6 +65,11 @@ function makeFakes() {
           ? { data: [], response: { status: 200 } }
           : { error: { name: "NotFoundError" }, response: { status: messagesStatus } },
       promptAsync: async () => ({ data: {} }),
+      get: async () => ({ data: { title: getTitle } }),
+      update: async (args: { body?: { title?: string } }) => {
+        if (args.body?.title) titleUpdates.push(args.body.title)
+        return { data: {} }
+      },
     },
     // 停归档后不应有人调 _client.patch;保留 spy 证明 archive 已彻底移除
     _client: {
@@ -85,6 +92,10 @@ function makeFakes() {
     setMessagesStatus: (s: number) => {
       messagesStatus = s
     },
+    setGetTitle: (t: string) => {
+      getTitle = t
+    },
+    titleUpdates,
   }
 }
 
@@ -153,16 +164,53 @@ describe("getOrCreateSession(REQ-073-①④)", () => {
     expect(store.get("acc1", "oc_group_123456789")).toBe("ses_new_1")
   })
 
-  test("U3 title 带 [botName] 前缀(REQ-073-④ 多 bot 不撞脸)", async () => {
+  test("U3 create 不再设静态 Feishu title(改走 opencode 默认→自动生成,与桌面一致)", async () => {
     const pipeline = makePipeline("DeskFox-Mac")
     await (pipeline as any).getOrCreateSession(makeEvent())
-    expect(fakes.created[0]!.body.title).toBe("[DeskFox-Mac] Feishu group/23456789")
+    // body 不含 title → opencode 用默认标题触发 LLM 自动生成
+    expect(fakes.created[0]!.body.title).toBeUndefined()
   })
 
-  test("U3b botName 缺省 → 回落无前缀(与旧 title 一致)", async () => {
+  test("U3b ensureBotTitlePrefix:描述性标题 → 补 [botName] 前缀", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    fakes.setGetTitle("波动率自适应止损策略讨论") // 模拟 opencode 已自动生成
+    await (pipeline as any).ensureBotTitlePrefix("ses_x")
+    expect(fakes.titleUpdates).toContain("[DeskFox-Mac] 波动率自适应止损策略讨论")
+  })
+
+  test("U3c ensureBotTitlePrefix:默认标题(生成未完成)→ 不改,可后续重试", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    fakes.setGetTitle("New session - 2026-07-06T00:00:00.000Z")
+    await (pipeline as any).ensureBotTitlePrefix("ses_x")
+    expect(fakes.titleUpdates).toHaveLength(0)
+    // 未标记 done → 生成完成后再调仍会补
+    fakes.setGetTitle("某个话题")
+    await (pipeline as any).ensureBotTitlePrefix("ses_x")
+    expect(fakes.titleUpdates).toContain("[DeskFox-Mac] 某个话题")
+  })
+
+  test("U3d ensureBotTitlePrefix:已带前缀 → 幂等不重复叠加", async () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    fakes.setGetTitle("[DeskFox-Mac] 已有前缀")
+    await (pipeline as any).ensureBotTitlePrefix("ses_x")
+    await (pipeline as any).ensureBotTitlePrefix("ses_x")
+    expect(fakes.titleUpdates).toHaveLength(0)
+  })
+
+  test("U3e ensureBotTitlePrefix:无 botName → 纯描述性标题不加前缀(与桌面一致)", async () => {
     const pipeline = makePipeline(undefined)
-    await (pipeline as any).getOrCreateSession(makeEvent())
-    expect(fakes.created[0]!.body.title).toBe("Feishu group/23456789")
+    fakes.setGetTitle("某话题")
+    await (pipeline as any).ensureBotTitlePrefix("ses_x")
+    expect(fakes.titleUpdates).toHaveLength(0)
+  })
+
+  test("U3f deriveTitleHint:文本→片段 / 文件→文件名 / 兜底→Feishu <type>", () => {
+    const pipeline = makePipeline("DeskFox-Mac")
+    const h = (ev: any) => (pipeline as any).deriveTitleHint(ev)
+    expect(h(makeEvent({ content: JSON.stringify({ text: "帮我分析这个波动率自适应止损策略的历史回测表现如何" }) })))
+      .toBe("帮我分析这个波动率自适应止损策略的历史回测表现如") // 前 24 字
+    expect(h(makeEvent({ content: JSON.stringify({ file_name: "策略报告.xlsx" }) }))).toBe("策略报告.xlsx")
+    expect(h(makeEvent({ chatType: "group", content: "not-json" }))).toBe("Feishu group")
   })
 
   test("U1 同 chat 二次调用复用内存 session,不重复新建", async () => {
