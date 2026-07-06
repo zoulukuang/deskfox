@@ -71,12 +71,33 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 → **结论**:`contact:user.base:readonly` **只对「合并转发里非当前 chat 成员的真名」是锦上添花,核心功能不需要**。已建的 `contact-name-resolver`(contact API + graceful 回落)对合并转发正确;**第 6 项群呈现面应改走 chat-members(免 scope)**,不用通讯录 API。
 
+## 第四批:REQ-073-⑥ 群 session 发送者昵称(注入式,commit `24e3f520c7`)
+
+user 拍板走**注入式**(把发送者真名前缀进 user message,桌面见谁说的 + bot 知道谁在说,契合已认可的群上下文带入特性)。
+
+- `contact-name-resolver.ts` 加 `resolveChatMemberNames(chatId, client)`:分页 `GET /im/v1/chats/{id}/members`,**免 contact scope**(实测直接返 name),graceful 回落。
+- `message-pipeline.ts` `getGroupSenderName`:群消息发送者真名,**10min TTL per-chat 缓存**;handle() 里 `promptText` 前注入 `[真实昵称]: <内容>`;p2p / 查不到 → 无前缀(旧行为一致)。
+- +5 单测(U10/U10b/U10c 分页各态 + U11/U11b)。**adapter 760 全量回归绿**。
+
+## 真机端到端验收(2026-07-06,本地版重建 + 投资CFO)
+
+重建 feishu 插件 bundle(`build-feishu-plugin.sh` → `plugin.js` 4.4MB,grep 特征串确认新代码入包)→ 拷进本地版 `.app/Contents/Resources/plugin/feishu-bridge/dist/` → **仅重启本地版**(正式版 PID 49812 全程存活未碰)→ `/debug/simulate-message` 注入(不依赖真 WSS,非侵入)。
+
+| 项 | 验收手段 | 结果 |
+|---|---|---|
+| ① 停归档 | 新建 session 查 `opencode-local.db` `time_archived` | ✅ **空(未归档)** → 进侧栏 |
+| ④ bot title | 查 session `title` | ✅ **`[投资CFO] Feishu p2p/83304075`** |
+| ② 跨重启接续 | 重启本地版 → 同 chat 再发 → 比对 session id | ✅ **复用 `ses_0cacb46e`**(store 回读生效,旧行为会新建) |
+| ⑤ 授权反向失效 | 需真 permission 流 | 单测覆盖(U5/U6);真机 permission 流未单独跑 |
+| ⑥ 群昵称 | chat-members 真机返 name(前已实测「搞量化的小贝」)+ 单测 U10/U11 | 逻辑已证;真群 e2e 受 DB 隔离限制未单跑 |
+
+⚠️ 验收在本地版(`opencode-local.db`),与正式版 DB 隔离;测试 chat 条目已从共享 store 清理。
+
 ## 待续
 
-- **REQ-073-⑥ 群 session 呈现面**:改用 chat-members(免 scope)解析群成员名;**呈现落点**(把 sender 真名注入 session prompt = 改 LLM 可见内容/影响 bot 行为,vs 仅桌面 UI 层展示)待 user 拍板。
-- REQ-055 合并转发真名:contact API 路已就绪,scope **可选**(开通则点亮,否则回落前缀)。可选增强:先试 chat-members(当前 chat)再落 contact API。
-- 第 3 项桌面续聊:待真机验证 0 前端改动。
-- 全部 🔴 真机验收(E1-E8);⚠️ 须在实际桥接账号的实例(注意本地版/正式版 DB 隔离),需重建本地版 sidecar 载入新代码。
+- 第 3 项桌面续聊 / ⑤⑥ 真机 permission+真群 e2e:留待 user 在实际桥接实例抽查(可选;逻辑均单测+真 API 证)。
+- REQ-055 合并转发真名 scope **可选**:user 开通 `contact:user.base:readonly` 则点亮,否则回落前缀。
+- merge 前:1-spec R8 清单回填实际单测编号;feat 分支 push / 合 main 待 user。
 
 ## 回退方法
 
