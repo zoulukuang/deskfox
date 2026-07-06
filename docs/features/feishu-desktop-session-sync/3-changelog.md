@@ -188,6 +188,24 @@ user 转发「笑南与李哲的会话记录」合并卡片到「投资CFO」bot
 
 **未做(方案 B,follow-up)**:让桌面能**真授权**飞书权限,需飞书 pipeline 改用每账号目录 scoped 的 client(让权限落在 GUI 能到的 instance),触及飞书桥核心 client 路由、稳定性风险高,`稳定 > 一切` 下另立结构改任务。现形态:**权限统一在飞书授**,桌面不再报错、卡片正常消失。
 
+## bug 修复:P2 升级为方案 D「谁触发谁展示」(对称,user 拍板 + CDP 双路径实测)
+
+user 进一步澄清产品意图:**哪端触发的审批卡片就在哪端出现,其他端不出现**。方案 A(桌面不报错但仍显示不可用卡)不够;方案 B(双操控台)违反「绝对单一」+ 深耦合 instance 内部。评估后 user 选**方案 D**:每端只展示**自己 instance 能 resolve(= 自己触发)** 的权限。
+
+**判据**:权限落在「谁跑这次活」的 instance(实测:桌面续聊触发 → 桌面 instance、桌面能审;飞书 bot 触发 → 飞书 instance、桌面 respond 会 404)。permission.asked 按目录广播故两端都收得到,但 respond/list 是 instance-scoped。
+
+**两端过滤(不同机制,同判据)**:
+- **桌面 GUI**(`session-composer-state.ts`,改上游 + FORK):`sessionPermissionRequest` 加过滤 —— 用本 instance 的 `permission.list()`(v2,instance-scoped)交叉核,只展示 id 在本 list 里的权限。飞书触发的(不在本 list)→ 不显示卡。fail-open(拉取失败不过滤)。
+- **飞书 adapter**(`message-pipeline.ts`,fork-only):v1 client 无 permission.list → 改用**纯本地判据 `inFlightSessions`**(runOpencode 进出维护「本 pipeline 正跑 turn 的 session」)。`handlePermissionAsked` 只对 inFlight 的 session 弹卡;非 inFlight(疑桌面触发)→ 跳过。
+
+**CDP 双路径真机实测通过**:
+- 路径①(飞书 bot 触发):飞书弹卡 ✓ / 桌面**不弹**(过滤,`allowBtn:false`,导航到持权限的会话确认 dock 空)✓。
+- 路径②(桌面续聊触发):桌面弹卡且**点「允许一次」成功 resolve、agent 继续**(`toastFail:false`)✓ / 飞书**不弹**(本环境飞书 event hook 未为桌面 instance 触发,card=0)✓。
+
+**测试**:+2 单测(U15 in-flight→弹 / U16 非 in-flight→不弹);adapter **777 全量 0 fail** + 两包 typecheck 绿。方案 A 的 toast 静默降级**保留作双保险**(存量/漏网跨-instance 权限点到也不报错)。
+
+**已知边界**:①飞书侧 inFlight 是**每 session 粒度**,若「飞书正跑该 session turn」时桌面又往**同一 session** 并发提交,飞书 inFlight=true 会误放行桌面权限(飞书弹一张点了 404 的死卡)—— 纯本地信号在并发同会话下的固有局限,罕见(正常不会在会话 working 时从桌面插入);②本环境实测飞书 event hook 未为桌面 instance 权限触发(故飞书侧过滤未被实际走到),保留作 user 曾观察到「飞书也弹」那类配置的防护网。
+
 ## 待办(仅剩流程)
 
 - **P2 桌面授权 404**(飞书 resolve 后桌面 GUI 卡片不撤 → 再点报 "Permission request not found"):疑 opencode 原生 GUI 未响应外部 `permission.replied` 自动撤卡(纯 opencode GUI+TUI 双端也会),不在 adapter 修复范围,待查上游 GUI。

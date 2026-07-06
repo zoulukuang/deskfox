@@ -260,6 +260,31 @@ describe("getOrCreateSession(REQ-073-①④)", () => {
     ).toBeNull()
   })
 
+  // [fix: feishu-permission-cross-instance 方案D] 2026-07-06
+  // 「谁触发谁展示」飞书侧:permission.asked 只对【飞书当前正跑 turn(inFlight)的 session】弹卡;
+  // 桌面续聊触发的权限(飞书非 in-flight,落桌面 instance,飞书 respond 会 404)→ 跳过不弹。
+  function makePermRequest(sessionID: string) {
+    return { id: "per_1", sessionID, permission: "read", patterns: [], metadata: {}, always: [] } as any
+  }
+  test("U15 handlePermissionAsked:飞书 in-flight turn 的 session → 弹飞书卡", async () => {
+    const pipeline = makePipeline("Bot")
+    let started = 0
+    ;(pipeline as any).permissionController = { start: async () => void started++ }
+    ;(pipeline as any).sessionToChat.set("ses_x", "oc_chat")
+    ;(pipeline as any).inFlightSessions.add("ses_x") // 飞书正跑这条 turn
+    await (pipeline as any).handlePermissionAsked(makePermRequest("ses_x"))
+    expect(started).toBe(1)
+  })
+  test("U16 handlePermissionAsked:非飞书 in-flight(桌面触发)→ 不弹飞书卡", async () => {
+    const pipeline = makePipeline("Bot")
+    let started = 0
+    ;(pipeline as any).permissionController = { start: async () => void started++ }
+    ;(pipeline as any).sessionToChat.set("ses_x", "oc_chat")
+    // inFlightSessions 不含 ses_x(飞书没在跑 → 疑桌面触发)
+    await (pipeline as any).handlePermissionAsked(makePermRequest("ses_x"))
+    expect(started).toBe(0)
+  })
+
   test("U1 同 chat 二次调用复用内存 session,不重复新建", async () => {
     const pipeline = makePipeline("DeskFox-Mac")
     const first = await (pipeline as any).getOrCreateSession(makeEvent())

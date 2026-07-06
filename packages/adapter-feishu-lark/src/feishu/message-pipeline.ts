@@ -516,6 +516,14 @@ export class MessagePipeline {
   private readonly larkClient: Client
   /** chatId → opencode sessionID(in-memory cache,真持久化在 chatSessionStore)*/
   private readonly chatToSession = new Map<string, string>()
+  /**
+   * [fix: feishu-permission-cross-instance 方案D] 2026-07-06
+   * 本 pipeline **正在跑 turn** 的 sessionID 集合(runOpencode 进出维护)。
+   * 用于 permission.asked 归属判断:permission.asked 全局广播,桌面续聊触发的权限(落在桌面
+   * instance,飞书 respond 会 404)也会到 handlePermissionAsked;只有**飞书此刻正跑这条 session
+   * 的 turn** 时,该权限才是飞书 instance 的、飞书能 resolve → 才弹飞书卡。实现「谁触发谁展示」。
+   */
+  private readonly inFlightSessions = new Set<string>()
   /** [feat: feishu-image-recognition] 2026-05-26 — model vision capability 缓存
    *  key: `<providerID>/<modelID>` 或 "__default__"(account 没指定 model)
    *  value: { supportsImage: boolean, checkedAt: ms }
@@ -613,6 +621,16 @@ export class MessagePipeline {
     if (!chatId) {
       console.warn(
         `[pipeline ${this.opts.accountId}] permission.asked for unknown sessionID ${request.sessionID}`,
+      )
+      return
+    }
+    // [fix: feishu-permission-cross-instance 方案D] 2026-07-06 —— 「谁触发谁展示」。
+    // permission.asked 全局广播:桌面续聊飞书会话触发的权限(落在桌面 instance,飞书 respond 会
+    // 404)也会到这。只有**飞书此刻正跑这条 session 的 turn**(inFlight)时,权限才在飞书 instance、
+    // 飞书能 resolve → 才弹飞书卡;否则(桌面触发)跳过,交给桌面弹卡审批。
+    if (!this.inFlightSessions.has(request.sessionID)) {
+      console.log(
+        `[pipeline ${this.opts.accountId}] permission ${request.id} 非飞书 in-flight turn(疑桌面触发)→ 不发飞书卡`,
       )
       return
     }
@@ -2134,6 +2152,11 @@ export class MessagePipeline {
     // 的 friendlyErrorReply,确保用户一定能收到一条 reply(消除"bot 死了"黑洞)。
     const dispatchPromise = this.opts.dispatcher.register(sessionID, timeoutMs)
 
+    // [fix: feishu-permission-cross-instance 方案D] 标记本 session 正被【飞书】跑 turn;
+    // 这段窗口内到达的 permission.asked 才归属飞书 instance(见 handlePermissionAsked)。
+    // 窗口 = [此处, dispatchPromise resolve/reject](turn 内工具触发权限都落此窗口内)。
+    this.inFlightSessions.add(sessionID)
+
     // [feat: feishu-edit-dialog-ux 2026-06-08] effectiveModel 把"自动免费"哨兵实时解析成具体
     // model;未设/解析不到 → null → promptAsync 不带 model 走 opencode 全局默认。
     const accountModel = await this.effectiveModel()
@@ -2187,7 +2210,13 @@ export class MessagePipeline {
     // 等 dispatcher signal(session.idle / timeout-partial 都 resolve,timeout-empty /
     // session.error / superseded / abortAll 都 reject)。reject 一路冒到 handle() 的
     // catch → friendlyErrorReply 给 user surface,不再静默丢弃。
-    const dispatchResult = await dispatchPromise
+    // [fix: feishu-permission-cross-instance 方案D] turn 结束(resolve/reject)即撤 in-flight 标记。
+    let dispatchResult: Awaited<typeof dispatchPromise>
+    try {
+      dispatchResult = await dispatchPromise
+    } finally {
+      this.inFlightSessions.delete(sessionID)
+    }
 
     // [feat: feishu-llm-timeout-surface review-followup] 2026-06-01
     // dispatcher 已经累积的 LLM 文本(collectText 已 trim,空字符串就是 "")。

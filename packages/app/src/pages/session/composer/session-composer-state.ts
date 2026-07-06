@@ -1,4 +1,4 @@
-import { createEffect, createMemo, on, onCleanup } from "solid-js"
+import { createEffect, createMemo, createResource, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
 import { useParams } from "@solidjs/router"
@@ -35,9 +35,34 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     return sessionQuestionRequest(sync.data.session, sync.data.question, params.id)
   })
 
+  // FORK: 跨-instance 权限过滤(方案D)2026-07-06
+  // permission.asked 按目录广播,会带进【别的 instance】(如飞书桥无人值守跑的 turn)触发的权限;
+  // 但 respond 是 instance-scoped —— 别的 instance 的权限在本端点了必 404("Permission request
+  // not found")。故用本 instance 的 permission.list() 交叉核,只展示【本 instance 能 resolve】的
+  // (= 本端触发的)权限卡,实现「谁触发谁展示」。resource 随权限集合变化刷新;拉取失败 fail-open 不过滤。
+  const permissionSignature = createMemo(() =>
+    Object.values(sync.data.permission)
+      .flat()
+      .map((p) => (p as PermissionRequest | undefined)?.id ?? "")
+      .sort()
+      .join(","),
+  )
+  const [myPermissionIds] = createResource(permissionSignature, async () => {
+    try {
+      const r = await sdk.client.permission.list()
+      return new Set(((r.data ?? []) as PermissionRequest[]).map((p) => p.id))
+    } catch {
+      return null // 查询失败 → 不过滤(fail-open,宁可多展示不误藏)
+    }
+  })
+
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
+    const mine = myPermissionIds()
     return sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) => {
-      return !permission.autoResponds(item, sdk.directory)
+      if (permission.autoResponds(item, sdk.directory)) return false
+      // mine 为 undefined(加载中)/ null(失败)→ fail-open 不过滤;有集合则只留本 instance 的
+      if (mine != null && !mine.has(item.id)) return false
+      return true
     })
   })
 
