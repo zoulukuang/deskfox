@@ -54,6 +54,12 @@ export interface FlattenOptions {
   maxImages: number
   /** 当前嵌套深度(0=顶层,≥2 时占位)*/
   depth: number
+  /**
+   * open_id → 真实昵称映射(REQ-055,由 contact-name-resolver 在 pipeline 层解析后传入)。
+   * 命中则 senderTag 用真名,未命中(缺 scope / 不在可用范围 / 未传)回落 open_id 前 6 位。
+   * [feat: feishu-desktop-session-sync]
+   */
+  senderNames?: Map<string, string>
 }
 
 export const MAX_SUB_MESSAGES = 50
@@ -70,11 +76,14 @@ export function sortByCreateTime(items: SubMessage[]): SubMessage[] {
   })
 }
 
-/** sender open_id 简显前 6 位(D5,sender_id → 用户名映射留 backlog)*/
-function senderTag(item: SubMessage): string {
+/**
+ * sender 显示名:优先真实昵称(nameMap 命中),回落 open_id 前 6 位。
+ * [feat: feishu-desktop-session-sync REQ-055] 真名解析在 pipeline 层做,本纯函数只查表。
+ */
+function senderTag(item: SubMessage, nameMap?: Map<string, string>): string {
   const senderId = item.sender?.id ?? ""
   if (!senderId) return "未知"
-  return senderId.slice(0, 6)
+  return nameMap?.get(senderId) ?? senderId.slice(0, 6)
 }
 
 /** 提 post msg_type 的 textContent(同 message-pipeline.ts parseMessageContent post 分支)*/
@@ -132,9 +141,10 @@ export function renderSubMessage(
   imageRendered: boolean,
   imageGlobalIndex: number,
   depth: number,
+  nameMap?: Map<string, string>,
 ): string {
   const msgType = item.msg_type ?? "unknown"
-  const senderPrefix = withSender ? `[${senderTag(item)}]: ` : ""
+  const senderPrefix = withSender ? `[${senderTag(item, nameMap)}]: ` : ""
   const contentJson = item.body?.content ?? "{}"
 
   let bodyText: string
@@ -251,7 +261,7 @@ export function flattenMergeForward(
   items: SubMessage[],
   options: FlattenOptions,
 ): FlattenResult {
-  const { withSender, maxSubMessages, maxImages, depth } = options
+  const { withSender, maxSubMessages, maxImages, depth, senderNames } = options
 
   // R2 时间序
   const sorted = sortByCreateTime(items)
@@ -306,6 +316,7 @@ export function flattenMergeForward(
       canExpand,
       imageGlobalIndex,
       depth,
+      senderNames,
     )
     lines.push(line)
   }

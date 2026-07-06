@@ -1,4 +1,4 @@
-import { createEffect, createMemo, on, onCleanup } from "solid-js"
+import { createEffect, createMemo, createResource, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
 import { useParams } from "@solidjs/router"
@@ -35,9 +35,34 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     return sessionQuestionRequest(sync.data.session, sync.data.question, params.id)
   })
 
+  // FORK: 跨-instance 权限过滤(方案D)2026-07-06
+  // permission.asked 按目录广播,会带进【别的 instance】(如飞书桥无人值守跑的 turn)触发的权限;
+  // 但 respond 是 instance-scoped —— 别的 instance 的权限在本端点了必 404("Permission request
+  // not found")。故用本 instance 的 permission.list() 交叉核,只展示【本 instance 能 resolve】的
+  // (= 本端触发的)权限卡,实现「谁触发谁展示」。resource 随权限集合变化刷新;拉取失败 fail-open 不过滤。
+  const permissionSignature = createMemo(() =>
+    Object.values(sync.data.permission)
+      .flat()
+      .map((p) => (p as PermissionRequest | undefined)?.id ?? "")
+      .sort()
+      .join(","),
+  )
+  const [myPermissionIds] = createResource(permissionSignature, async () => {
+    try {
+      const r = await sdk.client.permission.list()
+      return new Set(((r.data ?? []) as PermissionRequest[]).map((p) => p.id))
+    } catch {
+      return null // 查询失败 → 不过滤(fail-open,宁可多展示不误藏)
+    }
+  })
+
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
+    const mine = myPermissionIds()
     return sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) => {
-      return !permission.autoResponds(item, sdk.directory)
+      if (permission.autoResponds(item, sdk.directory)) return false
+      // mine 为 undefined(加载中)/ null(失败)→ fail-open 不过滤;有集合则只留本 instance 的
+      if (mine != null && !mine.has(item.id)) return false
+      return true
     })
   })
 
@@ -82,6 +107,13 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
       .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
+        // FORK: 飞书桥接权限跨-instance 优雅降级 2026-07-06
+        // opencode 每个目录 instance 有独立 permission store;飞书桥接的权限创建在 plugin 宿主
+        // instance,而本 GUI 按 session 目录连的是另一个 instance server → 这里 respond 会返
+        // "Permission request not found"(权限不在本 instance 的 pending 里)。这是良性情况:
+        // 权限本应在发起端(飞书)确认,且会随 permission.replied 全局事件让本卡片自动消失。
+        // 故对该 NotFound 静默降级,不弹吓人的错误 toast(避免用户误以为授权坏了)。
+        if (/permission request not found/i.test(description)) return
         showToast({ title: language.t("common.requestFailed"), description })
       })
       .finally(() => {

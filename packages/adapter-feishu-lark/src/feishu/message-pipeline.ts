@@ -31,6 +31,7 @@ import { createGroup, getShareLink } from "./group-creator"
 import {
   PermissionCardController,
   type ParsedCardAction,
+  type PermissionReply,
   type PermissionRequest,
 } from "./permission-card"
 import {
@@ -47,6 +48,7 @@ import {
   ensureDeskfoxDir,
   resolveWorkspace,
 } from "./deskfox-dir"
+import { resolveChatMemberNames, resolveOpenIdNames } from "./contact-name-resolver"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
   flattenMergeForward,
@@ -229,6 +231,22 @@ export async function fetchParentMessageText(
   const msg = items?.[0]
   if (!msg) return null
 
+  return parseQuotedMessageText(msg)
+}
+
+/**
+ * 把一条(已 get 到的)父消息解析成引用原文文本。纯函数,不做 IO。
+ * [feat: feishu-desktop-session-sync] 从 fetchParentMessageText 抽出,供引用/回复统一入口
+ * resolveQuotedContext 复用(merge_forward 分支单独在 pipeline 层展开,不走本函数)。
+ *
+ * 消息类型映射:
+ *   text / post → 抽取文本;image(纯图无 caption)→ "[图片]"
+ *   file → "[文件:{file_name}]";其他 → "[{msg_type}]"
+ */
+export function parseQuotedMessageText(msg: {
+  msg_type?: string
+  body?: { content?: string }
+}): string | null {
   const msgType = msg.msg_type ?? ""
   const content = msg.body?.content ?? ""
 
@@ -498,6 +516,14 @@ export class MessagePipeline {
   private readonly larkClient: Client
   /** chatId → opencode sessionID(in-memory cache,真持久化在 chatSessionStore)*/
   private readonly chatToSession = new Map<string, string>()
+  /**
+   * [fix: feishu-permission-cross-instance 方案D] 2026-07-06
+   * 本 pipeline **正在跑 turn** 的 sessionID 集合(runOpencode 进出维护)。
+   * 用于 permission.asked 归属判断:permission.asked 全局广播,桌面续聊触发的权限(落在桌面
+   * instance,飞书 respond 会 404)也会到 handlePermissionAsked;只有**飞书此刻正跑这条 session
+   * 的 turn** 时,该权限才是飞书 instance 的、飞书能 resolve → 才弹飞书卡。实现「谁触发谁展示」。
+   */
+  private readonly inFlightSessions = new Set<string>()
   /** [feat: feishu-image-recognition] 2026-05-26 — model vision capability 缓存
    *  key: `<providerID>/<modelID>` 或 "__default__"(account 没指定 model)
    *  value: { supportsImage: boolean, checkedAt: ms }
@@ -513,6 +539,14 @@ export class MessagePipeline {
   } | null = null
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
+  /** [feat: feishu-desktop-session-sync REQ-073-④] 已补 [botName] 标题前缀的 session(短路避免重复 get）*/
+  private readonly titlePrefixDone = new Set<string>()
+  /** [feat: feishu-desktop-session-sync REQ-073-⑥] 群成员 open_id→昵称缓存(免-scope chat-members)
+   *  key: chatId,value: { names: Map<open_id,name>, checkedAt: ms }。TTL 10min,免每条群消息翻页 */
+  private readonly chatMemberNameCache = new Map<
+    string,
+    { names: Map<string, string>; checkedAt: number }
+  >()
   /** 飞书 CardKit 权限卡片控制器(LLM 调工具触发权限时弹卡片让 user 在飞书选)*/
   readonly permissionController: PermissionCardController
   /** [feat: feishu-bridge-light] yes/no 确认卡片控制器(自动建群二次确认等)*/
@@ -590,7 +624,31 @@ export class MessagePipeline {
       )
       return
     }
+    // [fix: feishu-permission-cross-instance 方案D] 2026-07-06 —— 「谁触发谁展示」。
+    // permission.asked 全局广播:桌面续聊飞书会话触发的权限(落在桌面 instance,飞书 respond 会
+    // 404)也会到这。只有**飞书此刻正跑这条 session 的 turn**(inFlight)时,权限才在飞书 instance、
+    // 飞书能 resolve → 才弹飞书卡;否则(桌面触发)跳过,交给桌面弹卡审批。
+    if (!this.inFlightSessions.has(request.sessionID)) {
+      console.log(
+        `[pipeline ${this.opts.accountId}] permission ${request.id} 非飞书 in-flight turn(疑桌面触发)→ 不发飞书卡`,
+      )
+      return
+    }
     await this.permissionController.start(request, chatId)
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync REQ-073-⑤] 收到 permission.replied event
+   * (桌面 GUI / TUI 已解决该权限)→ 让本 pipeline 对应的飞书卡片反向失效。
+   * sessionID 不属于本 pipeline 时静默 noop(plugin 已按 hasSession 路由,这里再防御一次)。
+   */
+  async handlePermissionReplied(
+    sessionID: string,
+    requestID: string,
+    reply: PermissionReply,
+  ): Promise<void> {
+    if (!this.hasSession(sessionID)) return
+    await this.permissionController.handleExternalResolve(requestID, reply)
   }
 
   /**
@@ -607,6 +665,285 @@ export class MessagePipeline {
    */
   async handleCardActionReply(parsed: ParsedCardAction): Promise<void> {
     await this.permissionController.handleReply(parsed)
+  }
+
+  /**
+   * 获取 / 创建 chat 对应的 opencode session,统一 4 条消息路径(主文本 / merge_forward /
+   * 文件消息 / 图片文件)此前近乎逐字重复的「查找 → 创建 → 落盘 → archive」块。
+   * [feat: feishu-desktop-session-sync] 2026-07-06
+   *
+   * 与旧逻辑的三点差异:
+   *   1. 停止自动归档(REQ-073-①):新建 session 不再 archiveSession,飞书会话保持普通可见
+   *      session、进桌面侧栏;归档改由 user 在 GUI 操作驱动。
+   *   2. title 与桌面端一致(REQ-073-④ 改进):**不再设静态 `Feishu p2p/<chatId>` 标题**
+   *      (那串 chatId 尾号对人无意义)。改为创建时用 opencode 默认标题 → 触发桌面同款
+   *      LLM 自动生成描述性标题;再由 `ensureBotTitlePrefix` 惰性补 `[botName]` 前缀
+   *      (多 bot 同群仍可区分)。缺 botName 则纯描述性标题。
+   *   3. 跨重启接续(REQ-073-②):内存 miss 时回读已落盘的 chatSessionStore 复用旧 session,
+   *      不再每次重启开新 session。**但回读的 session 必须先校验在当前实例 DB 存在**
+   *      —— chatSessionStore 按 chatId 存全局共享,而 sessionID 是 DB 作用域:local 渠道用
+   *      opencode-local.db、发布三档共享 opencode.db(见《版本号与发布渠道规范》§3.11),
+   *      同账号被不同 DB 的实例桥接过时(如 local 版接手了 prod 建的 chat),回读会拿到本 DB
+   *      不存在的 dangling id → promptAsync 挂死 240s 超时(bug-repro)。故存在才复用,否则弃用新建。
+   *
+   * @returns 成功返回 sessionID;创建失败已发飞书友好错误并返回 null(调用点应 return)。
+   */
+  private async getOrCreateSession(event: ImMessageEvent): Promise<string | null> {
+    const cached = this.chatToSession.get(event.chatId)
+    if (cached) {
+      void this.ensureBotTitlePrefix(cached) // 自动标题生成后惰性补 [botName] 前缀
+      return cached
+    }
+    // 跨重启接续:回读落盘映射,**校验在当前 DB 存在**后才复用(防跨-DB dangling id 挂死)
+    const persisted = this.opts.chatSessionStore.get(this.opts.accountId, event.chatId)
+    if (persisted && (await this.sessionExists(persisted))) {
+      this.chatToSession.set(event.chatId, persisted)
+      this.sessionToChat.set(persisted, event.chatId)
+      void this.ensureBotTitlePrefix(persisted)
+      console.log(
+        `[pipeline ${this.opts.accountId}] reuse persisted session ${persisted} for chat=${event.chatId}`,
+      )
+      return persisted
+    }
+    if (persisted) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] persisted session ${persisted} 不在当前 DB(跨渠道/DB 隔离),弃用改新建 for chat=${event.chatId}`,
+      )
+    }
+    try {
+      // 不设 title → opencode 用默认标题("New session - <ISO>"),触发桌面同款 LLM 自动生成
+      const res = await this.opts.opencodeClient.session.create({
+        query: { directory: this.workspaceDir() },
+        body: {},
+      })
+      const id = (res as { data?: { id?: string } }).data?.id
+      if (!id) throw new Error("session.create returned no id")
+      this.chatToSession.set(event.chatId, id)
+      this.sessionToChat.set(id, event.chatId)
+      // 落盘:plugin 重启后同 chat 仍能复用此 session(第 2 项接续的持久化基础)
+      this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, id)
+      // 自动标题是 forkIn 异步生成,create 后不保证已完成;延迟一次 best-effort 补前缀
+      // (覆盖只发一条消息、不会再触发 cache-hit 路径的会话);gen 失败则用 hint 兜底
+      this.scheduleTitlePrefix(id, this.deriveTitleHint(event))
+      console.log(
+        `[pipeline ${this.opts.accountId}] new opencode session ${id} (持久化,可见) for chat=${event.chatId}`,
+      )
+      return id
+    } catch (err) {
+      console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
+      await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
+      return null
+    }
+  }
+
+  /**
+   * 从消息事件推导一个确定性标题 hint(自动生成失败时兜底,保证标题可读、含内容线索)。
+   * 优先首条消息文本片段 → 文件名 → 最末回落 `Feishu <chatType>`。
+   */
+  private deriveTitleHint(event: ImMessageEvent): string {
+    try {
+      const c = JSON.parse(event.content ?? "{}") as { text?: string; file_name?: string }
+      if (typeof c.text === "string" && c.text.trim()) return c.text.trim().slice(0, 24)
+      if (typeof c.file_name === "string" && c.file_name.trim()) return c.file_name.trim()
+    } catch {
+      // ignore
+    }
+    return `Feishu ${event.chatType}`
+  }
+
+  /**
+   * 轮询节奏(累积 ~90s):**等** opencode 异步生成描述性标题。导出供单测覆盖(可实例覆盖成短值)。
+   * [fix: feishu-title-prefix-race] 2026-07-06
+   */
+  static readonly TITLE_PREFIX_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000, 30000, 30000]
+  private titleRetryDelays: readonly number[] = MessagePipeline.TITLE_PREFIX_RETRY_DELAYS_MS
+
+  /**
+   * 轮询触发 title 补齐(给 opencode 异步生成描述性标题的时间)。
+   *
+   * [fix: feishu-title-prefix-race] 2026-07-06 —— 旧实现只 6s 后**一次性**:若那时 gen 未完成
+   * 就设 `[botName] <hint>` 并标记 titlePrefixDone;之后 gen 迟到把标题覆盖成无前缀的描述性标题
+   * (如「日常闲聊」),因 done 已置 → ensureBotTitlePrefix 短路,前缀**永久丢失**(P1 真机复现)。
+   *
+   * 新实现**先等 gen**:每个 tick 调 `ensureBotTitlePrefix`——仍是默认标题(gen 未完成)→ 不 done、
+   * 继续下一 tick;gen 完成变描述性 → 补 `[botName]` 前缀并 done、停。**只有轮询到头 gen 仍没来**
+   * (provider 超时等)才用确定性 hint 兜底,避免标题永久停在 "New session -"。这样正常路径先拿到
+   * gen 的真标题再补前缀,不存在"先设 hint 再被 gen 冲掉"的竞态。
+   */
+  private scheduleTitlePrefix(sessionID: string, hint: string): void {
+    const delays = this.titleRetryDelays
+    const tick = async (attempt: number): Promise<void> => {
+      if (this.titlePrefixDone.has(sessionID)) return
+      // gen 完成(标题变描述性)→ ensureBotTitlePrefix 补前缀并置 done;仍默认 → 不 done,继续轮询
+      await this.ensureBotTitlePrefix(sessionID)
+      if (this.titlePrefixDone.has(sessionID)) return
+      if (attempt + 1 < delays.length) {
+        setTimeout(() => void tick(attempt + 1), delays[attempt + 1])
+        return
+      }
+      // 轮询到头 gen 仍没来 → 确定性 hint 兜底(不再等,避免永久停在 "New session -")
+      const botName = this.opts.account.botName?.trim()
+      const fallback = botName ? `[${botName}] ${hint}` : hint
+      try {
+        const r = await this.opts.opencodeClient.session.get({
+          path: { id: sessionID },
+          query: { directory: this.workspaceDir() },
+        })
+        const title = ((r as { data?: { title?: string } }).data?.title ?? "").trim()
+        // 仍是默认/空才兜底(别覆盖 gen 或用户后来产生的标题)
+        if (!title || title.startsWith("New session - ") || title.startsWith("Child session - ")) {
+          await this.opts.opencodeClient.session.update({
+            path: { id: sessionID },
+            query: { directory: this.workspaceDir() },
+            body: { title: fallback },
+          })
+          this.titlePrefixDone.add(sessionID)
+          console.log(`[pipeline ${this.opts.accountId}] title 兜底(gen 超时未完成)→ ${fallback}`)
+        }
+      } catch (err) {
+        console.warn(
+          `[pipeline ${this.opts.accountId}] scheduleTitlePrefix 兜底失败(忽略):`,
+          (err as Error).message,
+        )
+      }
+    }
+    setTimeout(() => void tick(0), delays[0])
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync REQ-073-④ 改进] 给自动生成的描述性标题惰性补 `[botName]` 前缀。
+   *
+   * 时序:opencode 的标题自动生成是 `forkIn` 异步跑(prompt.ts),create/promptAsync 返回时
+   * 不保证已完成。故本方法在 create 后延迟触发 + 每次 cache-hit/reuse 再触发,直到标题非默认时补上一次:
+   *   - 默认标题("New session - …")= 生成未完成 → 跳过,下条消息/延迟再试(不加入 done)
+   *   - 已 `[` 开头 = 已带前缀 → 标记 done,跳过(幂等,防重复叠加)
+   *   - 无 botName → 标记 done(纯描述性标题,与桌面一致)
+   *   - 否则 → session.update 补 `[botName] <描述性标题>`,标记 done
+   * done Set 短路,避免每条消息都 session.get。全程 best-effort,失败忽略。
+   */
+  private async ensureBotTitlePrefix(sessionID: string): Promise<void> {
+    if (this.titlePrefixDone.has(sessionID)) return
+    const botName = this.opts.account.botName?.trim()
+    if (!botName) {
+      this.titlePrefixDone.add(sessionID)
+      return
+    }
+    try {
+      const r = await this.opts.opencodeClient.session.get({
+        path: { id: sessionID },
+        query: { directory: this.workspaceDir() },
+      })
+      const title = ((r as { data?: { title?: string } }).data?.title ?? "").trim()
+      if (!title) return
+      if (title.startsWith("New session - ") || title.startsWith("Child session - ")) return
+      if (title.startsWith("[")) {
+        this.titlePrefixDone.add(sessionID)
+        return
+      }
+      await this.opts.opencodeClient.session.update({
+        path: { id: sessionID },
+        query: { directory: this.workspaceDir() },
+        body: { title: `[${botName}] ${title}` },
+      })
+      this.titlePrefixDone.add(sessionID)
+      console.log(
+        `[pipeline ${this.opts.accountId}] title 补 bot 前缀 → [${botName}] ${title}`,
+      )
+    } catch (err) {
+      console.warn(
+        `[pipeline ${this.opts.accountId}] ensureBotTitlePrefix 失败(忽略):`,
+        (err as Error).message,
+      )
+    }
+  }
+
+  /**
+   * 校验 sessionID 在**当前实例 DB** 存在(第 2 项 store 回读的安全闸)。
+   * [bug-repro: local 版回读到 prod-db 的 session id(chatSessionStore 全局共享但 DB 隔离)
+   *  → promptAsync 挂死 240s 超时] 2026-07-06
+   *
+   * 走 session.messages(同 debugFetchMessages 路径),仅看 HTTP 状态:200=存在(空消息也算);
+   * 404 / 任何非 200 / 抛异常 → 一律当"不存在"(**宁可新建也不冒挂死风险**;跨-DB dangling id
+   * 与瞬时异常都归此路,损失至多是丢一次跨重启上下文,远好于 240s 无响应)。
+   */
+  private async sessionExists(sessionID: string): Promise<boolean> {
+    try {
+      const r = await this.opts.opencodeClient.session.messages({
+        path: { id: sessionID },
+        query: { directory: this.workspaceDir() },
+      })
+      const wrap = r as { error?: unknown; response?: { status?: number } }
+      const status = wrap.response?.status
+      if (typeof status === "number") return status >= 200 && status < 300
+      // 某些 SDK 形态不带 response.status:有 error 视为不存在,否则乐观视为存在
+      return !wrap.error
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync REQ-073-⑥] 群消息发送者昵称(真名优先,回落 open_id 前缀)。
+   *
+   * 走 chat-members 拿真名(带 10min TTL per-chat 缓存,免每条群消息翻页)。
+   *
+   * [fix: feishu-group-sender-fallback] 2026-07-06 —— chat-members **需要 `im:chat*` scope**
+   * (旧注释"免-scope"不准:实测缺 scope 时飞书返 code=99991672 Access denied → 拿不到任何名字)。
+   * **缺 scope / 查不到时回落 open_id 前 6 位**(对齐合并转发 senderTag),保证多人群里每条消息
+   * 至少带**可区分**的发言人标签,而非旧行为「返 null → 完全无前缀 → 全员匿名 → bot 分不清谁是谁」。
+   * 仅 p2p / 无 senderOpenId 才返 null(单聊跟 bot 一对一,无需前缀)。
+   */
+  private async getGroupSenderName(event: ImMessageEvent): Promise<string | null> {
+    if (event.chatType === "p2p" || !event.senderOpenId) return null
+    const names = await this.getChatMemberNames(event.chatId)
+    return names.get(event.senderOpenId) ?? event.senderOpenId.slice(0, 6)
+  }
+
+  /**
+   * 取某 chat 全体成员 open_id→昵称(免-scope chat-members),带 10min TTL per-chat 缓存。
+   * [feat: feishu-desktop-session-sync]
+   */
+  private async getChatMemberNames(chatId: string): Promise<Map<string, string>> {
+    const NAME_TTL_MS = 10 * 60 * 1000
+    const now = Date.now()
+    let entry = this.chatMemberNameCache.get(chatId)
+    if (!entry || now - entry.checkedAt > NAME_TTL_MS) {
+      const names = await resolveChatMemberNames(chatId, this.larkClient)
+      entry = { names, checkedAt: now }
+      this.chatMemberNameCache.set(chatId, entry)
+    }
+    return entry.names
+  }
+
+  /**
+   * 解析一组 sender open_id → 昵称,**chat-members 优先(免 scope)→ contact API 兜底**。
+   * [feat: feishu-desktop-session-sync REQ-055]
+   *
+   * 合并转发的 sender 若是当前 chat 成员(同群转发),chat-members 立刻拿到真名、不依赖任何
+   * scope;非当前 chat 成员(跨群/陌生人)才落 contact/v3/users(需 contact:user.base:readonly,
+   * 未生效则回落前缀)。两层都 graceful。
+   */
+  private async resolveSenderNames(
+    chatId: string,
+    openIds: string[],
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>()
+    const unique = [...new Set(openIds.filter((x) => !!x))]
+    if (unique.length === 0) return result
+    // 第一层:chat-members(免 scope)
+    const memberNames = await this.getChatMemberNames(chatId)
+    const unresolved: string[] = []
+    for (const id of unique) {
+      const n = memberNames.get(id)
+      if (n) result.set(id, n)
+      else unresolved.push(id)
+    }
+    // 第二层:剩余(非当前 chat 成员)走 contact API
+    if (unresolved.length > 0) {
+      const contactNames = await resolveOpenIdNames(unresolved, this.larkClient)
+      for (const [id, n] of contactNames) result.set(id, n)
+    }
+    return result
   }
 
   async handle(event: ImMessageEvent): Promise<void> {
@@ -873,64 +1210,35 @@ export class MessagePipeline {
       ),
     )
 
-    // 仅复用 *本 sidecar lifecycle 内* 创建的 session(in-memory cache)。
-    // 历史 session(sidecar 上次启动前创建的)因 opencode 内部 InstanceState 不预 load
-    // 而对 GET /session/{id}/message 路由返 401,导致拉不到 reply。
-    // 短期 trade-off:sidecar 重启后所有 chat 第一条消息开新 session(无跨重启 multi-turn memory),
-    // 但同 sidecar lifetime 内 chat 仍 multi-turn 复用 session。
-    // FUTURE:让旧 session 也能拉(可能改走 /api/session/{id}/message 或 reload state)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: {
-            title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}`,
-          },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        // 落盘:plugin 重启后同 chat 仍能复用此 session
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        // 🚨 立即 archive 飞书 plugin 创建的 session,user GUI sidebar 不显示
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] archive session ${sessionID} failed (会显示在 GUI):`,
-            archErr,
-          )
-        })
-        console.log(
-          `[pipeline ${this.opts.accountId}] new opencode session ${sessionID} (archived,持久化) for chat=${event.chatId}`,
-        )
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // session 复用 / 新建(REQ-073-①④:停归档 + bot 昵称 title;跨重启接续见 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     // FORK-BEGIN: REQ-036 引用/回复原文注入 2026-06-02
     // 架构说明:注入在 user message parts(text part),对所有 agent 均有效
     // (包括 claude-code plugin 等不读 system prompt 的 plugin agent)。
     let quotedContext: string | null = null
     if (event.parentId) {
-      quotedContext = await fetchParentMessageText(event.parentId, this.larkClient).catch(
-        () => null,
-      )
+      // [feat: feishu-desktop-session-sync] 统一入口:merge_forward 父消息展开子消息 + 发言人昵称,
+      // 其余走纯文本抽取(此前 fetchParentMessageText 对 merge_forward 只吐 [merge_forward] 空壳)。
+      quotedContext = await this.resolveQuotedContext(event).catch(() => null)
       if (quotedContext !== null) {
         console.log(
           `[pipeline ${this.opts.accountId}] quote parent=${event.parentId}: "${quotedContext.slice(0, 60)}"`,
         )
       }
     }
+    // FORK-END
+
+    // REQ-073-⑥ 群 session「谁说的」:注入式,把发送者真实昵称前缀进 user message,
+    // 桌面 session 能看到谁说的,bot 也知道是谁在说(契合已认可的群上下文带入特性)。
+    // 免-scope chat-members 取名;p2p / 查不到 → 无前缀(与旧行为一致)。
+    const senderName = await this.getGroupSenderName(event)
+    const attributedText = senderName ? `[${senderName}]: ${cleaned}` : cleaned
     const promptText =
       quotedContext !== null
-        ? `[引用原文]\n${quotedContext}\n[/引用原文]\n\n${cleaned}`
-        : cleaned
-    // FORK-END
+        ? `[引用原文]\n${quotedContext}\n[/引用原文]\n\n${attributedText}`
+        : attributedText
 
     let reply: string
     try {
@@ -978,6 +1286,89 @@ export class MessagePipeline {
   }
 
   /**
+   * [feat: feishu-desktop-session-sync] 引用/回复原文解析统一入口。
+   *
+   * 一次 message.get 拿父消息(merge_forward 容器的 get 会一并返回全部子消息):
+   *   - merge_forward → 展开子消息 + 发言人昵称(问题①修复:此前只吐 `[merge_forward]` 空壳,
+   *     引用合并转发再追问时 bot 完全读不到内容,还会误判"转发没粘上")
+   *   - 其它类型 → parseQuotedMessageText 纯文本抽取(text/post/image/file)
+   *
+   * 全程 graceful:get 失败 / 无父消息 → null,调用点降级为"不带引用块"正常走 LLM。
+   */
+  private async resolveQuotedContext(event: ImMessageEvent): Promise<string | null> {
+    const parentId = event.parentId
+    if (!parentId) return null
+    let items: SubMessage[]
+    try {
+      const r = await this.larkClient.im.v1.message.get({ path: { message_id: parentId } })
+      items = (r as { data?: { items?: SubMessage[] } }).data?.items ?? []
+    } catch {
+      return null
+    }
+    const container = items[0]
+    if (!container) return null
+
+    if (container.msg_type === "merge_forward") {
+      // 子消息 = 带 upper_message_id 的项(同 fetchMergeForwardItems 语义,复用同一次 get 结果,不再多打一次 API)
+      const subs = items.filter(
+        (i) => typeof i.upper_message_id === "string" && i.upper_message_id !== "",
+      )
+      if (subs.length === 0) return "[合并转发消息(空)]"
+      const conv = await this.flattenForwardConversation(subs, event)
+      const header = `合并转发的会话记录(共 ${subs.length} 条子消息${conv.nestedCount > 0 ? `,含 ${conv.nestedCount} 个嵌套合并消息` : ""}):`
+      let text = `${header}\n${conv.text}`
+      if (conv.imageCount > 0) {
+        text += `\n(注:另含 ${conv.imageCount} 张图片,飞书接口不支持读取合并转发内的图片。)`
+      }
+      return text
+    }
+
+    return parseQuotedMessageText(container)
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync] 合并转发子消息 → 带发言人昵称的对话文本(共享底座)。
+   * handleMergeForward(直接转发)与 resolveQuotedContext(引用/回复)共用同一套展开逻辑。
+   *
+   * 问题②修复:**withSender 恒 true** —— 合并转发内容天生是"多人会话记录",发言人姓名是核心
+   * 信息,与外层 chat 是否 p2p 无关。旧逻辑 `withSender = chatType !== "p2p"` 会在私聊(跟 bot
+   * 单聊)里把发言人全部剥光,LLM 只能"猜有几个人",这正是"没识别出昵称"的根因。
+   *
+   * 昵称走 resolveSenderNames:chat-members(免 scope,当前 chat 成员立即拿真名)→ contact API
+   * 兜底(群外/陌生人需 contact:user.base:readonly scope);两层都未命中回落 open_id 前缀。
+   */
+  private async flattenForwardConversation(
+    items: SubMessage[],
+    event: ImMessageEvent,
+  ): Promise<{ text: string; imageCount: number; nestedCount: number }> {
+    const withSender = true
+    const senderNames = await this.resolveSenderNames(
+      event.chatId,
+      items.map((i) => i.sender?.id).filter((x): x is string => !!x),
+    )
+    const flatten = flattenMergeForward(items, {
+      withSender,
+      maxSubMessages: MAX_SUB_MESSAGES,
+      // 合并转发内图片飞书 API 不支持读取(234043),恒不下载;含图诚实提示由 caller 处理
+      maxImages: 0,
+      depth: 0,
+      senderNames,
+    })
+    const expanded = await this.expandNestedMergeForward(
+      flatten.text,
+      items,
+      0,
+      withSender,
+      senderNames,
+    )
+    return {
+      text: expanded.flat(),
+      imageCount: flatten.imageCount,
+      nestedCount: expanded.nestedCount,
+    }
+  }
+
+  /**
    * [feat: feishu-merge-forward] 2026-05-26
    * merge_forward 独立处理路径(跟 text/image/post 的 handle 主流程并列)。
    *
@@ -1019,27 +1410,14 @@ export class MessagePipeline {
       return
     }
 
-    // 3. flatten 顶层(depth=0)
+    // 3. flatten 顶层(depth=0)+ 嵌套递归 + 发言人昵称 — 统一走 flattenForwardConversation
     // FORK: 合并转发里的图片飞书 API 不支持读取(错误码 234043 / HTTP 400,见
     // OPENCODE-PLAN/需求池/飞书合并转发子图下载-400-bug.md)→ maxImages=0:不建下载列表、
     // 不假装"已展开识别";含图时改在回复头部给用户诚实提示(步骤 11)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
-    const flatten = flattenMergeForward(items, {
-      withSender: event.chatType !== "p2p",
-      maxSubMessages: MAX_SUB_MESSAGES,
-      maxImages: 0,
-      depth: 0,
-    })
-
-    // 5. 嵌套递归 1 层(D4) — depth=0 flatten 后,把嵌套占位替换为子内容
-    // 实现:遍历 items 找 msg_type=merge_forward 的,深度递归 fetch + flatten depth=1
-    // 然后把"[嵌套合并消息(展开中)]"占位文本替换成 "  ↳ {嵌套 flatten text}"
-    const expandedText = await this.expandNestedMergeForward(
-      flatten.text,
-      items,
-      0, // 嵌套层的图同样不可下载(同 234043),不下载
-      event.chatType !== "p2p",
-    )
+    // REQ-055 + 问题②:sender open_id → 真实昵称,withSender 恒 true(移入 flattenForwardConversation,
+    // p2p 转发不再剥掉发言人);chat-members 优先(免 scope)→ contact API 兜底,全程 graceful 回落前缀
+    const conv = await this.flattenForwardConversation(items, event)
 
     // 6. 合并转发的图片【不下载】— 飞书 API 不支持读取合并转发内的资源(234043),下载必 400。
     // imageParts 恒空(maxImages=0 → flatten.images 也为空);含图时在回复头部给用户诚实提示(步骤 11)。
@@ -1047,12 +1425,11 @@ export class MessagePipeline {
     const imageParts: Array<{ mime: string; filename: string; absolutePath: string }> = []
 
     // 7. 组装最终 text(flatten + nested expanded + vision-incapable warning)
-    let finalText = expandedText.flat()
-    finalText = `(以下是用户合并转发给你的对话内容,共 ${items.length} 条子消息${expandedText.nestedCount > 0 ? `,含 ${expandedText.nestedCount} 个嵌套合并消息` : ""})\n\n${finalText}\n\n请基于这些内容回答用户的问题或给出总结/建议。`
+    let finalText = `(以下是用户合并转发给你的对话内容,共 ${items.length} 条子消息${conv.nestedCount > 0 ? `,含 ${conv.nestedCount} 个嵌套合并消息` : ""})\n\n${conv.text}\n\n请基于这些内容回答用户的问题或给出总结/建议。`
 
     // FORK: 合并转发含图 → 告诉 LLM 图读不了(只基于文字回答),且无需在回复里重复说明
     //(用户侧的诚实提示由步骤 11 在回复头部统一加,避免重复)。[feat: feishu-merge-forward-image-400]
-    if (flatten.imageCount > 0) {
+    if (conv.imageCount > 0) {
       finalText +=
         "\n\n(注:这条合并转发里有图片,但飞书接口不支持读取合并转发内的图片,你看不到图片内容,只基于文字回答即可,无需在回复中说明这一点。)"
     }
@@ -1065,35 +1442,9 @@ export class MessagePipeline {
       ),
     )
 
-    // 9. session create / 复用(跟 handle 主流程同款)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] archive session ${sessionID} failed:`,
-            archErr,
-          )
-        })
-        console.log(
-          `[pipeline ${this.opts.accountId}] new opencode session ${sessionID} (merge_forward) for chat=${event.chatId}`,
-        )
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed:`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // 9. session create / 复用(REQ-073-①④,统一走 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     // 10. runOpencode(text + N file part)
     let reply: string
@@ -1122,9 +1473,9 @@ export class MessagePipeline {
     }
     // FORK: 合并转发含图 → 回复头部加一行诚实提示(飞书 API 不支持读取合并转发内图片)。
     // [feat: feishu-merge-forward-image-400] 2026-05-27
-    if (flatten.imageCount > 0) {
+    if (conv.imageCount > 0) {
       finalReply =
-        `📷 合并转发里的 ${flatten.imageCount} 张图片我读不了(飞书接口限制),需要识别请直接把图转发给我。\n\n` +
+        `📷 合并转发里的 ${conv.imageCount} 张图片我读不了(飞书接口限制),需要识别请直接把图转发给我。\n\n` +
         finalReply
     }
     try {
@@ -1155,6 +1506,7 @@ export class MessagePipeline {
     items: SubMessage[],
     remainingImageQuota: number,
     withSender: boolean,
+    senderNames?: Map<string, string>,
   ): Promise<{ flat: () => string; nestedCount: number }> {
     const nestedItems = items.filter((i) => i.msg_type === "merge_forward")
     if (nestedItems.length === 0) {
@@ -1175,6 +1527,7 @@ export class MessagePipeline {
           maxSubMessages: MAX_SUB_MESSAGES,
           maxImages: remaining,
           depth: MAX_NEST_DEPTH, // depth=1 — 再嵌套的占位 "深度超限"
+          senderNames, // 顶层解析的映射复用;嵌套独有的 sender 未命中则回落前缀
         })
         remaining -= subFlatten.images.length
 
@@ -1320,35 +1673,9 @@ export class MessagePipeline {
     ].join("\n")
     // FORK-END
 
-    // 获取 / 创建 session(跟 handle() 主路径同款)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(
-            `[pipeline ${this.opts.accountId}] archive session ${sessionID} (file) failed:`,
-            archErr,
-          )
-        })
-        console.log(
-          `[pipeline ${this.opts.accountId}] new session ${sessionID} (file:${fileName}) for chat=${event.chatId}`,
-        )
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed (file):`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // 获取 / 创建 session(REQ-073-①④,统一走 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     // runOpencode
     let reply: string
@@ -1572,30 +1899,9 @@ export class MessagePipeline {
       return
     }
 
-    // 获取 / 创建 session(同 handleFileMessage)
-    let sessionID = this.chatToSession.get(event.chatId)
-    if (!sessionID) {
-      try {
-        const res = await this.opts.opencodeClient.session.create({
-          query: { directory: this.workspaceDir() },
-          body: { title: `Feishu ${event.chatType}/${event.chatId.slice(-8)}` },
-        })
-        const id = (res as { data?: { id?: string } }).data?.id
-        if (!id) throw new Error("session.create returned no id")
-        sessionID = id
-        this.chatToSession.set(event.chatId, sessionID)
-        this.sessionToChat.set(sessionID, event.chatId)
-        this.opts.chatSessionStore.set(this.opts.accountId, event.chatId, sessionID)
-        await this.archiveSession(sessionID).catch((archErr) => {
-          console.warn(`[pipeline ${this.opts.accountId}] archive session (image file) failed:`, archErr)
-        })
-        console.log(`[pipeline ${this.opts.accountId}] new session ${sessionID} (image file:${fileName})`)
-      } catch (err) {
-        console.error(`[pipeline ${this.opts.accountId}] createSession failed (image file):`, err)
-        await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
-        return
-      }
-    }
+    // 获取 / 创建 session(REQ-073-①④,统一走 getOrCreateSession)
+    const sessionID = await this.getOrCreateSession(event)
+    if (!sessionID) return
 
     let reply: string
     try {
@@ -1846,6 +2152,11 @@ export class MessagePipeline {
     // 的 friendlyErrorReply,确保用户一定能收到一条 reply(消除"bot 死了"黑洞)。
     const dispatchPromise = this.opts.dispatcher.register(sessionID, timeoutMs)
 
+    // [fix: feishu-permission-cross-instance 方案D] 标记本 session 正被【飞书】跑 turn;
+    // 这段窗口内到达的 permission.asked 才归属飞书 instance(见 handlePermissionAsked)。
+    // 窗口 = [此处, dispatchPromise resolve/reject](turn 内工具触发权限都落此窗口内)。
+    this.inFlightSessions.add(sessionID)
+
     // [feat: feishu-edit-dialog-ux 2026-06-08] effectiveModel 把"自动免费"哨兵实时解析成具体
     // model;未设/解析不到 → null → promptAsync 不带 model 走 opencode 全局默认。
     const accountModel = await this.effectiveModel()
@@ -1899,7 +2210,13 @@ export class MessagePipeline {
     // 等 dispatcher signal(session.idle / timeout-partial 都 resolve,timeout-empty /
     // session.error / superseded / abortAll 都 reject)。reject 一路冒到 handle() 的
     // catch → friendlyErrorReply 给 user surface,不再静默丢弃。
-    const dispatchResult = await dispatchPromise
+    // [fix: feishu-permission-cross-instance 方案D] turn 结束(resolve/reject)即撤 in-flight 标记。
+    let dispatchResult: Awaited<typeof dispatchPromise>
+    try {
+      dispatchResult = await dispatchPromise
+    } finally {
+      this.inFlightSessions.delete(sessionID)
+    }
 
     // [feat: feishu-llm-timeout-surface review-followup] 2026-06-01
     // dispatcher 已经累积的 LLM 文本(collectText 已 trim,空字符串就是 "")。
@@ -2046,27 +2363,6 @@ export class MessagePipeline {
       requestMethod: wrap.request?.method,
       authHeader: auth ? `${auth.slice(0, 20)}...` : "(none)",
     }
-  }
-
-  /**
-   * Archive 一个 opencode session(plugin 创建的 system session 用,GUI sidebar 默认不显)。
-   *
-   * 通过 v1 SDK 的 raw `_client.patch`(其 update 类型 schema stale 不含 time.archived,
-   * 但 server 端实际接受 — 用 cast 绕过 type 限制)。
-   */
-  private async archiveSession(sessionID: string): Promise<void> {
-    const rawClient = (this.opts.opencodeClient as unknown as { _client?: unknown })._client
-    if (!rawClient || typeof (rawClient as { patch?: unknown }).patch !== "function") {
-      throw new Error("opencode SDK client missing internal _client.patch")
-    }
-    await (rawClient as { patch: (req: unknown) => Promise<unknown> }).patch({
-      url: "/session/{id}",
-      path: { id: sessionID },
-      query: { directory: this.workspaceDir() },
-      body: {
-        time: { archived: Date.now() },
-      },
-    })
   }
 
   /**

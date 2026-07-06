@@ -833,7 +833,9 @@ describe("requireMention enforcement (feat: feishu-group-mention-policy)", () =>
     )
     // 给 fire-and-forget promptAsync 一点时间被调到
     await new Promise((r) => setTimeout(r, 100))
-    expect(capturedText).toBe("说句话")
+    // mention 占位符仍被 strip(本 case 主旨);群消息现带发言人前缀([fix: feishu-group-sender-fallback]:
+    // chat-members 缺 scope → 回落 open_id 前 6 位 ou_sen),多人群里保留可区分的发言人标签
+    expect(capturedText).toBe("[ou_sen]: 说句话")
     expect(capturedText).not.toContain("@_user_1")
   })
 
@@ -1347,6 +1349,96 @@ describe("REQ-036 引用回复上下文注入(Q6-Q9)", () => {
     expect(text).toContain("[引用原文]")
     expect(text).toContain("[图片]")
     expect(text).toContain("这张图讲了什么")
+  })
+
+  // ============================================================
+  // [feat: feishu-desktop-session-sync]
+  // [bug-repro: 引用/回复合并转发消息时,fetchParentMessageText 对 merge_forward 只吐
+  //  字面量 [merge_forward] 空壳 → bot 读不到任何内容也拿不到发言人昵称,还误判"转发没粘上"]
+  //
+  // 构造:parentMsgItems = merge_forward 容器 + 2 条带 sender/upper_message_id 的子消息。
+  // 昵称在 mock larkClient(无 tokenManager)下 graceful 回落 open_id 前 6 位 → 断言 [ou_...] 前缀,
+  // 既证内容被展开(问题①),又证 withSender 生效(问题②)。
+  // ============================================================
+  function mfSub(id: string, senderId: string, text: string, ts: number) {
+    return {
+      message_id: id,
+      msg_type: "text",
+      body: { content: JSON.stringify({ text }) },
+      sender: { id: senderId },
+      create_time: String(ts),
+      upper_message_id: "om_container",
+    }
+  }
+  const MF_ITEMS = [
+    { msg_type: "merge_forward", body: { content: "{}" } }, // 容器(无 upper_message_id)
+    mfSub("om_s1", "ou_alice", "那个恐慌收割大师兄可以分析分析", 1000),
+    mfSub("om_s2", "ou_bobby", "好,我回头试试", 2000),
+  ]
+
+  test("MF-Q1: 引用 merge_forward → 展开子消息内容(不再是 [merge_forward] 空壳)", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline(MF_ITEMS)
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "里面说了什么?" }),
+        parentId: "om_merge_parent",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    // 引用块存在
+    expect(text).toContain("[引用原文]")
+    expect(text).toContain("[/引用原文]")
+    // 内容被真正展开(问题①核心回归:此前这里只有 [merge_forward])
+    expect(text).toContain("合并转发的会话记录")
+    expect(text).toContain("那个恐慌收割大师兄可以分析分析")
+    expect(text).toContain("好,我回头试试")
+    // 绝不能再退化成空壳占位
+    expect(text).not.toContain("\n[merge_forward]\n")
+    // 用户本轮问题也在
+    expect(text).toContain("里面说了什么?")
+  })
+
+  test("MF-Q2: 引用 merge_forward → 带发言人前缀(问题②,昵称未命中回落 open_id 前缀)", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline(MF_ITEMS)
+
+    void pipeline.testHandle(
+      makeEvent({
+        content: JSON.stringify({ text: "里面都是谁在说话?" }),
+        parentId: "om_merge_parent",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    // withSender 恒 true → 每条带发言人标签;mock 无鉴权 → 回落 open_id 前 6 位
+    expect(text).toContain("[ou_ali]:")
+    expect(text).toContain("[ou_bob]:")
+  })
+
+  test("MF-Q3: p2p 直接转发 merge_forward → 发言人不再被剥光(问题②核心回归)", async () => {
+    const { pipeline, capturedPromptTexts } = buildQuotePipeline(MF_ITEMS)
+
+    void pipeline.testHandle(
+      makeEvent({
+        chatType: "p2p", // 私聊:旧逻辑 withSender=false 会把发言人剥光
+        messageType: "merge_forward",
+        messageId: "om_container",
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(capturedPromptTexts).toHaveLength(1)
+    const text = capturedPromptTexts[0]!
+    expect(text).toContain("以下是用户合并转发给你的对话内容")
+    expect(text).toContain("那个恐慌收割大师兄可以分析分析")
+    // p2p 下仍带发言人前缀(问题②:此前 withSender = chatType!=="p2p" 会为 false)
+    expect(text).toContain("[ou_ali]:")
+    expect(text).toContain("[ou_bob]:")
   })
 })
 
