@@ -3,6 +3,10 @@ import { type Accessor, batch, createMemo } from "solid-js"
 import { createStore, type SetStoreFunction, type Store } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
 import { ServerScope } from "@/utils/server-scope"
+// FORK: win-anchor-hide-case-fold — 持久化匹配层统一走大小写不敏感目录比较(Windows 大小写不敏感;
+//   POSIX 大小写敏感=零回归)。防持久化 worktree(历史/深链/手输,大小写不受控)与后端 realpath 规范化
+//   路径差一位即匹配漏判 → relocate/setId/forget 静默失效。2026-07-07
+import { sameDirectory } from "@/utils/same-directory"
 
 // FORK: REQ-072 — 持久化 id,供改名后 stale 条目锚扫描 relocate(旧文件夹已消失、读不到锚,靠这个记住身份)
 type StoredProject = { worktree: string; expanded: boolean; id?: string }
@@ -77,26 +81,26 @@ export function createServerProjects<T extends ServerProjectState>(input: {
     list: current,
     open(directory: string) {
       const scope = input.scope()
-      if (current().some((project) => project.worktree === directory)) return
+      if (current().some((project) => sameDirectory(project.worktree, directory))) return
       setStore("projects", scope, [{ worktree: directory, expanded: true }, ...current()])
     },
     close(directory: string) {
       setStore(
         "projects",
         input.scope(),
-        current().filter((project) => project.worktree !== directory),
+        current().filter((project) => !sameDirectory(project.worktree, directory)),
       )
     },
     expand(directory: string) {
-      const index = current().findIndex((project) => project.worktree === directory)
+      const index = current().findIndex((project) => sameDirectory(project.worktree, directory))
       if (index !== -1) setStore("projects", input.scope(), index, "expanded", true)
     },
     collapse(directory: string) {
-      const index = current().findIndex((project) => project.worktree === directory)
+      const index = current().findIndex((project) => sameDirectory(project.worktree, directory))
       if (index !== -1) setStore("projects", input.scope(), index, "expanded", false)
     },
     move(directory: string, toIndex: number) {
-      const fromIndex = current().findIndex((project) => project.worktree === directory)
+      const fromIndex = current().findIndex((project) => sameDirectory(project.worktree, directory))
       if (fromIndex === -1 || fromIndex === toIndex) return
       const next = [...current()]
       const [item] = next.splice(fromIndex, 1)
@@ -112,14 +116,14 @@ export function createServerProjects<T extends ServerProjectState>(input: {
     // FORK: REQ-068 — 默认项目目录已不存在(missing)时清掉它作为 lastProject,避免下次启动又自动加载死路径
     // → UI 落到项目选择器。仅当当前 scope 的 lastProject 正是该目录时才清,不误伤。2026-06-25 [feat: stale-path-hardening]
     forget(directory: string) {
-      if (input.store.lastProject[input.scope()] === directory) {
+      if (sameDirectory(input.store.lastProject[input.scope()] ?? "", directory)) {
         setStore("lastProject", input.scope(), undefined as unknown as string)
       }
     },
     // FORK: REQ-072 — 记住项目 id(打开成功后回写),供改名后 stale 条目锚扫描 relocate。仅在变化时写。
     setId(directory: string, id: string) {
       if (!id || id === "global") return
-      const index = current().findIndex((project) => project.worktree === directory)
+      const index = current().findIndex((project) => sameDirectory(project.worktree, directory))
       if (index === -1) return
       if (current()[index]?.id === id) return
       setStore("projects", input.scope(), index, "id", id)
@@ -128,16 +132,19 @@ export function createServerProjects<T extends ServerProjectState>(input: {
     // 若该目录正是 lastProject 也一并改,避免下次启动又加载死路径。
     relocate(oldDirectory: string, newDirectory: string) {
       const scope = input.scope()
-      const index = current().findIndex((project) => project.worktree === oldDirectory)
+      const index = current().findIndex((project) => sameDirectory(project.worktree, oldDirectory))
       if (index !== -1) {
-        if (current().some((project) => project.worktree === newDirectory)) {
-          // 新路径已有条目(用户已 Open Folder 过)→ 直接删旧 stale 条目去重
-          setStore("projects", scope, current().filter((project) => project.worktree !== oldDirectory))
+        // 按 index 判「新路径是否另有独立条目」,避免纯大小写改名(D:\Foo→D:\foo)时旧条目自己被当成
+        // 「新路径已存在」而被误删(sameDirectory 折叠下 old 与 new 同键)。
+        const newIndex = current().findIndex((project) => sameDirectory(project.worktree, newDirectory))
+        if (newIndex !== -1 && newIndex !== index) {
+          // 新路径已有独立条目(用户已 Open Folder 过)→ 删旧 stale 条目去重
+          setStore("projects", scope, current().filter((_, i) => i !== index))
         } else {
           setStore("projects", scope, index, "worktree", newDirectory)
         }
       }
-      if (input.store.lastProject[scope] === oldDirectory) {
+      if (sameDirectory(input.store.lastProject[scope] ?? "", oldDirectory)) {
         setStore("lastProject", scope, newDirectory)
       }
     },

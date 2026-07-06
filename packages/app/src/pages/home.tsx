@@ -46,6 +46,8 @@ import { checkProjectAvailable, openPickedDirectories } from "@/pages/layout/sta
 import { showToast } from "@/utils/toast"
 import { sessionTitle } from "@/utils/session-title"
 import { pathKey } from "@/utils/path-key"
+// FORK: win-anchor-hide-case-fold — relocate 取 id 用大小写不敏感匹配(Windows 盘符/大小写不受控)2026-07-07
+import { sameDirectory } from "@/utils/same-directory"
 import { useGlobal } from "@/context/global"
 import { useCommand } from "@/context/command"
 import { useSettings } from "@/context/settings"
@@ -1154,8 +1156,8 @@ function LegacyHome() {
         const find = platform.findRelocatedProject
         // 优先后端权威项目列表(sync.data.project,id 与磁盘锚一致),回退持久化 StoredProject.id
         const id =
-          sync.data.project.find((p) => p.worktree === directory)?.id ??
-          serverCtx.projects.list().find((p) => p.worktree === directory)?.id
+          sync.data.project.find((p) => sameDirectory(p.worktree, directory))?.id ??
+          serverCtx.projects.list().find((p) => sameDirectory(p.worktree, directory))?.id
         if (find && id && id !== "global") {
           const relocated = await find(directory, id).catch(() => null)
           if (relocated) {

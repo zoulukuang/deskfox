@@ -71,6 +71,8 @@ import { useDirectoryPicker } from "@/components/directory-picker"
 import { ServerConnection, useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
 import { pathKey } from "@/utils/path-key"
+// FORK: win-anchor-hide-case-fold — relocate 取 id 用大小写不敏感匹配(Windows 盘符/大小写不受控)2026-07-07
+import { sameDirectory } from "@/utils/same-directory"
 import {
   displayName,
   effectiveWorkspaceOrder,
@@ -559,8 +561,8 @@ export default function Layout(props: ParentProps) {
     // 拿该 stale 路径的项目 id:优先后端权威项目列表(serverSync.data.project,worktree=改名前旧路径、
     // id=真实身份),回退前端持久化(StoredProject.id,跨重启兜底)。用后端 id 保证与磁盘锚一致(锚也写的这个 id)。
     const id =
-      serverSync.data.project.find((p) => p.worktree === directory)?.id ??
-      server.projects.list().find((p) => p.worktree === directory)?.id
+      serverSync.data.project.find((p) => sameDirectory(p.worktree, directory))?.id ??
+      server.projects.list().find((p) => sameDirectory(p.worktree, directory))?.id
     if (!id || id === "global") return null
     const relocated = await find(directory, id).catch(() => null)
     if (!relocated) return null
