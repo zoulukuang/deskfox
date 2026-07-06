@@ -39,15 +39,18 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   // permission.asked 按目录广播,会带进【别的 instance】(如飞书桥无人值守跑的 turn)触发的权限;
   // 但 respond 是 instance-scoped —— 别的 instance 的权限在本端点了必 404("Permission request
   // not found")。故用本 instance 的 permission.list() 交叉核,只展示【本 instance 能 resolve】的
-  // (= 本端触发的)权限卡,实现「谁触发谁展示」。resource 随权限集合变化刷新;拉取失败 fail-open 不过滤。
-  const permissionSignature = createMemo(() =>
-    Object.values(sync.data.permission)
-      .flat()
-      .map((p) => (p as PermissionRequest | undefined)?.id ?? "")
-      .sort()
-      .join(","),
+  // (= 本端触发的)权限卡,实现「谁触发谁展示」。拉取失败 fail-open 不过滤。
+  //
+  // ⚠️ 仅在【本 session 树确有候选权限】时才查 permission.list —— 否则无谓的网络请求会在
+  // e2e/离线环境冒 `ERR_CONNECTION_REFUSED` console 错(JS catch 拦不住浏览器层网络错日志),
+  // smoke 断言会误判失败。无 pending 权限时 hasCandidate=false → 不发请求。
+  const hasPermissionCandidate = createMemo(
+    () =>
+      !!sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) =>
+        !permission.autoResponds(item, sdk.directory),
+      ),
   )
-  const [myPermissionIds] = createResource(permissionSignature, async () => {
+  const [myPermissionIds] = createResource(hasPermissionCandidate, async () => {
     try {
       const r = await sdk.client.permission.list()
       return new Set(((r.data ?? []) as PermissionRequest[]).map((p) => p.id))
