@@ -117,6 +117,25 @@ user 拍板走**注入式**(把发送者真名前缀进 user message,桌面见�
 
 **22 专属单测 + adapter 762 全量 0 fail + typecheck 绿。**
 
+## bug 修复:跨-DB dangling session 挂死(commit `73ce2862e0`,真机自动化测试发现)
+
+user 反馈 InveM🐼-Mac 账号在本地版发消息 → session 无最新记录 + 每条「LLM 回复超时 240000ms 无输出」。**根因 = 第 2 项 store 回读的回归**:
+
+- `chatSessionStore` 按 chatId **全局共享**(单文件 `~/.opencode/feishu-chat-sessions.json`),但 `sessionID` 是 **DB 作用域**:`local` 渠道用 `opencode-local.db`、发布三档共享 `opencode.db`(规范 §3.11)。
+- 本地版回读到 store 里 **prod 建的 session id**(实测 InveM 全部 9 个 chat 的 session 均 prod-db 有、local-db 无)→ `promptAsync` 对本 DB 不存在的 id **挂死 240s 首字节超时**,GUI 也不显示。
+- 日志实锤:`reuse persisted session ses_X → opencode prompt 首字节超时 (240000ms)`。
+
+**修法**:`getOrCreateSession` 回读后经 `sessionExists`(`session.messages` 查 HTTP 状态)校验在当前 DB 存在才复用;404/异常/非 200 一律弃用改新建(宁可丢一次跨重启上下文,不冒挂死)。
+
+**真机验证闭环**:① 修复前 reuse dangling→240s 超时;② 修复后 `弃用改新建 → new session (local-db) → prompt 出回复(msg 2 行)`;③ 再重启 → 有效 local session 正常 `reuse`(item 2 复用未被破坏)。+2 单测(U13 bug-repro / U13b)。adapter 764 全量绿。
+
+## 全面自动化回归小结(2026-07-06)
+
+- 单测:24 专属 + adapter **764 全量 0 fail** + typecheck 绿。
+- 真机(本地版 + `/debug/simulate-message`):①②④ 过 + 跨-DB bug 修复闭环验证。
+- 日志扫查:REQ-073 相关 0 新异常;5 账号 WSS 全连。
+- **附带发现(非本版)**:`media-gen EADDRINUSE 51737` = 本地版/正式版双实例抢 media-gen 固定端口(既有多实例限制,另立条目)。
+
 ## 待办(仅剩流程)
 
 - 可选:contact scope 若确认线上生效,合并转发陌生人真名自动点亮(现同群转发已用 chat-members 显示,陌生人回落前缀)。
