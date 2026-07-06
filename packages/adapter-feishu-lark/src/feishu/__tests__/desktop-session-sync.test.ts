@@ -13,7 +13,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { FeishuAccount } from "../../core/config-schema"
 import { ChatSessionStore } from "../chat-session-store"
-import { resolveOpenIdNames } from "../contact-name-resolver"
+import { resolveChatMemberNames, resolveOpenIdNames } from "../contact-name-resolver"
 import { MessagePipeline } from "../message-pipeline"
 import { flattenMergeForward, type SubMessage } from "../merge-forward-flatten"
 import { PermissionCardController, type PermissionRequest } from "../permission-card"
@@ -338,5 +338,96 @@ describe("resolveOpenIdNames(REQ-055 底座)", () => {
     const m = await resolveOpenIdNames([], fakeClient)
     expect(m.size).toBe(0)
     expect(called).toBe(false)
+  })
+})
+
+describe("resolveChatMemberNames(REQ-073-⑥ 免-scope 群成员名)", () => {
+  const realFetch = globalThis.fetch
+  const fakeClient = { domain: "https://open.feishu.cn", tokenManager: { getTenantAccessToken: async () => "tok" } } as any
+
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  test("U10 单页成员 → open_id→name 映射", async () => {
+    globalThis.fetch = (async () => ({
+      json: async () => ({ code: 0, data: { items: [{ member_id: "ou_a", name: "小贝" }], has_more: false } }),
+    })) as any
+    const m = await resolveChatMemberNames("oc_x", fakeClient)
+    expect(m.get("ou_a")).toBe("小贝")
+  })
+
+  test("U10b 分页 has_more → 翻页合并", async () => {
+    let call = 0
+    globalThis.fetch = (async () => {
+      call++
+      return call === 1
+        ? { json: async () => ({ code: 0, data: { items: [{ member_id: "ou_a", name: "阿" }], has_more: true, page_token: "p2" } }) }
+        : { json: async () => ({ code: 0, data: { items: [{ member_id: "ou_b", name: "乙" }], has_more: false } }) }
+    }) as any
+    const m = await resolveChatMemberNames("oc_x", fakeClient)
+    expect(m.get("ou_a")).toBe("阿")
+    expect(m.get("ou_b")).toBe("乙")
+    expect(call).toBe(2)
+  })
+
+  test("U10c code≠0 → 空表,不抛", async () => {
+    globalThis.fetch = (async () => ({ json: async () => ({ code: 232000, msg: "chat not found" }) })) as any
+    const m = await resolveChatMemberNames("oc_x", fakeClient)
+    expect(m.size).toBe(0)
+  })
+})
+
+describe("getGroupSenderName 注入(REQ-073-⑥)", () => {
+  let tmpDir: string
+  const realFetch = globalThis.fetch
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "group-sender-"))
+  })
+  afterEach(() => {
+    globalThis.fetch = realFetch
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  function makePipeline() {
+    // larkClient 需带 tokenManager+domain 供 getClientAuthContext
+    const larkClient = {
+      domain: "https://open.feishu.cn",
+      tokenManager: { getTenantAccessToken: async () => "tok" },
+      im: { v1: { message: { create: async () => ({ data: { message_id: "om" } }) }, messageReaction: { create: async () => ({ data: {} }) } } },
+    } as any
+    return new MessagePipeline({
+      account: makeAccount({ botName: "投资CFO" } as any),
+      accountId: "acc1",
+      opencodeClient: { session: { create: async () => ({ data: { id: "ses_x" } }), messages: async () => ({ data: [] }), promptAsync: async () => ({ data: {} }) } } as any,
+      dispatcher: new PromptDispatcher(),
+      chatSessionStore: new ChatSessionStore(join(tmpDir, "s.json")),
+      larkClient,
+    })
+  }
+
+  test("U11 群消息 sender 命中成员名 → 返回真名并缓存(二次不再请求)", async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls++
+      return { json: async () => ({ code: 0, data: { items: [{ member_id: "ou_sender", name: "搞量化的小贝" }], has_more: false } }) }
+    }) as any
+    const pipeline = makePipeline()
+    const ev = makeEvent({ chatType: "group", senderOpenId: "ou_sender" })
+    const n1 = await (pipeline as any).getGroupSenderName(ev)
+    const n2 = await (pipeline as any).getGroupSenderName(ev)
+    expect(n1).toBe("搞量化的小贝")
+    expect(n2).toBe("搞量化的小贝")
+    expect(calls).toBe(1) // TTL 缓存命中,第二次不再翻页
+  })
+
+  test("U11b p2p → 返回 null,不发请求(不注入前缀)", async () => {
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return { json: async () => ({ code: 0, data: {} }) } }) as any
+    const pipeline = makePipeline()
+    const n = await (pipeline as any).getGroupSenderName(makeEvent({ chatType: "p2p", senderOpenId: "ou_sender" }))
+    expect(n).toBeNull()
+    expect(calls).toBe(0)
   })
 })

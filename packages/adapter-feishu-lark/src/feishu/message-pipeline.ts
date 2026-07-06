@@ -48,7 +48,7 @@ import {
   ensureDeskfoxDir,
   resolveWorkspace,
 } from "./deskfox-dir"
-import { resolveOpenIdNames } from "./contact-name-resolver"
+import { resolveChatMemberNames, resolveOpenIdNames } from "./contact-name-resolver"
 import { fetchMergeForwardItems } from "./merge-forward-fetcher"
 import {
   flattenMergeForward,
@@ -515,6 +515,12 @@ export class MessagePipeline {
   } | null = null
   /** sessionID → chatId 反查(用于 permission.asked 事件路由)*/
   private readonly sessionToChat = new Map<string, string>()
+  /** [feat: feishu-desktop-session-sync REQ-073-⑥] 群成员 open_id→昵称缓存(免-scope chat-members)
+   *  key: chatId,value: { names: Map<open_id,name>, checkedAt: ms }。TTL 10min,免每条群消息翻页 */
+  private readonly chatMemberNameCache = new Map<
+    string,
+    { names: Map<string, string>; checkedAt: number }
+  >()
   /** 飞书 CardKit 权限卡片控制器(LLM 调工具触发权限时弹卡片让 user 在飞书选)*/
   readonly permissionController: PermissionCardController
   /** [feat: feishu-bridge-light] yes/no 确认卡片控制器(自动建群二次确认等)*/
@@ -679,6 +685,26 @@ export class MessagePipeline {
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
       return null
     }
+  }
+
+  /**
+   * [feat: feishu-desktop-session-sync REQ-073-⑥] 群消息发送者真实昵称。
+   *
+   * 走**免-scope 的 chat-members**(区别于合并转发陌生人才用的通讯录 API + scope),
+   * 带 10min TTL 的 per-chat 缓存,免每条群消息翻页。p2p / 无 senderOpenId / 查不到 → null
+   * (调用点不注入前缀,graceful)。
+   */
+  private async getGroupSenderName(event: ImMessageEvent): Promise<string | null> {
+    if (event.chatType === "p2p" || !event.senderOpenId) return null
+    const NAME_TTL_MS = 10 * 60 * 1000
+    const now = Date.now()
+    let entry = this.chatMemberNameCache.get(event.chatId)
+    if (!entry || now - entry.checkedAt > NAME_TTL_MS) {
+      const names = await resolveChatMemberNames(event.chatId, this.larkClient)
+      entry = { names, checkedAt: now }
+      this.chatMemberNameCache.set(event.chatId, entry)
+    }
+    return entry.names.get(event.senderOpenId) ?? null
   }
 
   async handle(event: ImMessageEvent): Promise<void> {
@@ -963,11 +989,17 @@ export class MessagePipeline {
         )
       }
     }
+    // FORK-END
+
+    // REQ-073-⑥ 群 session「谁说的」:注入式,把发送者真实昵称前缀进 user message,
+    // 桌面 session 能看到谁说的,bot 也知道是谁在说(契合已认可的群上下文带入特性)。
+    // 免-scope chat-members 取名;p2p / 查不到 → 无前缀(与旧行为一致)。
+    const senderName = await this.getGroupSenderName(event)
+    const attributedText = senderName ? `[${senderName}]: ${cleaned}` : cleaned
     const promptText =
       quotedContext !== null
-        ? `[引用原文]\n${quotedContext}\n[/引用原文]\n\n${cleaned}`
-        : cleaned
-    // FORK-END
+        ? `[引用原文]\n${quotedContext}\n[/引用原文]\n\n${attributedText}`
+        : attributedText
 
     let reply: string
     try {

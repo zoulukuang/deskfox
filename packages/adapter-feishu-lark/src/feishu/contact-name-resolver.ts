@@ -82,3 +82,76 @@ export async function resolveOpenIdNames(
   }
   return result
 }
+
+/** 单次分页上限;群成员通常远小于此,极少分页 */
+const MEMBER_PAGE_SIZE = 100
+/** 分页保险丝:最多翻 20 页(2000 成员),防超大群翻页失控 */
+const MAX_MEMBER_PAGES = 20
+
+/**
+ * 解析某 chat 全体成员 open_id → 昵称(REQ-073-⑥ 群 session 发送者昵称)。
+ *
+ * 走 `GET /im/v1/chats/{chat_id}/members` —— **无需 `contact:user.base:readonly` scope**
+ * (实测该接口直接返 name),是群场景取名的首选路径,区别于合并转发陌生人才用的通讯录 API。
+ *
+ * 全程 graceful:取 token / 请求 / code≠0 任一失败均返回**已累积的部分结果**(不抛),
+ * caller 未命中回落 open_id 前缀。
+ */
+export async function resolveChatMemberNames(
+  chatId: string,
+  client: Client,
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>()
+  if (!chatId) return result
+
+  let auth: { token: string; domain: string }
+  try {
+    auth = await getClientAuthContext(client)
+  } catch (err) {
+    console.warn(
+      `[contact-name-resolver] chat-members 取 token 失败,回落前缀:`,
+      (err as Error).message,
+    )
+    return result
+  }
+
+  let pageToken: string | undefined
+  for (let page = 0; page < MAX_MEMBER_PAGES; page++) {
+    const params = new URLSearchParams({
+      member_id_type: "open_id",
+      page_size: String(MEMBER_PAGE_SIZE),
+    })
+    if (pageToken) params.set("page_token", pageToken)
+    const url = `${auth.domain}/open-apis/im/v1/chats/${encodeURIComponent(chatId)}/members?${params.toString()}`
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${auth.token}` } })
+      const json = (await res.json()) as {
+        code?: number
+        msg?: string
+        data?: {
+          items?: Array<{ member_id?: string; name?: string }>
+          has_more?: boolean
+          page_token?: string
+        }
+      }
+      if (json.code !== 0) {
+        console.warn(
+          `[contact-name-resolver] chat-members code=${json.code} msg=${json.msg ?? "?"} — 回落前缀`,
+        )
+        break
+      }
+      for (const item of json.data?.items ?? []) {
+        if (item.member_id && item.name) result.set(item.member_id, item.name)
+      }
+      if (!json.data?.has_more || !json.data.page_token) break
+      pageToken = json.data.page_token
+    } catch (err) {
+      console.warn(
+        `[contact-name-resolver] chat-members 请求失败,回落已累积结果:`,
+        (err as Error).message,
+      )
+      break
+    }
+  }
+  return result
+}
