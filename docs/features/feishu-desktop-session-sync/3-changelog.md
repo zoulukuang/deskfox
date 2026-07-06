@@ -60,10 +60,21 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - `message-pipeline.ts` `handleMergeForward`:群场景解析 sender 真名传入 flatten + 嵌套复用。
 - +7 单测(U7/U8/U8b/U8c resolver 各态 + U9/U9b/U9c flatten 查表)。**adapter 755 全量回归绿**。
 
+## 取名路径的更正(2026-07-06,user 纠偏 + 二次实测)
+
+先前把「拿昵称」误当成「必须开 `contact:user.base:readonly`」。二次真机实测(投资CFO)钉死**取名有多条路,scope 非必需**:
+
+| 场景 | 路径 | 要 contact scope 吗 |
+|---|---|---|
+| 群 session「谁说的」(第 6 项) | `GET /im/v1/chats/{chat}/members`(实测返 name「搞量化的小贝」)/ 消息 mention 数据 | ❌ 免 scope,现成 |
+| 合并转发子消息 sender(REQ-055) | 子消息只带 `sender.id` 且发言人未必在当前 chat → 只能查 `contact/v3/users/batch` | ✅ **仅此一处**;不开回落前缀 |
+
+→ **结论**:`contact:user.base:readonly` **只对「合并转发里非当前 chat 成员的真名」是锦上添花,核心功能不需要**。已建的 `contact-name-resolver`(contact API + graceful 回落)对合并转发正确;**第 6 项群呈现面应改走 chat-members(免 scope)**,不用通讯录 API。
+
 ## 待续
 
-- **REQ-073-⑥ 群 session 呈现面**(呈现落点):底座已就绪,但「群主路径把 sender 真名注入 session」这一落点会改 LLM 看到的 prompt 内容(影响 bot 行为),待 user 定夺方案后落地。可选:chat-members 免 scope 接口取名。
-- **scope 开通**(user 侧):投资CFO app 开通 `contact:user.base:readonly` + 发布 → REQ-055 合并转发真名自动点亮(现回落前缀)。
+- **REQ-073-⑥ 群 session 呈现面**:改用 chat-members(免 scope)解析群成员名;**呈现落点**(把 sender 真名注入 session prompt = 改 LLM 可见内容/影响 bot 行为,vs 仅桌面 UI 层展示)待 user 拍板。
+- REQ-055 合并转发真名:contact API 路已就绪,scope **可选**(开通则点亮,否则回落前缀)。可选增强:先试 chat-members(当前 chat)再落 contact API。
 - 第 3 项桌面续聊:待真机验证 0 前端改动。
 - 全部 🔴 真机验收(E1-E8);⚠️ 须在实际桥接账号的实例(注意本地版/正式版 DB 隔离),需重建本地版 sidecar 载入新代码。
 
