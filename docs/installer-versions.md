@@ -11,6 +11,24 @@
 
 
 
+## [Windows] 2026.8.3 - 2026-07-07 19:15
+
+**主题**:飞书↔桌面 session 协同 + Windows 锚点适配 + 三笔独立小修(端口缓存/编辑按钮/聊天链接空白);小更新进"补"位(2026.8.2 → 2026.8.3)。
+
+**本次内容**(自 `ship-prod-2026.8.2` 起,三批已合 main 的 feat):
+- **feishu-desktop-session-sync(REQ-073/055)**:飞书↔桌面 session 协同 — 合并转发发言人昵称(chat-members 优先→contact 兜底 + 引用路径展开)/ 跨-DB dangling session 挂死修复(回读校验存在再复用)/ session 标题与桌面一致(描述性标题 + [botName] 前缀)/ 群场景标题竞态与发言人回落 / 桌面授权跨-instance 404 优雅降级 / 权限「谁触发谁展示」方案D + 按需查 permission.list。
+- **win-anchor-hide-case-fold(REQ-069/072 Win 适配)**:`.deskfox` 锚点目录 attrib 隐藏 + 路径大小写折叠 relocate(Win 大小写不敏感、盘符差一位致 relocate/setId/forget 静默失效)/ boot autoselect·lastProject 匹配同款折叠 / 飞书权限卡片 reply 静默失败修复(SDK throwOnError 缺省吞错 → 显式检查,权限卡「允许一次」端到端解锁)。
+- **batch-port-edit-mdlink(REQ-029/074/075)**:飞书 plugin 重启换端口后不再打旧端口(feishu.ts 缓存 mtime 失效,半自动端到端验杀 sidecar 自愈)/ 文件查看器右键「编辑」按钮复活(isTauri→isDesktopApp 换基座回归,真机验通)/ 聊天消息相对路径 md 链接点击不再整窗空白(共享拦截 util + 聊天区接线开预览 tab + main 进程 will-navigate/setWindowOpenHandler 兜底,顺手修 exa/webfetch _blank 弹裸窗 → 系统浏览器;CDP+真机验通)。详见 [docs/features/batch-port-edit-mdlink/](features/batch-port-edit-mdlink/3-changelog.md)。
+- **发版前 code-review(high workflow)**:确认 1 项非高危记账 — `session.ts:597` scope=project 列表自愈对死路径 `fs.stat` 无超时,离线网络盘/U 盘残留目录场景侧栏刷新变慢(非崩溃非数据风险,待立 REQ 修);部分验证 agent 撞订阅限额、覆盖打折。无启动崩溃/高危项。
+- **验收**:三批各自合 main 前全绿(typecheck 22/22 + app 515 + desktop/media-gen/adapter-feishu-lark 全过);batch 批 25 新单测;CDP 自测 + user 真机 QA 全过。
+
+**Release**:GitHub `ship-prod-2026.8.3`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)+ 阿里云 OSS CDN。
+**updater**:Electron 自更新源 `updates.deskfox.ai/electron/prod/latest.yml` version=2026.8.3;Tauri→Electron 迁移桥 `v1/latest/desktop/windows/latest.json` version=2026.8.3。
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.3-win-x64.exe`(Electron;含 LibreOffice)
+**sha512**:`evjRRLA/q3ux6spbBzNC0TfJ+HeKV0QoBAU4CCKxcz2tNlx6+JOngZxVvIrP7Xu1NYwQKMYlcb6A10U56Yx3lA==`(size 276039679)
+
+---
+
 ## [macOS] 2026.8.3 - 2026-07-04
 
 **主题**:macOS 端补发 stale 路径全族根治(与 Win prod 2026.8.2 同源代码),小更新进"补"位(mac 2026.8.2 → 2026.8.3)。mac 2026.8.2 曾用于「安装并重启」修复,故本批 stale-path 顺延到 2026.8.3。
