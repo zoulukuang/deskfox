@@ -16,6 +16,8 @@ const electronMock: Record<string, unknown> = {
   powerSaveBlocker: { start: () => 1, stop: () => {}, isStarted: () => false },
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => "/tmp/deskfox-test" },
+  // feishu.ts(REQ-029 测试加载)顶层 import { dialog }
+  dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
 }
 // store.ts 用 `import electron from "electron"`(default 形态)→ default 自指,同时满足 default + named import。
 electronMock.default = electronMock
