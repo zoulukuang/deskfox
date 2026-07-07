@@ -1,5 +1,5 @@
 feat-id: batch-port-edit-mdlink
-status: in-progress
+status: done(验收全过,待 merge main)
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实际改动
@@ -52,11 +52,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   - **E5b** ✅ `window.open(https,_blank)` → 不再弹裸 Electron 窗(page target 数不变,setWindowOpenHandler deny 生效)
   - **REQ-074** ✅ md 预览右键 → 菜单「编辑」`disabled:false`(修复前永久灰显)→ 点击进 CodeMirror、内容正确;「添加到聊天/复制」无选区时仍正确灰显
   - 冷启动无 error toast(全新构建两次 fresh launch 观察)
-- 真机 QA(user 待验,CDP 不可替代项):
-  - [ ] REQ-074:真桌面右键 .md/.txt/.ts 编辑→改→保存,内容落盘正确;二进制/Office/大文件「编辑」仍灰显
-  - [ ] REQ-075 E3:聊天点 http(s) 外链 → **系统浏览器**弹出(native 行为)
-  - [ ] REQ-075 E4:exa 搜索结果 / webfetch 网址链接 → 系统浏览器(修复前弹裸 Electron 窗)
-  - [ ] REQ-029 M1:真桌面飞书 OAuth 中途 kill plugin 进程 → 看门狗重启换端口 → 功能自愈不报旧端口
+- 真机 QA:
+  - [x] REQ-074:user 真机验证通过(2026-07-07)
+  - [x] REQ-075 E3/E4:user 真机验证通过(2026-07-07)
+  - [x] REQ-029 M1:agent 半自动端到端验证通过(2026-07-07,本地版真实链路):第 1 次 `feishu_list_accounts` 成功(缓存端口 27340)→ 杀 sidecar NodeService 进程 → 看门狗重启 plugin 写新端口 38318(旧 27340 实测 connect refused)→ 第 2 次调用**成功**(mtime 失效生效,自动跟上新端口;修复前此步必报旧端口 connect refused)
 
 ## 回退方法
 
