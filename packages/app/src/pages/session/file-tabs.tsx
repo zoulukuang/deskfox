@@ -13,7 +13,7 @@ import { Markdown } from "@opencode-ai/ui/markdown"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { showToast } from "@opencode-ai/ui/toast"
-import { invoke, listen } from "@/utils/native"
+import { invoke, isDesktopApp, listen } from "@/utils/native"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useComments } from "@/context/comments"
@@ -443,9 +443,10 @@ export function FileTabContent(props: {
     const d = draft()
     return d !== null && d !== contents()
   })
-  const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+  // FORK: REQ-074 换基座回归修复 — isTauri()(检测 __TAURI_INTERNALS__)在 Electron 永远 false,
+  // 编辑按钮永久灰显;改走 native.ts isDesktopApp()(检测 window.deskfox 桥)[feat: batch-port-edit-mdlink] 2026-07-07
   const canEdit = () => {
-    if (!isTauri()) return false
+    if (!isDesktopApp()) return false
     const p = path()
     if (!p) return false
     if (isBinary(p)) return false
@@ -458,7 +459,7 @@ export function FileTabContent(props: {
   }
   const editDisabledReason = () => {
     // FORK: 禁编辑提示走 i18n(原为硬编码中英混杂,英文 locale 看到中文)[feat: ui-brand-deskfox] 2026-06-06
-    if (!isTauri()) return language.t("fileViewer.editDisabled.desktopOnly")
+    if (!isDesktopApp()) return language.t("fileViewer.editDisabled.desktopOnly")
     const p = path()
     if (!p) return undefined
     if (isOfficeDocument(p)) return language.t("fileViewer.editDisabled.office")
