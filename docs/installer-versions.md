@@ -29,9 +29,21 @@
 
 ---
 
-## [macOS] 2026.8.4 - 2026-07-07 19:15
+## [macOS] 2026.8.4 - 2026-07-08 00:31
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:macOS 端发布飞书↔桌面 session 协同 + 锚点大小写折叠 + 三笔独立小修(与 Win prod 2026.8.3 同源 main),小更新进"补"位(mac 2026.8.3 → 2026.8.4)。
+
+**本次内容**(自 `ship-mac-prod-2026.8.3` 起,三批已合 main 的 feat,与 Win 2026.8.3 同批):
+- **feishu-desktop-session-sync(REQ-073/055)**:飞书↔桌面 session 协同 — 合并转发发言人昵称(chat-members 优先→contact 兜底 + 引用路径展开)/ 跨-DB dangling session 挂死修复(回读校验存在再复用)/ session 标题与桌面一致(描述性标题 + [botName] 前缀)/ 群场景标题竞态与发言人回落 / 桌面授权跨-instance 404 优雅降级 / 权限「谁触发谁展示」方案D + 按需查 permission.list。
+- **win-anchor-hide-case-fold(REQ-069/072)**:`.deskfox` 锚点目录隐藏 + 路径大小写折叠 relocate / boot autoselect·lastProject 匹配同款折叠 / 飞书权限卡片 reply 静默失败修复(SDK throwOnError 缺省吞错 → 显式检查)。注:大小写折叠按路径形态判定(POSIX 不折叠),macOS APFS 默认大小写不敏感的同款场景为已知遗留(非本批新引入,待深修)。
+- **batch-port-edit-mdlink(REQ-029/074/075)**:飞书 plugin 重启换端口后不再打旧端口(feishu.ts 缓存 mtime 失效)/ 文件查看器右键「编辑」按钮复活(isTauri→isDesktopApp 换基座回归)/ 聊天消息相对路径 md 链接点击不再整窗空白(共享拦截 util + will-navigate/setWindowOpenHandler 兜底)。详见 [docs/features/batch-port-edit-mdlink/](features/batch-port-edit-mdlink/3-changelog.md)。
+- **发版前 code-review(3 角度收敛,4 角度撞会话额度未跑)**:无启动崩溃/高危项。记账 1 项非崩溃窄路径 bug — 方案D 权限过滤 `session-composer-state.ts:53` 的 `myPermissionIds` resource 以布尔 memo 为 source,同 session 并发两个待批权限时第二个本地权限会被陈旧快照过滤(飞书无人值守并发流才碰得到,imbot 常规顺序调用不触发),待立 REQ 修;另 `session.ts:597` scope=project 列表自愈死路径 fs.stat 无超时(承 Win 2026.8.3 记账)+ 若干 cleanup 项(inFlight 影子状态/标题逻辑重复/navigation-guard 死分支)一并入 follow-up。
+- **验收**:三批各自合 main 前全绿;tag push pre-push 钩子 779 测试 0 fail;公证门禁 stapler validate + spctl「Notarized Developer ID」双过。
+
+**Release**:GitHub `ship-mac-prod-2026.8.4`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(id 736993,正文挂 CDN)+ 阿里云 OSS CDN。
+**updater**:Electron 自更新源 `updates.deskfox.ai/electron/prod/latest-mac.yml` version=2026.8.4;Tauri→Electron 迁移桥 `v1/latest/desktop/darwin/latest.json` version=2026.8.4。
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.4-mac-arm64.dmg`(Electron;arm64;含 LibreOffice;Developer ID 签名 + 公证 + staple)
+**sha256**:`e7fa755cd2c7f91c12df0b34b7a0eb9cf1a047e525f6cc030417bf92c4e4ea7a`(size 324459422)
 
 ---
 ## [macOS] 2026.8.3 - 2026-07-04
