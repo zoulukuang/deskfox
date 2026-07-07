@@ -87,6 +87,35 @@ Windows clone 实读 + 兼容性审计发现:REQ-069/072 的 flag 已在 `sideca
 
 ---
 
+# 追加:REQ-073⑤ 权限卡片正向 e2e 首次跑通 + reply 静默失败修复(commit 4)
+
+> 2026-07-07 延伸 QA(user 主导真机点击 + Claude 排查)。此前 Mac/Win 两端 ⑤ 的 e2e 均未跑通过。
+
+## 排查历程(三层拨开)
+1. **claude-code provider 不触发命令级门控**:全仓零个 `Permission.evaluate("bash", <命令>)`,
+   config 的 `"Remove-Item *": "ask"` 等命令级 pattern 对 claude-code provider 是死配置;工具名级
+   `workflow_tool_approval` 对 bash 也预批准 → imbot(claude-code)任何命令都不弹卡片。
+   **user 把 doctor_win session 换 qwen(alibaba-cn)后卡片能弹**(走 opencode 原生工具执行)。
+2. **点「允许」卡片变绿但 bot 卡死**:日志有 `user replied` 但无任何错误、工具不解锁。
+3. **根因(修复)**:`PluginInput.client`(plugin/index.ts:139 `createOpencodeClient`)未设
+   `throwOnError` → SDK 默认失败装在返回值 `error` 字段**不抛异常** → `replyToOpencode` 的
+   try/catch 永远捕不到 → reply 失败被静默吞。修 = 显式检查返回值 error,失败打 REJECTED 日志
+   (status+详情)、成功打 delivered 日志。commit `2c20e67f3`,+2 单测,adapter 779 pass。
+
+## e2e 结果(Windows 真机,真飞书 doctor_win)
+`飞书卡片(whoami)→ user 点「允许一次」→ reply delivered status=200 → bash 解锁执行(输出 yuexi)→ bot 回复飞书` ✅
+- 反向通道同验:reply 触发 `permission.replied` 广播,插件 `handlePermissionReplied` 收到(本端已
+  处理 → 正确 no-op)。完整反向 e2e(桌面解决→飞书卡片失效)受方案D「谁触发谁展示」限制(bot 触发
+  的权限桌面不显示)无独立解决入口,维持单测覆盖。
+- 注:上次"点允许卡死"含一个一次性诱因(换模型未重启,session 带 claude-code 半截工具调用被污染);
+  干净重启后同链路一次通过。修复针对的是"失败静默"这一确定性缺陷(任何 reply 失败都会隐形)。
+
+## 待跟进(记录)
+- claude-code provider 的命令级权限门控缺失(bot 直跑破坏性命令不问)= 上游行为,与本 feat 无关,
+  见 OPENCODE-PLAN 需求池(user 知晓,择期立项)。
+
+---
+
 # R4 黑名单 override 复核报告
 
 > 触发文件:`packages/core/src/project/anchor.ts` + `packages/core/test/project-anchor.test.ts`
