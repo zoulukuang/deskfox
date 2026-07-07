@@ -262,6 +262,52 @@ describe("PermissionCardController", () => {
     expect(fakes.replyCalls[0]?.body.response).toBe("reject")
   })
 
+  // FORK: win-anchor-hide-case-fold QA — SDK throwOnError=false 时失败装在返回值 error 字段不抛异常,
+  //   原实现只 try/catch → reply 失败被静默吞(真机实锤:卡片变绿但工具永不解锁,bot 卡死)。
+  //   修复 = 显式检查返回值 error 并 console.error 暴露。 2026-07-07
+  test("replyToOpencode:SDK 返回 error(throwOnError=false 风格)→ console.error 暴露不静默", async () => {
+    const errors: string[] = []
+    const origError = console.error
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map(String).join(" "))
+    }
+    try {
+      const failingClient = {
+        postSessionIdPermissionsPermissionId: async () => ({
+          error: { name: "PermissionNotFoundError" },
+          response: { status: 404 },
+        }),
+      } as any
+      const c = new PermissionCardController({
+        opencodeClient: failingClient,
+        larkClient: fakes.larkClient,
+        workspaceDir: "/test/workspace",
+        timeoutMs: 100,
+      })
+      await c.start(baseRequest, "oc_TEST")
+      await c.handleReply({ requestID: baseRequest.id, reply: "once" })
+      c.abortAll()
+      expect(errors.some((e) => e.includes("REJECTED") && e.includes("404"))).toBe(true)
+    } finally {
+      console.error = origError
+    }
+  })
+
+  test("replyToOpencode:SDK 成功(无 error 字段)→ 不报 REJECTED", async () => {
+    const errors: string[] = []
+    const origError = console.error
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map(String).join(" "))
+    }
+    try {
+      await controller.start(baseRequest, "oc_TEST")
+      await controller.handleReply({ requestID: baseRequest.id, reply: "once" })
+      expect(errors.some((e) => e.includes("REJECTED"))).toBe(false)
+    } finally {
+      console.error = origError
+    }
+  })
+
   test("handleReply 未知 requestID(已 expired / 重复点击)→ noop", async () => {
     await controller.handleReply({ requestID: "perm_unknown", reply: "once" })
     expect(fakes.replyCalls.length).toBe(0)
