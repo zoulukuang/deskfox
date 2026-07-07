@@ -493,11 +493,23 @@ export class PermissionCardController {
         console.error(`[permission-card] SDK postSessionIdPermissionsPermissionId not available`)
         return
       }
-      await client.postSessionIdPermissionsPermissionId({
+      // FORK: win-anchor-hide-case-fold QA 排查 — PluginInput.client 未设 throwOnError(SDK 默认
+      //   false),失败装在返回值 error 字段、不抛异常 → 原 try/catch 永远捕不到 = reply 失败被静默吞,
+      //   卡片变绿但工具永不解锁(真机实锤:user 点允许后 bot 卡死)。改为显式检查返回值。 2026-07-07
+      const result = (await client.postSessionIdPermissionsPermissionId({
         path: { id: sessionID, permissionID: requestID },
         query: { directory: this.opts.workspaceDir },
         body: { response: reply },
-      })
+      })) as { error?: unknown; response?: { status?: number }; data?: unknown }
+      if (result?.error !== undefined) {
+        console.error(
+          `[permission-card] permission reply REJECTED by opencode for ${requestID}: status=${result.response?.status} error=${JSON.stringify(result.error).slice(0, 400)}`,
+        )
+        return
+      }
+      console.log(
+        `[permission-card] permission reply delivered for ${requestID} (${reply}) status=${result?.response?.status ?? "?"}`,
+      )
     } catch (err) {
       console.error(`[permission-card] permission reply API failed for ${requestID}:`, err)
     }

@@ -140,17 +140,16 @@ describe("readAnchor", () => {
     ),
   )
 
-  it.live("returns undefined on permission error (read failure degraded to undefined)", () =>
+  // FORK: win-anchor-hide-case-fold — 读失败注入改用「id 路径是目录」(EISDIR,mac/win 均可移植)。
+  //   原 chmod 0o000 在 Windows 上不移除读权限 → 读仍成功 → 测试在 Win 上假失败。行为断言不变。 2026-07-07
+  it.live("returns undefined on read failure (degraded to undefined)", () =>
     withTmpdir((dir) =>
       Effect.gen(function* () {
         const anchorDir = path.join(dir, ANCHOR_DIR)
         const anchorFile = path.join(anchorDir, ANCHOR_FILE)
-        yield* Effect.promise(() => fs.mkdir(anchorDir, { recursive: true }))
-        yield* Effect.promise(() => fs.writeFile(anchorFile, mintId()))
-        // 移除读权限,测试结束后恢复(以便 tmpdir cleanup)
-        const restore = Effect.promise(() => fs.chmod(anchorFile, 0o644))
-        yield* Effect.promise(() => fs.chmod(anchorFile, 0o000))
-        const result = yield* readAnchor(dir).pipe(Effect.ensuring(restore))
+        // 把 id 造成目录 → readFileString 读它必失败(EISDIR),跨平台一致
+        yield* Effect.promise(() => fs.mkdir(anchorFile, { recursive: true }))
+        const result = yield* readAnchor(dir)
         expect(result).toBeUndefined()
       }),
     ),
@@ -196,17 +195,18 @@ describe("writeAnchor", () => {
     ),
   )
 
-  it.live("degrades silently on read-only directory (does not throw)", () =>
+  // FORK: win-anchor-hide-case-fold — 写失败注入改用「父路径是文件」(ENOTDIR,mac/win 均可移植)。
+  //   原 chmod 0o555 在 Windows 上不阻止在只读目录下建文件 → 写仍成功 → 测试在 Win 上假失败。 2026-07-07
+  it.live("degrades silently on write failure (does not throw)", () =>
     withTmpdir((dir) =>
       Effect.gen(function* () {
         const id = mintId()
-        // 设置目录只读
-        yield* Effect.promise(() => fs.chmod(dir, 0o555))
-        const restore = Effect.promise(() => fs.chmod(dir, 0o755))
-        // writeAnchor 应降级不抛错
-        yield* writeAnchor(dir, id).pipe(Effect.ensuring(restore))
-        // 恢复权限后读锚应返回 undefined(因为写入失败了)
-        const result = yield* readAnchor(dir)
+        // 造一个文件当「父目录」→ writeWithDirs 无法在其下 mkdir → 写失败但降级不抛
+        const blocker = path.join(dir, "blocker")
+        yield* Effect.promise(() => fs.writeFile(blocker, "x"))
+        yield* writeAnchor(blocker, id)
+        // 读锚应返回 undefined(因为写入失败了)
+        const result = yield* readAnchor(blocker)
         expect(result).toBeUndefined()
       }),
     ),
@@ -331,29 +331,100 @@ describe("writeAnchor + appendToInfoExclude integration", () => {
   )
 })
 
-// ─── hideAnchorDir stub ───────────────────────────────────────────────────────
+// ─── hideAnchorDir 平台薄层(win-anchor-hide-case-fold 阶段二) ─────────────────
 
 describe("hideAnchorDir", () => {
-  it.live("is a no-op on macOS (dot-prefix naturally hidden)", () =>
+  // TC-H2:非 win32 平台 no-op —— 不调隐藏执行器(macOS/Linux 点目录天然隐藏)
+  it.live("is a no-op on non-win32 platforms (does not invoke setHidden)", () =>
+    Effect.gen(function* () {
+      let called = 0
+      yield* hideAnchorDir("/some/dir", {
+        platform: "darwin",
+        setHidden: async () => {
+          called++
+        },
+      })
+      expect(called).toBe(0)
+    }),
+  )
+
+  // TC-H1(隐藏侧):win32 → 对 <dir>/.deskfox 调 attrib(隐藏执行器),路径正确
+  it.live("invokes setHidden on the .deskfox dir on win32", () =>
+    Effect.gen(function* () {
+      const targets: string[] = []
+      yield* hideAnchorDir(path.join("C:", "Proj"), {
+        platform: "win32",
+        setHidden: async (t) => {
+          targets.push(t)
+        },
+      })
+      expect(targets.length).toBe(1)
+      expect(targets[0]).toBe(path.join("C:", "Proj", ANCHOR_DIR))
+    }),
+  )
+
+  // TC-H3:隐藏执行器失败(attrib 不存在/权限)→ 降级不抛错
+  it.live("degrades silently when setHidden rejects (win32)", () =>
+    Effect.gen(function* () {
+      // 若抛错会让 Effect fail → it.live 判失败;能跑到断言即证明已降级
+      const result = yield* hideAnchorDir("C:\\Proj", {
+        platform: "win32",
+        setHidden: async () => {
+          throw new Error("attrib not found")
+        },
+      })
+      expect(result).toBeUndefined()
+    }),
+  )
+
+  it.live("returns void without creating any directory", () =>
     withTmpdir((dir) =>
       Effect.gen(function* () {
-        // 不应抛错,不应有副作用
-        yield* hideAnchorDir(dir)
-        // 目录不应被创建
+        // 用真实默认执行器(当前平台);无论平台都不应创建目录
+        const result = yield* hideAnchorDir(dir)
         const exists = yield* Effect.promise(() =>
           fs.stat(path.join(dir, ANCHOR_DIR)).then(() => true).catch(() => false)
         )
+        expect(result).toBeUndefined()
         expect(exists).toBe(false)
       }),
     ),
   )
+})
 
-  it.live("succeeds even when anchor dir does not exist", () =>
+// ─── writeAnchor → hideAnchorDir 接线(写成功才隐藏) ──────────────────────────
+
+describe("writeAnchor hide wiring", () => {
+  // TC-H1(写侧):写成功 → hide 被调用一次,参数为项目目录
+  it.live("calls hide with project dir after a successful write", () =>
     withTmpdir((dir) =>
       Effect.gen(function* () {
-        // 调用前目录不存在也不报错
-        const result = yield* hideAnchorDir(dir)
-        expect(result).toBeUndefined()
+        const hidden: string[] = []
+        yield* writeAnchor(dir, mintId(), (d) =>
+          Effect.sync(() => {
+            hidden.push(d)
+          }),
+        )
+        expect(hidden).toEqual([dir])
+      }),
+    ),
+  )
+
+  // TC-H4:写失败 → 不调 hide(无锚可隐藏),且不抛错。
+  // 失败注入用「父路径是文件」(ENOTDIR,mac/win 均可移植;chmod 只读在 Windows 对目录/读权限 no-op)。
+  it.live("does not call hide when the write fails", () =>
+    withTmpdir((dir) =>
+      Effect.gen(function* () {
+        let called = 0
+        // 造一个文件当「父目录」→ writeWithDirs 无法在其下 mkdir .deskfox → 写失败
+        const blocker = path.join(dir, "blocker")
+        yield* Effect.promise(() => fs.writeFile(blocker, "x"))
+        yield* writeAnchor(blocker, mintId(), () =>
+          Effect.sync(() => {
+            called++
+          }),
+        )
+        expect(called).toBe(0)
       }),
     ),
   )

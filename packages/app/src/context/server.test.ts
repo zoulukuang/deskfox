@@ -115,6 +115,99 @@ describe("createServerProjects", () => {
       dispose()
     })
   })
+
+  // FORK: win-anchor-hide-case-fold — 持久化匹配层大小写不敏感(Windows 盘符/大小写不受控)
+  describe("case-insensitive matching (windows paths)", () => {
+    // TC-R1:持久化 D:\Proj + relocate(d:\proj → D:\Proj2)→ 命中旧条目并改成新路径(不静默失效)
+    test("TC-R1: relocate matches persisted worktree case-insensitively", () => {
+      createRoot((dispose) => {
+        const [scope] = createSignal(ServerScope.local)
+        const [store, setStore] = createStore({
+          projects: { local: [{ worktree: "D:\\Proj", expanded: true }] },
+          lastProject: { local: "D:\\Proj" },
+        })
+        const projects = createServerProjects({ scope, store, setStore })
+
+        // relocate 用小写盘符调用,应命中 D:\Proj 条目
+        projects.relocate("d:\\proj", "D:\\Proj2")
+        expect(projects.list()).toEqual([{ worktree: "D:\\Proj2", expanded: true }])
+        expect(store.lastProject.local).toBe("D:\\Proj2")
+        dispose()
+      })
+    })
+
+    // TC-R1b:纯大小写改名不误删条目(D:\Foo → D:\foo)
+    test("TC-R1b: case-only rename updates in place (does not drop entry)", () => {
+      createRoot((dispose) => {
+        const [scope] = createSignal(ServerScope.local)
+        const [store, setStore] = createStore({
+          projects: { local: [{ worktree: "D:\\Foo", expanded: true, id: "fld_x" }] },
+          lastProject: {},
+        })
+        const projects = createServerProjects({ scope, store, setStore })
+
+        projects.relocate("D:\\Foo", "D:\\foo")
+        expect(projects.list()).toEqual([{ worktree: "D:\\foo", expanded: true, id: "fld_x" }])
+        dispose()
+      })
+    })
+
+    // TC-R2:setId 大小写差异仍能回写 id
+    test("TC-R2: setId matches worktree case-insensitively", () => {
+      createRoot((dispose) => {
+        const [scope] = createSignal(ServerScope.local)
+        const [store, setStore] = createStore({
+          projects: { local: [{ worktree: "D:\\Proj", expanded: true }] },
+          lastProject: {},
+        })
+        const projects = createServerProjects({ scope, store, setStore })
+
+        projects.setId("d:\\proj", "fld_abc")
+        expect(projects.list()[0]?.id).toBe("fld_abc")
+        dispose()
+      })
+    })
+
+    // TC-R3:不同 server scope 隔离(不跨 server 误匹配)
+    test("TC-R3: scopes stay isolated under case-folding", () => {
+      createRoot((dispose) => {
+        const [scope] = createSignal(ServerScope.local)
+        const [store, setStore] = createStore({
+          projects: { local: [{ worktree: "D:\\Proj", expanded: true }] },
+          lastProject: {},
+        })
+        const localProjects = createServerProjects({ scope, store, setStore })
+        const remoteProjects = createServerProjects({
+          scope: () => "https://debian.example" as ServerScope,
+          store,
+          setStore,
+        })
+
+        // 在 remote scope 上 relocate 同名(小写)路径,不应动 local scope 的条目
+        remoteProjects.relocate("d:\\proj", "D:\\Proj2")
+        expect(localProjects.list()).toEqual([{ worktree: "D:\\Proj", expanded: true }])
+        expect(remoteProjects.list()).toEqual([])
+        dispose()
+      })
+    })
+
+    // POSIX 回归:大小写敏感不折叠(Mac/Linux 行为不变)
+    test("posix paths remain case-sensitive (no regression)", () => {
+      createRoot((dispose) => {
+        const [scope] = createSignal(ServerScope.local)
+        const [store, setStore] = createStore({
+          projects: { local: [{ worktree: "/home/User/Proj", expanded: true }] },
+          lastProject: {},
+        })
+        const projects = createServerProjects({ scope, store, setStore })
+
+        // 不同大小写在 POSIX 是不同目录 → relocate 不命中 → 原条目不变
+        projects.relocate("/home/user/proj", "/home/user/proj2")
+        expect(projects.list()).toEqual([{ worktree: "/home/User/Proj", expanded: true }])
+        dispose()
+      })
+    })
+  })
 })
 
 describe("migrateCanonicalLocalServerState", () => {

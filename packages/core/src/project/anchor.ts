@@ -14,6 +14,7 @@
 import path from "path"
 import { Effect } from "effect"
 import { randomBytes } from "crypto"
+import { execFile } from "child_process"
 import { FSUtil } from "../fs-util"
 import { ID } from "../project"
 
@@ -68,14 +69,28 @@ export const readAnchor = (dir: string): Effect.Effect<ID | undefined, never, FS
 
 /**
  * 写锚文件。将 id 写入 <dir>/.deskfox/id。
- * 写失败(只读卷/权限/受控目录)降级为 Effect.ignore,不抛错。
- * macOS 走通;平台薄层留 Windows 接口(阶段二实现)。
+ * 写失败(只读卷/权限/受控目录)降级不抛错。
+ * 写成功后隐藏锚目录(Windows attrib +h;macOS 点目录天然隐藏 no-op)。
+ * FORK: win-anchor-hide-case-fold — 写成功才隐藏(写失败无锚可隐藏),hide 可注入便于单测。2026-07-07
+ * hide 参数默认真实 hideAnchorDir,测试可注入 spy 验证「写成功→隐藏」链路。
  */
-export const writeAnchor = (dir: string, id: ID): Effect.Effect<void, never, FSUtil.Service> =>
+export const writeAnchor = (
+  dir: string,
+  id: ID,
+  hide: (dir: string) => Effect.Effect<void, never, never> = hideAnchorDir,
+): Effect.Effect<void, never, FSUtil.Service> =>
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const anchorPath = path.join(dir, ANCHOR_DIR, ANCHOR_FILE)
-    yield* fs.writeWithDirs(anchorPath, id + "\n").pipe(Effect.ignore)
+    // 写成功 → true;写失败(只读卷/权限)→ false,降级不抛
+    const wrote = yield* fs
+      .writeWithDirs(anchorPath, id + "\n")
+      .pipe(
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      )
+    // 只在确实写出锚后隐藏(写失败时无锚目录可隐藏)
+    if (wrote) yield* hide(dir)
   })
 
 /**
@@ -106,10 +121,35 @@ export const appendToInfoExclude = (gitStore: string, entry: string): Effect.Eff
 
 // ─── 平台薄层接口 ────────────────────────────────────────────────────────────
 
+/** 隐藏属性执行器注入点(便于单测,默认真实 `attrib +h`)。 */
+export type SetHiddenFn = (target: string) => Promise<void>
+
 /**
- * 隐藏锚目录(平台薄层接口占位)。
- * macOS: 点文件(.deskfox)Finder 天然隐藏,空实现即可。
- * Windows 阶段二补 attrib +h / SetFileAttributes 实现。
- * 签名平台无关,调用方无需区分平台。
+ * 默认隐藏执行器:Windows 上跑 `attrib +h <target>` 给目录打隐藏属性。
+ * 无论 attrib 成功/失败/不存在都 resolve —— 隐藏是「锦上添花」,失败绝不阻塞写锚。
  */
-export const hideAnchorDir = (_dir: string): Effect.Effect<void, never, never> => Effect.void
+const defaultSetHidden: SetHiddenFn = (target) =>
+  new Promise<void>((resolve) => {
+    execFile("attrib", ["+h", target], () => resolve())
+  })
+
+/**
+ * 隐藏锚目录(平台薄层)。
+ * FORK: win-anchor-hide-case-fold — 兑现 REQ-069 阶段二 Windows 隐藏属性。2026-07-07
+ *  - Windows: 对 <dir>/.deskfox 目录设隐藏属性(attrib +h),否则资源管理器里每个项目文件夹
+ *    都可见一个 .deskfox 目录,用户困惑/误删(锚丢失=旧会话失联)。
+ *  - macOS/Linux: 点开头目录 Finder 天然隐藏,no-op。
+ * 平台判定与执行器均可注入,便于跨平台单测(生产默认 process.platform + 真实 attrib)。
+ * 降级哲学:任何失败(attrib 不存在/权限/受控目录)都静默,绝不抛错、不影响写锚成功。
+ */
+export const hideAnchorDir = (
+  dir: string,
+  opts?: { platform?: NodeJS.Platform; setHidden?: SetHiddenFn },
+): Effect.Effect<void, never, never> =>
+  Effect.gen(function* () {
+    const platform = opts?.platform ?? process.platform
+    if (platform !== "win32") return
+    const setHidden = opts?.setHidden ?? defaultSetHidden
+    const target = path.join(dir, ANCHOR_DIR)
+    yield* Effect.promise(() => setHidden(target).catch(() => {})).pipe(Effect.ignore)
+  })
