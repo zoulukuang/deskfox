@@ -15,21 +15,39 @@ import { dialog, BrowserWindow } from "electron"
 
 type Ready = { url: string; username: string; password: string }
 
+// REQ-029:plugin 看门狗重启会换端口重写 server.json,缓存必须随 mtime 失效,
+// 否则永远打旧端口 connect refused。statSync 每次调用一趟,本地开销可忽略。
+// 同毫秒双写理论上漏检,真实重启间隔远大于 mtime 精度,不处理。
 let cached: Ready | null = null
+let cachedMtimeMs = 0
 
-function loadReady(): Ready | null {
-  if (cached) return cached
+export function loadReadyFrom(file: string): Ready | null {
   try {
-    const p = path.join(os.homedir(), ".opencode", "feishu-plugin-server.json")
-    const r = JSON.parse(fs.readFileSync(p, "utf-8")) as Ready
+    const mtimeMs = fs.statSync(file).mtimeMs
+    if (cached && mtimeMs === cachedMtimeMs) return cached
+    const r = JSON.parse(fs.readFileSync(file, "utf-8")) as Ready
     if (r?.url && r?.username) {
       cached = r
+      cachedMtimeMs = mtimeMs
       return r
     }
+    cached = null
+    cachedMtimeMs = 0
   } catch {
-    /* 插件还没启动 → 文件不存在 */
+    /* 插件还没启动(文件不存在)/ 内容损坏 → 清缓存,不残留旧端口 */
+    cached = null
+    cachedMtimeMs = 0
   }
   return null
+}
+
+export function resetReadyCacheForTest() {
+  cached = null
+  cachedMtimeMs = 0
+}
+
+function loadReady(): Ready | null {
+  return loadReadyFrom(path.join(os.homedir(), ".opencode", "feishu-plugin-server.json"))
 }
 
 function currentReady(): Ready {

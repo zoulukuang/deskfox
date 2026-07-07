@@ -33,6 +33,15 @@ declare global {
   }
 }
 
+/**
+ * 是否运行在 DeskFox 桌面壳内(Electron preload 已注入原生桥)。
+ * 替代 Tauri 时代的 `"__TAURI_INTERNALS__" in window` 检测(REQ-074 换基座回归:
+ * Electron 不注入该字段 → 旧检测永远 false → 依赖它的桌面能力全被禁用)。
+ */
+export function isDesktopApp(): boolean {
+  return typeof window !== "undefined" && window.deskfox !== undefined
+}
+
 function bridge(): DeskfoxBridge {
   const b = typeof window !== "undefined" ? window.deskfox : undefined
   if (!b) throw new Error("DeskFox 原生桥未注入(非 Electron 环境,或 preload 未加载)")

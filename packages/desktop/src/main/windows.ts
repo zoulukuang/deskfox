@@ -11,6 +11,8 @@ import { exportDebugLogs, write as writeLog } from "./logging"
 import { getStore } from "./store"
 import { PINCH_ZOOM_ENABLED_KEY } from "./store-keys"
 import { createUnresponsiveSampler } from "./unresponsive"
+// FORK: REQ-075 主窗口导航兜底(will-navigate/window.open 拦截)[feat: batch-port-edit-mdlink] 2026-07-07
+import { wireNavigationGuard } from "./deskfox/navigation-guard"
 
 const root = dirname(fileURLToPath(import.meta.url))
 const rendererRoot = join(root, "../renderer")
@@ -171,6 +173,8 @@ export function createMainWindow() {
 
   allowRendererPermissions(win)
   wireWindowRecovery(win, "main")
+  // FORK: REQ-075 导航兜底 — SPA 无合法整页导航,一律拦;_blank 转系统浏览器 [feat: batch-port-edit-mdlink] 2026-07-07
+  wireNavigationGuard(win)
 
   win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details

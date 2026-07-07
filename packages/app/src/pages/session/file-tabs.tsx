@@ -13,7 +13,8 @@ import { Markdown } from "@opencode-ai/ui/markdown"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { showToast } from "@opencode-ai/ui/toast"
-import { invoke, listen } from "@/utils/native"
+import { invoke, isDesktopApp, listen } from "@/utils/native"
+import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useComments } from "@/context/comments"
@@ -38,7 +39,7 @@ import { CsvTable } from "@/components/csv-table"
 // FORK: 选区 overlay 几何工具(CSV 裁剪 + iframe 投影)[feat: viewer-selection-tray-style]
 import { clampRectsToBounds, projectIframeRects } from "./selection-overlay"
 // FORK: 本地资源 protocol(.md 内 <img>/<video>/<audio> 重写 + HTML 预览 iframe)2026-05-05
-import { localAssetUrl, resolveAbsolute, rewriteAssetSrc } from "@/utils/local-asset"
+import { localAssetUrl, rewriteAssetSrc } from "@/utils/local-asset"
 // FORK: 大文件预览统一防护 — L4 UX 兜底组件 [feat: large-file-preview-guard] 2026-05-21
 import { FileTooLarge } from "@/components/file-too-large"
 // FORK: debounce auto-save + flush [feat: auto-save-debounce-flush] 2026-05-21
@@ -443,9 +444,10 @@ export function FileTabContent(props: {
     const d = draft()
     return d !== null && d !== contents()
   })
-  const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+  // FORK: REQ-074 换基座回归修复 — isTauri()(检测 __TAURI_INTERNALS__)在 Electron 永远 false,
+  // 编辑按钮永久灰显;改走 native.ts isDesktopApp()(检测 window.deskfox 桥)[feat: batch-port-edit-mdlink] 2026-07-07
   const canEdit = () => {
-    if (!isTauri()) return false
+    if (!isDesktopApp()) return false
     const p = path()
     if (!p) return false
     if (isBinary(p)) return false
@@ -458,7 +460,7 @@ export function FileTabContent(props: {
   }
   const editDisabledReason = () => {
     // FORK: 禁编辑提示走 i18n(原为硬编码中英混杂,英文 locale 看到中文)[feat: ui-brand-deskfox] 2026-06-06
-    if (!isTauri()) return language.t("fileViewer.editDisabled.desktopOnly")
+    if (!isDesktopApp()) return language.t("fileViewer.editDisabled.desktopOnly")
     const p = path()
     if (!p) return undefined
     if (isOfficeDocument(p)) return language.t("fileViewer.editDisabled.office")
@@ -1296,51 +1298,20 @@ export function FileTabContent(props: {
   const [mdContainerRef, setMdContainerRef] = createSignal<HTMLDivElement | undefined>()
 
   // MD 内链点击拦截:相对路径 *.md / *.txt / 等 → 调 props.onOpenTab 在查看器打开
-  const handleMdLinkClick = (event: MouseEvent) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-    const target = event.target
-    if (!(target instanceof Element)) return
-    const link = target.closest("a") as HTMLAnchorElement | null
-    if (!link) return
-    const href = link.getAttribute("href")
-    if (!href) return
-    // 跳过外链 / data / blob / 锚点;锚点(#xxx)留给浏览器原生处理
-    if (/^(https?|mailto|data|blob|tauri|localasset|file|javascript):/i.test(href)) return
-    if (href.startsWith("//")) return
-    if (href.startsWith("#")) return
-
-    const root = sdk.directory
-    const p = path()
-    if (!root || !p) return
-
-    const fileAbs = `${root}/${p}`.replace(/\\/g, "/")
-    const baseDir = pathDirname(fileAbs)
-    const targetAbs = resolveAbsolute(baseDir, href)
-
-    const normRoot = root.replace(/\\/g, "/").replace(/\/+$/, "")
-    // 越权防护:解析后必须在 sdk.directory 内
-    if (!targetAbs.startsWith(normRoot + "/") && targetAbs !== normRoot) {
-      showToast({ variant: "error", title: "链接超出项目范围", description: targetAbs })
-      event.preventDefault()
-      return
-    }
-
-    const rel = targetAbs.startsWith(normRoot + "/") ? targetAbs.slice(normRoot.length + 1) : ""
-    if (rel && props.onOpenTab) {
-      // 永远 preventDefault — 防 Tauri 把 _blank 路由到系统浏览器
-      event.preventDefault()
-      // 异步检查文件存在;不存在 → toast 提示,不开 tab
-      const onOpen = props.onOpenTab
-      invoke<number>("get_file_mtime", { root, path: rel })
-        .then(() => onOpen(rel))
-        .catch(() => {
-          showToast({ variant: "error", title: "文件不存在", description: rel })
-        })
-    } else {
-      // 没拿到合法相对路径(可能是绝对路径或 root 外)— 也阻止默认,防止开浏览器
-      event.preventDefault()
-    }
-  }
+  // FORK: REQ-075 — 逻辑提取到 md-link-click.ts 与聊天区共享,此处 baseDir=当前文件所在目录,
+  // 行为不变(R1 回归用例守护)[feat: batch-port-edit-mdlink] 2026-07-07
+  const handleMdLinkClick = createMdLinkClickHandler({
+    root: () => sdk.directory,
+    baseDir: () => {
+      const root = sdk.directory
+      const p = path()
+      if (!root || !p) return undefined
+      return pathDirname(`${root}/${p}`.replace(/\\/g, "/"))
+    },
+    onOpen: (rel) => props.onOpenTab?.(rel),
+    checkExists: (root, rel) => invoke<number>("get_file_mtime", { root, path: rel }),
+    toast: showToast,
+  })
 
   const renderMarkdown = (source: string) => (
     // FORK: data-context scope 让 markdown.css 单独定制文件查看器排版,不影响聊天 2026-04-29
