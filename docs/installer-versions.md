@@ -29,6 +29,11 @@
 
 ---
 
+## [macOS] 2026.8.4 - 2026-07-07 19:15
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [macOS] 2026.8.3 - 2026-07-04
 
 **主题**:macOS 端补发 stale 路径全族根治(与 Win prod 2026.8.2 同源代码),小更新进"补"位(mac 2026.8.2 → 2026.8.3)。mac 2026.8.2 曾用于「安装并重启」修复,故本批 stale-path 顺延到 2026.8.3。
