@@ -48,12 +48,16 @@ import { type FollowupDraft, sendFollowupDraft } from "@/components/prompt-input
 import { createSessionComposerState, SessionComposerRegion } from "@/pages/session/composer"
 import {
   createOpenReviewFile,
+  createOpenSessionFileTab,
   createSessionTabs,
   createSizing,
   focusTerminalById,
   shouldFocusTerminalOnKeyDown,
   shouldShowFileTree,
 } from "@/pages/session/helpers"
+// FORK: REQ-075 聊天 md 内链拦截 [feat: batch-port-edit-mdlink] 2026-07-07
+import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
+import { invoke } from "@/utils/native"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
@@ -313,6 +317,27 @@ export default function Page() {
   const openReviewPanel = () => {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
   }
+
+  // FORK-BEGIN: REQ-075 聊天消息 md 相对路径链接点击拦截 — 此前聊天区无人拦截,浏览器原生 <a>
+  // 导航把整个 SPA 导航掉 → 主内容区空白、不开 tab、无报错。命中项目内文件 → 与文件树同链路
+  // 开预览 tab;相对路径按项目根解析(聊天没有"当前文件",user 2026-07-07 拍板)。
+  // [feat: batch-port-edit-mdlink] 2026-07-07
+  const openChatFileTab = createOpenSessionFileTab({
+    normalizeTab,
+    openTab: tabs().open,
+    pathFromTab: file.pathFromTab,
+    loadFile: file.load,
+    openReviewPanel,
+    setActive: tabs().setActive,
+  })
+  const handleChatMdLinkClick = createMdLinkClickHandler({
+    root: () => sdk.directory,
+    baseDir: () => sdk.directory,
+    onOpen: (rel) => openChatFileTab(file.tab(rel)),
+    checkExists: (root, rel) => invoke<number>("get_file_mtime", { root, path: rel }),
+    toast: showToast,
+  })
+  // FORK-END
 
   // FORK: 每次打开/切换项目默认收起内容预览器(reviewPanel),让"新项目打开"是干净的聊天 + 文件树,
   //   点文件才展开预览(展开链路 createOpenSessionFileTab→openReviewPanel 已现成)。监听项目目录
@@ -1839,6 +1864,10 @@ export default function Page() {
                 </Match>
                 <Match when={params.id}>
                   <Show when={messagesReady()}>
+                    {/* FORK: REQ-075 聊天 md 内链拦截委托容器(display:contents 零布局影响,
+                        只借点击冒泡;外链 a.external-link 由 desktop renderer 全局委托处理,不冲突)
+                        [feat: batch-port-edit-mdlink] 2026-07-07 */}
+                    <div class="contents" onClick={handleChatMdLinkClick}>
                     <MessageTimeline
                       actions={actions}
                       scroll={ui.scroll}
@@ -1869,6 +1898,7 @@ export default function Page() {
                         revealMessage = fn
                       }}
                     />
+                    </div>
                   </Show>
                 </Match>
                 <Match when={true}>

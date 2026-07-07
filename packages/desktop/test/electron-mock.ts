@@ -18,6 +18,8 @@ const electronMock: Record<string, unknown> = {
   app: { getPath: () => "/tmp/deskfox-test" },
   // feishu.ts(REQ-029 测试加载)顶层 import { dialog }
   dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
+  // navigation-guard.ts(REQ-075 测试加载)顶层 import { shell }
+  shell: { openExternal: async () => {} },
 }
 // store.ts 用 `import electron from "electron"`(default 形态)→ default 自指,同时满足 default + named import。
 electronMock.default = electronMock
