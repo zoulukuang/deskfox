@@ -114,6 +114,44 @@ for a in "${ASSETS[@]}"; do
   SED_ARGS+=(-e "s#(url|path): +${obj}\$#\1: ${OSS_CDN_BASE}/${obj}#")
 done
 sed -E "${SED_ARGS[@]}" "$YML" > "$OUT_YML"
+
+# 2.5 按磁盘实算回写各资产 sha512/size(2026-07-08 立,staple 脏数据根治):
+#     electron-builder 生成 yml 在「.dmg 公证 staple」之前,staple 会改 .dmg 字节 → yml 里 dmg 的
+#     sha512/size 必然过期(2026.8.4 靠事后补救、2026.8.5 靠人记得手改,都不可靠)。部署前一律以
+#     磁盘文件为准重算回写,消灭整类问题;zip 不受 staple 影响,重算结果不变、无害。
+python3 - "$OUT_YML" "${ASSETS[@]}" <<'PY'
+import sys, re, base64, hashlib, os
+yml, assets = sys.argv[1], sys.argv[2:]
+info = {}
+for a in assets:
+    h = hashlib.sha512()
+    with open(a, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    info[os.path.basename(a)] = (base64.b64encode(h.digest()).decode(), os.path.getsize(a))
+out, cur = [], None
+for ln in open(yml).read().split("\n"):
+    m = re.match(r"^(\s*(?:- )?)(url|path): (?:https?://\S+/)?(\S+)\s*$", ln)
+    if m:
+        cur = info.get(m.group(3))
+        out.append(ln)
+        continue
+    if cur:
+        m2 = re.match(r"^(\s*)sha512: ", ln)
+        if m2:
+            out.append(m2.group(1) + "sha512: " + cur[0])
+            continue
+        m3 = re.match(r"^(\s*)size: ", ln)
+        if m3:
+            out.append(m3.group(1) + "size: " + str(cur[1]))
+            cur = None
+            continue
+        cur = None  # 其他 key = 该资产条目结束
+    out.append(ln)
+open(yml, "w").write("\n".join(out))
+print("[el-updater] 2.5 已按磁盘实算回写 sha512/size:", ", ".join(sorted(info)))
+PY
+
 echo "[el-updater] 改写后 $YML_NAME($OUT_YML):"; echo "----------"; cat "$OUT_YML"; echo "----------"
 # 自检:无残留相对文件名(url/path 全应改成 https 绝对),且 version 对
 if grep -qE ': +DeskFox.*\.(zip|dmg|exe)$' "$OUT_YML"; then

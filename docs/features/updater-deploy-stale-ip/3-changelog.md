@@ -47,5 +47,14 @@ macOS prod 2026.8.4 发版后,user 报「新版已发布但本地检测不到更
 
 ## 遗留(建议后续)
 
-1. `deskfox-site/publish.sh` 当前用硬编码新 IP `57.180.8.119`(能工作),但同样是写死 IP,建议后续也改域名 `updates.deskfox.ai`。
-2. `ship.md` 步骤 7.5 的「非阻断/事后补跑」易让升级源失败被忽略,可考虑发版末尾加一步「curl 两条源 version == 本次版本」的硬校验收尾。
+1. `deskfox-site/publish.sh` 当前用硬编码新 IP `57.180.8.119`(能工作),但同样是写死 IP,建议后续也改域名 `updates.deskfox.ai`。→ **已解决**:user 2026-07-08 在 site 项目单独处理完(现用 `ubuntu@deskfox.ai`)。
+2. `ship.md` 步骤 7.5 的「非阻断/事后补跑」易让升级源失败被忽略,可考虑发版末尾加一步「curl 两条源 version == 本次版本」的硬校验收尾。→ **已落地**:ship.md 7.5(C) 硬校验(2026-07-08),2026.8.5 发版首跑 PASS。
+
+## Follow-up(2026-07-08,2026.8.5 发版复盘固化)[feat: updater-deploy-stale-ip]
+
+2026.8.5 发版全程复盘后的两笔脚本加固(同分支 `fix/updater-yml-recompute-and-bridge-env`):
+
+1. **`deploy-electron-updater.sh` 新增 2.5 段:部署前按磁盘实算回写 yml 各资产 sha512/size**。根因:electron-builder 生成 `latest-mac.yml` 在「.dmg 公证 staple」**之前**,staple 改写 .dmg 字节 → yml 里 dmg 的 sha512/size 必然过期。2026.8.4 靠事后补救、2026.8.5 靠人记得手改——依赖"记得"=没固化。现在脚本部署前一律以磁盘文件为准重算(python3 sha512+size,按 url/path basename 匹配替换,含顶层 path/sha512),整类问题消灭;zip 不受 staple 影响,重算无害幂等。**验证**:dry-run 用 2026.8.5 真实产物,重算值与发版实测值逐字节一致(dmg `QfY3W5…FA==`/324464942,zip `m5vSBT…KQ==`/336417843)。
+2. **`bridge-electron-updater.sh` 提前 source config.env(set -a)**。2026.8.5 发版前 code-review 发现:原本到步骤 3 minisign 才 source,晚于 SERVER 取值 → `DESKFOX_UPDATE_SSH` 写在 config.env 里对 bridge 静默无效,与 deploy 脚本行为分叉(运维紧急切换服务器时两条升级源会指向不同机器)。现在开头就 `set -a; source`(子进程 upload-asset-to-oss.sh 同受益),原步骤 3 的 source 保留(幂等无害)。**验证**:source(L60)< SERVER(L64)结构保证 + bash -n。
+
+配套(非本仓 commit):ship.md 五处修订(步骤 0 版本已发过检查 / 步骤 1 定型 4 finder ≤5 预算 / 步骤 3 公证日志假死判读 / 步骤 3.5 staple 后重算说明 / 步骤 8·9 `--rebase=merges`),备份已刷 `~/.deskfox-signing/ship.md.bak`。

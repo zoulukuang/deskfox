@@ -53,6 +53,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 [[ -z "$OUT" ]] && OUT="/tmp/deskfox-bridge-mac-$ENV"
 rm -rf "$OUT"; mkdir -p "$OUT"
 case "$ENV" in prod) CHANNEL="desktop" ;; beta) CHANNEL="desktop-beta" ;; dev) CHANNEL="desktop-dev" ;; esac
+# 提前加载 config.env(2026-07-08 code-review 发现:原本到步骤 3 minisign 才 source,晚于下面
+# SERVER 取值 → DESKFOX_UPDATE_SSH 写在 config.env 里对本脚本静默无效,与 deploy-electron-updater.sh
+# 行为分叉。set -a 让赋值自动 export,子进程 upload-asset-to-oss.sh 同样受益。)
+if [[ -f "$HOME/.deskfox-signing/config.env" ]]; then
+  set -a; set +u; source "$HOME/.deskfox-signing/config.env" >/dev/null 2>&1; set -u; set +a
+fi
 # 🔴 用**域名**做 SSH host(不写死 IP):updates.deskfox.ai 换机器/换 IP 时 DNS 自动跟随。
 #    历史坑(2026-07-08):硬编码旧 IP 52.197.46.120 换 IP 后 SSH 超时,桥 latest.json 部署静默失败。
 SERVER="${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}"
