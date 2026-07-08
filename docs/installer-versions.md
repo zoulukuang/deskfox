@@ -11,6 +11,23 @@
 
 
 
+## [Windows] 2026.8.4 - 2026-07-08 14:33
+
+**主题**:右键项目「关闭」失效修复(REQ-072 自愈效应回归,Win/Mac 同炸)+ updater 部署脚本旧 IP 修;小更新进"补"位(2026.8.3 → 2026.8.4),与 mac prod 2026.8.4 号面追平。
+
+**本次内容**(自 `ship-prod-2026.8.3` 起):
+- **project-close-heal-race**(`defc4fe3e`):侧栏项目图标右键 →「关闭」点了没反应 — 2026-07-05 REQ-072 引入的"折叠竞态自愈"效应把 `projects.list()` 当依赖追踪,关闭当前项目时 list 先变、路由还没切走,效应误判"被误折叠"又 `open` 补回。修法:`isListed` 包 `untrack`(自愈只由路由进入 / 实例 boot 完成驱动),效应抽 fork-only `project-restore.ts` 可单测;6 单测(3 复现 + 3 回归)+ 变异验证红/绿;app `test:unit` 加 `--conditions=browser`(bun 把 solid-js 解析到 server 构建致 createEffect no-op,effect 类单测跑不动)。详见 [docs/features/project-close-heal-race/](features/project-close-heal-race/3-changelog.md)。
+- **updater-deploy-stale-ip**(`5bb212798`,Mac 端修):`deploy-electron-updater.sh` / `bridge-electron-updater.sh` / `deploy-updater-manifest.sh` SSH host 硬编码旧 IP → 换 `updates.deskfox.ai` 域名,修 mac 2026.8.4 升级源静默不发;本次 Win ship 是该修复后首次 Win 端部署验证。
+- **发版前 code-review(high workflow,8 agent 撞会话额度 → 候选 10 条人工逐条核验)**:无高危。2 条最重候选(「boot 后折叠不再自愈」)经 reconciler 守卫分析驳回(booted 项目根不可能被折叠);其余为治理/清理级记账 — SSH 默认值三脚本重复未收口 / DEPRECATED `deploy-updater-manifest.sh` 建议删 / mac dev·beta 号线落后 prod 历史倒挂 / `package.json` 改 script 无法留 FORK marker(靠 changelog+commit message 记录)/ updater-deploy-stale-ip 台账 hash 未回填(本次 chore 分支顺手补)。
+- **验收**:main 上合并后全绿 — fork 范围 typecheck 22/22 + app 521(browser 条件)+ media-gen 140 + adapter-feishu-lark 779;真冷启动健康检查 ×2 CLEAN;CDP 真机三路径(关当前/非当前/最后一个项目)全 PASS。
+
+**Release**:GitHub `ship-prod-2026.8.4`(`zoulukuang/deskfox`,latest)+ Gitee 镜像(正文挂 CDN)+ 阿里云 OSS CDN。
+**updater**:Electron 自更新源 `updates.deskfox.ai/electron/prod/latest.yml` version=2026.8.4;Tauri→Electron 迁移桥 `v1/latest/desktop/windows/latest.json` version=2026.8.4。
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.4-win-x64.exe`(Electron;含 LibreOffice)
+**sha512**:`4gCbXan6/FO0VxeetjVT5fM1f6kpZYB4vbmFEJ8pBAIl/c28Q6W1vI+T0dfLvRxeXzh/SIU3Yyc8pvkpsWLzTA==`(size 276038941)
+
+---
+
 ## [Windows] 2026.8.3 - 2026-07-07 19:15
 
 **主题**:飞书↔桌面 session 协同 + Windows 锚点适配 + 三笔独立小修(端口缓存/编辑按钮/聊天链接空白);小更新进"补"位(2026.8.2 → 2026.8.3)。

@@ -4,6 +4,8 @@ related: ./3-changelog.md
 
 # updater 部署脚本 SSH host 硬编码旧 IP 修复(2026-07-08,Tiny)
 
+commit:`5bb212798`(2026-07-08,Win 端 ship 2026.8.4 时回填)
+
 ## 背景
 
 macOS prod 2026.8.4 发版后,user 报「新版已发布但本地检测不到更新 / 检查不到最新版本」。
