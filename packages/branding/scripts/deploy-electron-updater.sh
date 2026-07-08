@@ -68,7 +68,10 @@ case "$PLATFORM" in
 esac
 
 # 服务器(同 Tauri 那台东京 lightsail)+ Electron 专用路径
-SERVER="ubuntu@52.197.46.120"
+# 🔴 用**域名**做 SSH host(不写死 IP):updates.deskfox.ai 换机器/换弹性 IP 时 DNS 自动跟随,
+#    脚本无需改。历史坑(2026-07-08):曾硬编码旧 IP 52.197.46.120,服务器换 IP 后 SSH 22 静默超时,
+#    OSS 产物传成功但 manifest SCP 失败 → 更新源不刷 → 用户照不到新版。紧急可 DESKFOX_UPDATE_SSH 覆盖。
+SERVER="${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}"
 REMOTE_DIR="/var/www/updates/electron/$ENV"
 VERIFY_URL="https://updates.deskfox.ai/electron/$ENV/$YML_NAME"
 OSS_CDN_BASE="https://dl.clawtray.com"

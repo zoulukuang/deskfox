@@ -53,7 +53,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 [[ -z "$OUT" ]] && OUT="/tmp/deskfox-bridge-mac-$ENV"
 rm -rf "$OUT"; mkdir -p "$OUT"
 case "$ENV" in prod) CHANNEL="desktop" ;; beta) CHANNEL="desktop-beta" ;; dev) CHANNEL="desktop-dev" ;; esac
-SERVER="ubuntu@52.197.46.120"
+# 🔴 用**域名**做 SSH host(不写死 IP):updates.deskfox.ai 换机器/换 IP 时 DNS 自动跟随。
+#    历史坑(2026-07-08):硬编码旧 IP 52.197.46.120 换 IP 后 SSH 超时,桥 latest.json 部署静默失败。
+SERVER="${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}"
 REMOTE_DIR="/var/www/updates/v1/latest/$CHANNEL/darwin"
 VERIFY_URL="https://updates.deskfox.ai/v1/latest/$CHANNEL/darwin/latest.json"
 OSS_CDN_BASE="https://dl.clawtray.com"

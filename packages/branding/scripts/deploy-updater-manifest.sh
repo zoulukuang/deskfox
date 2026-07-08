@@ -48,7 +48,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 MACOS_BUNDLE="$REPO_ROOT/packages/desktop/src-tauri/target/release/bundle/macos"
 SSH_KEY="$HOME/.ssh/lightsail-tokyo-ap-northeast-1.pem"
-SERVER="ubuntu@52.197.46.120"
+# [DEPRECATED 脚本,勿运行] 仍统一改域名以防遗漏(2026-07-08 旧 IP 52.197.46.120 SSH 已失效)
+SERVER="${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}"
 REMOTE_DIR="/var/www/updates/v1/latest/$CHANNEL/darwin"
 VERIFY_URL="https://updates.deskfox.ai/v1/latest/$CHANNEL/darwin/latest.json"
 
