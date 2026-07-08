@@ -96,6 +96,7 @@ import {
   type WorkspaceSidebarContext,
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
+import { createProjectRestoreEffect } from "./layout/project-restore"
 import { SidebarContent } from "./layout/sidebar-shell"
 
 export default function Layout(props: ParentProps) {
@@ -1452,16 +1453,14 @@ export default function Layout(props: ParentProps) {
     makeEventListener(window, deepLinkEvent, handler as EventListener)
   })
 
-  // FORK: REQ-072 复制项目独立展示 — 折叠竞态自愈:旧版把副本目录误登记进 sandboxes,reconciler 会在
-  // 实例 boot 前把刚打开的副本条目折叠掉;boot 后实例上报自身 worktree === 当前路由目录(= 该目录本身
-  // 就是项目根)时,条目应存在 → 补回。后端打开时已清误登记,此效应只在首次打开旧污染行时兜竞态。2026-07-05
-  createEffect(() => {
-    const directory = currentDir()
-    if (!directory) return
-    const [child] = serverSync.child(directory, { bootstrap: false })
-    if (child.path?.worktree !== directory) return
-    if (layout.projects.list().some((p) => pathKey(p.worktree) === pathKey(directory))) return
-    layout.projects.open(directory)
+  // FORK: REQ-072 复制项目独立展示 — 折叠竞态自愈(逻辑抽到 project-restore.ts 可单测)。
+  // 2026-07-08 修:isListed 走 untrack,右键「关闭」项目引发的列表变化不再误触发补回(项目关不掉 bug),
+  // 详见 project-restore.ts 头注释。2026-07-05 立
+  createProjectRestoreEffect({
+    currentDir,
+    bootedWorktree: (directory) => serverSync.child(directory, { bootstrap: false })[0].path?.worktree,
+    isListed: (directory) => layout.projects.list().some((p) => pathKey(p.worktree) === pathKey(directory)),
+    open: (directory) => layout.projects.open(directory),
   })
 
   async function renameProject(project: LocalProject, next: string) {
