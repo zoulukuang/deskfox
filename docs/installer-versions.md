@@ -11,6 +11,12 @@
 
 
 
+
+## [macOS] 2026.8.5 - 2026-07-08 12:25
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows] 2026.8.3 - 2026-07-07 19:15
 
 **主题**:飞书↔桌面 session 协同 + Windows 锚点适配 + 三笔独立小修(端口缓存/编辑按钮/聊天链接空白);小更新进"补"位(2026.8.2 → 2026.8.3)。
