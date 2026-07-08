@@ -11,9 +11,20 @@
 
 
 
-## [macOS] 2026.8.5 - 2026-07-08 12:25
+## [macOS] 2026.8.5 - 2026-07-08 16:30
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:两笔小修的 patch 发版(2026.8.4 → 2026.8.5)— 右键项目「关闭」失效修复 + updater 部署脚本旧 IP 根治。
+
+**本次内容**(自 `ship-mac-prod-2026.8.4` 起):
+- **project-close-heal-race(Win 端修,Mac 同炸)**:右键项目「关闭」失效 — REQ-072 折叠竞态自愈效应误追踪 `projects.list()`,关闭当前项目时路由未切走被误判"被折叠"又补回 → 关不掉。修法 `isListed` 包 `untrack`(自愈只由路由进入/boot 完成驱动),效应抽 fork-only `project-restore.ts`。6 单测(3 复现+3 回归)+ 变异验证;Win CDP 三路径 + **Mac 本机真机 CDP 三路径**(关当前/关非当前/关最后一个,7 次关闭 0 次补回)+ user 真机确认,双端全过。`--conditions=browser` 修 bun 解析 solid server 构建 createEffect no-op 坑。
+- **updater-deploy-stale-ip(Mac 端修)**:2026.8.4 发版后升级源静默不发的根因 — 3 个部署脚本 SSH host 硬编码旧 IP `52.197.46.120`(服务器已换 IP,SSH 22 死了 web 443 还活,scp 静默超时)。修法 SERVER 改 `${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}`(域名 DNS 跟随 + env override)。**本次 ship 首战验证生效**(7.5 A/B 部署全走域名成功)。ship.md 步骤 7.5 新增 (C) 硬校验收尾(两条源 curl version==本次,红灯不许跳过),本次首跑 PASS。
+- **发版前 code-review(4 finder,守 ≤5 预算)**:无启动崩溃/高危。5 项记录不阻断:① untrack 收窄自愈窗口(boot 后折叠场景,单窗口 reconciler booted guard 兜住,跨窗口单实例锁下不可达)② bridge 脚本 DESKFOX_UPDATE_SSH 读取时机早于 source config.env(与 deploy 不一致,override 写 config.env 对 bridge 无效;shell export 两者都生效)③ bootedWorktree 裸 `!==` vs pathKey 归一化不对称(既有行为,fail-safe)④ --conditions=browser 翻转 SSR 分支覆盖(全量 521 绿)⑤ 域名方案 DNS TTL/host key 残余风险(失败响亮 + (C) 硬校验兜底)。
+- **验收**:app 单测 521 pass(Mac 复跑)+ 新 6 单测 + typecheck 0 错;公证 .app(DeskFox.zip Accepted)+ .dmg(ae73843c Accepted + staple)双过;spctl `Notarized Developer ID`。
+
+**Release**:GitHub `ship-mac-prod-2026.8.5`(latest)+ Gitee release id 737621(正文挂 CDN 链接)+ 阿里云 OSS CDN。
+**updater**:Electron 自更新源 `updates.deskfox.ai/electron/prod/latest-mac.yml` version=2026.8.5 ✅;Tauri→Electron 迁移桥 `v1/latest/desktop/darwin/latest.json` version=2026.8.5 ✅;7.5(C) 硬校验 PASS。staple 后 dmg 脏数据(size/sha512)已在部署前主动修正(上版踩坑本版内化为流程)。
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.5-mac-arm64.dmg`(Electron;含 LibreOffice;arm64)
+**sha256**:`e96c0bc633113a47294b6c22086eeeaa8385ad93dac15f2bd330c35dd67920ca`(size 324464942)
 
 ---
 ## [Windows] 2026.8.4 - 2026-07-08 14:33
