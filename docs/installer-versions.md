@@ -11,6 +11,11 @@
 
 
 
+## [macOS] 2026.8.5 - 2026-07-08 12:25
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows] 2026.8.4 - 2026-07-08 14:33
 
 **主题**:右键项目「关闭」失效修复(REQ-072 自愈效应回归,Win/Mac 同炸)+ updater 部署脚本旧 IP 修;小更新进"补"位(2026.8.3 → 2026.8.4),与 mac prod 2026.8.4 号面追平。
