@@ -37,7 +37,7 @@ related: ./3-changelog.md(Tiny,1-spec / 2-plan 省略)
 | `packages/app/src/pages/layout.tsx` | 原 inline 效应替换为 `createProjectRestoreEffect(...)` 调用(FORK 注释更新) |
 | `packages/app/package.json` | `test:unit` / `test:unit:watch` 加 `--conditions=browser` — bun test 默认把 solid-js 解析到 server 构建(`createEffect` 是 no-op),effect 类单测跑不起来;browser 条件下全量 521 测试跑过全绿 |
 
-commit:(见本分支,合 main 后回填 hash)
+commit:`defc4fe3e`(merge to main:`6549709f2`,2026-07-08)
 
 ## 测试
 
