@@ -4,7 +4,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # macOS Intel x64 安装包构建支持(2026-07-11,Medium)
 
-commit:`(feat 分支 commit 后回填)`(分支 `feat/macos-intel-x64-build`)
+commit:`74b1b64a40`(分支 `feat/macos-intel-x64-build`;hash 回填 commit 另计)
 
 ## 背景
 
