@@ -40,20 +40,31 @@ ENV=""
 NO_BUNDLE=0
 SIGN=0
 NOTARIZE=0
+ARCH="arm64"   # 目标 arch,默认本机 Apple Silicon;Intel 交叉编译传 --arch x64(REQ-081)
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -Env|--env|-e) ENV="$2"; shift 2 ;;
         --no-bundle|-NoBundle) NO_BUNDLE=1; shift ;;
         --sign|-Sign) SIGN=1; shift ;;
         --notarize|-Notarize) NOTARIZE=1; SIGN=1; shift ;;  # 公证隐含签名
+        --arch|-Arch) ARCH="$2"; shift 2 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
 
 if [[ "$ENV" != "dev" && "$ENV" != "beta" && "$ENV" != "prod" && "$ENV" != "local" ]]; then
-    echo "Usage: $0 -Env <dev|beta|prod|local> [--no-bundle]" >&2
+    echo "Usage: $0 -Env <dev|beta|prod|local> [--no-bundle] [--arch <arm64|x64>]" >&2
     exit 1
 fi
+
+# arch 归一化 + 派生 LO bundle 目录 / electron-builder 产物目录(REQ-081):
+#   arm64 → LO macos/、产物 dist-deskfox/mac/;x64 → LO macos-x64/、产物 dist-deskfox/mac-x64/。
+case "$ARCH" in
+    arm64|aarch64) ARCH="arm64"; LO_SUBDIR="macos"; MAC_APP_DIR="mac" ;;
+    x64|x86_64)    ARCH="x64";   LO_SUBDIR="macos-x64"; MAC_APP_DIR="mac-x64" ;;
+    *) echo "[deskfox] ❌ --arch 须 arm64|x64(得 $ARCH)" >&2; exit 1 ;;
+esac
+echo "[deskfox] target arch=$ARCH  (LO bundle: libreoffice-bundle/$LO_SUBDIR)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRANDING_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -61,6 +72,27 @@ REPO_ROOT="$(cd "$BRANDING_ROOT/../.." && pwd)"
 DESKTOP="$REPO_ROOT/packages/desktop"
 CONFIG="$DESKTOP/electron-builder.deskfox.config.ts"
 VERSIONS_JSON="$BRANDING_ROOT/installer-versions.json"
+
+# === 0.5 跨架构原生预编译就绪(REQ-081,仅 x64 交叉打包)===
+# node-pty / @parcel/watcher 走"每平台独立 optional 预编译包"分发(node-pty-darwin-x64 等,各含
+#   prebuilds/<plat>/*.node)。bun 在 arm64 主机按包自身 cpu/os 字段【只装 darwin-arm64 那份】。
+#   交叉打 x64 包时,electron-builder 磁盘上只有 arm64 的 pty.node → 会把 arm64 原生模块误打进 x64
+#   app.asar → Intel 机启动即崩(Error: Cannot find module './prebuilds/darwin-x64/pty.node')。
+#   故 x64 build 前用 --cpu='*' 把 darwin 两架构预编译都落到 node_modules(--no-save 不写 lockfile,
+#   避免 npmmirror 绝对 URL 污染开源仓);electron-builder 再按 --x64 的 cpu 字段各取所需。
+#   arm64 build 本机已有原生预编译,不触发此步 → 现有 arm64/prod 发布流程零改动。
+if [[ "$ARCH" == "x64" ]]; then
+    echo "[deskfox] 交叉打包 x64:确保 x64 原生预编译(node-pty / parcel-watcher)就位…"
+    ( cd "$REPO_ROOT" && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        -u ALL_PROXY -u all_proxy bun install --cpu='*' --no-save ) || {
+        echo "[deskfox] ❌ x64 原生依赖安装失败(缺 node-pty-darwin-x64 等预编译)" >&2; exit 1; }
+    # 硬校验:x64 pty.node 必须真在磁盘上,否则打出来的包必崩,提前失败而非产出坏包
+    _PTY_X64="$REPO_ROOT/packages/desktop/node_modules/@lydell/node-pty-darwin-x64/prebuilds/darwin-x64/pty.node"
+    if [[ ! -f "$_PTY_X64" ]]; then
+        echo "[deskfox] ❌ x64 node-pty 预编译缺失,拒绝产出会崩的 x64 包: $_PTY_X64" >&2; exit 1
+    fi
+    echo "[deskfox]   x64 原生预编译就位 ✓ ($(file -b "$_PTY_X64"))"
+fi
 
 # === 1. 日历版号(prod → macos;dev/beta → <env>-macos,独立号线;local → 回落平台裸号)===
 # 实际版本注入由 electron-builder.deskfox.config.ts 自读 installer-versions.json 完成
@@ -142,7 +174,7 @@ echo "[deskfox] plugin dist 就绪且无 Bun.serve 残留 ✓"
 #   (profile 虽建成但 convert 无输出);extensions/ 在 LO bundle 里通常是【空目录】,electron-builder
 #   打包必丢弃空目录(实测最终 .app 无 extensions),但缺它冷启动转换完全正常 → 不作硬门槛,仅作完整性提示。
 # 故此处只硬卡 presets 非空;extensions 仅警告。最终包是否真含 presets 由 §5.5 post-build 复验(堵打包漏拷)。
-LO_BUNDLE_APP="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
+LO_BUNDLE_APP="$BRANDING_ROOT/libreoffice-bundle/$LO_SUBDIR/LibreOffice.app"
 if [[ -d "$LO_BUNDLE_APP" ]]; then
     LO_RES="$LO_BUNDLE_APP/Contents/Resources"
     if [[ ! -d "$LO_RES/presets" ]] || [[ -z "$(ls -A "$LO_RES/presets" 2>/dev/null)" ]]; then
@@ -164,6 +196,10 @@ fi
 
 # === 4. electron-vite build(自动跑 predev:编译 opencode Node 后端 + copy-icons)===
 export OPENCODE_CHANNEL="$ENV"
+# REQ-081:把【目标 arch】透传给 electron.vite.config.ts,让 node-pty-narrower 插件按目标架构(而非
+#   构建机 process.arch)选并 externalize node-pty 子包。交叉打 x64 的成败关键 —— 否则 arm64 机产出的
+#   x64 bundle 会写死 import arm64 子包 → Intel 启动即崩(prebuilds/darwin-x64/pty.node not found)。
+export DESKFOX_TARGET_ARCH="$ARCH"
 export ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
 export ELECTRON_BUILDER_BINARIES_MIRROR="${ELECTRON_BUILDER_BINARIES_MIRROR:-https://npmmirror.com/mirrors/electron-builder-binaries/}"
 # electron 下载缓存:本机外置卷优先(内置盘空间紧),无则回落 electron-builder 系统默认。
@@ -199,7 +235,7 @@ if [[ "$SIGN" -eq 1 ]]; then
     # (soffice 主可执行需兄弟 uno 先签,顺序无保证 → "subcomponent not signed" 失败)。
     # codesign --deep 正确按由内到外签整个 bundle;config 的 mac.signIgnore 让 electron-builder 跳过 LO,
     # 故必须这里先把【源】LO 签好(electron-builder extraResources 拷贝保留签名,外层 seal 覆盖之)。
-    LO_SRC="$BRANDING_ROOT/libreoffice-bundle/macos/LibreOffice.app"
+    LO_SRC="$BRANDING_ROOT/libreoffice-bundle/$LO_SUBDIR/LibreOffice.app"
     if [[ -d "$LO_SRC" ]]; then
         TS_ARG="--timestamp=none"                       # dev 签名免时间戳(快);公证才需安全时间戳
         [[ "$NOTARIZE" -eq 1 ]] && TS_ARG="--timestamp"
@@ -216,7 +252,7 @@ if [[ "$SIGN" -eq 1 ]]; then
 fi
 
 # === 5. electron-builder 打包(--publish never;--no-bundle → --dir 只出 .app)===
-EB_ARGS=(--mac --publish never --config electron-builder.deskfox.config.ts)
+EB_ARGS=(--mac "--$ARCH" --publish never --config electron-builder.deskfox.config.ts)
 # local 永不发布 → 始终 --dir(只出 .app,不打 dmg/installer);--no-bundle 同样 --dir。
 if [[ "$NO_BUNDLE" -eq 1 || "$ENV" == "local" ]]; then EB_ARGS=(--dir "${EB_ARGS[@]}"); fi
 
@@ -241,7 +277,7 @@ echo "[deskfox] electron-builder ${EB_ARGS[*]}…"
 # 注:此处 soffice 尚未 Developer ID 签名 —— 嵌套 bundle 签名是阶段2(当前 config identity=null 出未签名包),
 #     故只做结构性存在检查;冷启动健康由 prepare-lo-bundle 的 smoke 闸已保证。
 if [[ -d "$LO_BUNDLE_APP" ]]; then
-    APP_PATH="$(ls -d "$DESKTOP/dist-deskfox"/mac*/*.app 2>/dev/null | head -1)"
+    APP_PATH="$(ls -d "$DESKTOP/dist-deskfox/$MAC_APP_DIR"/*.app 2>/dev/null | head -1)"
     if [[ -n "$APP_PATH" ]]; then
         LO_DST="$APP_PATH/Contents/Resources/libreoffice"
         VERIFY_SOFFICE="$LO_DST/Contents/MacOS/soffice"
@@ -267,8 +303,8 @@ OUT="$DESKTOP/dist-deskfox"
 echo ""
 echo "[deskfox] ✅ 构建完成,产物:"
 if [[ "$NO_BUNDLE" -eq 1 || "$ENV" == "local" ]]; then
-    ls -d "$OUT"/mac*/*.app 2>/dev/null | while read -r a; do echo "  .app : $a"; done
+    ls -d "$OUT/$MAC_APP_DIR"/*.app 2>/dev/null | while read -r a; do echo "  .app : $a"; done
 else
-    ls "$OUT"/*.dmg "$OUT"/*.zip 2>/dev/null | while read -r f; do echo "  $f"; done
-    ls -d "$OUT"/mac*/*.app 2>/dev/null | while read -r a; do echo "  .app : $a"; done
+    ls "$OUT"/*-"$ARCH".dmg "$OUT"/*-"$ARCH".zip 2>/dev/null | while read -r f; do echo "  $f"; done
+    ls -d "$OUT/$MAC_APP_DIR"/*.app 2>/dev/null | while read -r a; do echo "  .app : $a"; done
 fi

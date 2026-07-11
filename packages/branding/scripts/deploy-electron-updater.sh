@@ -94,7 +94,10 @@ ASSETS=()
 if [[ -n "$ASSET" ]]; then
   ASSETS+=("$ASSET")
 elif [[ "$PLATFORM" == "mac" ]]; then
-  for f in "$DIST_DIR"/DeskFox*-"${VERSION}"-mac-arm64.zip "$DIST_DIR"/DeskFox*-"${VERSION}"-mac-arm64.dmg; do
+  # REQ-081:mac 双 arch —— arm64 与 x64 的 zip(updater 用)+ dmg(用户面)全收,生成单本合并 yml。
+  #   只 build 了一个 arch 时自然只收到那一个,退化为单 arch(向后兼容)。
+  for f in "$DIST_DIR"/DeskFox*-"${VERSION}"-mac-arm64.zip "$DIST_DIR"/DeskFox*-"${VERSION}"-mac-arm64.dmg \
+           "$DIST_DIR"/DeskFox*-"${VERSION}"-mac-x64.zip   "$DIST_DIR"/DeskFox*-"${VERSION}"-mac-x64.dmg; do
     [[ -f "$f" ]] && ASSETS+=("$f")
   done
 else
@@ -102,24 +105,58 @@ else
   [[ -n "$f" && -f "$f" ]] && ASSETS+=("$f")
 fi
 [[ ${#ASSETS[@]} -eq 0 ]] && { echo "[el-updater] ERROR: 找不到资产(dist-deskfox 下 DeskFox*-${VERSION}-${PLATFORM}-*)— 先完整 build" >&2; exit 1; }
-# Gitee 镜像挑用户面安装包:mac=.dmg / win=.exe(无则退回首个资产)
+# Gitee 镜像挑用户面安装包:mac 优先 arm64 .dmg(存量主力),否则任一 .dmg / win=.exe(无则退首个资产)
 GITEE_ASSET="${ASSETS[0]}"
 for a in "${ASSETS[@]}"; do case "$a" in *.dmg|*.exe) GITEE_ASSET="$a" ;; esac; done
+for a in "${ASSETS[@]}"; do case "$a" in *-mac-arm64.dmg) GITEE_ASSET="$a" ;; esac; done
 
-# 2. 改 YML:每个资产 basename → OSS 绝对 URL(generic provider 读绝对 url 从 CDN 下)
+# 2. 生成/改写 YML → OUT_YML(url 全 OSS 绝对;sha512/size 一律磁盘实算,天然消 staple 脏数据)
 OUT_YML="/tmp/deskfox-electron-${ENV}-${YML_NAME}"
-SED_ARGS=()
-for a in "${ASSETS[@]}"; do
-  obj="$(basename "$a")"
-  SED_ARGS+=(-e "s#(url|path): +${obj}\$#\1: ${OSS_CDN_BASE}/${obj}#")
-done
-sed -E "${SED_ARGS[@]}" "$YML" > "$OUT_YML"
-
-# 2.5 按磁盘实算回写各资产 sha512/size(2026-07-08 立,staple 脏数据根治):
-#     electron-builder 生成 yml 在「.dmg 公证 staple」之前,staple 会改 .dmg 字节 → yml 里 dmg 的
-#     sha512/size 必然过期(2026.8.4 靠事后补救、2026.8.5 靠人记得手改,都不可靠)。部署前一律以
-#     磁盘文件为准重算回写,消灭整类问题;zip 不受 staple 影响,重算结果不变、无害。
-python3 - "$OUT_YML" "${ASSETS[@]}" <<'PY'
+if [[ "$PLATFORM" == "mac" ]]; then
+  # REQ-081 mac 双 arch:electron-builder 每次 build 只产单 arch 的 latest-mac.yml、后一次覆盖前一次,
+  #   拿不全两 arch。改由磁盘上全部 arch 资产【重新生成】一本合并 yml:arm64+x64 的 zip/dmg 全列进
+  #   files[](electron-updater MacUpdater.filterFilesForArch 按 url 含不含 arm64 给每台机分流)。
+  #   version/releaseDate 取自 electron-builder yml;sha512/size 磁盘实算(顺带根治 staple 脏数据);
+  #   path/顶层 sha512 指 arm64 zip(存量用户 arm64,不读 files[] 的老客户端 fallback 默认给 arm64)。
+  #   只 build 一个 arch 时自然退化为单 arch,向后兼容。
+  python3 - "$YML" "$OUT_YML" "$OSS_CDN_BASE" "$VERSION" "${ASSETS[@]}" <<'PY'
+import sys, re, base64, hashlib, os
+src, out, cdn, version = sys.argv[1:5]
+assets = sys.argv[5:]
+rel = ""
+for ln in open(src).read().split("\n"):
+    m = re.match(r"^releaseDate: (.*)$", ln)
+    if m: rel = m.group(1).strip()
+def dig(p):
+    h = hashlib.sha512()
+    with open(p, "rb") as f:
+        for c in iter(lambda: f.read(1 << 20), b""): h.update(c)
+    return base64.b64encode(h.digest()).decode(), os.path.getsize(p)
+# 排序:arm64 zip → arm64 dmg → x64 zip → x64 dmg(arm64 优先做 primary)
+assets = sorted(assets, key=lambda p: (0 if "arm64" in os.path.basename(p) else 1,
+                                       0 if os.path.basename(p).endswith(".zip") else 1))
+lines, primary = ["version: " + version, "files:"], None
+for a in assets:
+    b = os.path.basename(a); sha, size = dig(a)
+    lines += ["  - url: %s/%s" % (cdn, b), "    sha512: " + sha, "    size: " + str(size)]
+    if primary is None and b.endswith(".zip"): primary = (b, sha)
+if primary is None:
+    b = os.path.basename(assets[0]); sha, _ = dig(assets[0]); primary = (b, sha)
+lines += ["path: %s/%s" % (cdn, primary[0]), "sha512: " + primary[1]]
+if rel: lines.append("releaseDate: " + rel)
+open(out, "w").write("\n".join(lines) + "\n")
+print("[el-updater] mac yml 已生成(双 arch files[]):", ", ".join(os.path.basename(a) for a in assets))
+PY
+else
+  # win(单 exe,原行为):sed 把 url/path 改 OSS 绝对
+  SED_ARGS=()
+  for a in "${ASSETS[@]}"; do
+    obj="$(basename "$a")"
+    SED_ARGS+=(-e "s#(url|path): +${obj}\$#\1: ${OSS_CDN_BASE}/${obj}#")
+  done
+  sed -E "${SED_ARGS[@]}" "$YML" > "$OUT_YML"
+  # 2.5 按磁盘实算回写 sha512/size(2026-07-08 立;win 无 staple 但统一路径、重算无害)
+  python3 - "$OUT_YML" "${ASSETS[@]}" <<'PY'
 import sys, re, base64, hashlib, os
 yml, assets = sys.argv[1], sys.argv[2:]
 info = {}
@@ -151,6 +188,7 @@ for ln in open(yml).read().split("\n"):
 open(yml, "w").write("\n".join(out))
 print("[el-updater] 2.5 已按磁盘实算回写 sha512/size:", ", ".join(sorted(info)))
 PY
+fi
 
 echo "[el-updater] 改写后 $YML_NAME($OUT_YML):"; echo "----------"; cat "$OUT_YML"; echo "----------"
 # 自检:无残留相对文件名(url/path 全应改成 https 绝对),且 version 对

@@ -13,7 +13,13 @@ const channel = (() => {
   return "dev"
 })()
 
-const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
+// FORK: 交叉打包(如 arm64 机上打 x64)按【目标 arch】选 node-pty 子包 [feat: macos-intel-x64-build] 2026-07-11
+//   node-pty-narrower 插件会把 import '@lydell/node-pty' 改写成此宿主子包并 externalize。若用构建机
+//   process.arch(arm64),交叉打的 x64 包会把 arm64 子包写死进 bundle → Intel 机 arm64/utils.js 去找
+//   自身没有的 prebuilds/darwin-x64/pty.node → 启动即崩(REQ-081)。故优先取 DESKFOX_TARGET_ARCH(由
+//   build-deskfox-electron.sh 按 --arch 注入),缺省回落 process.arch(原生打包行为不变)。
+const targetArch = process.env.DESKFOX_TARGET_ARCH || process.arch
+const nodePtyPkg = `@lydell/node-pty-${process.platform}-${targetArch}`
 
 const sentry =
   process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
