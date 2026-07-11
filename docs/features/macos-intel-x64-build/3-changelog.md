@@ -49,6 +49,21 @@ Intel 真机首装报 `Failed to load native module: pty.node ... Cannot find '.
 
 ---
 
+## Follow-up:双 arch ship 发布链(U5 + ship 集成,2026-07-11)
+
+> user 要求「以后 ship 同时打 arm64+x64 两包,完整发布(GitHub/Gitee/官网双链接)」。在同一 feat 分支续做 U5(updater 双 arch)+ ship 编排 + 官网。跨三处落点:
+
+**① `deploy-electron-updater.sh`(本仓,fork-only)** —— mac 改为**单本 `latest-mac.yml` 双 arch 生成**:
+- 资产收集扩到 arm64+x64 各 zip/dmg(只 build 一个 arch 时退化单 arch,向后兼容)。
+- mac 分支不再 sed-patch electron-builder 的 yml(它每次 build 只产单 arch、后者覆盖前者),改由磁盘全部 arch 资产**生成** yml:4 条 `files[]`(arm64+x64),sha512/size 磁盘实算(顺带根治 staple 脏数据),`path`/顶层 sha512 指 arm64 primary(存量用户 arm64,不读 files[] 的老客户端 fallback)。electron-updater `MacUpdater.filterFilesForArch` 按 url 含不含 `arm64` 给每台机分流。win 路径原样不动。
+- Gitee 镜像优先 arm64 dmg。**dry-run 验过**:两 arch 资产在磁盘时正确生成 4 条 files[] + 全 OSS 绝对 url。
+
+**② `.claude/commands/ship.md`(本机 gitignored + `~/.deskfox-signing/ship.md.bak`)** —— 步骤 3 循环打 arm64→x64 两 arch;3.5 两个 dmg 各自公证+staple+门禁(删掉已被 deploy 脚本取代的手动 yml 重算);6 GitHub 上传两 dmg;7 OSS+Gitee 两 arch 双链接;7.5 (A) deploy 自动双 arch、(B) 迁移桥保持 arm64(旧 Tauri 无 Intel 存量);10 报告双链接。
+
+**③ `deskfox-site` 仓(独立仓)** —— 下载区 macOS 改**两个并列按钮**(Apple 芯片 arm64 / Intel 芯片 x64),各带 GitHub+国内源;3 语言 i18n 加 `download.btn_mac_arm64/_x64`;`publish.sh` 加 x64 资产/URL/CDN 检测 + 2 条 patch 正则(末尾锚定 `-mac-x64` 与 arm64 互斥,6 条各恰好匹配 1 处已验)。publish.sh 步骤 4 对 x64 GitHub 资产做可达硬校验 → **x64 未真发布前不会上线坏链**(自保护)。
+
+**验证**:deploy dry-run 双 arch yml 正确;publish.sh `bash -n` + 6 patch 正则 match-count 各=1;index.html i18n 三语言齐。**首次真·双 arch 发布**在下次 `/ship` 实跑端到端验收。
+
 ## R4 override 复核报告(`electron.vite.config.ts`)
 
 > 命中 pre-commit §4.1 黑名单规则 `.*\.config\.(ts|js|mjs)$`(护上游配置;`.deskfox.config.*` 才豁免)。本季(Q3)R4 累计:REQ-069 + REQ-072 + 本笔 = **第 3 笔**,**已超健康基线 ≤2**。本报告即 R4 报备,待 user 审阅点头后 commit(commit 前不落地)。
