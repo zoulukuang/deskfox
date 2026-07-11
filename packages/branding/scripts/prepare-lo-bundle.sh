@@ -63,7 +63,11 @@ MIRRORS=(
 )
 
 CACHE_DIR="$BRANDING_ROOT/libreoffice-bundle/cache"
-DEST_DIR="$BRANDING_ROOT/libreoffice-bundle/macos"
+# x64 落独立目录 macos-x64,与 arm64(macos)并存,避免互相覆盖(REQ-081 双 arch 分发)。
+# config/build 脚本按目标 arch 从对应目录取 LO bundle。
+DEST_SUBDIR="macos"
+[[ "$ARCH" == "x86_64" || "$ARCH" == "x64" ]] && DEST_SUBDIR="macos-x64"
+DEST_DIR="$BRANDING_ROOT/libreoffice-bundle/$DEST_SUBDIR"
 DMG_PATH="$CACHE_DIR/$DMG_NAME"
 
 mkdir -p "$CACHE_DIR" "$DEST_DIR"
@@ -291,5 +295,5 @@ echo "[lo-bundle-mac] === DONE ==="
 echo "[lo-bundle-mac] output: $DEST_APP"
 echo "[lo-bundle-mac] size:   ${FINAL_SIZE_MB} MB"
 echo ""
-echo "Next: run build-deskfox-electron.sh -Env dev (or prod) to include it in DeskFox.app"
-echo "      build-deskfox-electron.sh auto-detects libreoffice-bundle/macos/LibreOffice.app"
+echo "Next: run build-deskfox-electron.sh -Env dev (or prod) [--arch x64] to include it in DeskFox.app"
+echo "      build-deskfox-electron.sh auto-detects libreoffice-bundle/$DEST_SUBDIR/LibreOffice.app"

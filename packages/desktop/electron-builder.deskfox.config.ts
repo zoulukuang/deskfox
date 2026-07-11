@@ -36,6 +36,15 @@ const targetPlat = (() => {
   if (process.platform === "linux") return "linux"
   return "windows"
 })()
+// FORK: 目标 arch 读取(REQ-081 macOS Intel x64 交叉编译)。build 脚本把 --x64/--arm64 透传给
+// electron-builder CLI,本 config 从同一 argv 派生 arch,决定:① mac.target 显式 arch ② LO bundle 取
+// macos(arm64)还是 macos-x64(x64)目录。默认 arm64(本机 Apple Silicon),不 break 现有流程。
+const targetArch = (() => {
+  const argv = process.argv.join(" ")
+  if (argv.includes("--x64")) return "x64"
+  if (argv.includes("--arm64")) return "arm64"
+  return "arm64"
+})()
 const appVersion = (() => {
   const versions = JSON.parse(
     fs.readFileSync(path.join(brandingDir, "installer-versions.json"), "utf8"),
@@ -82,7 +91,9 @@ const extraResources: Array<{ from: string; to: string; filter?: string[] }> = [
 // [feat: electron-replatform-macos / electron-replatform-windows] 2026-06-14
 const extraFiles: Array<{ from: string; to: string; filter?: string[] }> = []
 if (targetPlat === "macos") {
-  const loApp = path.join(brandingDir, "libreoffice-bundle", "macos", "LibreOffice.app")
+  // FORK: x64 从 macos-x64/ 取 LO bundle,arm64 从 macos/(REQ-081 双 arch)
+  const loSubdir = targetArch === "x64" ? "macos-x64" : "macos"
+  const loApp = path.join(brandingDir, "libreoffice-bundle", loSubdir, "LibreOffice.app")
   if (fs.existsSync(loApp)) {
     extraResources.push({ from: loApp, to: "libreoffice" })
   }
@@ -137,7 +148,12 @@ const config: Configuration = {
   mac: {
     category: "public.app-category.productivity",
     icon: path.join(brandingDir, "src", "assets", "icons", iconEnv, "icon.icns"),
-    target: ["dmg", "zip"],
+    // FORK: 显式声明目标 arch(REQ-081)。默认 arm64;--x64 时出 x64 包。artifactName 的 ${arch}
+    // 自动产 mac-arm64/mac-x64 文件名,updater 靠文件名含 arm64 与否分流(MacUpdater.filterFilesForArch)。
+    target: [
+      { target: "dmg", arch: [targetArch] },
+      { target: "zip", arch: [targetArch] },
+    ],
     hardenedRuntime: true,
     gatekeeperAssess: false,
     entitlements: "resources/entitlements.plist",
