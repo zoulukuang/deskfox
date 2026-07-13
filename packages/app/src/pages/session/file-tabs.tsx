@@ -1209,7 +1209,13 @@ export function FileTabContent(props: {
     showToast({ variant: "success", title: comment ? "已加入聊天上下文(含问题)" : "已加入聊天上下文" })
     // FORK: 加 attachment 后把焦点 + 光标交还 chat input,user 可立刻继续打字 [feat: chat-input-focus-follow] 2026-05-21
     // rAF 跟 chat-selection-menu / applyHistoryPrompt 同套路,等 attachment 卡片插入触发的 layout 完再 focus
-    requestAnimationFrame(focusChatInput)
+    requestAnimationFrame(() => {
+      focusChatInput()
+      // FORK: REQ-082 提交后保持文件预览打开 + 当前文件 active,避免加 context 后布局(尤其窄窗)
+      //   把预览收起 —— user 真机反馈「浮窗 Enter 提交后文件预览关闭」。已开则 no-op,安全兜底。2026-07-14
+      view().reviewPanel.open()
+      tabs().setActive(props.tab)
+    })
     // 注:closeMdMenu 已统一处理 removeAllRanges + 清 Pierre 行选区
   }
 
