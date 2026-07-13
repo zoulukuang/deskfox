@@ -37,9 +37,21 @@ commit: feat 分支 `feat/quick-ask-align-onboarding`,与 REQ-082 同分支分�
 
 `git revert <commit>` 单笔回退。资源文件 + 主进程调用点 + deep link 扩展一并回滚,`open-project` 回到无 file 参。
 
-## ⚠️ 待真桌面 QA(R9 未闭合,不可据此提 merge 前置)
+## 真桌面 QA 记录
 
-- 全新 profile 首启端到端(New DeskFox 建成 + 自动开工作区 + 介绍文档首 tab + base64 二维码渲染);可用 `OPENCODE_TEST_ONBOARDING=1` 起隔离首启。
-- Windows 端 Documents 落点 + 全链路。
-- macOS TCC 未授权 .md file:// 兜底。
+### ✅ Mac 首启端到端(功能层,2026-07-13,CDP 隔离首启)
+
+本地版 `-Env local --no-bundle` 构建 → `OPENCODE_TEST_ONBOARDING=1` + `--remote-debugging-port=9222` 隔离首启(userData/XDG/documents 全落 tmp,不碰真实 Documents,正式版进程不受影响)→ CDP 验证:
+
+- ✅ 磁盘:`<tmp>/documents/New DeskFox/关于 DeskFox 你该知道的几件事.md` 创建成功
+- ✅ 首启 deep link 自动打开 New DeskFox 为工作区
+- ✅ 介绍文档作 tab 渲染全文(标题 / 隐私段「你,是自己数据的唯一知情人」/ 第三部分 / 文末「DeskFox 官方交流群」)
+- ✅ **base64 二维码真解码渲染**:`img[src^="data:image/png;base64"]`,naturalWidth=1372 / naturalHeight=1392 / complete=true —— 单文件 base64 方案坐实(待钉死项 #1 闭合)
+- 📝 观察:首启到内容完全渲染有 ~数秒延迟(sidecar 起 + 文件读 + markdown 渲染 + base64 解码),CDP 首查 3s 偏早会看到 img 尚未出现,属渲染时序非缺陷;真实用户短暂加载后即见内容。
+
+### ⚠️ 仍待人工 QA(R9 未完全闭合,merge 前须补)
+
+- **视觉最终确认**:真实(非隔离)双击首启,介绍文档在系统 Documents、二维码视觉对齐 —— 建议 user 双击真机看一眼。
+- **Windows 端**:`app.getPath("documents")` 落点 + 首启全链路(我在 Mac,须 Win 同事验)。
+- **macOS TCC**:真实 `~/Documents` 首启若弹 TCC 授权对话框、未点时 .md 加载路径(隔离用 tmp 不触发 TCC,此项隔离验不到)。
 - 设置面板 UI 开关行(功能 key 已生效,可视入口 follow-up)。
