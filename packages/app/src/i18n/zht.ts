@@ -1034,7 +1034,7 @@ export const dict = {
   "fileViewer.menu.addToChat": "新增至對話視窗",
   "fileViewer.menu.copy": "複製",
   "fileViewer.menu.input.placeholder": "想怎麼改 / 想問什麼...",
-  "fileViewer.menu.input.shortcutHint": "{{shortcut}} 提交 · Esc 取消",
+  "fileViewer.menu.input.shortcutHint": "Enter 提交 · Shift+Enter 換行 · Esc 取消",
   "fileViewer.menu.input.submit": "加入對話",
   // FORK: 跨頁選區提示 [feat: office-選中加聊天] 2026-05-24
   "fileViewer.menu.crossPageHint": "跨頁選區暫不支援,請分段選取後再加入對話",

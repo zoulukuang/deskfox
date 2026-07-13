@@ -50,6 +50,7 @@ import { stripFrontmatter } from "@/utils/markdown-frontmatter"
 import { focusChatInput } from "@/utils/chat-input-focus"
 // FORK: 选区菜单贴边沿溢出修复(REQ-032)— 渲染后 measure + clamp 进视口
 import { repositionMenu } from "@/utils/menu-position"
+import { isImeComposingEvent } from "@/utils/ime"
 // FORK: Ctrl+C v2 — onSelChange scope 闸 + keydown 当前选区优先决策
 // 修跨区域选区污染 + history 策略错配两 bug,详见 file-tabs-ctrl-c.ts 头部注释 2026-05-29
 import { decideCtrlCAction } from "./file-tabs-ctrl-c"
@@ -59,9 +60,6 @@ import { decideCtrlCAction } from "./file-tabs-ctrl-c"
 // history 现在只剩**一个**合法消费者(`handleSelectionContextMenu` 对抗 macOS WebKit shadow collapse bug)
 import { registerViewer } from "./selection-bus"
 import type { ViewerSelectionHistory } from "./selection-history"
-
-// FORK: macOS 平台检测,用于右键菜单输入框 Option+Enter 提交支持 2026-04-30
-const IS_MAC = typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
 
 function isMarkdownPath(p: string | undefined): boolean {
   if (!p) return false
@@ -1896,17 +1894,17 @@ export function FileTabContent(props: {
                   onInput={(e) => setMdComment(e.currentTarget.value)}
                   onKeyDown={(e) => {
                     if (e.key !== "Enter") return
-                    // FORK: macOS 加 Option+Enter 提交,Win/Linux 维持 Ctrl+Enter,Mac 维持 Cmd+Enter 2026-04-30
-                    if (!(e.ctrlKey || e.metaKey || (IS_MAC && e.altKey))) return
+                    // FORK: REQ-082 对齐主输入框键位 —— Shift+Enter 换行(textarea 默认,先于 IME 判)/
+                    // IME 组合态跳过 / 裸 Enter 提交 2026-07-13
+                    if (e.shiftKey) return
+                    if (isImeComposingEvent(e)) return
                     e.preventDefault()
                     submitMdSelection()
                   }}
                 />
                 <div class="flex items-center justify-between">
                   <span class="text-[11px] text-text-weak">
-                    {language.t("fileViewer.menu.input.shortcutHint", {
-                      shortcut: IS_MAC ? "Cmd/Opt+Enter" : "Ctrl+Enter",
-                    })}
+                    {language.t("fileViewer.menu.input.shortcutHint")}
                   </span>
                   <div class="flex items-center gap-2">
                     <button

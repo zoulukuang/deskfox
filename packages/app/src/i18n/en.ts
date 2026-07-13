@@ -1162,7 +1162,7 @@ export const dict = {
   "fileViewer.menu.addToChat": "Add to Chat",
   "fileViewer.menu.copy": "Copy",
   "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...",
-  "fileViewer.menu.input.shortcutHint": "{{shortcut}} to submit · Esc to cancel",
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel",
   "fileViewer.menu.input.submit": "Add to Chat",
   // FORK: cross-page selection hint [feat: office-选中加聊天] 2026-05-24
   "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.",
