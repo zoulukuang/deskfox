@@ -34,6 +34,25 @@ commit: feat 分支 `feat/quick-ask-align-onboarding`,与 REQ-083 同分支分�
 
 `git revert <commit>` 单笔回退(纯前端,P4 可逆)。
 
-## 待真桌面 QA(View 清单,e2e 基础设施就绪后补)
+## 真桌面 QA 记录
 
-- 两浮窗真键盘:裸 Enter 提交 / Shift+Enter 换行 / 中文输入法组合确认时 Enter 不误提交 / Esc 关闭 / 底部提示文案。
+### ✅ file-tabs.tsx 浮窗(markdown 选区)CDP 验证全过(2026-07-13,本地版隔离首启)
+
+本地版打开介绍文档 md → CDP 选区触发浮窗 → 派发键盘事件(IME 组合态用 `Object.defineProperty` 强制 `keyCode=229`/`isComposing`)→ 观测浮窗 `[data-slot=md-selection-menu]` 存亡:
+
+- ✅ 底部文案 = `Enter 提交 · Shift+Enter 换行 · Esc 取消`
+- ✅ 裸 Enter → 提交(浮窗消失)
+- ✅ Shift+Enter → 换行不提交(浮窗仍在,textarea 值保留)
+- ✅ IME `keyCode=229` Enter → 不提交
+- ✅ IME `isComposing` Enter → 不提交
+- ✅ Esc → 关闭
+- ✅ 提交按钮点击 → 提交(键位改动未破坏按钮路径)
+
+### host.tsx 浮窗(PDF/Office 右键)
+
+onKeyDown 与 file-tabs.tsx **字节级一致**(共用 `isImeComposingEvent` + 同一 i18n `shortcutHint`),由上面 file-tabs CDP 验证 + `ime.test.ts` 单测覆盖同一逻辑。PDF/Office 右键触发的**真机视觉**留人工确认(需 PDF/office 文件,New DeskFox 仅 md)。
+
+### 仍建议真机点验
+
+- 真中文输入法(非合成事件)组合确认时 Enter 不误提交(CDP 用 defineProperty 模拟,真输入法更权威)。
+- host.tsx PDF/Office 右键浮窗视觉。
