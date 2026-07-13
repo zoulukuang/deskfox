@@ -45,9 +45,16 @@ commit: feat 分支 `feat/quick-ask-align-onboarding`,与 REQ-082 同分支分�
 
 - ✅ 磁盘:`<tmp>/documents/New DeskFox/关于 DeskFox 你该知道的几件事.md` 创建成功
 - ✅ 首启 deep link 自动打开 New DeskFox 为工作区
-- ✅ 介绍文档作 tab 渲染全文(标题 / 隐私段「你,是自己数据的唯一知情人」/ 第三部分 / 文末「DeskFox 官方交流群」)
-- ✅ **base64 二维码真解码渲染**:`img[src^="data:image/png;base64"]`,naturalWidth=1372 / naturalHeight=1392 / complete=true —— 单文件 base64 方案坐实(待钉死项 #1 闭合)
-- 📝 观察:首启到内容完全渲染有 ~数秒延迟(sidecar 起 + 文件读 + markdown 渲染 + base64 解码),CDP 首查 3s 偏早会看到 img 尚未出现,属渲染时序非缺陷;真实用户短暂加载后即见内容。
+- ❌ **介绍文档未作为首个 tab 自动激活渲染**(缺陷,复现:隔离首启 60s file tab 始终未出现,tabs 仅外壳「审查/所有文件」;手动点文件列表里的介绍文档条目才渲染)。根因见下。
+- ✅ **base64 二维码真解码渲染**(手动打开介绍文档后验):`img[src^="data:image/png;base64"]`,naturalWidth=1372 / naturalHeight=1392 / complete=true —— **单文件 base64 方案本身坐实**(待钉死项 #1 闭合),缺陷只在「自动打开 tab」这一步。
+
+> ⚠️ 更正:2026-07-13 首轮 QA 曾记「介绍文档作 tab 渲染 ✅」,系当时隔几分钟后偶然渲染的误判;复测稳定复现「工作区开、file tab 不自动开」。
+
+### ❌ 缺陷:介绍文档 file tab 未自动激活(待修)
+
+- **现象**:`open-project` deep link 的工作区打开稳定成功,但 `handleDeepLinks` 里 `layout.tabs(key).open("file://"+file)` 写入的 file tab 没在 UI 显示/激活。
+- **根因(初判)**:`openProject(directory)` 的 `navigateToProject` 导航到项目文件列表视图;`layout.tabs(key).open(tab)` 只把 tab 写进 `projectTabs[projectKey]`,**未 `setActive`、未导航到显示文件预览的视图** → 数据在、UI 没切过去。对比:手动点文件条目走 `createOpenSessionFileTab`(open + setActive + 切预览视图)故能渲染。
+- **修法方向(待实现 + 重验)**:handleDeepLinks 里对 file 分支补 `setActive` + 导航到文件预览路由(或复用 `createOpenSessionFileTab` 等价路径),使自动打开的 file tab 立即激活渲染。修后需重跑隔离首启复验。
 
 ### ⚠️ 仍待人工 QA(R9 未完全闭合,merge 前须补)
 

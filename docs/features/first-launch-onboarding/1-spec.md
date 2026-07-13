@@ -21,7 +21,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 验收标准
 
-- [x] 全新机器双击启动:`Documents/New DeskFox/` 已创建并作为工作区自动打开,`关于 DeskFox 你该知道的几件事.md` 作首个 tab 显示,文末官方群二维码正常渲染 —— **Mac CDP 隔离首启功能层已过**(naturalWidth 1372×1392;详 3-changelog QA 记录),视觉最终确认建议 user 双击真机看
+- [~] 全新机器双击启动:`Documents/New DeskFox/` 已创建 ✅ + 作为工作区自动打开 ✅,但 `关于 DeskFox 你该知道的几件事.md` **未作为首个 tab 自动激活渲染 ❌**(缺陷待修,详 3-changelog);手动打开该文档后二维码正常渲染 ✅(base64 方案坐实)
 - [ ] macOS 与 Windows 均落在各自系统 Documents(`app.getPath("documents")`),文件夹里只有那一个文件 —— Mac 隔离验证落 tmp/documents(路径逻辑同);**Windows 待验**
 - [x] 重启不再重复触发(marker gate);删除 `New DeskFox/` 后重启不重建;已存在不覆盖;写失败降级不阻塞启动 —— 决策逻辑单测覆盖(TC-A1~A4 / TC-R1~R5)
 - [ ] macOS TCC 对话框未点时,介绍 .md 前端 file:// 兜底加载(不依赖 sidecar)—— **待真桌面 QA**
