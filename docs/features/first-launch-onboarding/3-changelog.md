@@ -45,16 +45,17 @@ commit: feat 分支 `feat/quick-ask-align-onboarding`,与 REQ-082 同分支分�
 
 - ✅ 磁盘:`<tmp>/documents/New DeskFox/关于 DeskFox 你该知道的几件事.md` 创建成功
 - ✅ 首启 deep link 自动打开 New DeskFox 为工作区
-- ❌ **介绍文档未作为首个 tab 自动激活渲染**(缺陷,复现:隔离首启 60s file tab 始终未出现,tabs 仅外壳「审查/所有文件」;手动点文件列表里的介绍文档条目才渲染)。根因见下。
-- ✅ **base64 二维码真解码渲染**(手动打开介绍文档后验):`img[src^="data:image/png;base64"]`,naturalWidth=1372 / naturalHeight=1392 / complete=true —— **单文件 base64 方案本身坐实**(待钉死项 #1 闭合),缺陷只在「自动打开 tab」这一步。
+- ✅ **介绍文档自动作为首个 tab 激活渲染全文**(2026-07-14 修复后复验:全新首启 2s 内 `active`=介绍文档 tab + 正文「住在你电脑里」/隐私段/文末加群段渲染)
+- ✅ **base64 二维码真解码渲染**:`img[src^="data:image/png;base64"]`,naturalWidth=1372 / naturalHeight=1392 / complete=true —— 单文件 base64 方案坐实(待钉死项 #1 闭合)
 
-> ⚠️ 更正:2026-07-13 首轮 QA 曾记「介绍文档作 tab 渲染 ✅」,系当时隔几分钟后偶然渲染的误判;复测稳定复现「工作区开、file tab 不自动开」。
+### ✅ 缺陷已修复:介绍文档 file tab 自动激活(2026-07-14)
 
-### ❌ 缺陷:介绍文档 file tab 未自动激活(待修)
+首轮实现「自动作首个 tab」不生效,经 CDP 逐层诊断(诊断法本身高复用价值):
 
-- **现象**:`open-project` deep link 的工作区打开稳定成功,但 `handleDeepLinks` 里 `layout.tabs(key).open("file://"+file)` 写入的 file tab 没在 UI 显示/激活。
-- **根因(初判)**:`openProject(directory)` 的 `navigateToProject` 导航到项目文件列表视图;`layout.tabs(key).open(tab)` 只把 tab 写进 `projectTabs[projectKey]`,**未 `setActive`、未导航到显示文件预览的视图** → 数据在、UI 没切过去。对比:手动点文件条目走 `createOpenSessionFileTab`(open + setActive + 切预览视图)故能渲染。
-- **修法方向(待实现 + 重验)**:handleDeepLinks 里对 file 分支补 `setActive` + 导航到文件预览路由(或复用 `createOpenSessionFileTab` 等价路径),使自动打开的 file tab 立即激活渲染。修后需重跑隔离首启复验。
+- **诊断链**:①`window.__onboardingDebug` 证 consume effect 触发、pending 取到、`openChatFileTab` 调用 → ②tab **已开且预览区在**,但内容空 → ③`window.__ob` 证 `file.load` **很快成功**(loaded=true / hasContent=true)、内容已进 store → ④查 `aria-selected` 证 **active tab 是「审查」(review)**,介绍文档 tab 未激活 → 预览区显示 review 而非文档。
+- **真根因(与首判不同)**:不是 load 时机、不是 key/编码,而是**首启默认把 active 设为 review,覆盖了 `openChatFileTab` 的 `setActive`**。
+- **修法(最终)**:改用「按目录传递已废弃 → 全局单值 pending」+ 正常 `openProject`(默认导航到 session 视图);session.tsx 消费 effect 里延迟后**持续把 active 设回介绍文档 tab + 保底 force load**,直到 tab 激活且加载(`ensure` 有界自愈,~6s 上限,实测 2s 内成)。彻底避开 `fromLegacy/fromRoute` 的 key 形态差异与 `/var`↔`/private/var` symlink 匹配脆弱性。
+- **改动文件**:`session/handoff.ts`(pending 单值)+ `layout.tsx`(setPendingOpenFile + 普通 openProject)+ `session.tsx`(consume + ensure effect)。诊断代码已全部移除。
 
 ### ⚠️ 仍待人工 QA(R9 未完全闭合,merge 前须补)
 
