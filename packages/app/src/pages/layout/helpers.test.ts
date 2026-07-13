@@ -41,7 +41,21 @@ const session = (input: Partial<Session> & Pick<Session, "id" | "directory">) =>
 
 describe("layout deep links", () => {
   test("parses open-project deep links", () => {
-    expect(parseDeepLink("opencode://open-project?directory=/tmp/demo")).toBe("/tmp/demo")
+    expect(parseDeepLink("opencode://open-project?directory=/tmp/demo")).toEqual({
+      directory: "/tmp/demo",
+      file: undefined,
+    })
+  })
+
+  // FORK: REQ-083 open-project 可选 file 参(首启把介绍文档作首个 tab)
+  test("parses open-project deep links with optional file", () => {
+    expect(parseDeepLink("opencode://open-project?directory=/tmp/demo&file=intro.md")).toEqual({
+      directory: "/tmp/demo",
+      file: "intro.md",
+    })
+    expect(
+      parseDeepLink("opencode://open-project?directory=%2Ftmp%2FNew%20DeskFox&file=%E5%85%B3%E4%BA%8E.md"),
+    ).toEqual({ directory: "/tmp/New DeskFox", file: "关于.md" })
   })
 
   test("ignores non-project deep links", () => {
@@ -58,7 +72,10 @@ describe("layout deep links", () => {
     const original = Object.getOwnPropertyDescriptor(URL, "canParse")
     Object.defineProperty(URL, "canParse", { configurable: true, value: undefined })
     try {
-      expect(parseDeepLink("opencode://open-project?directory=/tmp/demo")).toBe("/tmp/demo")
+      expect(parseDeepLink("opencode://open-project?directory=/tmp/demo")).toEqual({
+        directory: "/tmp/demo",
+        file: undefined,
+      })
     } finally {
       if (original) Object.defineProperty(URL, "canParse", original)
       if (!original) Reflect.deleteProperty(URL, "canParse")
@@ -76,7 +93,10 @@ describe("layout deep links", () => {
       "opencode://other?directory=/b",
       "opencode://open-project?directory=/c",
     ])
-    expect(result).toEqual(["/a", "/c"])
+    expect(result).toEqual([
+      { directory: "/a", file: undefined },
+      { directory: "/c", file: undefined },
+    ])
   })
 
   test("parses new-session deep links with optional prompt", () => {

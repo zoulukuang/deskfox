@@ -76,6 +76,9 @@ const extraResources: Array<{ from: string; to: string; filter?: string[] }> = [
   // dist/plugin.js 是 gitignored 现场产物 → build 脚本打包前断言其存在,防 extraResources 拷空。
   { from: path.join(brandingDir, "plugin", "feishu-bridge"), to: "plugin/feishu-bridge", filter: ["dist/**", "package.json"] },
   { from: mediaGenDir, to: "plugin/media-gen", filter: ["dist/**"] },
+  // FORK: REQ-083 首启新手引导介绍文档(base64 二维码内嵌单文件)→ resources/onboarding/,
+  //   main/deskfox/onboarding.ts 首启从此拷到 Documents/New DeskFox/。[feat: first-launch-onboarding]
+  { from: path.join(brandingDir, "src", "assets", "onboarding"), to: "onboarding" },
 ]
 
 // FORK: 注入内置 LibreOffice bundle(office 预览/转换依赖),按平台结构 + 后端探测路径区分落点:

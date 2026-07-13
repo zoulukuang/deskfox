@@ -1424,8 +1424,15 @@ export default function Layout(props: ParentProps) {
   const handleDeepLinks = (urls: string[]) => {
     if (!server.isLocal()) return
 
-    for (const directory of collectOpenProjectDeepLinks(urls)) {
+    for (const { directory, file } of collectOpenProjectDeepLinks(urls)) {
       void openProject(directory)
+      // FORK: REQ-083 首启把介绍文档作首个 tab 打开(file 相对项目根,tab id = file://<相对路径>)
+      //   [feat: first-launch-onboarding]
+      if (file) {
+        const slug = base64Encode(directory)
+        const key = SessionStateKey.from(server.scope(), SessionRouteKey.fromLegacy(slug))
+        void layout.tabs(key).open(`file://${file}`)
+      }
     }
 
     for (const link of collectNewSessionDeepLinks(urls)) {

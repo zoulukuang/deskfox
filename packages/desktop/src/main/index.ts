@@ -3,7 +3,8 @@ import { mkdirSync, rmSync } from "node:fs"
 import * as http from "node:http"
 import { createServer } from "node:net"
 import { homedir, tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 import type { Event } from "electron"
 import { app, BrowserWindow } from "electron"
@@ -50,6 +51,9 @@ import { createWslServersController } from "./wsl/servers"
 import { registerWslIpcHandlers } from "./wsl/ipc"
 import { spawnWslSidecar } from "./wsl/sidecar"
 import { migrate } from "./migrate"
+// FORK: REQ-083 首启新手引导 [feat: first-launch-onboarding]
+import { ONBOARDING_DOC_NAME, firstExistingPath, runFirstLaunchOnboarding } from "./deskfox/onboarding"
+import { getStore } from "./store"
 
 // FORK-BEGIN: DeskFox 应用身份 — 继承 Tauri 版三档 identifier(ai.deskfox.app,治理规则 R3/应用身份-命名规则)
 //   userData 与旧 Tauri 版同目录(Roaming/<id>):前端偏好迁移同目录原地完成,Win 任务栏固定/通知
@@ -65,6 +69,8 @@ const APP_IDS: Record<string, string> = {
 // FORK-END
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
+// FORK: REQ-083 编译后 main 目录(定位介绍文档资源,dev/packaged 分支)[feat: first-launch-onboarding]
+const MAIN_DIR = dirname(fileURLToPath(import.meta.url))
 
 let logger: ReturnType<typeof initLogging>
 let mainWindow: BrowserWindow | null = null
@@ -446,6 +452,42 @@ const main = Effect.gen(function* () {
         relaunch()
       },
     })
+  }
+
+  // FORK: REQ-083 首启新手引导 — 首启建 Documents/New DeskFox/ + 介绍文档,发 deep link
+  //   让 renderer 自动打开为工作区 + 介绍文档作首个 tab。写失败降级不阻塞。
+  //   [feat: first-launch-onboarding]
+  try {
+    const documentsDir = onboardingTestRoot ? join(onboardingTestRoot, "documents") : app.getPath("documents")
+    const docCandidates = app.isPackaged
+      ? [join(process.resourcesPath, "onboarding", ONBOARDING_DOC_NAME)]
+      : [
+          join(MAIN_DIR, "../../resources/onboarding", ONBOARDING_DOC_NAME),
+          join(MAIN_DIR, "../../../branding/src/assets/onboarding", ONBOARDING_DOC_NAME),
+        ]
+    const resourceDocPath = firstExistingPath(docCandidates)
+    if (!resourceDocPath) {
+      logger.warn("onboarding intro doc resource not found, skip", { docCandidates })
+    } else {
+      const result = runFirstLaunchOnboarding({
+        documentsDir,
+        resourceDocPath,
+        store: getStore(),
+        logger: {
+          log: (message, meta) => logger.log(message, meta),
+          warn: (message, meta) => logger.warn(message, meta),
+        },
+      })
+      if (result) {
+        const url = `opencode://open-project?directory=${encodeURIComponent(
+          result.directory,
+        )}&file=${encodeURIComponent(ONBOARDING_DOC_NAME)}`
+        logger.log("onboarding emitting auto-open deep link", { url })
+        emitDeepLinks([url])
+      }
+    }
+  } catch (error) {
+    logger.warn("onboarding failed (non-blocking)", error)
   }
 })
 
