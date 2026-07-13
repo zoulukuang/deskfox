@@ -57,6 +57,12 @@ commit: feat 分支 `feat/quick-ask-align-onboarding`,与 REQ-082 同分支分�
 - **修法(最终)**:改用「按目录传递已废弃 → 全局单值 pending」+ 正常 `openProject`(默认导航到 session 视图);session.tsx 消费 effect 里延迟后**持续把 active 设回介绍文档 tab + 保底 force load**,直到 tab 激活且加载(`ensure` 有界自愈,~6s 上限,实测 2s 内成)。彻底避开 `fromLegacy/fromRoute` 的 key 形态差异与 `/var`↔`/private/var` symlink 匹配脆弱性。
 - **改动文件**:`session/handoff.ts`(pending 单值)+ `layout.tsx`(setPendingOpenFile + 普通 openProject)+ `session.tsx`(consume + ensure effect)。诊断代码已全部移除。
 
+## Follow-up:介绍文档文案更新(2026-07-14)
+
+正稿 `OPENCODE-PLAN/需求池/首次启动/关于 DeskFox 你该知道的几件事.md` 新增「### 它的底子,是全球顶级的开源项目」段(OpenCode 底座 + 每天免费最新模型)。重跑 `gen_onboarding.py` 重新生成 base64 二维码内嵌单文件到 `packages/branding/src/assets/onboarding/`(248041 字节)。真机 local 版清首启标记 + 删旧 New DeskFox 重新首启验证:新文案正常渲染。
+
+> 注:首启标记 gate「已存在不覆盖」意味着**存量已首启用户不会自动拿到新文案**(需删 `New DeskFox/` + 清 `firstLaunchDone` 才重拷);文案随版本更新的追加策略(F10)本期不做,留 follow-up。
+
 ### ⚠️ 仍待人工 QA(R9 未完全闭合,merge 前须补)
 
 - **视觉最终确认**:真实(非隔离)双击首启,介绍文档在系统 Documents、二维码视觉对齐 —— 建议 user 双击真机看一眼。
