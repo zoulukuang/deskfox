@@ -36,10 +36,9 @@ import {
 import { focusChatInput } from "@/utils/chat-input-focus"
 // FORK: 选区菜单贴近边沿溢出修复(REQ-032)— 渲染后 measure + clamp 进视口
 import { repositionMenu } from "@/utils/menu-position"
+import { isImeComposingEvent } from "@/utils/ime"
 import { promptLength } from "@/components/prompt-input/history"
 import type { SelectionProvider, SelectionResult } from "./provider"
-
-const IS_MAC = typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
 
 type MenuMode = "menu" | "input"
 type MenuState = {
@@ -488,17 +487,17 @@ export function ContextMenuHost(props: {
                   onInput={(e) => setComment(e.currentTarget.value)}
                   onKeyDown={(e) => {
                     if (e.key !== "Enter") return
-                    // macOS Opt+Enter / Cmd+Enter,Win/Linux Ctrl+Enter
-                    if (!(e.ctrlKey || e.metaKey || (IS_MAC && e.altKey))) return
+                    // REQ-082: 对齐主输入框键位 —— Shift+Enter 换行(交给 textarea 默认行为,先于 IME 判)/
+                    // IME 组合态跳过 / 裸 Enter 提交
+                    if (e.shiftKey) return
+                    if (isImeComposingEvent(e)) return
                     e.preventDefault()
                     submitToChat()
                   }}
                 />
                 <div class="flex items-center justify-between">
                   <span class="text-[11px] text-text-weak">
-                    {language.t("fileViewer.menu.input.shortcutHint", {
-                      shortcut: IS_MAC ? "Cmd/Opt+Enter" : "Ctrl+Enter",
-                    })}
+                    {language.t("fileViewer.menu.input.shortcutHint")}
                   </span>
                   <div class="flex items-center gap-2">
                     <button

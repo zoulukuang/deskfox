@@ -61,6 +61,8 @@ import { invoke } from "@/utils/native"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
+// FORK: REQ-083 首启自动打开介绍文档 tab(按目录取出待打开文件)[feat: first-launch-onboarding]
+import { takePendingOpenFile } from "@/pages/session/handoff"
 // FORK: ChatSelectionMenu 提到 Session 顶层,不受 messagesReady() Show 门控
 //   确保 user 看 PDF/office 无 chat 会话时也能用右键菜单 [feat: office-选中加聊天] 2026-05-25
 import { ChatSelectionMenu } from "@/pages/session/chat-selection-menu"
@@ -344,6 +346,40 @@ export default function Page() {
   //   (sdk.directory)变化主动 close;同项目内切会话 directory 不变、不触发。
   //   [feat: new-project-hide-file-viewer-default] 2026-06-09
   createEffect(on(() => sdk.directory, () => view().reviewPanel.close()))
+
+  // FORK: REQ-083 首启自动打开介绍文档 tab — 按 sdk.directory 取出待打开文件,走完整 openChatFileTab
+  //   (open+load+openReviewPanel+setActive)。定义顺序在上面 reviewPanel.close 之后 → 同一 directory
+  //   变化时先 close 再由此重新打开预览,不被"新项目默认收起"抵消。take 一次即清,切项目不复触发。
+  //   [feat: first-launch-onboarding]
+  createEffect(
+    on(
+      () => sdk.directory,
+      () => {
+        const rel = takePendingOpenFile()
+        if (!rel) return
+        const tabId = file.tab(rel)
+        openChatFileTab(tabId)
+        // FORK: 首启会把 active 默认设为 "审查"(review),覆盖 openChatFileTab 的 setActive;且 load
+        //   的异步读文件可能早于 sidecar 就绪。故延迟后持续把 active 设回介绍文档 tab + 保底 load,
+        //   直到该 tab 激活且已加载(自愈首启时序竞态)。
+        const want = normalizeTab(tabId)
+        let tries = 0
+        const ensure = () => {
+          const active = tabs().active()
+          const loaded = !!file.get(rel)?.loaded
+          if (active === want && loaded) return
+          if (tries++ >= 20) return
+          if (!loaded) void file.load(rel, { force: true })
+          if (active !== want) {
+            tabs().setActive(tabId)
+            view().reviewPanel.open()
+          }
+          setTimeout(ensure, 300)
+        }
+        setTimeout(ensure, 200)
+      },
+    ),
+  )
 
   // FORK: 创作卡作用域跟随当前 session [feat: media-creation-mode]
   //   - 进某 session → 切到该 session 作用域;首页 draft 直接建出 session(prev 无 id)→ draft 卡过继;

@@ -10,13 +10,16 @@ const parseUrl = (input: string) => {
   }
 }
 
+// FORK: REQ-083 open-project 增加可选 file 参(相对项目根)—— 首启自动把介绍文档作首个 tab 打开。
+// 无 file 时行为不变(只打开工作区)。[feat: first-launch-onboarding]
 export const parseDeepLink = (input: string) => {
   const url = parseUrl(input)
   if (!url) return
   if (url.hostname !== "open-project") return
   const directory = url.searchParams.get("directory")
   if (!directory) return
-  return directory
+  const file = url.searchParams.get("file") || undefined
+  return { directory, file }
 }
 
 export const parseNewSessionDeepLink = (input: string) => {
@@ -31,7 +34,7 @@ export const parseNewSessionDeepLink = (input: string) => {
 }
 
 export const collectOpenProjectDeepLinks = (urls: string[]) =>
-  urls.map(parseDeepLink).filter((directory): directory is string => !!directory)
+  urls.map(parseDeepLink).filter((link): link is NonNullable<ReturnType<typeof parseDeepLink>> => !!link)
 
 export const collectNewSessionDeepLinks = (urls: string[]) =>
   urls.map(parseNewSessionDeepLink).filter((link): link is { directory: string; prompt?: string } => !!link)

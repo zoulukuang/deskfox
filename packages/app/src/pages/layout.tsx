@@ -57,7 +57,7 @@ import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
 import { Worktree as WorktreeState } from "@/utils/worktree"
-import { setSessionHandoff } from "@/pages/session/handoff"
+import { setSessionHandoff, setPendingOpenFile } from "@/pages/session/handoff"
 import { SessionRouteKey, SessionStateKey } from "@/utils/server-scope"
 
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -1424,7 +1424,12 @@ export default function Layout(props: ParentProps) {
   const handleDeepLinks = (urls: string[]) => {
     if (!server.isLocal()) return
 
-    for (const directory of collectOpenProjectDeepLinks(urls)) {
+    for (const { directory, file } of collectOpenProjectDeepLinks(urls)) {
+      // FORK: REQ-083 首启把介绍文档作首个 tab 打开 —— 仅写 projectTabs 数据不够(新项目默认收起
+      //   预览面板,且需 load+active)。改：先按目录挂起待打开文件,再走正常 openProject(默认导航到
+      //   项目 session 视图),由 session.tsx 在 sdk.directory 就绪时取出、走完整 openChatFileTab。
+      //   [feat: first-launch-onboarding]
+      if (file) setPendingOpenFile(file)
       void openProject(directory)
     }
 
