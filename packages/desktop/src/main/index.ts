@@ -24,6 +24,9 @@ import { registerDeskfoxIpc } from "./deskfox/ipc"
 import { initTelemetry, emitAppOpen } from "./deskfox/telemetry"
 import { createTray, attachCloseToTray, setQuitting, isQuitting, showMainWindow } from "./deskfox/tray"
 import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
+// FORK: 运行期数据/配置命名空间隔离(与上游 opencode 分家,防共用 opencode.db schema 冲突)
+//   [feat: deskfox-data-namespace-isolation] 2026-07-12
+import { applyDeskfoxDataNamespace } from "./deskfox/data-namespace"
 import { restorePreventSleep } from "./deskfox/prevent-sleep"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
@@ -284,6 +287,10 @@ const main = Effect.gen(function* () {
   yield* Effect.promise(() => app.whenReady())
 
   if (!TEST_ONBOARDING) migrate()
+  // FORK: 隔离 DeskFox 运行期数据/配置命名空间(设 XDG_DATA/CONFIG_HOME 指向 deskfox 专属根 + 首启
+  //   非破坏迁移),必须在 sidecar 起之前(sidecar 继承 process.env)。TEST_ONBOARDING 已自设 tmp XDG,跳过。
+  //   [feat: deskfox-data-namespace-isolation] 2026-07-12
+  if (!TEST_ONBOARDING) yield* Effect.promise(() => applyDeskfoxDataNamespace())
   app.setAsDefaultProtocolClient("opencode")
   registerRendererProtocol()
   setDockIcon()
