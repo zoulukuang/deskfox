@@ -11,6 +11,21 @@
 
 
 
+
+## [macOS] 2026.8.6 - 2026-07-14 18:40
+
+**主题**:三 feature 波次(与 Win 2026.8.5 同内容)—「加入聊天」浮窗键位对齐 + 首启新手引导(含老用户升级不打扰)+ 运行期数据命名空间隔离(与上游 OpenCode 物理分家);另含 e2e session-timeline flaky 根治。**REQ-081 双 arch 首战**:arm64 + x64 同版本双包,单本 latest-mac.yml 分流。
+
+- **渠道**:prod;tag `ship-mac-prod-2026.8.6`;main `cf3afafb67`(bump merge)
+- **产物**(Developer ID 签名 + 公证 + staple,双 arch):
+  - `DeskFox-2026.8.6-mac-arm64.dmg` sha256 `2e0ffdbe1c91f7a1779958418645fbbf7408927581bc70d864c968c55abb2234`
+  - `DeskFox-2026.8.6-mac-x64.dmg` sha256 `9106285b5055892cc7e98b49119a188405bd44d44d574cb64a5d7003476c05ba`
+- **公证**:.app 内联 + 双 dmg 补公证均 Accepted,spctl `Notarized Developer ID`
+- **分发**:GitHub Release(--latest,双 dmg)+ 阿里云 CDN `dl.clawtray.com` 双链 + Gitee release(链接)
+- **升级源**:A Electron `latest-mac.yml` version=2026.8.6(4 files 双 arch)✅ / B Tauri 迁移桥 darwin latest.json version=2026.8.6 ✅(硬校验回读过)
+- **官网**:deskfox.ai 已更新部署(54e201f)
+
+---
 ## [Windows] 2026.8.5 - 2026-07-14 16:27
 
 **主题**:三 feature 波次 — 「加入聊天」浮窗键位对齐 + 首启新手引导(含老用户升级不打扰)+ 运行期数据命名空间隔离(与上游 OpenCode 物理分家);小更新进"补"位(2026.8.4 → 2026.8.5),与 mac prod 2026.8.5 号面追平。
