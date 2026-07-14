@@ -126,4 +126,63 @@ describe("applyDeskfoxDataNamespace (TC-3/4/5)", () => {
     expect(r.switched).toBe(false)
     expect(r.reason).toBe("same-dir")
   })
+
+  // TC-7 加强 e2e(2026-07-14):贴近真实老用户升级 —— 多 db + wal/shm 边界 + 深层嵌套 完整非破坏迁移。
+  // 补现有 TC-4 未覆盖的边界:① opencode.db + opencode-local.db 多 db ② db-wal 迁 / db-shm 排除
+  // ③ storage/session|message 多层嵌套内容逐字节完整 ④ 旧目录深层也全保留(非破坏)。
+  test("TC-7 加强:真实嵌套结构 + 多 db + wal/shm 边界,完整非破坏迁移", async () => {
+    const home = tmpHome("tc7")
+    const data = path.join(home, ".local", "share", "opencode")
+    const config = path.join(home, ".config", "opencode")
+    mkdirSync(path.join(data, "storage", "session", "ses_a", "parts"), { recursive: true })
+    mkdirSync(path.join(data, "storage", "message"), { recursive: true })
+    mkdirSync(path.join(data, "log"), { recursive: true })
+    mkdirSync(path.join(data, "bin"), { recursive: true })
+    mkdirSync(config, { recursive: true })
+    // 应迁移
+    writeFileSync(path.join(data, "opencode.db"), "DB-MAIN-sessions")
+    writeFileSync(path.join(data, "opencode-local.db"), "DB-LOCAL-channel") // 多 db
+    writeFileSync(path.join(data, "opencode.db-wal"), "WAL-pending-writes") // wal 应迁
+    writeFileSync(path.join(data, "auth.json"), '{"anthropic":{"key":"K"}}')
+    writeFileSync(path.join(data, "storage", "session", "ses_a", "parts", "p1.json"), "deep-part-content") // 深层嵌套
+    writeFileSync(path.join(data, "storage", "message", "msg_1.json"), "msg-content")
+    writeFileSync(path.join(config, "opencode.jsonc"), '{"model":"m"}')
+    // 应排除
+    writeFileSync(path.join(data, "opencode.db-shm"), "SHM-temp") // shm 排除
+    writeFileSync(path.join(data, "log", "app.log"), "logs")
+    writeFileSync(path.join(data, "bin", "rg"), "binary")
+    writeFileSync(path.join(data, "opencode.db.bak-20260101-000000"), "backup")
+
+    const env: NodeJS.ProcessEnv = {}
+    const r = await applyDeskfoxDataNamespace(env, home)
+    expect(r.switched).toBe(true)
+    expect(r.reason).toBe("migrate-from-opencode")
+
+    const newData = path.join(home, ".local", "share", "deskfox", "opencode")
+    const newConfig = path.join(home, ".config", "deskfox", "opencode")
+    // ① 多 db 都迁 + 内容逐字节一致
+    expect(readFileSync(path.join(newData, "opencode.db"), "utf8")).toBe("DB-MAIN-sessions")
+    expect(readFileSync(path.join(newData, "opencode-local.db"), "utf8")).toBe("DB-LOCAL-channel")
+    // ② wal 迁 / shm 排除
+    expect(readFileSync(path.join(newData, "opencode.db-wal"), "utf8")).toBe("WAL-pending-writes")
+    expect(existsSync(path.join(newData, "opencode.db-shm"))).toBe(false)
+    // ③ 深层嵌套逐字节完整
+    expect(readFileSync(path.join(newData, "storage", "session", "ses_a", "parts", "p1.json"), "utf8")).toBe(
+      "deep-part-content",
+    )
+    expect(readFileSync(path.join(newData, "storage", "message", "msg_1.json"), "utf8")).toBe("msg-content")
+    expect(readFileSync(path.join(newData, "auth.json"), "utf8")).toBe('{"anthropic":{"key":"K"}}')
+    expect(readFileSync(path.join(newConfig, "opencode.jsonc"), "utf8")).toBe('{"model":"m"}')
+    // 排除项确实没进新 ns
+    expect(existsSync(path.join(newData, "log"))).toBe(false)
+    expect(existsSync(path.join(newData, "bin"))).toBe(false)
+    expect(existsSync(path.join(newData, "opencode.db.bak-20260101-000000"))).toBe(false)
+    // ④ 旧目录深层也全保留(非破坏)
+    expect(readFileSync(path.join(data, "opencode.db"), "utf8")).toBe("DB-MAIN-sessions")
+    expect(readFileSync(path.join(data, "storage", "session", "ses_a", "parts", "p1.json"), "utf8")).toBe(
+      "deep-part-content",
+    )
+    // 幂等标记
+    expect(existsSync(path.join(newData, ".deskfox-namespace-migrated"))).toBe(true)
+  })
 })
