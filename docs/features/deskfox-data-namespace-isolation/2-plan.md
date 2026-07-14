@@ -61,6 +61,6 @@ TC-1 `resolveDeskfoxXdg`(env 分支 + 绝对路径校验)/ TC-2 `planNamespaceMi
 - **TC-1~5 单测在 Mac 重跑 12 pass 0 fail**(含下方 TC-7 加强)。
 - **TC-7 拆两层**:
   - **文件层(迁移正确性)→ 已由函数级加强 e2e 覆盖(自动化)**:`data-namespace.test.ts` 新增「TC-7 加强」用例 —— 贴近真实老用户升级,补现有 TC-4 未覆盖的边界:① `opencode.db` + `opencode-local.db` 多 db 都迁 ② `db-wal` 迁 / `db-shm` 排除 ③ `storage/session|message` 多层嵌套逐字节完整 ④ 旧目录深层也全保留(非破坏)。直接调 `applyDeskfoxDataNamespace(env, home=临时目录)`,不启动真 app,天然避开下述 macOS 障碍。
-  - **app 集成层(真 app 启动)→ 留真实升级验**:index.ts 真调用迁移 + sidecar 真读迁移后 db + app 内会话/key/飞书绑定可用。
+  - **app 集成层(真 app 启动)→ ✅ 真机 local 版验证通过(2026-07-14)**:真实 HOME 打开 local 版(不隔离,无 keychain 弹窗)→ index.ts 真调用迁移,把真实 1.2G(`opencode.db` 754MB + `opencode-local.db`)copy 到 `~/.local/share/deskfox`、写 marker(`from/at`)、旧目录 33 项非破坏保留、正式版 `opencode.db` mtime 未被动;app 用迁移后数据启动,user app 内核实会话/项目/模型 key 保留可用。**踩坑记录**:① 首轮 `.app` 因 electron-vite 缓存未重编 main(仍是旧构建、不含 data-namespace)→ 迁移没触发;删 `out/` 强制重建才生效。② 迁移后 app 持续往新 ns 写运行时数据(log/db sha 变),文件层验证须在迁移后"立即 kill app"再验,否则被运行时污染误判。
 - **⚠️ macOS 隔离测试教训**:试过用隔离 `HOME=/tmp/...` 启动 local 版模拟真机升级,**失败** —— macOS 的 keychain / `app.getPath("documents")` 用系统 API 取真实用户目录,**不认 `$HOME` 环境变量** → app 卡在「找不到钥匙串」弹窗、New DeskFox 仍落真实 Documents、迁移未在隔离目录发生(真实数据也未被动,安全)。故真 app 集成层不宜用隔离模拟,应在真实 prod/dev 包升级场景验。
 - **TC-6**(同机与上游 OpenCode 并存不崩)仍待真机 + 需另装上游 OpenCode 官方桌面端。
