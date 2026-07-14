@@ -55,7 +55,12 @@ import { registerWslIpcHandlers } from "./wsl/ipc"
 import { spawnWslSidecar } from "./wsl/sidecar"
 import { migrate } from "./migrate"
 // FORK: REQ-083 首启新手引导 [feat: first-launch-onboarding]
-import { ONBOARDING_DOC_NAME, firstExistingPath, runFirstLaunchOnboarding } from "./deskfox/onboarding"
+import {
+  ONBOARDING_DOC_NAME,
+  firstExistingPath,
+  runFirstLaunchOnboarding,
+  shouldAutoOpenOnboarding,
+} from "./deskfox/onboarding"
 import { getStore } from "./store"
 
 // FORK-BEGIN: DeskFox 应用身份 — 继承 Tauri 版三档 identifier(ai.deskfox.app,治理规则 R3/应用身份-命名规则)
@@ -290,7 +295,10 @@ const main = Effect.gen(function* () {
   // FORK: 隔离 DeskFox 运行期数据/配置命名空间(设 XDG_DATA/CONFIG_HOME 指向 deskfox 专属根 + 首启
   //   非破坏迁移),必须在 sidecar 起之前(sidecar 继承 process.env)。TEST_ONBOARDING 已自设 tmp XDG,跳过。
   //   [feat: deskfox-data-namespace-isolation] 2026-07-12
-  if (!TEST_ONBOARDING) yield* Effect.promise(() => applyDeskfoxDataNamespace())
+  // FORK: 接住迁移结果 — reason 供下方 onboarding 判定"老用户不自动打开引导" [feat: first-launch-onboarding]
+  const namespaceResult = TEST_ONBOARDING
+    ? undefined
+    : yield* Effect.promise(() => applyDeskfoxDataNamespace())
   app.setAsDefaultProtocolClient("opencode")
   registerRendererProtocol()
   setDockIcon()
@@ -486,11 +494,21 @@ const main = Effect.gen(function* () {
         },
       })
       if (result) {
-        const url = `opencode://open-project?directory=${encodeURIComponent(
-          result.directory,
-        )}&file=${encodeURIComponent(ONBOARDING_DOC_NAME)}`
-        logger.log("onboarding emitting auto-open deep link", { url })
-        emitDeepLinks([url])
+        // FORK: 老用户(有历史数据,data-namespace reason 非 fresh)只建 New DeskFox + 介绍文档、
+        //   不自动打开 —— 别打断他"恢复上次项目"的习惯;真新用户才发 deep link 自动打开。
+        //   2026-07-14 user 拍板 [feat: first-launch-onboarding]
+        if (shouldAutoOpenOnboarding(namespaceResult?.reason)) {
+          const url = `opencode://open-project?directory=${encodeURIComponent(
+            result.directory,
+          )}&file=${encodeURIComponent(ONBOARDING_DOC_NAME)}`
+          logger.log("onboarding emitting auto-open deep link", { url })
+          emitDeepLinks([url])
+        } else {
+          logger.log("onboarding created without auto-open (existing user)", {
+            directory: result.directory,
+            namespaceReason: namespaceResult?.reason,
+          })
+        }
       }
     }
   } catch (error) {

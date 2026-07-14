@@ -57,6 +57,14 @@ commit: feat 分支 `feat/quick-ask-align-onboarding`,与 REQ-082 同分支分�
 - **修法(最终)**:改用「按目录传递已废弃 → 全局单值 pending」+ 正常 `openProject`(默认导航到 session 视图);session.tsx 消费 effect 里延迟后**持续把 active 设回介绍文档 tab + 保底 force load**,直到 tab 激活且加载(`ensure` 有界自愈,~6s 上限,实测 2s 内成)。彻底避开 `fromLegacy/fromRoute` 的 key 形态差异与 `/var`↔`/private/var` symlink 匹配脆弱性。
 - **改动文件**:`session/handoff.ts`(pending 单值)+ `layout.tsx`(setPendingOpenFile + 普通 openProject)+ `session.tsx`(consume + ensure effect)。诊断代码已全部移除。
 
+## Follow-up:老用户升级不自动打开引导(2026-07-14,user 拍板)
+
+发版评估发现:`firstLaunchDone` 是新 key,**所有存量用户升级后都会触发首启引导**,被自动跳转到介绍文档、打断"恢复上次项目"的习惯。修法:复用 data-namespace 迁移结果的 `reason` 做新老用户信号 ——
+
+- 新增纯函数 `shouldAutoOpenOnboarding(namespaceReason)`(onboarding.ts):仅 `fresh-install-no-history`(无历史数据的真新用户)或 `undefined`(TEST_ONBOARDING 隔离,tmp 即全新装语义)→ 自动打开;其余迁移态(migrate-from-opencode / already-migrated / new-namespace-in-use / same-dir / migration-failed)= 有历史数据老用户 → **只建 New DeskFox + 介绍文档,不发 deep link 不自动打开**。
+- index.ts 接住 `applyDeskfoxDataNamespace()` 返回值,onboarding 段按其判定。
+- 验证:单测 +3(共 25 pass);真机双路径 —— 老用户路径(本机有历史,清 marker 后启动:New DeskFox 重建 ✅ + 界面 20s 全程未自动打开 ✅)/ 新用户路径(隔离首启:3s 自动打开 + 二维码渲染 ✅)。
+
 ## Follow-up:介绍文档文案更新(2026-07-14)
 
 正稿 `OPENCODE-PLAN/需求池/首次启动/关于 DeskFox 你该知道的几件事.md` 新增「### 它的底子,是全球顶级的开源项目」段(OpenCode 底座 + 每天免费最新模型)。重跑 `gen_onboarding.py` 重新生成 base64 二维码内嵌单文件到 `packages/branding/src/assets/onboarding/`(248041 字节)。真机 local 版清首启标记 + 删旧 New DeskFox 重新首启验证:新文案正常渲染。

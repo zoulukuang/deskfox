@@ -20,6 +20,19 @@ import {
 export const ONBOARDING_DIR_NAME = "New DeskFox"
 export const ONBOARDING_DOC_NAME = "关于 DeskFox 你该知道的几件事.md"
 
+/**
+ * 老用户升级不自动打开引导(2026-07-14 user 拍板):存量用户升级到本版后 firstLaunchDone 不存在,
+ * 会被首启引导跳转打断"恢复上次项目"的习惯。用 data-namespace 迁移结果的 reason 区分:
+ * - 无历史数据(fresh-install-no-history)→ 真新用户 → 自动打开引导
+ * - undefined(TEST_ONBOARDING 隔离测试跳过了 data-namespace,tmp 目录即全新装语义)→ 自动打开
+ * - 其它(migrate-from-opencode / already-migrated / new-namespace-in-use / same-dir /
+ *   migration-failed)→ 有历史数据的老用户 → 只建 New DeskFox + 介绍文档,不自动打开
+ */
+export function shouldAutoOpenOnboarding(namespaceReason: string | undefined): boolean {
+  if (namespaceReason === undefined) return true
+  return namespaceReason === "fresh-install-no-history"
+}
+
 /** 从候选列表里挑第一个真实存在的路径(packaged/dev 资源定位用);都不在 → null */
 export function firstExistingPath(candidates: string[]): string | null {
   for (const candidate of candidates) {

@@ -11,6 +11,7 @@ import {
   decideOnboarding,
   firstExistingPath,
   runFirstLaunchOnboarding,
+  shouldAutoOpenOnboarding,
 } from "./onboarding"
 import {
   FIRST_LAUNCH_DONE_KEY,
@@ -159,6 +160,27 @@ describe("runFirstLaunchOnboarding(IO)", () => {
     })
     expect(result).toBeNull()
     expect(store.dump()[FIRST_LAUNCH_DONE_KEY]).toBeUndefined()
+  })
+})
+
+// 老用户升级不自动打开引导(2026-07-14 user 拍板)
+describe("shouldAutoOpenOnboarding", () => {
+  test("真新用户(fresh-install-no-history)→ 自动打开", () => {
+    expect(shouldAutoOpenOnboarding("fresh-install-no-history")).toBe(true)
+  })
+  test("TEST_ONBOARDING 隔离(undefined,tmp 即全新装语义)→ 自动打开", () => {
+    expect(shouldAutoOpenOnboarding(undefined)).toBe(true)
+  })
+  test("有历史数据的老用户(各迁移态)→ 不自动打开", () => {
+    for (const reason of [
+      "migrate-from-opencode",
+      "already-migrated",
+      "new-namespace-in-use",
+      "same-dir",
+      "migration-failed",
+    ]) {
+      expect(shouldAutoOpenOnboarding(reason)).toBe(false)
+    }
   })
 })
 
