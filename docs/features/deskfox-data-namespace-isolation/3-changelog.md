@@ -65,3 +65,14 @@ commit:`7cd29e8948`(1-spec)/ `b27670758f`(主体)/ `c781aa53e4`(TC-7 加强 e2e)
 
 - 为「不碰真实数据」用**隔离 USERPROFILE**(指向骨架临时 home)启动 → electron 启动早期 abort(`0x80000003` STATUS_BREAKPOINT,logging 前)。**这是 Windows 测试方法坑,非产品 bug**:Windows 上 home 缺 AppData 结构会让 electron/crashpad CHECK 失败;真实用户永远有正常 USERPROFILE,不触发。
 - Windows 上迁移**无法只靠设 XDG env 测**:设了 `XDG_DATA_HOME` 后 old==new(均以 XDG 根为准)→ `same-dir` 短路、迁移 no-op。迁移只在 XDG 未设、走 `homedir()` 默认时触发 → 真机验证只能用真 home(会真迁真实数据)。故 Windows 端到端迁移验证由「真 home 启动实迁 2.1G」完成,测试产物随后清理(旧 ns 是真相源,删副本无损)。
+- **开发机多渠道共存注意**:deskfox ns 路径是 channel 无关的(所有档共用 `~/.local/share/deskfox`)。开发机上用 local 版测过迁移后,marker 会让**之后升级的 prod 档**跳过自己的迁移、读到 local 测试时刻的旧快照 → **每次 local 测完迁移必须删 deskfox ns**(本次已删)。纯生产用户单渠道无此问题。
+
+### Windows 发版前最终闸(2026-07-14,main=148f42fb1 含「老用户升级不自动打开引导」)
+
+| 闸 | 结果 | 证据 |
+|---|---|---|
+| G1 全量 fork 包单测 + typecheck | ✅ | desktop 74 / app 530(须 `test:unit` 带 `--conditions=browser`,裸 `bun test` 会假红 2 个)/ feishu 779 / media-gen 140,全 0 fail;typecheck 22/22 |
+| G2 老用户升级路径(真机) | ✅ | 删 `firstLaunchDone` 模拟存量升级:实迁 2.1G(19s)→ 日志 `created without auto-open (existing user)`,不发 deep link 不打断恢复;UI 显示介绍文档系「恢复上次项目恰为 New DeskFox」的持久化状态,非劫持 |
+| G3 新用户路径回归 | ✅ | TEST_ONBOARDING 隔离 → 介绍文档 tab 仍自动激活打开 |
+| G4 冷启动健康检查 ×2 | ✅ | 两次 CLEAN;稳态确认:二次启动 `already-migrated` 瞬时(~66ms)+ onboarding skip,升级后日常启动无额外开销 |
+| G5 全量冒烟 smoke.py | ✅ | 21/21 pass,0 警告 0 崩溃(providers/panels/settings 全项) |
