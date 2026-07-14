@@ -11,6 +11,24 @@
 
 
 
+## [Windows] 2026.8.5 - 2026-07-14 16:27
+
+**主题**:三 feature 波次 — 「加入聊天」浮窗键位对齐 + 首启新手引导(含老用户升级不打扰)+ 运行期数据命名空间隔离(与上游 OpenCode 物理分家);小更新进"补"位(2026.8.4 → 2026.8.5),与 mac prod 2026.8.5 号面追平。
+
+**本次内容**(自 `ship-prod-2026.8.4` 起):
+- **quick-ask-enter-align**(`2825c13c4`+`319a7773c`):「加入聊天」浮窗(markdown 选区 + PDF/Office 右键)快捷键对齐主输入框 — 裸 Enter 提交 / Shift+Enter 换行 / IME 组合态守卫(`isImeComposingEvent` 共享纯函数);修浮窗提交后文件预览被关闭(提交后主动 `reviewPanel.open()` + 保持当前文件 active)。
+- **first-launch-onboarding**(`732b0c61a`+`aa3736a4a`+`148f42fb1`):首次启动自动建 `Documents/New DeskFox/` + 介绍文档(base64 内嵌官方群二维码,单文件),deep link 自动打开为工作区 + 介绍文档作首个 tab 激活;**老用户升级不自动打开**(复用 data-namespace 迁移 reason 做新老用户信号,存量用户只建不跳转、不打断恢复上次项目)。
+- **deskfox-data-namespace-isolation**(`b27670758`):运行期数据/配置隔离到 `~/.local/share/deskfox` / `~/.config/deskfox`(XDG env 注入,0 改上游 core),修与另装上游 OpenCode 共用 `opencode.db` schema 打架必崩(2026-07-12 Intel 报障根因);首启非破坏 copy 迁移(旧目录保留、幂等 marker、失败保守回落)。**升级用户首启会做一次数据迁移(约 20s~1min,视库大小),属正常。**
+- 其余:e2e smoke 外链资源加载失败过滤(session-timeline flaky 修,`ec4559e2d`)/ deploy yml 部署前磁盘实算 sha512(`d12fc7cdf`,Mac 端加固)/ macos-intel-x64-build(Mac 交叉打包,Win 路径 no-op 已审)。
+- **Windows 端 QA(`chore/win-adapt-namespace-isolation`)**:TC-W1~W7 全过 — xdg-basedir Windows 实读 XDG env 坐实、真机实迁 2.1G 非破坏 + 原子完成、稳态 already-migrated ~66ms 零开销;发版前最终闸 G1-G5 全绿(全量单测 desktop 74/app 530/feishu 779/media-gen 140 + typecheck 22/22、老用户升级真机建而不开、新用户回归、冷启动 ×2 CLEAN、smoke 21/21)。详见 [docs/features/deskfox-data-namespace-isolation/](features/deskfox-data-namespace-isolation/3-changelog.md)。
+- **发版前 code-review**:无高危。Win 运行时改动 21 文件全部经 G1-G5 实测;唯一未测 diff(`electron.vite.config.ts` node-pty 按目标 arch)在 Win 上 `DESKFOX_TARGET_ARCH` 未设回落 `process.arch`,行为不变。
+
+**Release**:GitHub `ship-prod-2026.8.5`(latest)+ Gitee release(正文挂 CDN 链接)+ 阿里云 OSS CDN。
+**updater**:Electron 自更新源 `updates.deskfox.ai/electron/prod/latest.yml` version=2026.8.5;Tauri→Electron 迁移桥 `v1/latest/desktop/windows/latest.json` version=2026.8.5。
+**installer**:`packages/desktop/dist-deskfox/DeskFox-2026.8.5-win-x64.exe`(Electron;含 LibreOffice)
+
+---
+
 ## [macOS] 2026.8.5 - 2026-07-08 16:30
 
 **主题**:两笔小修的 patch 发版(2026.8.4 → 2026.8.5)— 右键项目「关闭」失效修复 + updater 部署脚本旧 IP 根治。
