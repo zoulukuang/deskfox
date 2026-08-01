@@ -1,5 +1,7 @@
 import type { Message, Session } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@/utils/toast"
+// FORK: REQ-049 [feat: sidecar-oom-brake] 2026-08-02
+import { isBackendUnreachableError } from "@/utils/server-errors"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
@@ -253,7 +255,17 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       .abort({
         sessionID,
       })
-      .catch(() => {})
+      .catch((error) => {
+        // FORK: REQ-049 L3 — 后台不可达时停止请求静默失败,用户点停止「空转」没反馈;
+        //   如实提示 + 依赖看门狗 respawn 后 heal-interrupted 自愈复位 [feat: sidecar-oom-brake] 2026-08-02
+        if (isBackendUnreachableError(error)) {
+          showToast({
+            variant: "error",
+            title: "停止请求未送达:AI 后台服务未响应",
+            description: "后台正在自动恢复,恢复后此任务状态会自动复位,请稍候。",
+          })
+        }
+      })
   }
 
   const restoreCommentItems = (items: CommentItem[]) => {

@@ -14,6 +14,14 @@ type SidecarMessage =
   | { type: "ready" }
   | { type: "stopped" }
   | { type: "error"; error: { message: string; stack?: string } }
+  // FORK: REQ-049 内存压力上报(sidecar 侧 memory-brake 采样)[feat: sidecar-oom-brake] 2026-08-02
+  | { type: "memory-pressure"; usedMB: number; limitMB: number; ratio: number }
+
+// FORK: REQ-049 L1 硬帽 — sidecar V8 老生代上限,撑爆快速 OOM 由 L2 看门狗秒级 respawn,
+//   不再拖垮整机内存(2026-06-03 飞书白屏连累实证)。[feat: sidecar-oom-brake] 2026-08-02
+export const SIDECAR_MAX_OLD_SPACE_MB = 3072
+
+export type SidecarMemoryPressure = { usedMB: number; limitMB: number; ratio: number }
 
 export type SidecarListener = { stop: () => Promise<void> }
 
@@ -26,6 +34,8 @@ type SpawnLocalServerOptions = {
   onStdout?: (message: string) => void
   onStderr?: (message: string) => void
   onExit?: (code: number) => void
+  // FORK: REQ-049 内存压力回调 [feat: sidecar-oom-brake] 2026-08-02
+  onMemoryPressure?: (info: SidecarMemoryPressure) => void
 }
 
 export function getDefaultServerUrl(): string | null {
@@ -65,6 +75,8 @@ export async function spawnLocalServer(
     env: createSidecarEnv(),
     serviceName: SIDECAR_SERVICE_NAME,
     stdio: "pipe",
+    // FORK: REQ-049 L1 硬帽 [feat: sidecar-oom-brake] 2026-08-02
+    execArgv: [`--max-old-space-size=${SIDECAR_MAX_OLD_SPACE_MB}`],
   })
   let exited = false
   const exit = defer<number>()
@@ -82,6 +94,10 @@ export async function spawnLocalServer(
     exit.resolve(code)
   })
   child.on("error", (error) => options.onStderr?.(`utility process error: ${serializeError(error).message}`))
+  // FORK: REQ-049 内存压力消息常驻转发(与启动期 onMessage 监听互不影响)[feat: sidecar-oom-brake] 2026-08-02
+  child.on("message", (message: SidecarMessage) => {
+    if (message.type === "memory-pressure") options.onMemoryPressure?.(message)
+  })
 
   child.stdout?.on("data", (chunk: Buffer) => options.onStdout?.(chunk.toString("utf8").trimEnd()))
   child.stderr?.on("data", (chunk: Buffer) => options.onStderr?.(chunk.toString("utf8").trimEnd()))
