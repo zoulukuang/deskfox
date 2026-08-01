@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, on, onCleanup } from "solid-js"
+import { createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { PermissionRequest, QuestionRequest, Todo } from "@opencode-ai/sdk/v2"
 import { useParams } from "@solidjs/router"
@@ -35,36 +35,16 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     return sessionQuestionRequest(sync.data.session, sync.data.question, params.id)
   })
 
-  // FORK: 跨-instance 权限过滤(方案D)2026-07-06
+  // FORK: 跨-instance 权限过滤(方案D)2026-07-06;REQ-078 改走 permission.canResolve 共享层 2026-08-02
   // permission.asked 按目录广播,会带进【别的 instance】(如飞书桥无人值守跑的 turn)触发的权限;
-  // 但 respond 是 instance-scoped —— 别的 instance 的权限在本端点了必 404("Permission request
-  // not found")。故用本 instance 的 permission.list() 交叉核,只展示【本 instance 能 resolve】的
-  // (= 本端触发的)权限卡,实现「谁触发谁展示」。拉取失败 fail-open 不过滤。
-  //
-  // ⚠️ 仅在【本 session 树确有候选权限】时才查 permission.list —— 否则无谓的网络请求会在
-  // e2e/离线环境冒 `ERR_CONNECTION_REFUSED` console 错(JS catch 拦不住浏览器层网络错日志),
-  // smoke 断言会误判失败。无 pending 权限时 hasCandidate=false → 不发请求。
-  const hasPermissionCandidate = createMemo(
-    () =>
-      !!sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) =>
-        !permission.autoResponds(item, sdk.directory),
-      ),
-  )
-  const [myPermissionIds] = createResource(hasPermissionCandidate, async () => {
-    try {
-      const r = await sdk.client.permission.list()
-      return new Set(((r.data ?? []) as PermissionRequest[]).map((p) => p.id))
-    } catch {
-      return null // 查询失败 → 不过滤(fail-open,宁可多展示不误藏)
-    }
-  })
-
+  // 但 respond 是 instance-scoped —— 别的 instance 的权限在本端点了必 404。原实现本地 resource
+  // 以布尔 memo 为 source,只在 false→true 沿拉一次 permission.list → 同 session 并发第二个权限
+  // 被陈旧快照 fail-closed 藏死(turn 挂死)。现由 context/permission 按「候选 id 集签名」refetch,
+  // 无候选不发请求(e2e/离线 gate 语义保留),失败/加载中 fail-open。
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
-    const mine = myPermissionIds()
     return sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) => {
       if (permission.autoResponds(item, sdk.directory)) return false
-      // mine 为 undefined(加载中)/ null(失败)→ fail-open 不过滤;有集合则只留本 instance 的
-      if (mine != null && !mine.has(item.id)) return false
+      if (!permission.canResolve(item, sdk.directory)) return false
       return true
     })
   })

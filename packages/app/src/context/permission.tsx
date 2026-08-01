@@ -1,5 +1,7 @@
-import { createEffect, createMemo, onCleanup } from "solid-js"
+import { createEffect, createMemo, getOwner, onCleanup, runWithOwner } from "solid-js"
 import { createStore, produce } from "solid-js/store"
+// FORK: REQ-078 方案D 共享过滤层 [feat: permission-filter-concurrency] 2026-08-02
+import { candidateSignature, createResolvableCache } from "./permission-resolvable"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2/client"
 import { Persist, persisted } from "@/utils/persist"
@@ -237,12 +239,49 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
       )
     }
 
+    // FORK-BEGIN: REQ-078 方案D「谁触发谁展示」共享过滤层 [feat: permission-filter-concurrency] 2026-08-02
+    // 按 directory 维护「本 instance 可 resolve 的权限 id 集」:候选权限 id 集签名任一增减即
+    // refetch(修复旧 composer 布尔 source 只在 false→true 沿拉一次、并发第二个权限被陈旧快照
+    // fail-closed 藏死的 bug);无候选不发请求(e2e/离线不冒网络错);失败/加载中 fail-open。
+    // composer 卡片、侧栏徽标、头像指示统一走 canResolve,消灭「侧栏亮灯 composer 没卡」幻影。
+    const resolvableOwner = getOwner()
+    const [resolvableStore, setResolvableStore] = createStore<Record<string, string[] | null>>({})
+    const resolvableCache = createResolvableCache(async (directory) => {
+      const r = await serverSDK.client.permission.list({ directory })
+      return ((r.data ?? []) as PermissionRequest[]).map((p) => p.id)
+    })
+    const resolvableTracked = new Set<string>()
+
+    function ensureResolvableTracked(directory: string) {
+      if (resolvableTracked.has(directory)) return
+      resolvableTracked.add(directory)
+      runWithOwner(resolvableOwner, () => {
+        const [childStore] = serverSync.child(directory, { bootstrap: false })
+        createEffect(() => {
+          const signature = candidateSignature(childStore.permission, (item) => shouldAutoRespond(item, directory))
+          void resolvableCache.sync(directory, signature, (ids) => setResolvableStore(directory, ids))
+        })
+      })
+    }
+
+    function canResolve(permission: PermissionRequest, directory?: string) {
+      if (!directory) return true
+      ensureResolvableTracked(directory)
+      const ids = resolvableStore[directory]
+      // undefined(未拉到)/ null(拉取失败)→ fail-open 不过滤,宁可多展示不误藏
+      if (ids == null) return true
+      return ids.includes(permission.id)
+    }
+    // FORK-END
+
     return {
       ready,
       respond,
       autoResponds(permission: PermissionRequest, directory?: string) {
         return shouldAutoRespond(permission, directory)
       },
+      // FORK: REQ-078 [feat: permission-filter-concurrency] 2026-08-02
+      canResolve,
       isAutoAccepting,
       isAutoAcceptingDirectory,
       toggleAutoAccept(sessionID: string, directory: string) {
