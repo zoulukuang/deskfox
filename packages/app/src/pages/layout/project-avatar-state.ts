@@ -16,7 +16,8 @@ export function useSessionTabAvatarState(
     if (!active()) return false
     const [store] = globalSync.child(directory(), { bootstrap: false })
     return !!sessionPermissionRequest(store.session, store.permission, sessionId(), (item) => {
-      return !permission.autoResponds(item, directory())
+      // FORK: REQ-078 共享 canResolve 过滤 [feat: permission-filter-concurrency] 2026-08-02
+      return !permission.autoResponds(item, directory()) && permission.canResolve(item, directory())
     })
   })
   const unread = createMemo(() => active() && (hasPermissions() || notification.session.unseenCount(sessionId()) > 0))

@@ -38,7 +38,12 @@ export const ProjectIcon = (props: {
   const hasPermissions = createMemo(() =>
     dirs().some((directory) => {
       const [store] = serverSync.child(directory, { bootstrap: false })
-      return hasProjectPermissions(store.permission, (item) => !permission.autoResponds(item, directory))
+      // FORK: REQ-078 与 composer 共享「本 instance 可 resolve」过滤,消灭幻影徽标
+      //   [feat: permission-filter-concurrency] 2026-08-02
+      return hasProjectPermissions(
+        store.permission,
+        (item) => !permission.autoResponds(item, directory) && permission.canResolve(item, directory),
+      )
     }),
   )
   const notify = createMemo(() => props.notify && (hasPermissions() || unseenCount() > 0))
@@ -156,7 +161,8 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
   const [sessionStore] = serverSync.child(props.session.directory)
   const hasPermissions = createMemo(() => {
     return !!sessionPermissionRequest(sessionStore.session, sessionStore.permission, props.session.id, (item) => {
-      return !permission.autoResponds(item, props.session.directory)
+      // FORK: REQ-078 共享 canResolve 过滤 [feat: permission-filter-concurrency] 2026-08-02
+      return !permission.autoResponds(item, props.session.directory) && permission.canResolve(item, props.session.directory)
     })
   })
   // FORK: stuck-working-indicator-fix — 判定逻辑抽到 deriveSessionWorking 纯函数 [feat: stuck-working-indicator-fix]
