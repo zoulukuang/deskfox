@@ -47,6 +47,8 @@ import { SettingsProvider, useSettings } from "@/context/settings"
 import { TerminalProvider } from "@/context/terminal"
 import { TabsProvider, useTabs, type DraftTab } from "@/context/tabs"
 import { SDKProvider, useSDK } from "@/context/sdk"
+// FORK: REQ-049 [feat: sidecar-oom-brake] 2026-08-02
+import { SidecarHealthMonitor } from "@/components/sidecar-health-monitor"
 import { WslServersProvider } from "@/wsl/context"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
 import Layout from "@/pages/layout"
@@ -177,6 +179,8 @@ function AppShellProviders(props: ParentProps) {
   return (
     <SettingsProvider>
       <BodyDesignClass />
+      {/* FORK: REQ-049 sidecar 断连/内存压力提示 [feat: sidecar-oom-brake] 2026-08-02 */}
+      <SidecarHealthMonitor />
       <PermissionProvider>
         <LayoutProvider>
           <NotificationProvider>

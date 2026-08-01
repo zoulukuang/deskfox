@@ -2,6 +2,26 @@ import * as http from "node:http"
 import * as tls from "node:tls"
 // FORK: 国内 npm 镜像注入(从 Tauri npm_registry.rs 平移)[feat: npm-registry-cn-mirror] 2026-06-13
 import { decideNpmRegistry } from "./deskfox/npm-registry"
+// FORK-BEGIN: REQ-049 L1 内存软刹车 [feat: sidecar-oom-brake] 2026-08-02
+import v8 from "node:v8"
+import { createMemoryPressureMonitor, type MemoryPressureEvent } from "./deskfox/memory-brake"
+
+const MEMORY_SAMPLE_INTERVAL_MS = 30_000
+let memoryTimer: ReturnType<typeof setInterval> | undefined
+
+function startMemoryWatch(port: ParentPort) {
+  if (memoryTimer) return
+  const monitor = createMemoryPressureMonitor({
+    sample: () => {
+      const stats = v8.getHeapStatistics()
+      return { usedBytes: stats.used_heap_size, limitBytes: stats.heap_size_limit }
+    },
+    emit: (event) => port.postMessage(event),
+  })
+  memoryTimer = setInterval(() => monitor.check(), MEMORY_SAMPLE_INTERVAL_MS)
+  memoryTimer.unref?.()
+}
+// FORK-END
 
 type NodeHttpWithEnvProxy = typeof http & {
   setGlobalProxyFromEnv: () => void
@@ -27,6 +47,8 @@ type SidecarMessage =
   | { type: "ready" }
   | { type: "stopped" }
   | { type: "error"; error: { message: string; stack?: string } }
+  // FORK: REQ-049 内存压力上报 [feat: sidecar-oom-brake] 2026-08-02
+  | MemoryPressureEvent
 
 type ParentPort = {
   postMessage(message: SidecarMessage): void
@@ -66,6 +88,8 @@ async function start(command: StartCommand) {
       cors: ["oc://renderer"],
     })
     parentPort.postMessage({ type: "ready" })
+    // FORK: REQ-049 启动即开始 heap 采样(30s 周期,80% 阈值上报)[feat: sidecar-oom-brake] 2026-08-02
+    startMemoryWatch(parentPort)
   } catch (error) {
     parentPort.postMessage({ type: "error", error: serializeError(error) })
     setImmediate(() => process.exit(1))
