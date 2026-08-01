@@ -59,15 +59,47 @@ export function clonePromptHistoryComments(comments: PromptHistoryComment[]) {
   }))
 }
 
+// FORK-BEGIN: REQ-087 历史不存图片 part [feat: renderer-snapshot-oom] 2026-08-02
+// ImageAttachmentPart.dataUrl 是完整 base64,100 条历史 × 截图级图片 = GB 级快照,
+// 是 renderer OOM + global.dat 膨胀的头号来源。历史仅回填文本/文件引用/comment;
+// normalize 侧同样过滤,兜住 migrate 前的存量脏数据。
+function withoutImageParts(prompt: Prompt): Prompt {
+  return prompt.filter((part) => part.type !== "image")
+}
+
+/** persisted migrate 钩子:清洗存量历史里的图片 part,变空壳的 entry 一并丢弃。 */
+export function migrateStoredHistory(value: unknown): unknown {
+  if (!value || typeof value !== "object" || !Array.isArray((value as { entries?: unknown }).entries)) return value
+  const entries = (value as { entries: unknown[] }).entries
+    .map((entry) => {
+      if (Array.isArray(entry)) return withoutImageParts(entry as Prompt)
+      if (!entry || typeof entry !== "object") return entry
+      const stored = entry as PromptHistoryEntry
+      if (!Array.isArray(stored.prompt)) return entry
+      return { ...stored, prompt: withoutImageParts(stored.prompt) }
+    })
+    .filter((entry) => {
+      const normalized = Array.isArray(entry) ? { prompt: entry as Prompt, comments: [] } : (entry as PromptHistoryEntry)
+      if (!Array.isArray(normalized.prompt)) return true
+      const text = promptLength(normalized.prompt) > 0
+      const comments = Array.isArray(normalized.comments) && normalized.comments.some((c) => !!c?.comment?.trim())
+      return text || comments
+    })
+  return { ...(value as object), entries }
+}
+// FORK-END
+
 export function normalizePromptHistoryEntry(entry: PromptHistoryStoredEntry): PromptHistoryEntry {
   if (Array.isArray(entry)) {
     return {
-      prompt: clonePromptParts(entry),
+      // FORK: REQ-087 历史不含图片 part(存量兜底过滤)[feat: renderer-snapshot-oom] 2026-08-02
+      prompt: clonePromptParts(withoutImageParts(entry)),
       comments: [],
     }
   }
   return {
-    prompt: clonePromptParts(entry.prompt),
+    // FORK: REQ-087 同上 [feat: renderer-snapshot-oom] 2026-08-02
+    prompt: clonePromptParts(withoutImageParts(entry.prompt)),
     comments: clonePromptHistoryComments(entry.comments),
   }
 }
@@ -86,12 +118,14 @@ export function prependHistoryEntry(
     .map((part) => ("content" in part ? part.content : ""))
     .join("")
     .trim()
-  const hasImages = prompt.some((part) => part.type === "image")
   const hasComments = comments.some((comment) => !!comment.comment.trim())
-  if (!text && !hasImages && !hasComments) return entries
+  // FORK: REQ-087 历史不存图片 part → 纯图片 prompt 无可回填内容,不入历史
+  //   [feat: renderer-snapshot-oom] 2026-08-02
+  if (!text && !hasComments) return entries
 
   const entry = {
-    prompt: clonePromptParts(prompt),
+    // FORK: REQ-087 剥离图片 part(dataUrl 不落盘)[feat: renderer-snapshot-oom] 2026-08-02
+    prompt: clonePromptParts(prompt.filter((part) => part.type !== "image")),
     comments: clonePromptHistoryComments(comments),
   } satisfies PromptHistoryEntry
   const last = entries[0]

@@ -42,6 +42,8 @@ import {
 } from "./server"
 // FORK: sidecar 看门狗自动重启(从 Tauri server.rs spawn_watchdog 平移)[feat: sidecar-watchdog-respawn] 2026-06-13
 import { createSidecarWatchdog } from "./deskfox/sidecar-watchdog"
+// FORK: REQ-087 renderer 连环崩自愈 [feat: renderer-snapshot-oom] 2026-08-02
+import { handleRendererGone } from "./deskfox/renderer-crash-guard"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
 import {
   createMainWindow,
@@ -275,6 +277,9 @@ const main = Effect.gen(function* () {
 
   app.on("render-process-gone", (_event, webContents, details) => {
     writeLog("window", "app render process gone", { url: webContents.getURL(), details }, "error")
+    // FORK: REQ-087 连环崩自愈 — 崩溃循环时隔离快照 .dat 再 reload,打破「一开就崩」
+    //   [feat: renderer-snapshot-oom] 2026-08-02
+    void handleRendererGone(webContents, details.reason, (message, data) => writeLog("window", message, data, "error"))
   })
 
   setRelaunchHandler(() => {

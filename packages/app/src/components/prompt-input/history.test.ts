@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Prompt } from "@/context/prompt"
 import {
   canNavigateHistoryAtCursor,
+  migrateStoredHistory,
   clonePromptParts,
   normalizePromptHistoryEntry,
   navigatePromptHistory,
@@ -151,3 +152,60 @@ describe("prompt-input history", () => {
     expect(canNavigateHistoryAtCursor("down", "abc", 1, true)).toBe(false)
   })
 })
+
+// FORK-BEGIN: REQ-087 历史剥离图片 part [feat: renderer-snapshot-oom] 2026-08-02
+describe("history image stripping (REQ-087)", () => {
+  const IMAGE_PART = {
+    type: "image" as const,
+    id: "img-1",
+    filename: "shot.png",
+    mime: "image/png",
+    dataUrl: "data:image/png;base64," + "A".repeat(1024),
+  }
+  const textPart = (content: string) => ({ type: "text" as const, content, start: 0, end: content.length })
+
+  test("prependHistoryEntry strips image parts but keeps text and comments", () => {
+    const prompt: Prompt = [textPart("hello"), IMAGE_PART]
+    const entries = prependHistoryEntry([], prompt, [comment("c1", "why")])
+    expect(entries).toHaveLength(1)
+    const entry = normalizePromptHistoryEntry(entries[0])
+    expect(entry.prompt.some((part) => part.type === "image")).toBe(false)
+    expect(entry.prompt.some((part) => part.type === "text" && part.content === "hello")).toBe(true)
+    expect(entry.comments).toHaveLength(1)
+  })
+
+  test("image-only prompt does not create a history entry", () => {
+    const prompt: Prompt = [textPart(""), IMAGE_PART]
+    expect(prependHistoryEntry([], prompt, [])).toHaveLength(0)
+  })
+
+  test("normalizePromptHistoryEntry filters image parts from legacy entries", () => {
+    const legacyArray = normalizePromptHistoryEntry([textPart("old"), IMAGE_PART])
+    expect(legacyArray.prompt).toHaveLength(1)
+    expect(legacyArray.prompt[0]?.type).toBe("text")
+
+    const legacyObject = normalizePromptHistoryEntry({ prompt: [IMAGE_PART, textPart("keep")], comments: [] })
+    expect(legacyObject.prompt.some((part) => part.type === "image")).toBe(false)
+  })
+
+  test("migrateStoredHistory strips dataUrl and drops entries left empty", () => {
+    const stored = {
+      entries: [
+        { prompt: [textPart("keep me"), IMAGE_PART], comments: [] },
+        { prompt: [textPart(""), IMAGE_PART], comments: [] }, // 纯图片 → 清洗后空壳,丢弃
+        [textPart("legacy array"), IMAGE_PART],
+        { prompt: [textPart("")], comments: [comment("c2", "has question")] }, // 空文本但有 comment → 保留
+      ],
+    }
+    const migrated = migrateStoredHistory(stored) as { entries: unknown[] }
+    expect(migrated.entries).toHaveLength(3)
+    expect(JSON.stringify(migrated)).not.toContain("dataUrl")
+  })
+
+  test("migrateStoredHistory passes through malformed values untouched", () => {
+    expect(migrateStoredHistory(null)).toBeNull()
+    expect(migrateStoredHistory("junk")).toBe("junk")
+    expect(migrateStoredHistory({ nope: 1 })).toEqual({ nope: 1 })
+  })
+})
+// FORK-END
