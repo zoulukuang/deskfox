@@ -6,7 +6,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## commit
 
-- `b407b3fb60` `fix(opencode): REQ-079 heal stat 3s 竞速 + Session.list 进程级闩 [feat: session-heal-stat-timeout] [bug-repro: …] [override-blacklist: …;user 2026-08-02 审批]`(分支 feat/daily-ux-batch;R4 复核报告见下,user 于 commit 前审批通过)
+- `785b7049e6` `fix(opencode): REQ-079 heal stat 3s 竞速 + Session.list 进程级闩 [feat: session-heal-stat-timeout] [bug-repro: …] [override-blacklist: …;user 2026-08-02 审批]`(分支 feat/daily-ux-batch;R4 复核报告见下,user 于 commit 前审批通过)
 
 ## 实际改动
 
