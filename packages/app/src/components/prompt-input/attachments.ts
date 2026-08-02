@@ -4,6 +4,9 @@ import { showToast } from "@/utils/toast"
 import { usePrompt, type ContentPart, type ImageAttachmentPart } from "@/context/prompt"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
+// FORK: REQ-026 粘贴/拖图前查当前模型 image 能力 [feat: model-capability-ui] 2026-08-02
+import { useLocal } from "@/context/local"
+import { modelSupportsImage } from "../model-capability"
 import { uuid } from "@/utils/uuid"
 import { getCursorPosition } from "./editor-dom"
 import { attachmentMime } from "./files"
@@ -42,6 +45,8 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
   const language = useLanguage()
   // FORK: 多选拖动 abs→rel 需要项目根 [feat: file-tree-multi-drag-to-chat] 2026-05-15
   const sdk = useSDK()
+  // FORK: REQ-026 [feat: model-capability-ui] 2026-08-02
+  const local = useLocal()
 
   const warn = () => {
     showToast({
@@ -50,10 +55,29 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     })
   }
 
+  // FORK-BEGIN: REQ-026 模型不支持图片 → 发送前拦截 [feat: model-capability-ui] 2026-08-02
+  // 仅当能力**明确为 false** 才拦(能力未知保守放行,后端 ERROR 文本仍是兜底);
+  // 「先贴图后换模型」路径不在此拦,显式接受走后端兜底(spec 记录)。
+  const imageBlocked = () => modelSupportsImage(local.model.current()) === false
+  const warnImageUnsupported = () => {
+    showToast({
+      title: language.t("prompt.toast.imageUnsupported.title"),
+      description: language.t("prompt.toast.imageUnsupported.description", {
+        model: local.model.current()?.name ?? "",
+      }),
+    })
+  }
+  // FORK-END
+
   const add = async (file: File, toast = true) => {
     const mime = await attachmentMime(file)
     if (!mime) {
       if (toast) warn()
+      return false
+    }
+    // FORK: REQ-026 当前模型明确不支持图片 → 拦截 + toast [feat: model-capability-ui]
+    if (imageBlocked()) {
+      if (toast) warnImageUnsupported()
       return false
     }
 
@@ -85,7 +109,11 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
       if (ok) found = true
     }
 
-    if (!found && files.length > 0 && toast) warn()
+    // FORK: REQ-026 多文件全被拦时分流提示:模型不支持图片给专属 toast,其余保持原「不支持的粘贴」
+    if (!found && files.length > 0 && toast) {
+      if (imageBlocked()) warnImageUnsupported()
+      else warn()
+    }
     return found
   }
 

@@ -316,6 +316,11 @@ export const dict = {
   "prompt.action.stop": "停止",
   "prompt.toast.pasteUnsupported.title": "不支持的附件",
   "prompt.toast.pasteUnsupported.description": "此处仅能附加图片、PDF 或文本文件。",
+  // [feat: model-capability-ui] REQ-026 2026-08-02
+  "prompt.toast.imageUnsupported.title": "当前模型不支持图片",
+  "prompt.toast.imageUnsupported.description": "「{{model}}」不支持图片输入。请在模型选择器切换到带 📷 徽标的视觉模型后再粘贴/拖入图片。",
+  "model.badge.image": "📷 图片",
+  "model.badge.reasoning": "🧠 推理",
   "prompt.toast.modelAgentRequired.title": "请选择智能体和模型",
   "prompt.toast.modelAgentRequired.description": "发送提示前请先选择智能体和模型。",
   "prompt.toast.worktreeCreateFailed.title": "创建工作树失败",
