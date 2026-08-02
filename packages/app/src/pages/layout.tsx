@@ -1330,6 +1330,17 @@ export default function Layout(props: ParentProps) {
 
   async function navigateToProject(directory: string | undefined) {
     if (!directory) return
+    // FORK-BEGIN: REQ-092 启动期快路径 [feat: startup-sidebar-feedback] 2026-08-02
+    // bootstrap 未完成时下面整条 await 链(relocate 探测/worktree.list/恢复上次会话的 SDK 调用)
+    // 会挂起,点击看似无效。not-ready 直接路由到会话列表页(目标页有 skeleton,REQ-092 同批补门条件);
+    // 代价:此窗口内不做恢复上次会话与 stale-relocate(v1 接受,ready 后行为不变)。
+    if (!serverSync.ready) {
+      const fastRoot = projectRoot(directory)
+      server.projects.touch(fastRoot)
+      navigateWithSidebarReset(`/${base64Encode(fastRoot)}/session`)
+      return
+    }
+    // FORK-END
     // FORK: REQ-072 — 切到已改名/挪位(stale)项目时,静默 relocate 到新路径。仅在「确切缺失」时才扫锚,
     // 正常项目只多一次快速 stat、行为不变。此处**不 forget/不 toast**(那些交给 autoselect/openProject 的
     // ensureProjectAvailable),避免与 autoselect→openProject→navigateToProject 调用链重复 forget 打断好路径。

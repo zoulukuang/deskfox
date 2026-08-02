@@ -21,6 +21,8 @@ import { useLanguage } from "@/context/language"
 import { pathKey } from "@/utils/path-key"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { orphanRootSessions, sortedRootSessions } from "./helpers"
+// FORK: REQ-092 [feat: startup-sidebar-feedback] 2026-08-02
+import { showSessionSkeleton } from "./session-skeleton-gate"
 import { useIsFetching } from "@tanstack/solid-query"
 
 type InlineEditorComponent = (props: {
@@ -332,7 +334,8 @@ export const SortableWorkspace = (props: {
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
   const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.directory)))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
-  const loading = () => fetching() > 0 && count() === 0
+  // FORK: REQ-092 启动期(bootstrap 未完成)也亮 skeleton [feat: startup-sidebar-feedback] 2026-08-02
+  const loading = () => showSessionSkeleton(fetching(), count(), serverSync.ready)
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
@@ -478,7 +481,8 @@ export const LocalWorkspace = (props: {
   const count = createMemo(() => sessions()?.length ?? 0)
   const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.project.worktree)))
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
-  const loading = () => fetching() > 0 && count() === 0
+  // FORK: REQ-092 启动期(bootstrap 未完成)也亮 skeleton [feat: startup-sidebar-feedback] 2026-08-02
+  const loading = () => showSessionSkeleton(fetching(), count(), serverSync.ready)
   const loadMore = async () => {
     // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15)[feat: session-list-load-more-30]
     workspace().setStore("limit", (limit) => (limit ?? 0) + 30)
