@@ -297,11 +297,9 @@ export const dict = {
 
   "prompt.toast.pasteUnsupported.title": "不支援的附件",
   "prompt.toast.pasteUnsupported.description": "此處僅能附加圖片、PDF 或文字檔案。",
-  // [feat: model-capability-ui] REQ-026 2026-08-02
+  // [feat: model-capability-ui] REQ-026 2026-08-02(徽標已撤,文案不再引用)
   "prompt.toast.imageUnsupported.title": "當前模型不支援圖片",
-  "prompt.toast.imageUnsupported.description": "「{{model}}」不支援圖片輸入。請在模型選擇器切換到帶 📷 徽標的視覺模型後再貼上/拖入圖片。",
-  "model.badge.image": "📷 圖片",
-  "model.badge.reasoning": "🧠 推理",
+  "prompt.toast.imageUnsupported.description": "「{{model}}」不支援圖片輸入。請切換到支援圖片的視覺模型(懸停模型可查看輸入能力)後再貼上/拖入圖片。",
   "prompt.toast.modelAgentRequired.title": "請選擇代理程式和模型",
   "prompt.toast.modelAgentRequired.description": "傳送提示前請先選擇代理程式和模型。",
   "prompt.toast.worktreeCreateFailed.title": "建立工作樹失敗",

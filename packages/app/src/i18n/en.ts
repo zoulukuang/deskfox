@@ -307,12 +307,10 @@ export const dict = {
 
   "prompt.toast.pasteUnsupported.title": "Unsupported attachment",
   "prompt.toast.pasteUnsupported.description": "Only images, PDFs, or text files can be attached here.",
-  // [feat: model-capability-ui] REQ-026 2026-08-02
+  // [feat: model-capability-ui] REQ-026 2026-08-02 (badges removed; copy no longer references them)
   "prompt.toast.imageUnsupported.title": "Current model does not support images",
   "prompt.toast.imageUnsupported.description":
-    "“{{model}}” does not support image input. Switch to a vision model (📷 badge) in the model selector, then paste or drop the image again.",
-  "model.badge.image": "📷 Image",
-  "model.badge.reasoning": "🧠 Reasoning",
+    "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.",
   "prompt.toast.modelAgentRequired.title": "Select an agent and model",
   "prompt.toast.modelAgentRequired.description": "Choose an agent and model before sending a prompt.",
   "prompt.toast.worktreeCreateFailed.title": "Failed to create worktree",
