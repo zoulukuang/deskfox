@@ -32,7 +32,7 @@ import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { MessageV2 } from "./message-v2"
 import type { InstanceContext } from "../project/instance-context"
 // FORK: REQ-072 follow-up — session.directory 自愈兜底(见 list 内调用点)2026-07-05
-import { healStaleSessionDirectories } from "../project/session-dir-heal"
+import { healStaleSessionDirectoriesOnce } from "../project/session-dir-heal"
 import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
 import { ProjectV2 } from "@opencode-ai/core/project"
@@ -593,8 +593,10 @@ export const layer: Layer.Layer<
       const gated = gateProjectScope(input, { projectID: ctx.project.id, directory: ctx.directory })
       // FORK: REQ-072 follow-up — 改名后 session.directory 自愈兜底(实例缓存跳过 fromDirectory 的
       // 改名往返场景;gated.scope==="project" 即非 global,收敛后 ≈ 一次 groupBy)。编排见 session-dir-heal.ts。
+      // FORK: REQ-079 [feat: session-heal-stat-timeout] 2026-08-02 — 换带进程级闩的变体:
+      // 同 projectID+worktree 只扫一次,离线卷死路径不再拖住每次侧栏刷新(stat 亦加 3s 超时)。
       if (gated?.scope === "project")
-        yield* healStaleSessionDirectories({ db, projectID: ctx.project.id, worktree: ctx.worktree })
+        yield* healStaleSessionDirectoriesOnce({ db, projectID: ctx.project.id, worktree: ctx.worktree })
       return yield* listByProject(db, {
         projectID: ctx.project.id,
         experimentalWorkspaces: flags.experimentalWorkspaces,

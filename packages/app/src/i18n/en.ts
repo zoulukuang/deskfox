@@ -307,6 +307,12 @@ export const dict = {
 
   "prompt.toast.pasteUnsupported.title": "Unsupported attachment",
   "prompt.toast.pasteUnsupported.description": "Only images, PDFs, or text files can be attached here.",
+  // [feat: model-capability-ui] REQ-026 2026-08-02
+  "prompt.toast.imageUnsupported.title": "Current model does not support images",
+  "prompt.toast.imageUnsupported.description":
+    "“{{model}}” does not support image input. Switch to a vision model (📷 badge) in the model selector, then paste or drop the image again.",
+  "model.badge.image": "📷 Image",
+  "model.badge.reasoning": "🧠 Reasoning",
   "prompt.toast.modelAgentRequired.title": "Select an agent and model",
   "prompt.toast.modelAgentRequired.description": "Choose an agent and model before sending a prompt.",
   "prompt.toast.worktreeCreateFailed.title": "Failed to create worktree",
@@ -1242,6 +1248,14 @@ export const dict = {
     "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.",
   "settings.feishu.edit.workspace.security":
     "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.",
+  // [feat: feishu-session-project-visibility] REQ-086 2026-08-02
+  "settings.feishu.edit.workspace.projectListWarning":
+    "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).",
+  "settings.feishu.bind.workspaceDefaulted":
+    "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.",
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}",
+  "settings.feishu.bind.workspaceFallback":
+    "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.",
   // FORK-END
   // FORK-BEGIN: REQ-068 启动默认项目路径不存在/不可达提示 [feat: stale-path-hardening]
   "project.path.missing.title": "Project folder not found",

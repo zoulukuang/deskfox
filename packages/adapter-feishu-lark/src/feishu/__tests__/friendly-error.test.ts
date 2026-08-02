@@ -56,6 +56,20 @@ describe("friendlyErrorReply — 把 opencode 技术错误翻译成 user 可操�
     expect(out).toContain("1800000ms")
   })
 
+  // [feat: feishu-retry-feedback] REQ-093 T6 — 重试终态 pattern,且不被 timeout 分支抢
+  test("fastfail 带「已自动重试 N 次」→ 重试终态文案(非 timeout 文案)", () => {
+    const out = friendlyErrorReply(
+      new Error("opencode prompt 首字节超时 (240000ms) — LLM 无任何输出(provider 繁忙,已自动重试 3 次仍无输出)"),
+    )
+    expect(out).toContain("自动重试后仍无响应")
+    expect(out).not.toContain("LLM 模型回复超时")
+  })
+
+  test("'overloaded' → 重试终态文案", () => {
+    const out = friendlyErrorReply(new Error("anthropic: Overloaded, please retry later"))
+    expect(out).toContain("自动重试后仍无响应")
+  })
+
   // [fix: feishu-llm-stall-fastfail 2026-06-07] 首字节快速失败的 error 也要命中 timeout 友好提示
   test("'opencode prompt 首字节超时 (120000ms) — LLM 无任何输出' → 模型超时友好提示", () => {
     const out = friendlyErrorReply(

@@ -29,7 +29,26 @@ interface Waiter {
    * 判定 provider 无响应,提前 reject 释放队列。收到首活动后即清除,不误伤正常长任务。
    */
   firstActivityHandle: ReturnType<typeof setTimeout> | undefined
+  // [feat: feishu-retry-feedback] REQ-093 2026-08-02 —— retry 事件支撑
+  /** 本 turn 已收到的核心自动重试次数(session.status type=retry 计数)*/
+  retryCount: number
+  /** retry 事件回调(pipeline 层做节流播报)*/
+  onRetry?: (info: RetryNotice) => void
+  /** fastfail 窗口毫秒数 + 触发闭包 —— retry 事件视为 activity 重置窗口用(施工注意⑤)*/
+  faMs: number
+  fireFastfail: () => void
 }
+
+/** [feat: feishu-retry-feedback] REQ-093 — retry 事件透传给 pipeline 的最小信息 */
+export interface RetryNotice {
+  attempt: number
+  message?: string
+  /** 核心给的下次重试时间戳(ms,可能缺省)*/
+  next?: number
+}
+
+/** [feat: feishu-retry-feedback] fastfail 错误文案锚点 — runOpencode 据此判定走 session.abort */
+export const FASTFAIL_ERROR_MARKER = "首字节超时"
 
 /** 默认"首字节活动"超时(ms)— provider 完全无输出多久判定卡死。
  *  [fix: feishu-review-followup 2026-06-07] 120s → 240s:留足推理模型(如 deepseek-r1)
@@ -68,6 +87,8 @@ export class PromptDispatcher {
     sessionID: string,
     timeoutMs: number,
     firstActivityTimeoutMs: number = DEFAULT_FIRST_ACTIVITY_TIMEOUT_MS,
+    // [feat: feishu-retry-feedback] REQ-093 — 核心自动重试事件回调(节流在 pipeline 层)
+    onRetry?: (info: RetryNotice) => void,
   ): Promise<DispatchResult> {
     return new Promise<DispatchResult>((resolve, reject) => {
       const existing = this.waiters.get(sessionID)
@@ -99,16 +120,20 @@ export class PromptDispatcher {
       // 上限不超过 timeoutMs(测试传小 timeout 时不被 firstActivity 反超)。message 含"超时"+
       // "无任何输出"→ 命中 friendlyErrorReply 的 timeout pattern,飞书侧给"模型繁忙/换 model"提示。
       const faMs = Math.min(firstActivityTimeoutMs, timeoutMs)
-      const firstActivityHandle = setTimeout(() => {
+      // [feat: feishu-retry-feedback] REQ-093 — 触发闭包抽名:retry 事件重置窗口时要重装同一逻辑;
+      // 有过重试时文案拼「已自动重试 N 次」(命中 friendlyErrorReply 重试终态 pattern,
+      // 并作为 FASTFAIL_ERROR_MARKER 锚点让 runOpencode 走 session.abort 防僵尸)
+      const fireFastfail = () => {
         const w = this.waiters.get(sessionID)
         if (!w) return
+        const retried =
+          w.retryCount > 0 ? `(provider 繁忙,已自动重试 ${w.retryCount} 次仍无输出)` : `(provider 可能繁忙/无响应,如 503 重试)`
         finalize(
           "reject",
-          new Error(
-            `opencode prompt 首字节超时 (${faMs}ms) — LLM 无任何输出(provider 可能繁忙/无响应,如 503 重试)`,
-          ),
+          new Error(`opencode prompt ${FASTFAIL_ERROR_MARKER} (${faMs}ms) — LLM 无任何输出${retried}`),
         )
-      }, faMs)
+      }
+      const firstActivityHandle = setTimeout(fireFastfail, faMs)
 
       const timeoutHandle = setTimeout(() => {
         const w = this.waiters.get(sessionID)
@@ -139,6 +164,11 @@ export class PromptDispatcher {
         reject: (err) => finalize("reject", err),
         timeoutHandle,
         firstActivityHandle,
+        // [feat: feishu-retry-feedback] REQ-093
+        retryCount: 0,
+        onRetry,
+        faMs,
+        fireFastfail,
       })
     })
   }
@@ -187,6 +217,31 @@ export class PromptDispatcher {
     if (!sessionID) return
     const w = this.waiters.get(sessionID)
     if (!w) return
+
+    // [feat: feishu-retry-feedback] REQ-093 — 核心自动重试事件:
+    // ① 计数 + 回调(pipeline 层节流播报「正在重试第 N 次」);
+    // ② retry 视为 activity 重置 fastfail 窗口(施工注意⑤:核心退避带 rate-limit header
+    //    时可 >240s,不重置会出现「刚播报重试中就被 fastfail 硬杀」的矛盾;重置后语义 =
+    //    距上次 activity/retry 事件超窗才判死)。真实 part 已到过(handle 已清)则不重装,
+    //    不影响长任务 30min 硬超时语义。
+    if (event.type === "session.status") {
+      const p = event.properties as
+        | { sessionID?: string; status?: { type?: string; attempt?: number; message?: string; next?: number } }
+        | undefined
+      const status = p?.status
+      if (!status || status.type !== "retry") return
+      w.retryCount += 1
+      if (w.firstActivityHandle) {
+        clearTimeout(w.firstActivityHandle)
+        w.firstActivityHandle = setTimeout(w.fireFastfail, w.faMs)
+      }
+      try {
+        w.onRetry?.({ attempt: status.attempt ?? w.retryCount, message: status.message, next: status.next })
+      } catch (err) {
+        console.warn(`[dispatcher] onRetry callback error for ${sessionID}:`, err)
+      }
+      return
+    }
 
     if (event.type === "session.idle") {
       w.resolve({ reply: collectText(w), source: "session.idle" })

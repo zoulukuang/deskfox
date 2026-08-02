@@ -18,6 +18,10 @@ import path from "path"
 import { fileURLToPath } from "node:url"
 import { app } from "electron"
 import { write as writeLog } from "../logging"
+// [feat: imbot-agent-schema-upgrade] REQ-094 2026-08-02 — imbot spec + 注入/升级逻辑抽到
+// imbot-agent.ts(纯逻辑可单测)。原「已有 agent.imbot 完全跳过」改为按 `_schemaVersion`
+// 升级:覆盖管理键(description/permission),保留用户自增键(model/prompt 等)。
+import { injectImbotAgent } from "./imbot-agent"
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -166,41 +170,6 @@ function injectPlugin(config: Record<string, unknown>, name: string, pluginUrl: 
   return changed
 }
 
-/** imbot 安全 agent v3 极简档(与 Tauri imbot_agent_spec 逐键一致) */
-function imbotAgentSpec(): Record<string, unknown> {
-  return {
-    description:
-      "DeskFox IM 桥接 v3 极简档 — 只对 SSH 凭证 read + 真不可逆破坏 bash(rm -rf / Remove-Item / git --force / 云资源销毁 / 磁盘级)做 ask",
-    permission: {
-      read: { "*": "allow", "*.env": "ask", "*.env.*": "ask", "*.env.example": "allow", "**/.ssh/**": "ask" },
-      bash: {
-        "*": "allow",
-        "rm -rf *": "ask",
-        "Remove-Item *": "ask",
-        "rmdir *": "ask",
-        "del *": "ask",
-        "rd *": "ask",
-        "git push --force*": "ask",
-        "git push -f *": "ask",
-        "aws s3 rb *": "ask",
-        "aws ec2 terminate*": "ask",
-        "dd *": "ask",
-        "mkfs*": "ask",
-        "fdisk *": "ask",
-        "shutdown *": "ask",
-      },
-    },
-  }
-}
-
-/** idempotent:已有 agent.imbot 完全跳过(尊重 user 手动调整) */
-function injectImbotAgent(config: Record<string, unknown>): boolean {
-  const agent = (config.agent ??= {}) as Record<string, unknown>
-  if (typeof agent !== "object" || agent === null) return false
-  if ("imbot" in agent) return false
-  agent.imbot = imbotAgentSpec()
-  return true
-}
 
 /** 主入口 — app.whenReady 后调用一次 */
 export function ensureDeskfoxPlugins(): void {

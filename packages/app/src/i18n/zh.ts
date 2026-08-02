@@ -316,6 +316,11 @@ export const dict = {
   "prompt.action.stop": "停止",
   "prompt.toast.pasteUnsupported.title": "不支持的附件",
   "prompt.toast.pasteUnsupported.description": "此处仅能附加图片、PDF 或文本文件。",
+  // [feat: model-capability-ui] REQ-026 2026-08-02
+  "prompt.toast.imageUnsupported.title": "当前模型不支持图片",
+  "prompt.toast.imageUnsupported.description": "「{{model}}」不支持图片输入。请在模型选择器切换到带 📷 徽标的视觉模型后再粘贴/拖入图片。",
+  "model.badge.image": "📷 图片",
+  "model.badge.reasoning": "🧠 推理",
   "prompt.toast.modelAgentRequired.title": "请选择智能体和模型",
   "prompt.toast.modelAgentRequired.description": "发送提示前请先选择智能体和模型。",
   "prompt.toast.worktreeCreateFailed.title": "创建工作树失败",
@@ -1155,6 +1160,14 @@ export const dict = {
     "对话记忆跟着工作目录走——换目录会开启全新对话,旧对话留在原目录。",
   "settings.feishu.edit.workspace.security":
     "⚠️ 此账号的 AI 将能读写所选项目的真实文件并执行命令(用于远程开发)。涉及敏感读取或不可逆操作时,会发飞书卡片等你确认。",
+  // [feat: feishu-session-project-visibility] REQ-086 2026-08-02
+  "settings.feishu.edit.workspace.projectListWarning":
+    "未指定项目目录:此账号的飞书会话不会出现在桌面端项目列表(仅全局会话列表可见)。",
+  "settings.feishu.bind.workspaceDefaulted":
+    "工作目录已设为当前项目:{{path}}\n此账号的飞书会话将出现在该项目的会话列表;飞书发来的文件将保存到项目内 _deskfox/ 目录(自动加入 .gitignore)。可在「编辑」中修改。",
+  "settings.feishu.bind.workspaceKept": "工作目录沿用已有设置:{{path}}",
+  "settings.feishu.bind.workspaceFallback":
+    "当前没有打开的项目,工作目录使用全局默认;此账号的会话不会出现在项目列表。可在「编辑」中指定项目目录。",
   "settings.feishu.edit.loadFailed": "拉取提供商列表失败:{{msg}}",
   // FORK-END
   // FORK-BEGIN: REQ-068 启动默认项目路径不存在/不可达提示 [feat: stale-path-hardening]

@@ -26,23 +26,35 @@ import {
   Switch,
 } from "solid-js"
 import QRCode from "qrcode"
+import { useParams } from "@solidjs/router"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import {
+  feishuListAccounts,
   feishuOauthPoll,
   feishuOauthStart,
   feishuSaveAccount,
+  feishuUpdateAccountSettings,
   type FeishuDomain,
   type OauthPollResponse,
   type OauthStartResponse,
 } from "@/utils/feishu-config"
+// [feat: feishu-session-project-visibility] REQ-086 2026-08-02 — 绑定默认 workspace=当前项目
+import { defaultWorkspaceForBind } from "./feishu-bind-workspace"
+import { decode64 } from "@/utils/base64"
 
 type Phase =
   | { kind: "loading" }
   | { kind: "waiting"; data: OauthStartResponse; qrDataUrl: string | null }
   | { kind: "success"; result: OauthPollResponse }
   | { kind: "error"; message: string; canRetry: boolean }
+
+// [feat: feishu-session-project-visibility] REQ-086 — 成功页 workspace 落点提示三态
+type WorkspaceNote =
+  | { kind: "defaulted"; path: string } // 已默认为当前项目
+  | { kind: "kept"; path: string } // 重绑,沿用已有设置
+  | { kind: "fallback" } // 无打开项目,走全局默认(不进项目列表)
 
 /** locale → 默认飞书域名(zh / zht 优先国内,其它默认国际)*/
 function defaultDomainFor(locale: string): FeishuDomain {
@@ -52,9 +64,35 @@ function defaultDomainFor(locale: string): FeishuDomain {
 export const FeishuBindDialog: Component<{ onBound?: () => void }> = (props) => {
   const dialog = useDialog()
   const language = useLanguage()
+  // [feat: feishu-session-project-visibility] REQ-086 — 当前打开项目目录(dialog 内 useParams
+  // 可用,同 settings-general.tsx 模式;home 路由无 dir → undefined)
+  const params = useParams()
   const [domain, setDomain] = createSignal<FeishuDomain>(defaultDomainFor(language.locale()))
   const [phase, setPhase] = createSignal<Phase>({ kind: "loading" })
   const [secsLeft, setSecsLeft] = createSignal(0)
+  const [wsNote, setWsNote] = createSignal<WorkspaceNote | null>(null)
+
+  // [feat: feishu-session-project-visibility] REQ-086 — 绑定成功后 best-effort 默认 workspace:
+  // 账号未设 workspace 且当前有打开项目 → 注入项目目录(会话进项目列表、文件落 _deskfox/);
+  // 已设(重绑)→ 保留;失败/无项目 → fallback 提示。任何异常不阻断绑定主流程。
+  const applyDefaultWorkspace = async (accountId: string) => {
+    try {
+      const currentDir = decode64(params.dir)
+      const accounts = await feishuListAccounts()
+      const existing = accounts.find((a) => a.account_id === accountId)?.workspace ?? null
+      const target = defaultWorkspaceForBind(currentDir, existing)
+      if (target) {
+        await feishuUpdateAccountSettings(accountId, { workspace: target })
+        setWsNote({ kind: "defaulted", path: target })
+        return
+      }
+      const kept = (existing ?? "").trim()
+      setWsNote(kept ? { kind: "kept", path: kept } : { kind: "fallback" })
+    } catch (err) {
+      console.warn("[feishu-bridge] default workspace failed:", err)
+      setWsNote({ kind: "fallback" })
+    }
+  }
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -117,12 +155,15 @@ export const FeishuBindDialog: Component<{ onBound?: () => void }> = (props) => 
             // 凭证落盘 — appSecret 走 SecretRef file mode(0600)
             if (r.app_id && r.app_secret && r.open_id) {
               try {
-                await feishuSaveAccount({
+                const saved = await feishuSaveAccount({
                   domain: domain(),
                   app_id: r.app_id,
                   app_secret: r.app_secret,
                   open_id: r.open_id,
                 })
+                // [feat: feishu-session-project-visibility] REQ-086 — 默认 workspace=当前项目
+                // (在 onBound 前完成,列表 refetch 直接拿到注入后的 workspace)
+                await applyDefaultWorkspace(saved.account_id)
                 props.onBound?.() // 通知 settings-feishu 刷新列表
               } catch (saveErr) {
                 console.warn("[feishu-bridge] save account failed:", saveErr)
@@ -134,8 +175,9 @@ export const FeishuBindDialog: Component<{ onBound?: () => void }> = (props) => 
               appId: r.app_id,
               openId: r.open_id,
             })
-            // 1.2s 后自动关 dialog 回到列表(列表已经 onBound 触发 refetch)
-            setTimeout(() => dialog.close(), 1200)
+            // 自动关 dialog 回到列表(列表已经 onBound 触发 refetch)
+            // [feat: feishu-session-project-visibility] 有 workspace 落点提示时延至 5s 让 user 读完
+            setTimeout(() => dialog.close(), wsNote() ? 5000 : 1200)
             return
           case "denied":
             stopAllTimers()
@@ -272,6 +314,28 @@ export const FeishuBindDialog: Component<{ onBound?: () => void }> = (props) => 
               <p class="text-16-medium">
                 {language.t("settings.feishu.bind.statusSuccess")}
               </p>
+              {/* [feat: feishu-session-project-visibility] REQ-086 — workspace 落点明示 */}
+              <Show when={wsNote()}>
+                {(note) => (
+                  <p
+                    class="text-12-regular text-center whitespace-pre-line"
+                    classList={{
+                      "text-text-weak": note().kind !== "fallback",
+                      "text-text-warning": note().kind === "fallback",
+                    }}
+                  >
+                    {note().kind === "defaulted"
+                      ? language.t("settings.feishu.bind.workspaceDefaulted", {
+                          path: (note() as { kind: "defaulted"; path: string }).path,
+                        })
+                      : note().kind === "kept"
+                        ? language.t("settings.feishu.bind.workspaceKept", {
+                            path: (note() as { kind: "kept"; path: string }).path,
+                          })
+                        : language.t("settings.feishu.bind.workspaceFallback")}
+                  </p>
+                )}
+              </Show>
               <button
                 type="button"
                 class="px-3 py-1.5 rounded-md text-13-medium bg-surface-strong hover:bg-surface-stronger"

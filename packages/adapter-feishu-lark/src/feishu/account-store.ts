@@ -139,6 +139,10 @@ export function saveAccount(input: SaveAccountInput): SavedAccount {
     // 飞书桥接默认绑 "imbot" agent(DeskFox setup hook 注入的安全 agent,同 build 能力但 unattended 危险工具默认 ask)
     // 已有 account.agent(老 user 绑过 "build")保持不动 — user 自行在 edit dialog 切换
     agent: existing?.agent ?? "imbot",
+    // [feat: feishu-session-project-visibility] REQ-086 2026-08-02 — 重绑保留 per-account
+    // model/workspace(原沿用清单漏这两项 → re-OAuth 一次即丢用户设置)
+    model: existing?.model,
+    workspace: existing?.workspace,
     systemPrompt: existing?.systemPrompt,
     tools: existing?.tools,
     heartbeat: existing?.heartbeat,

@@ -56,7 +56,10 @@ import {
   MAX_SUB_MESSAGES,
   type SubMessage,
 } from "./merge-forward-flatten"
-import type { PromptDispatcher } from "./prompt-dispatcher"
+import type { PromptDispatcher, RetryNotice } from "./prompt-dispatcher"
+// [feat: feishu-retry-feedback] REQ-093 2026-08-02
+import { FASTFAIL_ERROR_MARKER } from "./prompt-dispatcher"
+import { retryNoticeText, shouldNotifyRetry, type RetryThrottleState } from "./retry-notify"
 // FORK: REQ-035 文件内容抽取 2026-06-02 / xlsx+pptx+image+pdf 2026-06-03
 import {
   detectFileFormat,
@@ -448,6 +451,15 @@ export function friendlyErrorReply(err: Error): string {
     return (
       "🔌 DeskFox 内部读不到 LLM 回复(session 状态异常)。\n" +
       "这通常是 sidecar 进程问题,请重启 DeskFox 后重试。\n" +
+      `(原始错误:${msg})`
+    )
+  }
+  // [feat: feishu-retry-feedback] REQ-093 — 自动重试后仍失败的终态。须在 timeout 分支前:
+  // fastfail 带重试的文案同时含「超时」「无任何输出」,timeout 分支会抢匹配。
+  if (msg.includes("已自动重试") || lower.includes("overloaded")) {
+    return (
+      "🔁 AI 服务持续繁忙,自动重试后仍无响应,本轮已停止。\n" +
+      "请稍后再发一次;如持续失败,在 DeskFox 主程序里换一个 model。\n" +
       `(原始错误:${msg})`
     )
   }
@@ -1245,10 +1257,17 @@ export class MessagePipeline {
       // [feat: feishu-llm-strip-mention-placeholders] 2026-05-24
       // 传 cleaned(已 strip @_user_N 飞书占位符)而非 raw text,避免 LLM 误把
       // 占位符当成另一个联系人(实测 bot reply 含"我不是 @_user_1..."类幻觉)。
-      reply = await this.runOpencode(sessionID, promptText, this.opts.account.agent, {
-        imagePart,
-        imageDownloadError,
-      })
+      reply = await this.runOpencode(
+        sessionID,
+        promptText,
+        this.opts.account.agent,
+        {
+          imagePart,
+          imageDownloadError,
+        },
+        // [feat: feishu-retry-feedback] REQ-093
+        this.createRetryNotifier(event.chatId),
+      )
     } catch (err) {
       console.error(`[pipeline ${this.opts.accountId}] opencode error:`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
@@ -1449,11 +1468,18 @@ export class MessagePipeline {
     // 10. runOpencode(text + N file part)
     let reply: string
     try {
-      reply = await this.runOpencode(sessionID, finalText, this.opts.account.agent, {
-        imagePart: null,
-        imageParts,
-        imageDownloadError: null,
-      })
+      reply = await this.runOpencode(
+        sessionID,
+        finalText,
+        this.opts.account.agent,
+        {
+          imagePart: null,
+          imageParts,
+          imageDownloadError: null,
+        },
+        // [feat: feishu-retry-feedback] REQ-093
+        this.createRetryNotifier(event.chatId),
+      )
     } catch (err) {
       console.error(`[pipeline ${this.opts.accountId}] opencode error (merge_forward):`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
@@ -1680,7 +1706,14 @@ export class MessagePipeline {
     // runOpencode
     let reply: string
     try {
-      reply = await this.runOpencode(sessionID, fileContext, this.opts.account.agent)
+      // [feat: feishu-retry-feedback] REQ-093 — 第 5 参传 onRetry(无 imageOpts 场景)
+      reply = await this.runOpencode(
+        sessionID,
+        fileContext,
+        this.opts.account.agent,
+        undefined,
+        this.createRetryNotifier(event.chatId),
+      )
     } catch (err) {
       console.error(`[pipeline ${this.opts.accountId}] opencode error (file):`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
@@ -1906,10 +1939,17 @@ export class MessagePipeline {
     let reply: string
     try {
       // 空 text + imagePart → LLM 直接看图描述/回答
-      reply = await this.runOpencode(sessionID, "", this.opts.account.agent, {
-        imagePart,
-        imageDownloadError: null,
-      })
+      reply = await this.runOpencode(
+        sessionID,
+        "",
+        this.opts.account.agent,
+        {
+          imagePart,
+          imageDownloadError: null,
+        },
+        // [feat: feishu-retry-feedback] REQ-093
+        this.createRetryNotifier(event.chatId),
+      )
     } catch (err) {
       console.error(`[pipeline ${this.opts.accountId}] opencode error (image file):`, err)
       await this.sendFeishuText(event.chatId, friendlyErrorReply(err as Error))
@@ -2137,6 +2177,8 @@ export class MessagePipeline {
       imageParts?: Array<{ mime: string; filename: string; absolutePath: string }>
       imageDownloadError: string | null
     },
+    // [feat: feishu-retry-feedback] REQ-093 — 核心自动重试事件回调(调用点传 createRetryNotifier(chatId))
+    onRetry?: (info: RetryNotice) => void,
   ): Promise<string> {
     // 默认 30 分钟超时(2026-05-10 由 5min 提)。
     // 实测出现过 7m18s 才完成的回复(用户问"DeskFox 服务启动后..."触发 75 次工具调用)
@@ -2150,7 +2192,9 @@ export class MessagePipeline {
     // dispatcher.register 返 DispatchResult (reply + source),timeout 无 partial
     // 时直接 reject,本函数依赖 catch / throw 链路把"无输出"信号送到 handle()
     // 的 friendlyErrorReply,确保用户一定能收到一条 reply(消除"bot 死了"黑洞)。
-    const dispatchPromise = this.opts.dispatcher.register(sessionID, timeoutMs)
+    // [feat: feishu-retry-feedback] REQ-093 — onRetry 透传;retry 事件在 dispatcher 侧
+    // 重置 fastfail 窗口(施工注意⑤),播报节流在 createRetryNotifier
+    const dispatchPromise = this.opts.dispatcher.register(sessionID, timeoutMs, undefined, onRetry)
 
     // [fix: feishu-permission-cross-instance 方案D] 标记本 session 正被【飞书】跑 turn;
     // 这段窗口内到达的 permission.asked 才归属飞书 instance(见 handlePermissionAsked)。
@@ -2214,6 +2258,25 @@ export class MessagePipeline {
     let dispatchResult: Awaited<typeof dispatchPromise>
     try {
       dispatchResult = await dispatchPromise
+    } catch (err) {
+      // [feat: feishu-retry-feedback] REQ-093 ④ — fastfail 判死后核心可能仍在无上限自动重试
+      // (烧配额 + 占 session),best-effort abort 终止本 turn。仅 fastfail 路径:正常 30min
+      // 超时不 abort(timeout-partial 语义不变,LLM 可能仍在产出)。
+      if (err instanceof Error && err.message.includes(FASTFAIL_ERROR_MARKER)) {
+        // 防御:老版本 SDK / 测试 fake 可能没有 session.abort — 缺失时跳过(播报/终态不受影响)
+        const abort = this.opts.opencodeClient.session.abort?.bind(this.opts.opencodeClient.session)
+        if (abort) {
+          void Promise.resolve()
+            .then(() => abort({ path: { id: sessionID }, query: { directory: this.workspaceDir() } }))
+            .then(() => {
+              console.log(`[pipeline ${this.opts.accountId}] fastfail 后已 abort session ${sessionID}(终止后台重试)`)
+            })
+            .catch((abortErr: unknown) => {
+              console.warn(`[pipeline ${this.opts.accountId}] fastfail abort ${sessionID} 失败:`, abortErr)
+            })
+        }
+      }
+      throw err
     } finally {
       this.inFlightSessions.delete(sessionID)
     }
@@ -2375,6 +2438,24 @@ export class MessagePipeline {
       data: { reaction_type: { emoji_type: "OK" } },
       path: { message_id: messageId },
     })
+  }
+
+  /**
+   * [feat: feishu-retry-feedback] REQ-093 — 每个 turn 一个节流通知器:
+   * 核心自动重试事件 → 飞书发「正在自动重试(第 N 次)」。节流策略见 retry-notify.ts
+   * (首条立即 / 之后 ≥90s / 单 turn ≤3 条);发送失败静默(播报是 best-effort,不影响主流程)。
+   */
+  private createRetryNotifier(chatId: string): (info: RetryNotice) => void {
+    const state: RetryThrottleState = { sentCount: 0, lastSentAt: 0 }
+    return (info) => {
+      const now = Date.now()
+      if (!shouldNotifyRetry(state, now)) return
+      state.sentCount += 1
+      state.lastSentAt = now
+      void this.sendFeishuText(chatId, retryNoticeText(info.attempt)).catch((err) => {
+        console.warn(`[pipeline ${this.opts.accountId}] retry notice send failed:`, err)
+      })
+    }
   }
 
   private async sendFeishuText(chatId: string, text: string): Promise<void> {

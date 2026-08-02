@@ -265,3 +265,75 @@ describe("PromptDispatcher — opencode plugin event ↔ waiter 桥梁", () => {
     expect(Date.now() - t0).toBeLessThan(1500)
   })
 })
+
+// ── [feat: feishu-retry-feedback] REQ-093 — session.status retry 事件 ──
+
+function retryEvent(sessionID: string, attempt: number, message = "503 overloaded"): { type: string; properties: Record<string, unknown> } {
+  return {
+    type: "session.status",
+    properties: { sessionID, status: { type: "retry", attempt, message, next: 0 } },
+  }
+}
+
+describe("PromptDispatcher — retry 事件(REQ-093)", () => {
+  test("T1: retry 事件触发 onRetry,收到 attempt/message", async () => {
+    const d = new PromptDispatcher()
+    const seen: Array<{ attempt: number; message?: string; next?: number }> = []
+    const p = d.register("ses_r1", 10_000, 10_000, (info) => seen.push(info))
+
+    d.dispatch(retryEvent("ses_r1", 1))
+    d.dispatch(retryEvent("ses_r1", 2, "rate limited"))
+
+    expect(seen).toEqual([
+      { attempt: 1, message: "503 overloaded", next: 0 },
+      { attempt: 2, message: "rate limited", next: 0 },
+    ])
+    d.dispatch({ type: "session.idle", properties: { sessionID: "ses_r1" } })
+    await p
+  })
+
+  test("T2: retry 事件重置 fastfail 窗口(原窗口点不 reject)", async () => {
+    const d = new PromptDispatcher()
+    // 首字节窗口 120ms;60ms 时来 retry 事件 → 窗口重开,原 120ms 点不应 reject
+    const p = d.register("ses_r2", 10_000, 120)
+    let settled = false
+    p.catch(() => {}).finally(() => (settled = true))
+
+    await new Promise((r) => setTimeout(r, 60))
+    d.dispatch(retryEvent("ses_r2", 1))
+    await new Promise((r) => setTimeout(r, 90)) // t=150ms > 原窗口 120ms,但距 retry 仅 90ms
+    expect(settled).toBe(false)
+
+    d.dispatch({ type: "session.idle", properties: { sessionID: "ses_r2" } })
+    await p
+  })
+
+  test("T3: retry 后仍无 activity 超窗 → reject 文案含「已自动重试 N 次」", async () => {
+    const d = new PromptDispatcher()
+    const p = d.register("ses_r3", 10_000, 60)
+    d.dispatch(retryEvent("ses_r3", 1))
+    d.dispatch(retryEvent("ses_r3", 2))
+    await expect(p).rejects.toThrow(/已自动重试 2 次/)
+  })
+
+  test("T4: 真实 part 已清 fastfail 后,retry 事件不再重装定时器(长任务不误伤)", async () => {
+    const d = new PromptDispatcher()
+    const p = d.register("ses_r4", 10_000, 60)
+    // 真实 part 到达 → 清 fastfail
+    d.dispatch({
+      type: "message.part.updated",
+      properties: { part: { id: "pa", sessionID: "ses_r4", type: "text", text: "部分输出" } },
+    })
+    // 之后来 retry(如输出后 provider 断流重试)→ 不应重装 fastfail
+    d.dispatch(retryEvent("ses_r4", 1))
+    await new Promise((r) => setTimeout(r, 100)) // 超过 faMs=60ms
+    d.dispatch({ type: "session.idle", properties: { sessionID: "ses_r4" } })
+    const result = await p
+    expect(result.reply).toBe("部分输出")
+  })
+
+  test("T7: 无 waiter 的 session 收到 retry 事件 → 静默忽略不 crash", () => {
+    const d = new PromptDispatcher()
+    expect(() => d.dispatch(retryEvent("ses_unknown", 1))).not.toThrow()
+  })
+})

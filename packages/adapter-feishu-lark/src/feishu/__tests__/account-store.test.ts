@@ -533,3 +533,46 @@ describe("updateAccountModel(向后兼容)", () => {
     expect(r).toBe(false)
   })
 })
+
+// ============================================================
+// [feat: feishu-session-project-visibility] REQ-086 T5-T6
+// [bug-repro: saveAccount 重绑重建 account 对象沿用清单漏 model/workspace → re-OAuth 即丢设置]
+// ============================================================
+
+describe("saveAccount 重绑字段保留(REQ-086)", () => {
+  test("T5: 已设 workspace + model 的账号重绑(re-OAuth)后两字段保留", () => {
+    saveAccount({ domain: "feishu", appId: "req086", appSecret: "s1", openId: "ou_1", configPath: configPath() })
+    updateAccountSettings(
+      "req086",
+      { workspace: "/tmp/req086-project", model: { providerID: "openai", modelID: "gpt-test" } },
+      configPath(),
+    )
+
+    const rebound = saveAccount({
+      domain: "feishu",
+      appId: "req086",
+      appSecret: "s2",
+      openId: "ou_1",
+      configPath: configPath(),
+    })
+
+    expect(rebound.account.workspace).toBe("/tmp/req086-project")
+    expect(rebound.account.model).toEqual({ providerID: "openai", modelID: "gpt-test" })
+    // 落盘同样保留(不止内存返回值)
+    const persisted = loadConfig(configPath()).accounts["req086"]
+    expect(persisted.workspace).toBe("/tmp/req086-project")
+    expect(persisted.model).toEqual({ providerID: "openai", modelID: "gpt-test" })
+  })
+
+  test("T6: 新账号 workspace/model 缺省(undefined)", () => {
+    const fresh = saveAccount({
+      domain: "feishu",
+      appId: "req086-fresh",
+      appSecret: "s3",
+      openId: "ou_2",
+      configPath: configPath(),
+    })
+    expect(fresh.account.workspace).toBeUndefined()
+    expect(fresh.account.model).toBeUndefined()
+  })
+})

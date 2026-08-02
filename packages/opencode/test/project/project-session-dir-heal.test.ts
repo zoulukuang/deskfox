@@ -19,7 +19,12 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { healStaleSessionDirectories } from "@/project/session-dir-heal"
+import {
+  confirmedMissingByNodeFs,
+  healStaleSessionDirectories,
+  healStaleSessionDirectoriesOnce,
+  resetSessionDirHealLatch,
+} from "@/project/session-dir-heal"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { testEffect } from "../lib/effect"
@@ -264,3 +269,84 @@ describe("session.directory 跟随项目身份自愈 (REQ-072 follow-up)", () =>
     }),
   )
 })
+
+// FORK: REQ-079 [feat: session-heal-stat-timeout] 2026-08-02
+// [bug-repro: 离线卷残留会话目录 fs.stat 挂几十秒 + 每次 Session.list 全量重扫 → 侧栏刷新被死路径拖住]
+describe("heal stat 超时 + Session.list 进程级闩 (REQ-079)", () => {
+  itOff.live("T1: statFn 永不 resolve → 限时返回 false(保守不动),不等挂死的盘", () =>
+    Effect.gen(function* () {
+      const t0 = Date.now()
+      const result = yield* confirmedMissingByNodeFs("/vol/offline", {
+        statFn: () => new Promise(() => {}),
+        timeoutMs: 50,
+      })
+      expect(result).toBe(false)
+      expect(Date.now() - t0).toBeLessThan(2000)
+    }),
+  )
+
+  itOff.live("T2: 三态语义不变 — ENOENT→true / 其它错误→false / 存在→false", () =>
+    Effect.gen(function* () {
+      const enoent = Object.assign(new Error("gone"), { code: "ENOENT" })
+      const eperm = Object.assign(new Error("denied"), { code: "EPERM" })
+      expect(yield* confirmedMissingByNodeFs("/x", { statFn: () => Promise.reject(enoent) })).toBe(true)
+      expect(yield* confirmedMissingByNodeFs("/x", { statFn: () => Promise.reject(eperm) })).toBe(false)
+      expect(yield* confirmedMissingByNodeFs("/x", { statFn: () => Promise.resolve({}) })).toBe(false)
+    }),
+  )
+
+  itOff.live("T3: 同 projectID+worktree 只扫一次;换 worktree 重扫;reset 后重扫", () =>
+    Effect.gen(function* () {
+      resetSessionDirHealLatch()
+      const projectID = `prj_latch_${crypto.randomUUID().slice(0, 8)}`
+      const worktree = `/tmp/req079-live-${projectID}`
+      // session.project_id 有 FK → 先落 project 行
+      const now = Date.now()
+      yield* Database.Service.use(({ db }) =>
+        db
+          .insert(ProjectTable)
+          .values({
+            id: projectID as any,
+            worktree: AbsolutePath.make(worktree),
+            time_created: now,
+            time_updated: now,
+            sandboxes: [],
+          })
+          .onConflictDoNothing()
+          .run()
+          .pipe(Effect.orDie),
+      )
+      yield* seedSession({ id: sid(), dir: `/tmp/req079-dead-${projectID}`, project: projectID })
+
+      let probes = 0
+      const counting = (_d: string) =>
+        Effect.sync(() => {
+          probes += 1
+          return false // 保守不动,只统计扫描次数
+        })
+
+      yield* healStaleSessionDirectoriesOnce({ db: yield* dbOf(), projectID, worktree, confirmedMissing: counting })
+      expect(probes).toBe(1)
+      // 第二次 list 兜底:闩生效,零 stat
+      yield* healStaleSessionDirectoriesOnce({ db: yield* dbOf(), projectID, worktree, confirmedMissing: counting })
+      expect(probes).toBe(1)
+      // 改名(新 worktree)→ 新 key 重扫
+      yield* healStaleSessionDirectoriesOnce({
+        db: yield* dbOf(),
+        projectID,
+        worktree: `${worktree}-renamed`,
+        confirmedMissing: counting,
+      })
+      expect(probes).toBe(2)
+      // reset(测试钩子)→ 重扫
+      resetSessionDirHealLatch()
+      yield* healStaleSessionDirectoriesOnce({ db: yield* dbOf(), projectID, worktree, confirmedMissing: counting })
+      expect(probes).toBe(3)
+      resetSessionDirHealLatch()
+    }),
+  )
+})
+
+function dbOf() {
+  return Database.Service.use(({ db }) => Effect.succeed(db))
+}

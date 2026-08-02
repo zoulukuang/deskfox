@@ -297,6 +297,13 @@ export const FeishuEditAccountDialog: Component<{
                 <p class="text-13-regular text-text-weak">
                   {language.t("settings.feishu.edit.workspace.hintFollow")}
                 </p>
+                {/* [feat: feishu-session-project-visibility] REQ-086 — 未设项目目录 = 会话不进
+                  * 桌面项目列表,显著提示引导设置(存量无 workspace 账号不自动迁移,靠这条引导)*/}
+                <Show when={!workspace().trim()}>
+                  <p class="text-13-regular text-text-warning">
+                    {language.t("settings.feishu.edit.workspace.projectListWarning")}
+                  </p>
+                </Show>
                 {/* A1 安全提示:仅当设了真实项目目录时显示 */}
                 <Show when={!!workspace().trim()}>
                   <p class="text-13-regular text-text-warning">
