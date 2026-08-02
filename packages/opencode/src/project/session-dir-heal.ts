@@ -21,14 +21,60 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import type { Database } from "@opencode-ai/core/database/database"
 import { isUnderWorktree, prefixRebindTarget } from "./project-rebind"
 
-/** 三态「确切不存在」默认实现(node fs):仅 ENOENT → true;存在/检查出错 → false(保守不动) */
-export const confirmedMissingByNodeFs = (dir: string): Effect.Effect<boolean> =>
-  Effect.promise(() =>
-    fsp.stat(dir).then(
+// FORK: REQ-079 [feat: session-heal-stat-timeout] 2026-08-02 — stat 超时上限(对齐 desktop fs-probe
+// 的 3s 竞速模式;包边界隔离只能模式复用不能 import)。离线卷(网络盘/拔掉的 U 盘)上 fs.stat 可能
+// 挂几十秒,每次 Session.list 都撞 → 侧栏刷新被死路径拖住。超时 → false(保守不动,与「检查出错」同义)。
+export const HEAL_STAT_TIMEOUT_MS = 3000
+
+/**
+ * 三态「确切不存在」默认实现(node fs):仅 ENOENT → true;存在/检查出错/超时 → false(保守不动)。
+ * [feat: session-heal-stat-timeout] REQ-079 — statFn/timeoutMs 可注入(测试);Promise.race 竞速,
+ * 超时后 probe 迟到的结果被丢弃(定时器在 probe settle 时清除,不泄漏)。
+ */
+export const confirmedMissingByNodeFs = (
+  dir: string,
+  opts?: { statFn?: (dir: string) => Promise<unknown>; timeoutMs?: number },
+): Effect.Effect<boolean> =>
+  Effect.promise(() => {
+    const stat = opts?.statFn ?? fsp.stat
+    const timeoutMs = opts?.timeoutMs ?? HEAL_STAT_TIMEOUT_MS
+    const probe = stat(dir).then(
       () => false,
-      (err: NodeJS.ErrnoException) => err?.code === "ENOENT",
-    ),
-  )
+      (err) => (err as NodeJS.ErrnoException)?.code === "ENOENT",
+    )
+    let handle: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<boolean>((resolve) => {
+      handle = setTimeout(() => resolve(false), timeoutMs)
+    })
+    void probe.finally(() => clearTimeout(handle))
+    return Promise.race([probe, timeout])
+  })
+
+// FORK-BEGIN: REQ-079 [feat: session-heal-stat-timeout] 2026-08-02 — Session.list 调用点进程级闩:
+// 每次 list 都全量扫 stat,N 个离线目录 = N×3s 拖住每次侧栏刷新。同 projectID+worktree 只扫一次
+// (set-before-run,同 tick 并发第二调用直接跳过 = 防双跑);key 含 worktree → 改名(新 worktree)
+// 自动重扫;fromDirectory 主路径不走闩(其 heal 带 oldWorktree 前缀重写语义,须每次跑)。
+// 已知边界(spec 记录):离线卷重挂后同进程内不再自动重治,等重启/改名/fromDirectory(TTL 先不加保持简单)。
+const healOnceKeys = new Set<string>()
+
+/** 测试用:清空闩(导出仅供测试/诊断) */
+export const resetSessionDirHealLatch = (): void => {
+  healOnceKeys.clear()
+}
+
+/** Session.list 兜底路径专用:同 projectID+worktree 进程生存期内只跑一次 */
+export const healStaleSessionDirectoriesOnce = Effect.fn("Project.healStaleSessionDirectoriesOnce")(function* (input: {
+  db: Database.Interface["db"]
+  projectID: string
+  worktree: string
+  confirmedMissing?: (dir: string) => Effect.Effect<boolean>
+}) {
+  const key = `${input.projectID}\0${input.worktree}`
+  if (healOnceKeys.has(key)) return
+  healOnceKeys.add(key)
+  yield* healStaleSessionDirectories(input)
+})
+// FORK-END
 
 export const healStaleSessionDirectories = Effect.fn("Project.healStaleSessionDirectories")(function* (input: {
   db: Database.Interface["db"]
