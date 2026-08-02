@@ -42,6 +42,8 @@ import {
 } from "./server"
 // FORK: sidecar 看门狗自动重启(从 Tauri server.rs spawn_watchdog 平移)[feat: sidecar-watchdog-respawn] 2026-06-13
 import { createSidecarWatchdog } from "./deskfox/sidecar-watchdog"
+// FORK: REQ-087 renderer 连环崩自愈 [feat: renderer-snapshot-oom] 2026-08-02
+import { handleRendererGone } from "./deskfox/renderer-crash-guard"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
 import {
   createMainWindow,
@@ -275,6 +277,9 @@ const main = Effect.gen(function* () {
 
   app.on("render-process-gone", (_event, webContents, details) => {
     writeLog("window", "app render process gone", { url: webContents.getURL(), details }, "error")
+    // FORK: REQ-087 连环崩自愈 — 崩溃循环时隔离快照 .dat 再 reload,打破「一开就崩」
+    //   [feat: renderer-snapshot-oom] 2026-08-02
+    void handleRendererGone(webContents, details.reason, (message, data) => writeLog("window", message, data, "error"))
   })
 
   setRelaunchHandler(() => {
@@ -388,23 +393,23 @@ const main = Effect.gen(function* () {
     useEnvProxy()
 
     logger.log("spawning sidecar", { url })
-    const { listener, health } = yield* Effect.promise(() =>
-      spawnLocalServer(hostname, port, password, {
-        userDataPath: app.getPath("userData"),
-        onStdout: (message) => writeLog("server", "stdout", { message }),
-        onStderr: (message) => writeLog("server", "stderr", { message }, "warn"),
-        onExit: (code) => writeLog("utility", "sidecar exited", { code }, "warn"),
-      }),
-    )
-    server = listener
-    // FORK: 启动 sidecar 看门狗 — 崩溃/假死时同 port+pw 自动重启,前台请求自动恢复
-    //   [feat: sidecar-watchdog-respawn] 2026-06-13
+    // FORK-BEGIN: REQ-049 首次 spawn 与 respawn 共用 options(补 onMemoryPressure 转发 renderer)
+    //   [feat: sidecar-oom-brake] 2026-08-02
     const spawnOptions = {
       userDataPath: app.getPath("userData"),
       onStdout: (message: string) => writeLog("server", "stdout", { message }),
       onStderr: (message: string) => writeLog("server", "stderr", { message }, "warn"),
       onExit: (code: number) => writeLog("utility", "sidecar exited", { code }, "warn"),
+      onMemoryPressure: (info: { usedMB: number; limitMB: number; ratio: number }) => {
+        writeLog("utility", "sidecar memory pressure", { ...info }, "warn")
+        mainWindow?.webContents.send("deskfox:sidecar-watchdog", { status: "memory-pressure", ...info })
+      },
     }
+    const { listener, health } = yield* Effect.promise(() => spawnLocalServer(hostname, port, password, spawnOptions))
+    server = listener
+    // FORK-END
+    // FORK: 启动 sidecar 看门狗 — 崩溃/假死时同 port+pw 自动重启,前台请求自动恢复
+    //   [feat: sidecar-watchdog-respawn] 2026-06-13
     const respawnSidecar = async () => {
       if (server) {
         const old = server
@@ -422,7 +427,9 @@ const main = Effect.gen(function* () {
       checkHealth: () => checkHealth(url, password),
       isShuttingDown: () => isQuitting(),
       respawn: respawnSidecar,
-      emit: (status) => mainWindow?.webContents.send("sidecar-watchdog", status),
+      // FORK: REQ-049 修通道 — preload 桥订阅的是 "deskfox:" 前缀通道,原裸通道 renderer 收不到;
+      //   payload 统一为 { status } 对象与 memory-pressure 同形 [feat: sidecar-oom-brake] 2026-08-02
+      emit: (status) => mainWindow?.webContents.send("deskfox:sidecar-watchdog", { status }),
       log: (message, data) => writeLog("utility", message, data ?? {}, "warn"),
     })
     sidecarWatchdog.start()

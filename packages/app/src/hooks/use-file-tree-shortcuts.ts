@@ -73,6 +73,22 @@ function hasTextSelectionOutsideFileTree(): boolean {
   return !el.closest('[data-component="filetree"]')
 }
 
+// FORK-BEGIN: REQ-085 判定改用事件原始 target [feat: popup-enter-passthrough] 2026-08-02
+// bug:「加入聊天」浮层(chat-selection / md-selection 菜单)textarea 里按 Enter,元素级 handler
+// preventDefault + 提交后【同步卸载浮层】→ document.activeElement 瞬间回落 body;同一事件继续
+// 冒泡到本 window 级监听时,activeIsEditable() 已看不到 textarea → 误判「中性区」,若文件树
+// selection 非空即走 B 路径把 Enter 当导航键吃掉(打开文件/toggle 预览区)。
+// event.target 是派发时刻的真实来源(即使节点已 detach 也不变),对文件树之外的可编辑控件
+// 一律不接管;文件树内部(含重命名 input,自带 stopPropagation)仍走原 A 路径,行为不变。
+export function keyEventFromEditableOutsideTree(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('[data-component="filetree"]')) return false
+  if (target.isContentEditable) return true
+  const tag = target.tagName
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
+}
+// FORK-END
+
 export function useFileTreeShortcuts(handlers: ShortcutHandlers) {
   const shouldTrigger = (): boolean => {
     if (activeInFileTree()) return true // A:focus 在文件树
@@ -83,6 +99,8 @@ export function useFileTreeShortcuts(handlers: ShortcutHandlers) {
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
+    // FORK: REQ-085 [feat: popup-enter-passthrough] 2026-08-02
+    if (keyEventFromEditableOutsideTree(event.target)) return
     if (!shouldTrigger()) return
 
     // FORK-BEGIN: 导航键 — 无任何 modifier 时响应 [feat: file-tree-ux-polish] 2026-05-04

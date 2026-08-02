@@ -209,3 +209,54 @@ describe("persist localStorage resilience", () => {
     expect(Persist.serverGlobal("a:b" as ServerScope, "c")).not.toEqual(Persist.serverGlobal("a" as ServerScope, "b:c"))
   })
 })
+
+// FORK-BEGIN: REQ-087 写盘节流 + 体积熔断 [feat: renderer-snapshot-oom] 2026-08-02
+describe("persist desktop write throttle", () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  test("burst of writes collapses to one trailing write with the latest value", async () => {
+    persistTesting.setThrottleMs(20)
+    const written: string[] = []
+    for (let i = 0; i < 10; i++) {
+      persistTesting.throttledWrite("throttle:burst", `v${i}`, (value) => written.push(value))
+    }
+    expect(written).toEqual([])
+    await sleep(60)
+    expect(written).toEqual(["v9"])
+    expect(persistTesting.pendingWriteCount()).toBe(0)
+  })
+
+  test("flush writes pending values immediately", () => {
+    persistTesting.setThrottleMs(10_000)
+    const written: string[] = []
+    persistTesting.throttledWrite("throttle:flush", "pending", (value) => written.push(value))
+    expect(written).toEqual([])
+    persistTesting.flushPendingWrites()
+    expect(written).toEqual(["pending"])
+    expect(persistTesting.pendingWriteCount()).toBe(0)
+  })
+
+  test("cancel drops the pending write for the key", async () => {
+    persistTesting.setThrottleMs(10)
+    const written: string[] = []
+    persistTesting.throttledWrite("throttle:cancel", "doomed", (value) => written.push(value))
+    persistTesting.cancelPendingWrite("throttle:cancel")
+    await sleep(40)
+    expect(written).toEqual([])
+  })
+
+  test("oversized snapshot is rejected and clears any pending write", async () => {
+    persistTesting.setThrottleMs(10)
+    const written: string[] = []
+    persistTesting.throttledWrite("throttle:oversized", "small", (value) => written.push(value))
+    const huge = "x".repeat(persistTesting.MAX_VALUE_CHARS + 1)
+    persistTesting.throttledWrite("throttle:oversized", huge, (value) => written.push(value))
+    await sleep(40)
+    expect(written).toEqual([])
+    // 回到正常体积后恢复持久化
+    persistTesting.throttledWrite("throttle:oversized", "recovered", (value) => written.push(value))
+    await sleep(40)
+    expect(written).toEqual(["recovered"])
+  })
+})
+// FORK-END

@@ -27,6 +27,85 @@ const GLOBAL_STORAGE = "opencode.global.dat"
 const LOCAL_PREFIX = "opencode."
 const fallback = new Map<string, boolean>()
 
+// FORK-BEGIN: REQ-087 桌面端 .dat 写盘节流 + 体积熔断 [feat: renderer-snapshot-oom] 2026-08-02
+// 背景:makePersisted 任意状态变更即全量 stringify → IPC → electron-store 整文件同步重写,
+// 打字每个键都重写 .dat(macOS 磁盘写入超限 .diag 实证)。这里对桌面 async 路径做
+// trailing-throttle:首写延后 WRITE_THROTTLE_MS,期间只更新 latest,到点写最新值 →
+// 打字期写速有恒定上界,崩溃丢失窗口 ≤ WRITE_THROTTLE_MS。窗口隐藏/关闭时 flush 兜底。
+// 单条快照超 MAX_VALUE_CHARS 直接拒写(内存态不受影响),防病态快照把 .dat 撑到百 MB 级
+// 反过来在下次启动恢复时 OOM(连环崩根子之一)。
+const WRITE_THROTTLE_MS = 800
+const MAX_VALUE_CHARS = 16 * 1024 * 1024
+
+type PendingWrite = { value: string; write: (value: string) => void; timer: ReturnType<typeof setTimeout> }
+const pendingWrites = new Map<string, PendingWrite>()
+const oversizedWarned = new Set<string>()
+let throttleMs = WRITE_THROTTLE_MS
+
+function flushPendingWrites() {
+  for (const [id, pending] of [...pendingWrites]) {
+    clearTimeout(pending.timer)
+    pendingWrites.delete(id)
+    pending.write(pending.value)
+  }
+}
+
+function cancelPendingWrite(id: string) {
+  const pending = pendingWrites.get(id)
+  if (!pending) return
+  clearTimeout(pending.timer)
+  pendingWrites.delete(id)
+}
+
+function throttledWrite(id: string, value: string, write: (value: string) => void) {
+  if (value.length > MAX_VALUE_CHARS) {
+    cancelPendingWrite(id)
+    if (!oversizedWarned.has(id)) {
+      oversizedWarned.add(id)
+      console.warn(`[persist] snapshot "${id}" exceeds ${MAX_VALUE_CHARS} chars, skip persisting (kept in memory)`)
+    }
+    return
+  }
+  oversizedWarned.delete(id)
+
+  const pending = pendingWrites.get(id)
+  if (pending) {
+    pending.value = value
+    pending.write = write
+    return
+  }
+
+  pendingWrites.set(id, {
+    value,
+    write,
+    timer: setTimeout(() => {
+      const current = pendingWrites.get(id)
+      if (!current) return
+      pendingWrites.delete(id)
+      current.write(current.value)
+    }, throttleMs),
+  })
+}
+
+let flushHooksInstalled = false
+function installFlushHooks() {
+  if (flushHooksInstalled) return
+  if (typeof window === "undefined") return
+  flushHooksInstalled = true
+  window.addEventListener("pagehide", flushPendingWrites)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingWrites()
+  })
+  // DeskFox 关闭到托盘(窗口 hide 不销毁)时主进程会广播 flush 事件,一并兜底
+  void import("@/utils/native")
+    .then((native) => {
+      if (!native.isDesktopApp()) return
+      return native.listen("deskfox-flush-before-close", flushPendingWrites)
+    })
+    .catch(() => undefined)
+}
+// FORK-END
+
 const CACHE_MAX_ENTRIES = 500
 const CACHE_MAX_BYTES = 8 * 1024 * 1024
 
@@ -468,6 +547,16 @@ export const PersistTesting = {
   migrateLegacy,
   normalize,
   workspaceStorage,
+  // FORK-BEGIN: REQ-087 节流内部件测试钩子 [feat: renderer-snapshot-oom] 2026-08-02
+  throttledWrite,
+  flushPendingWrites,
+  cancelPendingWrite,
+  pendingWriteCount: () => pendingWrites.size,
+  setThrottleMs: (ms: number) => {
+    throttleMs = ms
+  },
+  MAX_VALUE_CHARS,
+  // FORK-END
 }
 
 export const Persist = {
@@ -605,12 +694,16 @@ export function persisted<T>(
           migrate: config.migrate,
         })
       },
+      // FORK-BEGIN: REQ-087 写盘节流接入(桌面 async 路径)[feat: renderer-snapshot-oom] 2026-08-02
       setItem: async (key, value) => {
-        await current.setItem(key, value)
+        installFlushHooks()
+        throttledWrite(`${config.storage ?? ""}\u0000${key}`, value, (latest) => void current.setItem(key, latest))
       },
       removeItem: async (key) => {
+        cancelPendingWrite(`${config.storage ?? ""}\u0000${key}`)
         await current.removeItem(key)
       },
+      // FORK-END
     }
 
     return api

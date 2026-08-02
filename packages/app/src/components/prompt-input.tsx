@@ -62,6 +62,8 @@ import { createPromptAttachments } from "./prompt-input/attachments"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
+  // FORK: REQ-087 [feat: renderer-snapshot-oom] 2026-08-02
+  migrateStoredHistory,
   navigatePromptHistory,
   prependHistoryEntry,
   type PromptHistoryComment,
@@ -361,8 +363,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     return messages.some((m) => m.role === "user")
   })
 
+  // FORK: REQ-087 挂 migrate 清洗存量含图片 dataUrl 的历史(readCurrent 发现变化即回写 →
+  //   首次加载 global.dat 就缩容)[feat: renderer-snapshot-oom] 2026-08-02
   const [history, setHistory] = persisted(
-    Persist.global("prompt-history", ["prompt-history.v1"]),
+    { ...Persist.global("prompt-history", ["prompt-history.v1"]), migrate: migrateStoredHistory },
     createStore<{
       entries: PromptHistoryStoredEntry[]
     }>({
@@ -370,7 +374,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }),
   )
   const [shellHistory, setShellHistory] = persisted(
-    Persist.global("prompt-history-shell", ["prompt-history-shell.v1"]),
+    { ...Persist.global("prompt-history-shell", ["prompt-history-shell.v1"]), migrate: migrateStoredHistory },
     createStore<{
       entries: PromptHistoryStoredEntry[]
     }>({
