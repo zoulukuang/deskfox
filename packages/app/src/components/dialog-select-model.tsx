@@ -12,8 +12,6 @@ import { List } from "@opencode-ai/ui/list"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { ModelTooltip } from "./model-tooltip"
 import { useLanguage } from "@/context/language"
-// FORK: REQ-026 能力徽标 [feat: model-capability-ui] 2026-08-02
-import { modelSupportsImage, modelSupportsReasoning } from "./model-capability"
 
 const isFree = (provider: string, cost: { input: number } | undefined) =>
   provider === "opencode" && (!cost || cost.input === 0)
@@ -81,16 +79,6 @@ const ModelList: Component<{
           <Show when={i.latest}>
             <Tag>{language.t("model.tag.latest")}</Tag>
           </Show>
-          {/* FORK-BEGIN: REQ-026 能力徽标(仅明确 true 才亮,unknown 不显示)。
-            * 🔧 工具徽标刻意不做:capability merge 里 toolcall 默认 true,几乎全员都亮=噪音;
-            * 📷/🧠 才是差异点。[feat: model-capability-ui] 2026-08-02 */}
-          <Show when={modelSupportsImage(i) === true}>
-            <Tag>{language.t("model.badge.image")}</Tag>
-          </Show>
-          <Show when={modelSupportsReasoning(i) === true}>
-            <Tag>{language.t("model.badge.reasoning")}</Tag>
-          </Show>
-          {/* FORK-END */}
         </div>
       )}
     </List>

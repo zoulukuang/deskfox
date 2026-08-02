@@ -4,6 +4,14 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 改动记录
 
+## follow-up:撤除选择器徽标(2026-08-02,user 拍板)
+
+- commit(本笔,分支 fix/remove-model-capability-badges):`fix(app): REQ-026 撤除模型选择器能力徽标 [feat: model-capability-ui]`
+- 起源:真机截图实锤 —— 徽标把 w-72 弹层行宽挤爆,长模型名被截断、Tag 内文字换行折叠(「图/片」竖排),样式全乱。user 拍板去掉徽标显示。
+- 范围:`dialog-select-model.tsx` 徽标块与 import 撤除;i18n `model.badge.*` ×3 删除、`imageUnsupported.description` 改为不引用徽标(指引悬停查看能力);`model-capability.ts` 删除仅徽标使用的 tools/reasoning 判定(拦截仍用 `modelSupportsImage`,T1-T3 保留);如需恢复徽标从 `ce948764fd` 取回。
+- 保留:粘贴/拖图前端拦截(REQ-026 ②)与 config 数据补齐(①)不变。
+- 测试:app 565 全绿 + typecheck 绿 + 本地版真机 CDP 复验徽标不再渲染。
+
 ## commit
 
 - (本笔 commit)`feat(app): REQ-026 图片能力前端拦截 + 模型选择器能力徽标 [feat: model-capability-ui]`(分支 feat/daily-ux-batch)
