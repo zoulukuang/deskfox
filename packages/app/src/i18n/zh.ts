@@ -1155,6 +1155,14 @@ export const dict = {
     "对话记忆跟着工作目录走——换目录会开启全新对话,旧对话留在原目录。",
   "settings.feishu.edit.workspace.security":
     "⚠️ 此账号的 AI 将能读写所选项目的真实文件并执行命令(用于远程开发)。涉及敏感读取或不可逆操作时,会发飞书卡片等你确认。",
+  // [feat: feishu-session-project-visibility] REQ-086 2026-08-02
+  "settings.feishu.edit.workspace.projectListWarning":
+    "未指定项目目录:此账号的飞书会话不会出现在桌面端项目列表(仅全局会话列表可见)。",
+  "settings.feishu.bind.workspaceDefaulted":
+    "工作目录已设为当前项目:{{path}}\n此账号的飞书会话将出现在该项目的会话列表;飞书发来的文件将保存到项目内 _deskfox/ 目录(自动加入 .gitignore)。可在「编辑」中修改。",
+  "settings.feishu.bind.workspaceKept": "工作目录沿用已有设置:{{path}}",
+  "settings.feishu.bind.workspaceFallback":
+    "当前没有打开的项目,工作目录使用全局默认;此账号的会话不会出现在项目列表。可在「编辑」中指定项目目录。",
   "settings.feishu.edit.loadFailed": "拉取提供商列表失败:{{msg}}",
   // FORK-END
   // FORK-BEGIN: REQ-068 启动默认项目路径不存在/不可达提示 [feat: stale-path-hardening]

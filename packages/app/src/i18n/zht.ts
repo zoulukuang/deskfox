@@ -1140,6 +1140,14 @@ export const dict = {
     "對話記憶跟著工作目錄走——換目錄會開啟全新對話,舊對話留在原目錄。",
   "settings.feishu.edit.workspace.security":
     "⚠️ 此帳號的 AI 將能讀寫所選專案的真實檔案並執行命令(用於遠端開發)。涉及敏感讀取或不可逆操作時,會發飛書卡片等你確認。",
+  // [feat: feishu-session-project-visibility] REQ-086 2026-08-02
+  "settings.feishu.edit.workspace.projectListWarning":
+    "未指定專案目錄:此帳號的飛書會話不會出現在桌面端專案列表(僅全域會話列表可見)。",
+  "settings.feishu.bind.workspaceDefaulted":
+    "工作目錄已設為當前專案:{{path}}\n此帳號的飛書會話將出現在該專案的會話列表;飛書發來的檔案將保存到專案內 _deskfox/ 目錄(自動加入 .gitignore)。可在「編輯」中修改。",
+  "settings.feishu.bind.workspaceKept": "工作目錄沿用已有設定:{{path}}",
+  "settings.feishu.bind.workspaceFallback":
+    "當前沒有打開的專案,工作目錄使用全域預設;此帳號的會話不會出現在專案列表。可在「編輯」中指定專案目錄。",
   // FORK-END
   // FORK-BEGIN: REQ-068 啟動預設專案路徑不存在/不可達提示 [feat: stale-path-hardening]
   "project.path.missing.title": "專案目錄不存在",
