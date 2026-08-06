@@ -7,7 +7,7 @@ import { List } from "@opencode-ai/ui/list"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
 import { useNavigate } from "@solidjs/router"
-import { createMemo, createSignal, Match, onCleanup, Show, Switch } from "solid-js"
+import { createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { formatKeybind, useCommand, type CommandOption } from "@/context/command"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
@@ -18,8 +18,11 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { decode64 } from "@/utils/base64"
 import { getRelativeTime } from "@/utils/time"
+// FORK: REQ-095 会话内容搜索 [feat: session-content-search]
+import { parseSnippet } from "@/utils/session-search-snippet"
 
-type EntryType = "command" | "file" | "session"
+// FORK: REQ-095 — 新增「会话内容」命中(content)与范围切换行(content-scope)[feat: session-content-search]
+type EntryType = "command" | "file" | "session" | "content" | "content-scope"
 
 type Entry = {
   id: string
@@ -34,6 +37,11 @@ type Entry = {
   sessionID?: string
   archived?: number
   updated?: number
+  // FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
+  snippet?: string
+  anchorMessageID?: string
+  projectLabel?: string
+  // FORK-END
 }
 
 type DialogSelectFileMode = "all" | "files"
@@ -261,6 +269,65 @@ function createSessionEntries(props: {
   return { sessions }
 }
 
+// FORK-BEGIN: REQ-095 会话内容搜索 — 「会话内容」分组数据源(服务端 FTS,skipFilter 绕过客户端 fuzzy)
+// [feat: session-content-search]
+function createSessionContentEntries(props: {
+  projectDirectory: () => string
+  serverSDK: ReturnType<typeof useServerSDK>
+  language: ReturnType<typeof useLanguage>
+}) {
+  // dialog 生命周期内按 (scope, query) 缓存,避免同一输入重复请求
+  const cache = new Map<string, Entry[]>()
+
+  const scopeEntry = (scope: "project" | "global"): Entry => ({
+    id: "content-scope:toggle",
+    type: "content-scope",
+    title:
+      scope === "project"
+        ? props.language.t("palette.sessionContent.searchAllProjects")
+        : props.language.t("palette.sessionContent.searchCurrentProject"),
+    category: props.language.t("palette.group.sessionContent"),
+  })
+
+  const contents = async (text: string, scope: "project" | "global"): Promise<Entry[]> => {
+    const query = text.trim()
+    if (query.length < 2) return []
+    const directory = props.projectDirectory()
+    if (!directory) return []
+    const key = `${scope}:${query}`
+    const cached = cache.get(key)
+    if (cached) return cached
+    const category = props.language.t("palette.group.sessionContent")
+    const result = await props.serverSDK.client.session
+      .search({ directory, query, scope, limit: "20" })
+      .then((x) => x.data)
+      .catch(() => undefined)
+    // FTS 不可用(或请求失败)→ 整组隐藏,不影响其余分组
+    if (!result || result.unavailable) return []
+    const entries: Entry[] = result.hits.map((hit) => ({
+      id: `content:${hit.sessionID}:${hit.anchorMessageID}`,
+      type: "content",
+      title: hit.sessionTitle || props.language.t("command.session.new"),
+      category,
+      directory: hit.directory,
+      sessionID: hit.sessionID,
+      anchorMessageID: hit.anchorMessageID,
+      snippet: hit.snippet,
+      archived: hit.archived ? 1 : undefined,
+      updated: typeof hit.timeCreated === "number" && hit.timeCreated > 0 ? hit.timeCreated : undefined,
+      projectLabel:
+        scope === "global" ? (hit.projectName ?? getFilename(hit.projectWorktree ?? hit.directory)) : undefined,
+    }))
+    // 固定「在所有项目中搜索 / 只搜当前项目」切换行;当前项目零命中时它是组内唯一行,天然突出
+    entries.push(scopeEntry(scope))
+    cache.set(key, entries)
+    return entries
+  }
+
+  return { contents }
+}
+// FORK-END
+
 export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFile?: (path: string) => void }) {
   const command = useCommand()
   const language = useLanguage()
@@ -307,9 +374,16 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
   }
 
   const { sessions } = createSessionEntries({ workspaces, label, serverSDK, language })
+  // FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
+  const [contentScope, setContentScope] = createSignal<"project" | "global">("project")
+  const { contents } = createSessionContentEntries({ projectDirectory, serverSDK, language })
+  // FORK-END
 
   const items = async (text: string) => {
     const query = text.trim()
+    // FORK: REQ-095 — scope 信号必须在首个 await 前同步读取,List 的 createResource 源才会
+    // 追踪它,切换范围自动重查 [feat: session-content-search]
+    const scope = contentScope()
     setGrouped(query.length > 0)
 
     if (!query && filesOnly()) {
@@ -334,10 +408,15 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
       return files.map((path) => createFileEntry(path, category))
     }
 
-    const [files, nextSessions] = await Promise.all([file.searchFiles(query), Promise.resolve(sessions(query))])
+    // FORK: REQ-095 — 并行追加「会话内容」命中 [feat: session-content-search]
+    const [files, nextSessions, contentEntries] = await Promise.all([
+      file.searchFiles(query),
+      Promise.resolve(sessions(query)),
+      contents(query, scope),
+    ])
     const category = language.t("palette.group.files")
     const entries = files.map((path) => createFileEntry(path, category))
-    return [...commandEntries.list(), ...nextSessions, ...entries]
+    return [...commandEntries.list(), ...nextSessions, ...entries, ...contentEntries]
   }
 
   const handleMove = (item: Entry | undefined) => {
@@ -359,6 +438,13 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
 
   const handleSelect = (item: Entry | undefined) => {
     if (!item) return
+    // FORK-BEGIN: REQ-095 — 范围切换行只切 scope 不关面板;内容命中带 #message- 锚点跳转
+    // [feat: session-content-search]
+    if (item.type === "content-scope") {
+      setContentScope(contentScope() === "project" ? "global" : "project")
+      return
+    }
+    // FORK-END
     state.committed = true
     state.cleanup = undefined
     dialog.close()
@@ -373,6 +459,14 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
       navigate(`/${base64Encode(item.directory)}/session/${item.sessionID}`)
       return
     }
+
+    // FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
+    if (item.type === "content") {
+      if (!item.directory || !item.sessionID || !item.anchorMessageID) return
+      navigate(`/${base64Encode(item.directory)}/session/${item.sessionID}#message-${item.anchorMessageID}`)
+      return
+    }
+    // FORK-END
 
     if (!item.path) return
     open(item.path)
@@ -399,7 +493,9 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
         items={items}
         key={(item) => item.id}
         filterKeys={["title", "description", "category"]}
-        skipFilter={(item) => item.type === "file"}
+        // FORK: REQ-095 — 内容命中已由服务端过滤,标题不含关键词会被客户端 fuzzy 误杀,跳过
+        // [feat: session-content-search]
+        skipFilter={(item) => item.type === "file" || item.type === "content" || item.type === "content-scope"}
         groupBy={grouped() ? (item) => item.category : () => ""}
         onMove={handleMove}
         onSelect={handleSelect}
@@ -461,6 +557,50 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
                 </Show>
               </div>
             </Match>
+            {/* FORK-BEGIN: REQ-095 会话内容搜索 — 命中行(标题 + 高亮片段 + 时间/项目)与范围切换行
+                [feat: session-content-search] */}
+            <Match when={item.type === "content"}>
+              <div class="w-full flex items-center justify-between rounded-md pl-1">
+                <div class="flex items-center gap-x-3 grow min-w-0">
+                  <Icon name="bubble-5" size="small" class="shrink-0 text-icon-weak" />
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span
+                      class="text-14-regular text-text-strong whitespace-nowrap truncate shrink-0 max-w-[40%]"
+                      classList={{ "opacity-70": !!item.archived }}
+                    >
+                      {item.title}
+                    </span>
+                    <Show when={item.projectLabel}>
+                      <span class="text-12-regular text-text-weak whitespace-nowrap shrink-0">{item.projectLabel}</span>
+                    </Show>
+                    <span class="text-14-regular text-text-weak truncate min-w-0">
+                      <For each={parseSnippet(item.snippet ?? "")}>
+                        {(segment) =>
+                          segment.highlight ? (
+                            <span class="text-text-strong font-semibold">{segment.text}</span>
+                          ) : (
+                            segment.text
+                          )
+                        }
+                      </For>
+                    </span>
+                  </div>
+                </div>
+                <Show when={item.updated}>
+                  <span class="text-12-regular text-text-weak whitespace-nowrap ml-2">
+                    {getRelativeTime(new Date(item.updated!).toISOString(), language.t)}
+                  </span>
+                </Show>
+              </div>
+            </Match>
+            <Match when={item.type === "content-scope"}>
+              <div class="w-full flex items-center gap-2 rounded-md pl-1">
+                <Icon name="magnifying-glass" size="small" class="shrink-0 text-icon-weak" />
+                <span class="text-14-regular text-text-strong whitespace-nowrap">{item.title}</span>
+                <span class="text-14-regular text-text-weak">→</span>
+              </div>
+            </Match>
+            {/* FORK-END */}
           </Switch>
         )}
       </List>

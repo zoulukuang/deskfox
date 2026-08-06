@@ -95,6 +95,9 @@ export const dict = {
   "palette.empty": "No results found",
   "palette.group.commands": "Commands",
   "palette.group.files": "Files",
+  "palette.group.sessionContent": "Session content",
+  "palette.sessionContent.searchAllProjects": "Search in all projects",
+  "palette.sessionContent.searchCurrentProject": "Search this project only",
 
   "dialog.provider.search.placeholder": "Search providers",
   "dialog.provider.empty": "No providers found",

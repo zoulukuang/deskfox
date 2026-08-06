@@ -9,6 +9,11 @@ const emptyList = new Set([
   "/question",
   "/vcs/status",
   "/vcs/diff",
+  // FORK: REQ-095 — 面板输入关键词会打文件搜索端点,默认回 {} 会让 file.tsx `.map` 崩全屏
+  //   ErrorBoundary;显式回空数组 [feat: session-content-search]
+  "/find",
+  "/find/file",
+  "/find/symbol",
 ])
 const emptyObject = new Set(["/global/config", "/config", "/provider/auth", "/mcp", "/session/status"])
 
@@ -22,6 +27,9 @@ export interface MockServerConfig {
   // FORK: 可选 —— mock `/file?path=` 列目录(给文件树类 spec 用,如 REQ-062 选中态)。
   //   返回该目录下的条目数组;不提供则 /file 返回 []。2026-06-18
   files?: (path: string) => unknown[]
+  // FORK: REQ-095 可选 —— mock `/session/search` 会话内容搜索;不提供则返回 { hits: [] }。
+  //   [feat: session-content-search]
+  search?: (params: { query: string; scope: string }) => unknown
 }
 
 export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
@@ -54,6 +62,13 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
     if (path in staticRoutes) return json(route, staticRoutes[path])
 
     if (path === "/file") return json(route, config.files?.(url.searchParams.get("path") ?? "") ?? [])
+
+    // FORK: REQ-095 — 必须先于 /session/:id 匹配(与后端静态段优先一致)[feat: session-content-search]
+    if (path === "/session/search") {
+      const query = url.searchParams.get("query") ?? ""
+      const scope = url.searchParams.get("scope") ?? "project"
+      return json(route, config.search?.({ query, scope }) ?? { hits: [] })
+    }
 
     const sessionMatch = path.match(/^\/session\/([^/]+)$/)
     if (sessionMatch) {

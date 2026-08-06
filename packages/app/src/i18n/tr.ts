@@ -96,6 +96,9 @@ export const dict = {
   "palette.empty": "Sonuç bulunamadı",
   "palette.group.commands": "Komutlar",
   "palette.group.files": "Dosyalar",
+  "palette.group.sessionContent": "Oturum içeriği",
+  "palette.sessionContent.searchAllProjects": "Tüm projelerde ara",
+  "palette.sessionContent.searchCurrentProject": "Yalnızca bu projede ara",
 
   "dialog.provider.search.placeholder": "Sağlayıcı ara",
   "dialog.provider.empty": "Sağlayıcı bulunamadı",

@@ -119,6 +119,9 @@ export const dict = {
   "palette.empty": "未找到结果",
   "palette.group.commands": "命令",
   "palette.group.files": "文件",
+  "palette.group.sessionContent": "会话内容",
+  "palette.sessionContent.searchAllProjects": "在所有项目中搜索",
+  "palette.sessionContent.searchCurrentProject": "只搜当前项目",
 
   "dialog.provider.search.placeholder": "搜索提供商",
   "dialog.provider.empty": "未找到提供商",
