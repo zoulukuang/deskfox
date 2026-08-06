@@ -46,6 +46,19 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 全量:`bun turbo typecheck --filter='!./packages/console/*'` 22/22 ✅;app 571(569 pass + **2 预存 fail**:project-restore,基线 stash 对照证实与本 feat 无关);opencode test/session 411(4 fail = llm.stream flaky,基线 1-2 fail 同波动区间);opencode test/server 302(清代理后 291+ pass,超时类失败随机漂移、`httpapi-instance` 404 用例**基线同样失败**=预存);media-gen 140 ✅;adapter-feishu-lark 792 ✅;Playwright e2e 全量 20/20 ✅
 - 预存失败清单(非本 feat 回归,建议另立 fix):① `project-restore.test.ts` 2 用例(REQ-072 补回逻辑)② `httpapi-instance.test.ts` PATCH missing project 期望 404 得 200
 
+## 真机实测(2026-08-07,Mac 本地版,M1 项闭环)
+
+`build-deskfox-electron.sh -Env local --no-bundle` 打包(产物字节 grep 确认 sidecar bundle 含 `session_fts`、renderer 含新面板 chunk),CDP(:9333)+ playwright-core 驱动真桌面 app,种子数据直插 `opencode-local.db`:
+
+- **冷启动 + 首搜 bootstrap**:FTS 对象惰性创建,backfill 索引全库 183 行(种子 + 用户真实历史),首屏无卡顿
+- **触发器增量**:app 运行中外部连接插入 part,立即出现在 `session_fts`(免重启即可搜)
+- **项目内命中**:「编译报错」→「Session content」分组 + 加粗高亮片段 + 时间戳(截图 real-1)
+- **决定性跨会话跳转**:会话 A 内搜索只存在于从未打开过的会话 B 的词 → 点击 → 面板关闭、切到会话 B、`#message-` 锚点元素与消息文本可见(截图 real-4)
+- **全局切换**:当前项目 0 命中 → 固定行「Search in all projects」→ 跨项目命中(带项目上下文)+ 反向切换行(截图 real-5)
+- 8/8 断言 PASS;两处 URL 断言不适用(Electron 桌面路由不写 frame URL,以锚点元素可见性为准)
+
+实测中发现并确认的**非产品问题**:种子 message 行 JSON 过简会让 `/message` 端点 schema 解码 500(schema-valid 种子后消失)——提示日后手工造数须以真实行为模板。
+
 ## 回退方法
 
 1. `git revert` 两笔 commit(sidecar override 笔 + app 笔),互不依赖可单独回退。
