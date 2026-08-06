@@ -14,6 +14,12 @@ import { SessionRunState } from "@/session/run-state"
 import { SessionStatus } from "@/session/status"
 // FORK: stuck-working-indicator-fix — 残骸消息自愈 [feat: stuck-working-indicator-fix]
 import { HealInterrupted } from "@/session/heal-interrupted"
+// FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
+import { Database } from "@opencode-ai/core/database/database"
+import * as InstanceState from "@/effect/instance-state"
+import * as SessionSearch from "@/session/search/search"
+import { SessionSearchQuery } from "../groups/session-search"
+// FORK-END
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "@/session/todo"
 import { MessageID, PartID, SessionID } from "@/session/schema"
@@ -77,6 +83,21 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     const status = Effect.fn("SessionHttpApi.status")(function* () {
       return Object.fromEntries(yield* statusSvc.list())
     })
+
+    // FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
+    const search = Effect.fn("SessionHttpApi.search")(function* (ctx: {
+      query: typeof SessionSearchQuery.Type
+    }) {
+      const { db } = yield* Database.Service
+      const scope = ctx.query.scope ?? "project"
+      const projectID = scope === "project" ? (yield* InstanceState.context).project.id : undefined
+      return yield* SessionSearch.search(db, {
+        query: ctx.query.query,
+        projectID,
+        limit: ctx.query.limit,
+      })
+    })
+    // FORK-END
 
     const requireSession = Effect.fn("SessionHttpApi.requireSession")(function* (sessionID: SessionID) {
       return yield* SessionError.mapStorageNotFound(session.get(sessionID))
@@ -421,6 +442,8 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
 
     return handlers
       .handle("list", list)
+      // FORK: REQ-095 会话内容搜索 [feat: session-content-search]
+      .handle("search", search)
       .handle("status", status)
       .handle("get", get)
       .handle("children", children)

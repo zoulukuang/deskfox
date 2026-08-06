@@ -555,7 +555,7 @@ export type StepFinishPart = {
   sessionID: string
   messageID: string
   type: "step-finish"
-  reason: string
+  reason?: string
   snapshot?: string
   cost: number
   tokens: {
@@ -2597,6 +2597,27 @@ export type ProviderAuthError1 = {
     message?: string
     kind?: string
   }
+}
+
+export type SessionSearchHit = {
+  sessionID: string
+  messageID: string
+  anchorMessageID: string
+  partID: string
+  projectID: string
+  kind: string
+  snippet: string
+  timeCreated: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  sessionTitle: string
+  directory: string
+  archived?: boolean
+  projectName?: string
+  projectWorktree?: string
+}
+
+export type SessionSearchResult = {
+  unavailable?: boolean
+  hits: Array<SessionSearchHit>
 }
 
 export type NotFoundError = {
@@ -7847,6 +7868,37 @@ export type SessionCreateResponses = {
 }
 
 export type SessionCreateResponse = SessionCreateResponses[keyof SessionCreateResponses]
+
+export type SessionSearchData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    query: string
+    scope?: "project" | "global"
+    limit?: string
+  }
+  url: "/session/search"
+}
+
+export type SessionSearchErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SessionSearchError = SessionSearchErrors[keyof SessionSearchErrors]
+
+export type SessionSearchResponses = {
+  /**
+   * Session content search results
+   */
+  200: SessionSearchResult
+}
+
+export type SessionSearchResponse = SessionSearchResponses[keyof SessionSearchResponses]
 
 export type SessionStatusData = {
   body?: never

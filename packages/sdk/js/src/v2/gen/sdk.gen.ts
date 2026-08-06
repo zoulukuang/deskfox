@@ -213,6 +213,8 @@ import type {
   SessionPromptResponses,
   SessionRevertErrors,
   SessionRevertResponses,
+  SessionSearchErrors,
+  SessionSearchResponses,
   SessionShareErrors,
   SessionShareResponses,
   SessionShellErrors,
@@ -3533,6 +3535,42 @@ export class Session2 extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Search session message content
+   *
+   * Full-text search across session message content. Returns matching sessions with highlighted snippets and anchor message ids for navigation.
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      query: string
+      scope?: "project" | "global"
+      limit?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "query" },
+            { in: "query", key: "scope" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionSearchResponses, SessionSearchErrors, ThrowOnError>({
+      url: "/session/search",
+      ...options,
+      ...params,
     })
   }
 
