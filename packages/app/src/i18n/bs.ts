@@ -92,6 +92,9 @@ export const dict = {
   "palette.empty": "Nema rezultata",
   "palette.group.commands": "Komande",
   "palette.group.files": "Datoteke",
+  "palette.group.sessionContent": "Sadržaj sesije",
+  "palette.sessionContent.searchAllProjects": "Pretraži u svim projektima",
+  "palette.sessionContent.searchCurrentProject": "Pretraži samo u ovom projektu",
 
   "dialog.provider.search.placeholder": "Pretraži provajdere",
   "dialog.provider.empty": "Nema pronađenih provajdera",

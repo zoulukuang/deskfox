@@ -19,6 +19,8 @@ export function isLocalWorkspaceRoute(method: string, path: string) {
 
 export function getWorkspaceRouteSessionID(url: URL) {
   if (url.pathname === "/session/status") return null
+  // FORK: REQ-095 — /session/search 同 status:静态段,不是 sessionID [feat: session-content-search]
+  if (url.pathname === "/session/search") return null
 
   const id =
     url.pathname.match(/^\/session\/([^/]+)(?:\/|$)/)?.[1] ??

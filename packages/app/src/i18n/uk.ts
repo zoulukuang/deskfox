@@ -95,6 +95,9 @@ export const dict = {
   "palette.empty": "Результатів не знайдено",
   "palette.group.commands": "Команди",
   "palette.group.files": "Файли",
+  "palette.group.sessionContent": "Вміст сесії",
+  "palette.sessionContent.searchAllProjects": "Шукати в усіх проєктах",
+  "palette.sessionContent.searchCurrentProject": "Шукати лише в поточному проєкті",
 
   "dialog.provider.search.placeholder": "Пошук провайдерів",
   "dialog.provider.empty": "Провайдерів не знайдено",

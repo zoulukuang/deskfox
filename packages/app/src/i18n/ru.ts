@@ -92,6 +92,9 @@ export const dict = {
   "palette.empty": "Ничего не найдено",
   "palette.group.commands": "Команды",
   "palette.group.files": "Файлы",
+  "palette.group.sessionContent": "Содержимое сессии",
+  "palette.sessionContent.searchAllProjects": "Искать во всех проектах",
+  "palette.sessionContent.searchCurrentProject": "Искать только в текущем проекте",
 
   "dialog.provider.search.placeholder": "Поиск провайдеров",
   "dialog.provider.empty": "Провайдеры не найдены",

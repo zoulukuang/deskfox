@@ -21,6 +21,8 @@ import {
   WorkspaceRoutingQueryFields,
 } from "../middleware/workspace-routing"
 import { ApiNotFoundError, PermissionNotFoundError, SessionBusyError } from "../errors"
+// FORK: REQ-095 会话内容搜索 — schema 收 fork-only 文件 [feat: session-content-search]
+import { SessionSearchQuery, SessionSearchResult } from "./session-search"
 import { described } from "./metadata"
 import { QueryBoolean } from "./query"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -78,6 +80,8 @@ export const PermissionResponsePayload = Schema.Struct({
 export const SessionPaths = {
   list: root,
   status: `${root}/status`,
+  // FORK: REQ-095 — 静态段先于 `/:sessionID` 匹配(同 /session/status 先例)[feat: session-content-search]
+  search: `${root}/search`,
   get: `${root}/:sessionID`,
   children: `${root}/:sessionID/children`,
   todo: `${root}/:sessionID/todo`,
@@ -118,6 +122,19 @@ export const SessionApi = HttpApi.make("session")
             description: "Get a list of all OpenCode sessions, sorted by most recently updated.",
           }),
         ),
+        // FORK-BEGIN: REQ-095 会话内容搜索端点 [feat: session-content-search]
+        HttpApiEndpoint.get("search", SessionPaths.search, {
+          query: SessionSearchQuery,
+          success: described(SessionSearchResult, "Session content search results"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.search",
+            summary: "Search session message content",
+            description:
+              "Full-text search across session message content. Returns matching sessions with highlighted snippets and anchor message ids for navigation.",
+          }),
+        ),
+        // FORK-END
         HttpApiEndpoint.get("status", SessionPaths.status, {
           query: WorkspaceRoutingQuery,
           success: described(StatusMap, "Get session status"),
