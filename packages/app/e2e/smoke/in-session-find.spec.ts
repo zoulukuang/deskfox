@@ -49,16 +49,27 @@ test.describe("smoke: in-session find", () => {
 
     await findInput(page).fill("signal")
     await expect(findCount(page)).not.toHaveText("0/0", { timeout: 10000 })
+    // V2 渐进加载:更早历史后台补进来会把当前序号/总数一起顶高(如 1/196 → 149/345),
+    // 写死 /^2\// 在慢机上必挂(2026-08-07 竞态实锤)。先等计数收敛,再断言相对序号。
+    await expect(async () => {
+      const a = await findCount(page).innerText()
+      await page.waitForTimeout(400)
+      const b = await findCount(page).innerText()
+      expect(b).toBe(a)
+    }).toPass({ timeout: 20000 })
     const first = await findCount(page).innerText()
-    const total = Number(first.split("/")[1].replace("+", ""))
+    const match = first.match(/^(\d+)\/(\d+)/)
+    expect(match).not.toBeNull()
+    const ordinal = Number(match![1])
+    const total = Number(match![2])
     expect(total).toBeGreaterThan(0)
 
     if (total > 1) {
-      // 跳转会触发 hash 机制加载更早历史,total 可能增长(渐进加载),只断言序号
+      const next = (ordinal % total) + 1 // 末位命中时 Enter 回绕到 1
       await findInput(page).press("Enter")
-      await expect(findCount(page)).toHaveText(/^2\//)
+      await expect(findCount(page)).toHaveText(`${next}/${total}`)
       await findInput(page).press("Shift+Enter")
-      await expect(findCount(page)).toHaveText(/^1\//)
+      await expect(findCount(page)).toHaveText(first)
     }
 
     await page.keyboard.press("Escape")
