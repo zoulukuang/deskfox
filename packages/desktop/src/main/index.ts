@@ -10,7 +10,8 @@ import type { Event } from "electron"
 import { app, BrowserWindow } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
-import contextMenu from "electron-context-menu"
+// FORK: native-menu-i18n — contextMenu 收口到 deskfox/context-menu(按语言重挂)[feat: native-menu-i18n]
+import { applyContextMenuLanguage } from "./deskfox/context-menu"
 
 import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
@@ -133,7 +134,9 @@ function ensureLoopbackNoProxy() {
 }
 
 const main = Effect.gen(function* () {
-  contextMenu({ showSaveImageAs: true, showLookUpSelection: false, showSearchWithGoogle: false })
+  // FORK: native-menu-i18n — 原生右键菜单标签跟随 app 语言(首挂 OS locale 兜底,renderer
+  // 语言就绪后经 IPC 重挂)[feat: native-menu-i18n]
+  applyContextMenuLanguage()
 
   // on macOS apps run in `/` which can cause issues with ripgrep
   try {

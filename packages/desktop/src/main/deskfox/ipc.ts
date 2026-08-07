@@ -10,6 +10,8 @@ import * as preventSleep from "./prevent-sleep"
 import * as feishu from "./feishu"
 import * as telemetry from "./telemetry"
 import { registerLocalAssetProtocol } from "./local-asset"
+// FORK: native-menu-i18n [feat: native-menu-i18n]
+import { applyContextMenuLanguage } from "./context-menu"
 
 export function registerDeskfoxIpc() {
   // 本地资源协议(localasset://)— app.whenReady 后注册 [feat: electron-replatform]
@@ -38,6 +40,12 @@ export function registerDeskfoxIpc() {
   // ── 防休眠(powerSaveBlocker)──
   h("get_prevent_sleep", preventSleep.getPreventSleep)
   h("set_prevent_sleep", preventSleep.setPreventSleep)
+
+  // ── 原生右键菜单语言(跟随 app 内语言设置)[feat: native-menu-i18n] ──
+  h("set_context_menu_language", (args: { locale?: string }) => {
+    applyContextMenuLanguage(args.locale)
+    return true
+  })
 
   // ── 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] ──
   h("get_telemetry_enabled", () => telemetry.getTelemetryStatus())
