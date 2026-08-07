@@ -54,14 +54,55 @@ test.describe("smoke: in-session find", () => {
     expect(total).toBeGreaterThan(0)
 
     if (total > 1) {
+      // 跳转会触发 hash 机制加载更早历史,total 可能增长(渐进加载),只断言序号
       await findInput(page).press("Enter")
-      await expect(findCount(page)).toHaveText(`2/${total}`)
+      await expect(findCount(page)).toHaveText(/^2\//)
       await findInput(page).press("Shift+Enter")
-      await expect(findCount(page)).toHaveText(`1/${total}`)
+      await expect(findCount(page)).toHaveText(/^1\//)
     }
 
     await page.keyboard.press("Escape")
     await expect(findInput(page)).not.toBeVisible()
+  })
+
+  // E1c(bug-repro):命中在视口外的长会话,Enter 跳转必须真滚动到目标可见
+  // (修复前 reveal 竞态/scrollTop 钳制导致计数走、视图不动 — user 2026-08-07 报障)
+  test("jump scrolls a long session until the match is visible", async ({ page }) => {
+    const turns = 40
+    const mkUser = (i: number) => ({
+      info: {
+        id: `msg_long_user_${String(i).padStart(3, "0")}`,
+        sessionID: fixture.targetID,
+        role: "user",
+        time: { created: 1700000000000 + i * 10000 },
+        agent: "build",
+        model: { providerID: "opencode", modelID: "claude-opus-4-6" },
+        summary: { diffs: [] },
+      },
+      parts: [
+        {
+          id: `prt_long_user_${String(i).padStart(3, "0")}`,
+          sessionID: fixture.targetID,
+          messageID: `msg_long_user_${String(i).padStart(3, "0")}`,
+          type: "text",
+          text: i === 2 ? "这里埋着深位独特词铂金海獭 的关键内容" : `第 ${i} 轮普通内容,填充填充填充。`,
+        },
+      ],
+    })
+    const longMessages = Array.from({ length: turns }, (_, i) => mkUser(i))
+    await bootstrap(page, {
+      pageMessages: (sessionID: string, limit: number, before?: string) => {
+        if (sessionID !== fixture.targetID) return pageMessages(sessionID, limit, before)
+        const end = before ? Math.max(0, longMessages.findIndex((m) => m.info.id === before)) : longMessages.length
+        const start = Math.max(0, end - limit)
+        return { items: longMessages.slice(start, end), cursor: start > 0 ? longMessages[start]!.info.id : undefined }
+      },
+    })
+    await openFind(page)
+    await findInput(page).fill("铂金海獭")
+    await expect(findCount(page)).toHaveText(/^1\/1$/, { timeout: 15000 })
+    // 目标词必须滚动进入视口
+    await expect(page.getByText("铂金海獭", { exact: false }).first()).toBeInViewport({ timeout: 15000 })
   })
 
   // E1b:无命中显示 0/0

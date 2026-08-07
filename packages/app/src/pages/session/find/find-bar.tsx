@@ -8,9 +8,10 @@
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { InlineInput } from "@opencode-ai/ui/inline-input"
+import { useLocation, useNavigate } from "@solidjs/router"
 import { batch, createEffect, createMemo, createSignal, on, onCleanup, onMount, Show, type Accessor } from "solid-js"
 import { useLanguage } from "@/context/language"
-import { buildOccurrences, indexForAnchor, stepIndex, type TurnText } from "./find-core"
+import { buildOccurrences, indexForAnchor, stepIndex, type Occurrence, type TurnUnit } from "./find-core"
 import {
   applyHighlights,
   clearHighlights,
@@ -18,7 +19,7 @@ import {
   FIND_HIGHLIGHT,
   FIND_HIGHLIGHT_ACTIVE,
   highlightSupported,
-  locateActiveRange,
+  locateRangeInUnit,
 } from "./dom-highlight"
 import { consumePendingFind } from "./find-request"
 
@@ -29,18 +30,23 @@ const FIND_STYLE = `
 
 export function SessionFindBar(props: {
   sessionID: Accessor<string | undefined>
-  turns: Accessor<TurnText[]>
-  revealMessage: (id: string) => void
+  units: Accessor<TurnUnit[]>
+  /** 直达出现所在行(scrollToIndex);行尚未构建(深位历史)返回 false */
+  reveal: (occurrence: Occurrence) => boolean
   scroller: () => HTMLElement | undefined
 }) {
   const language = useLanguage()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [open, setOpen] = createSignal(false)
   const [query, setQuery] = createSignal("")
   const [active, setActive] = createSignal(-1)
+  // ⌘K 联动的目标锚点可能落在尚未加载进 store 的深位历史,turns 增长时再升级定位
+  const [pendingAnchor, setPendingAnchor] = createSignal<string | undefined>(undefined)
   let inputRef: HTMLInputElement | undefined
   let frames: number[] = []
 
-  const occurrences = createMemo(() => buildOccurrences(props.turns(), query().trim()))
+  const occurrences = createMemo(() => buildOccurrences(props.units(), query().trim()))
   const total = () => occurrences().length
 
   const queue = (fn: () => void) => {
@@ -63,37 +69,63 @@ export function SessionFindBar(props: {
     }
     const ranges = collectRanges(root, query().trim())
     const current = occurrences()[active()]
-    const activeRange = current ? locateActiveRange(root, ranges, current.anchorID, current.localIndex) : undefined
+    const activeRange = current ? locateRangeInUnit(root, query().trim(), current) : undefined
     applyHighlights(ranges, activeRange)
     return activeRange
   }
 
-  /** 跳到第 index 个出现:滚动到轮次 → 渲染后定位轮内 Range → 滚入视口 */
-  const jumpTo = (index: number, attempts = 8) => {
+  /** 跳到第 index 个出现:**locate-first** —— 行已在 DOM(含同行多命中场景)直接行内定位 +
+   *  视口微调;行未渲染才 reveal(scrollToIndex 直达行),行未构建(深位历史)再 hash 兜底翻页。
+   *  顺序不可倒:reveal 的 scrollToIndex 异步落地会把随后的关键词微调吸回行中心(真机竞态实证)。 */
+  const jumpTo = (index: number, attempts = 240) => {
     const current = occurrences()[index]
     if (!current) return
     setActive(index)
-    props.revealMessage(current.anchorID)
+    let revealed = false
+    let hashed = false
     const tryLocate = (left: number) => {
+      if (!open() || active() !== index || left <= 0) return
       const activeRange = refreshHighlights()
       if (activeRange) {
         const rect = activeRange.getBoundingClientRect()
         const root = props.scroller()
         if (root) {
           const rootRect = root.getBoundingClientRect()
-          if (rect.top < rootRect.top + 60 || rect.bottom > rootRect.bottom - 20) {
-            root.scrollTop += rect.top - rootRect.top - rootRect.height / 2
-            queue(() => refreshHighlights())
+          const outOfView = rect.top < rootRect.top + 60 || rect.bottom > rootRect.bottom - 20
+          if (outOfView) {
+            const delta = rect.top - rootRect.top - rootRect.height / 2
+            // 大距离交给 virtua scrollToIndex(自带高度估算收敛;直接 scrollTop 大步会被
+            // 估算 scrollHeight 钳住,真机实证偏差恰为一个视口高)
+            if (Math.abs(delta) > rootRect.height && !revealed) {
+              revealed = props.reveal(current)
+            } else {
+              root.scrollTop += delta
+            }
+            // 收敛复核:虚拟布局随滚动重估,继续校正直到落进视口
+            queue(() => tryLocate(left - 1))
+            return
           }
         }
         return
       }
-      if (left > 0) queue(() => tryLocate(left - 1))
+      // 行不在 DOM:滚到该行;行都还没构建(深位历史):hash 触发自动翻页加载
+      if (!revealed) {
+        revealed = props.reveal(current)
+        if (!revealed && !hashed) {
+          hashed = true
+          const targetHash = `#message-${current.anchorID}`
+          if (location.hash !== targetHash) {
+            navigate(location.pathname + location.search + targetHash, { replace: true })
+          }
+        }
+      }
+      queue(() => tryLocate(left - 1))
     }
     queue(() => tryLocate(attempts))
   }
 
   const step = (direction: 1 | -1) => {
+    setPendingAnchor(undefined)
     const next = stepIndex(active(), total(), direction)
     if (next === -1) return
     jumpTo(next)
@@ -108,16 +140,42 @@ export function SessionFindBar(props: {
       inputRef?.focus()
       inputRef?.select()
       if (initialQuery !== undefined && initialQuery.trim()) {
-        const index = indexForAnchor(buildOccurrences(props.turns(), initialQuery.trim()), anchorID)
+        const built = buildOccurrences(props.units(), initialQuery.trim())
+        const hasAnchor = !!anchorID && built.some((occurrence) => occurrence.anchorID === anchorID)
+        if (anchorID && !hasAnchor) {
+          // 目标轮次还没进 store(深位历史):先靠 hash 机制翻页加载,turns 增长后升级定位
+          setPendingAnchor(anchorID)
+          const targetHash = `#message-${anchorID}`
+          if (location.hash !== targetHash) navigate(location.pathname + location.search + targetHash, { replace: true })
+          return
+        }
+        const index = indexForAnchor(built, anchorID)
         if (index >= 0) jumpTo(index)
       }
     })
   }
 
+  // pendingAnchor 升级:深位历史加载进来后定位到目标轮次的首个出现
+  createEffect(
+    on(
+      () => [props.units(), occurrences()] as const,
+      () => {
+        const anchor = pendingAnchor()
+        if (!anchor || !open()) return
+        const index = occurrences().findIndex((occurrence) => occurrence.anchorID === anchor)
+        if (index === -1) return
+        setPendingAnchor(undefined)
+        jumpTo(index)
+      },
+      { defer: true },
+    ),
+  )
+
   const close = () => {
     cancelFrames()
     setOpen(false)
     setActive(-1)
+    setPendingAnchor(undefined)
     clearHighlights()
   }
 
@@ -152,10 +210,11 @@ export function SessionFindBar(props: {
     clearHighlights()
   })
 
-  // ⌘K 内容命中联动:进入会话后带词开条并定位
+  // ⌘K 内容命中联动:进入会话后带词开条并定位。
+  // 依赖含 location.hash:目标就是当前会话时 sessionID/units 都不变,靠 hash 变化触发消费
   createEffect(
     on(
-      () => [props.sessionID(), props.turns().length] as const,
+      () => [props.sessionID(), props.units().length, location.hash] as const,
       () => {
         const request = consumePendingFind(props.sessionID())
         if (!request) return
@@ -167,10 +226,11 @@ export function SessionFindBar(props: {
   // 查询/数据变化时刷新高亮;查询变化重置游标到首个出现
   createEffect(
     on(
-      () => [query(), open(), props.turns()] as const,
+      () => [query(), open(), props.units()] as const,
       (_, prev) => {
         if (!open()) return
         if (prev && prev[0] !== query()) {
+          setPendingAnchor(undefined)
           const index = total() > 0 ? 0 : -1
           setActive(index)
           if (index === 0) {

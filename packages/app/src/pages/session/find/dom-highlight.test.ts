@@ -1,7 +1,6 @@
-// FORK-ONLY test: REQ-097 — DOM Range 收集与轮次定位(happy-dom;CSS.highlights 不可用时降级)
-// [feat: in-session-find]
+// FORK-ONLY test: REQ-097 — DOM Range 收集与单元内数据直达定位(happy-dom)[feat: in-session-find]
 import { describe, expect, test } from "bun:test"
-import { collectRanges, highlightSupported, locateActiveRange } from "./dom-highlight"
+import { collectRanges, highlightSupported, locateRangeInUnit } from "./dom-highlight"
 
 function mount(html: string): HTMLElement {
   const root = document.createElement("div")
@@ -27,28 +26,28 @@ describe("dom-highlight.collectRanges", () => {
   })
 })
 
-describe("dom-highlight.locateActiveRange", () => {
-  test("按锚点行切轮次,取轮内第 n 个出现", () => {
+describe("dom-highlight.locateRangeInUnit", () => {
+  test("assistant 单元:按 data-find-part-ids 找行,行内取第 k 个", () => {
     const root = mount(
       `<div data-message-id="m1"><span>词</span></div>` +
-        `<div class="assistant"><span>词 和 词</span></div>` +
-        `<div data-message-id="m2"><span>词</span></div>`,
+        `<div data-find-part-ids="prt_a prt_x"><span>词 和 词</span></div>` +
+        `<div data-find-part-ids="prt_b"><span>词</span></div>`,
     )
-    const ranges = collectRanges(root, "词")
-    expect(ranges.length).toBe(4)
-    // m1 轮 = 锚点行 1 个 + assistant 行 2 个
-    expect(locateActiveRange(root, ranges, "m1", 0)?.startContainer.textContent).toBe("词")
-    expect(locateActiveRange(root, ranges, "m1", 2)).toBeDefined()
-    expect(locateActiveRange(root, ranges, "m1", 3)).toBeUndefined()
-    // m2 轮只有 1 个
-    expect(locateActiveRange(root, ranges, "m2", 0)).toBeDefined()
-    expect(locateActiveRange(root, ranges, "m2", 1)).toBeUndefined()
+    const base = { anchorID: "m1", unitID: "prt_a", isUser: false }
+    expect(locateRangeInUnit(root, "词", { ...base, indexInUnit: 0 })?.toString()).toBe("词")
+    expect(locateRangeInUnit(root, "词", { ...base, indexInUnit: 1 })).toBeDefined()
+    expect(locateRangeInUnit(root, "词", { ...base, indexInUnit: 2 })).toBeUndefined()
     root.remove()
   })
-  test("锚点不存在(未渲染)返回 undefined", () => {
+  test("user 单元:按 data-message-id 找行", () => {
+    const root = mount(`<div data-message-id="m1"><span>词甲 词乙</span></div>`)
+    const unit = { anchorID: "m1", unitID: "m1", isUser: true, indexInUnit: 1 }
+    expect(locateRangeInUnit(root, "词", unit)?.startContainer.textContent).toContain("词乙")
+    root.remove()
+  })
+  test("行未渲染(虚拟化卸载)返回 undefined", () => {
     const root = mount(`<div data-message-id="m1">词</div>`)
-    const ranges = collectRanges(root, "词")
-    expect(locateActiveRange(root, ranges, "m9", 0)).toBeUndefined()
+    expect(locateRangeInUnit(root, "词", { anchorID: "m9", unitID: "prt_z", isUser: false, indexInUnit: 0 })).toBeUndefined()
     root.remove()
   })
 })

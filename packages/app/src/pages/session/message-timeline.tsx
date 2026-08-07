@@ -1101,6 +1101,12 @@ export function MessageTimeline(props: {
         id={anchor() ? props.anchor(input.row().userMessageID) : undefined}
         data-message-id={input.row().userMessageID}
         data-timeline-row={input.row()._tag}
+        // FORK: REQ-097 — assistant part 行标 part id(空格分隔),查找跳转数据直达 [feat: in-session-find]
+        data-find-part-ids={(() => {
+          const row = input.row()
+          if (row._tag !== "AssistantPart") return undefined
+          return row.group.type === "part" ? row.group.ref.partID : row.group.refs.map((r) => r.partID).join(" ")
+        })()}
         classList={{
           "min-w-0 w-full max-w-full": true,
           "md:max-w-200 2xl:max-w-[1000px]": props.centered,
@@ -1265,25 +1271,55 @@ export function MessageTimeline(props: {
     return renderTimelineRow(() => props.row)
   }
 
-  // FORK-BEGIN: REQ-097 会话内查找 — 轮次文本(user 消息 + 其 assistant 回复的 text part)
-  // [feat: in-session-find]
-  const findTurns = createMemo(() => {
-    const turns: { anchorID: string; text: string }[] = []
+  // FORK-BEGIN: REQ-097 会话内查找 — 可定位单元(user 消息文本 = 一个单元;assistant 每个
+  // text part = 一个单元,与行结构一一对应,跳转可 scrollToIndex 直达)[feat: in-session-find]
+  const findUnits = createMemo(() => {
+    const units: { anchorID: string; unitID: string; isUser: boolean; text: string }[] = []
     for (const message of sessionMessages()) {
       if (message.role !== "user") continue
-      const chunks: string[] = []
+      const userChunks: string[] = []
       for (const part of getMsgParts(message.id)) {
-        if (part.type === "text" && part.text && !part.synthetic) chunks.push(part.text)
+        if (part.type === "text" && part.text && !part.synthetic) userChunks.push(part.text)
+      }
+      if (userChunks.length > 0) {
+        units.push({ anchorID: message.id, unitID: message.id, isUser: true, text: userChunks.join("\n") })
       }
       for (const assistant of assistantMessagesByParent().get(message.id) ?? []) {
         for (const part of getMsgParts(assistant.id)) {
-          if (part.type === "text" && part.text) chunks.push(part.text)
+          if (part.type === "text" && part.text) {
+            units.push({ anchorID: message.id, unitID: part.id, isUser: false, text: part.text })
+          }
         }
       }
-      turns.push({ anchorID: message.id, text: chunks.join("\n") })
     }
-    return turns
+    return units
   })
+
+  // part id → 时间线行索引(AssistantPart 行;group type=part 单 part,context 组含多 ref)
+  const findPartRowIndex = createMemo(() => {
+    const result = new Map<string, number>()
+    timelineRows().forEach((row, index) => {
+      if (row._tag !== "AssistantPart") return
+      if (row.group.type === "part") {
+        if (!result.has(row.group.ref.partID)) result.set(row.group.ref.partID, index)
+        return
+      }
+      for (const ref of row.group.refs) {
+        if (!result.has(ref.partID)) result.set(ref.partID, index)
+      }
+    })
+    return result
+  })
+
+  /** 直达出现所在行;行尚未构建(深位历史未加载)返回 false */
+  const revealFindOccurrence = (occurrence: { anchorID: string; unitID: string; isUser: boolean }) => {
+    const index = occurrence.isUser
+      ? messageRowIndex().get(occurrence.anchorID)
+      : (findPartRowIndex().get(occurrence.unitID) ?? messageRowIndex().get(occurrence.anchorID))
+    if (index === undefined) return false
+    virtualizer?.scrollToIndex(index, { align: "center" })
+    return true
+  }
   // FORK-END
 
   return (
@@ -1291,8 +1327,8 @@ export function MessageTimeline(props: {
       {/* FORK: REQ-097 会话内查找条 [feat: in-session-find] */}
       <SessionFindBar
         sessionID={sessionID}
-        turns={findTurns}
-        revealMessage={revealMessageLocal}
+        units={findUnits}
+        reveal={revealFindOccurrence}
         scroller={() => listRoot}
       />
       <div

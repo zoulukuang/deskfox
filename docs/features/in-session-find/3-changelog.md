@@ -43,6 +43,21 @@ CodeMirror 吞 Mod-F(capture 接管)/ e2e 按键早于组件挂载(toPass 重试
 
 `git revert` 1 笔 commit;纯前端,无 DB/API 变化。
 
+## Follow-up:跳转定位失效修复(2026-08-07,user 真机报障)
+
+**症状**:真实长会话里计数在走、视图不动;⌘K 落地也不定位到关键词。首版真机验证用的短种子会话(内容全在视口内)没压出滚动路径——测试盲区教训。
+
+**三层根因**(在 user 真实「1599」会话上以 CDP 逐层实证):
+1. **架构错位**:轮次几何/DOM 文档序定位在 virtua 虚拟列表下全不可信(行复用、绝对定位,文档序≠视觉序;深位 part 行直接被卸载出 DOM)。→ 重构为**数据直达**:匹配单位改为「可定位单元」(user 消息文本 / assistant 单 text part,与行结构一一对应),行帧铺 `data-find-part-ids`,跳转 = partRowIndex → scrollToIndex 直达行 → 行内取第 k 个 Range。
+2. **reveal 竞态**:每跳先 scrollToIndex(行中心)再微调,前者异步落地把微调吸回行中心。→ **locate-first**:行已在 DOM 只做微调;行缺失才 reveal;行未构建(深位历史)hash 兜底自动翻页。
+3. **scrollTop 大步被钳**:virtua 估算 scrollHeight,直接大步 scrollTop 偏差恰一个视口高。→ 大距离交 scrollToIndex 收敛,小距离微调 + 逐帧复核循环(修复原复核不递减的空转)。
+
+另修:同会话内 ⌘K 命中联动不触发(consume 效应缺 hash 依赖)。
+
+**验证**:真机 user 真实会话逐跳视口断言 4/4(每跳落点 574/968/574/574,精准中线);⌘K 联动(跨会话+同会话)PASS;新增 bug-repro e2e(40 轮长会话深位命中跳转必须可见);全量 e2e 30/30、app 596 单测、typecheck 全绿。
+
+fix 分支 `fix/in-session-find-jump`,commit:(回填)。
+
 ## commit
 
-- 主体:`ec3f0650bb`
+- 主体:`ec3f0650bb`(V1)
