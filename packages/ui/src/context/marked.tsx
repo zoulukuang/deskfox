@@ -7,6 +7,8 @@ import markedFootnote from "marked-footnote"
 import katex from "katex"
 import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
+// FORK: REQ-098 收紧 del 定界符(只认 ~~)[feat: chat-tilde-del-fix] 2026-08-07
+import { strictDelExtension } from "./marked-del-strict"
 import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
 
 // FORK: 2026-05-08 — GFM 风 heading slug:小写 + 去标点 + 空格转连字符 + 保留中文
@@ -551,6 +553,10 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
           },
         },
       },
+      // FORK: REQ-098 单波浪号误判删除线 —— 内置 GFM del 定界符是 `~~?`(一或两个 ~),
+      // 同行两个「数字~数字」区间会被闭合成 <del>(4.80~5.05 … 5.20~5.35)。收紧成只认 `~~`。
+      // 实现与陷阱(非匹配必须返 undefined)见 ./marked-del-strict.ts 2026-08-07
+      strictDelExtension,
       // FORK: GitHub 风 callout — > [!NOTE] / > [!TIP] / > [!IMPORTANT] / > [!WARNING] / > [!CAUTION] 2026-05-05
       markedAlert(),
       // FORK: 脚注 [^1] + [^1]: 解释 — 学术 / 技术文档高频 2026-05-05

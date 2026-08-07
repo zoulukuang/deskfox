@@ -2,11 +2,16 @@ import { marked } from "marked"
 import { codeToHtml } from "shiki"
 import markedShiki from "marked-shiki"
 import { createOverflow, useShareMessages } from "./common"
+// FORK: REQ-098 收紧 del 定界符(只认 ~~)[feat: chat-tilde-del-fix] 2026-08-07
+import { strictDelExtension } from "./marked-del-strict"
 import { CopyButton } from "./copy-button"
 import { createResource, createSignal } from "solid-js"
 import style from "./content-markdown.module.css"
 
 const markedWithShiki = marked.use(
+  // FORK: REQ-098 单波浪号误判删除线 —— 与桌面聊天页(packages/ui/src/context/marked.tsx)同病同治。
+  // marked.use() 作用于各自模块实例,ui 那次改动不会传导到这里,必须各加一次。2026-08-07
+  strictDelExtension,
   {
     renderer: {
       link({ href, title, text }) {

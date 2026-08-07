@@ -1,5 +1,5 @@
 feat-id: chat-tilde-del-fix
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-098 聊天渲染:单波浪号被误判成删除线
