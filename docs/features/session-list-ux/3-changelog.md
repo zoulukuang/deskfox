@@ -53,6 +53,10 @@ SDK regen 无 diff(Effect OpenAPI 生成器把 NullOr 折叠为 number,服务端
 4. 同文案多元素撞 strict mode("Delete session" = 标题+正文+按钮),用 role 定位。
 5. **drizzle `.set()` 跳过 undefined 列**(见上节)。
 
+## Follow-up:复制链接补回(2026-08-07,user 反馈)
+
+右键菜单接管后原生 "Copy Link" 消失,user 要求补回:菜单加「复制链接」项(重命名/分享/**复制链接**/归档/删除),复制 `oc://renderer/<b64dir>/session/<id>` 同格式内部链接(dump-session 等工作流以此引用会话),成功 toast「已复制」。文案复用现有 `session.share.copy.copyLink` / `.copied` 键(19 语言零新增)。e2e E5 补剪贴板内容断言。fix 分支 `fix/session-row-copy-link`,commit hash 回填:(待)。
+
 ## 回退方法
 
 `git revert` 两笔 commit;无 DB schema 变化、无数据迁移,回退即恢复原行为(已取消归档的行保持 NULL,无害)。

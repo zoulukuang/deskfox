@@ -134,6 +134,13 @@ test.describe("smoke: session list ux", () => {
     await page.getByText("Share", { exact: true }).click()
     await expect(page.getByText("Share URL copied to clipboard!")).toBeVisible()
 
+    // follow-up:复制链接(原生 Copy Link 回归,oc://renderer 同格式内部链接)
+    await row(page, fixture.targetID).click({ button: "right" })
+    await page.getByText("Copy link", { exact: true }).click()
+    await expect(page.getByText("Copied", { exact: true })).toBeVisible()
+    const clip = await page.evaluate(() => navigator.clipboard.readText())
+    expect(clip).toContain(`/session/${fixture.targetID}`)
+
     await row(page, fixture.targetID).click({ button: "right" })
     await page.getByText("Delete", { exact: true }).click()
     await expect(page.getByRole("heading", { name: "Delete session" })).toBeVisible()
