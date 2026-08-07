@@ -12,6 +12,12 @@
 
 
 
+
+## [macOS] 2026.9.0 - 2026-08-07 14:42
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [macOS] 2026.8.6 - 2026-07-14 18:40
 
 **主题**:三 feature 波次(与 Win 2026.8.5 同内容)—「加入聊天」浮窗键位对齐 + 首启新手引导(含老用户升级不打扰)+ 运行期数据命名空间隔离(与上游 OpenCode 物理分家);另含 e2e session-timeline flaky 根治。**REQ-081 双 arch 首战**:arm64 + x64 同版本双包,单本 latest-mac.yml 分流。
