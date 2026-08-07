@@ -34,6 +34,8 @@ export function SessionFindBar(props: {
   /** 直达出现所在行(scrollToIndex);行尚未构建(深位历史)返回 false */
   reveal: (occurrence: Occurrence) => boolean
   scroller: () => HTMLElement | undefined
+  /** V2:历史分页 —— 查找开着时后台渐进加载更早历史,总数收敛,深位命中可遍历 */
+  history: { more: () => boolean; loading: () => boolean; loadMore: () => Promise<void> }
 }) {
   const language = useLanguage()
   const navigate = useNavigate()
@@ -81,6 +83,7 @@ export function SessionFindBar(props: {
     const current = occurrences()[index]
     if (!current) return
     setActive(index)
+    activeKey = occurrenceKey(current)
     let revealed = false
     let hashed = false
     const tryLocate = (left: number) => {
@@ -124,14 +127,73 @@ export function SessionFindBar(props: {
     queue(() => tryLocate(attempts))
   }
 
+  // ---- V2:深位历史渐进加载 ----
+  // 查找开着时后台逐页拉更早历史(节流),总数收敛;封顶防巨型会话拉爆
+  const MAX_AUTO_PAGES = 40
+  let autoPages = 0
+  let autoTimer: number | undefined
+  const scheduleDeepLoad = () => {
+    if (autoTimer !== undefined) return
+    if (!open() || !query().trim()) return
+    if (autoPages >= MAX_AUTO_PAGES || !props.history.more() || props.history.loading()) return
+    autoTimer = window.setTimeout(() => {
+      autoTimer = undefined
+      if (!open() || !query().trim() || autoPages >= MAX_AUTO_PAGES) return
+      autoPages += 1
+      void props.history.loadMore().finally(() => scheduleDeepLoad())
+    }, 250)
+  }
+  const cancelDeepLoad = () => {
+    if (autoTimer !== undefined) window.clearTimeout(autoTimer)
+    autoTimer = undefined
+  }
+  createEffect(() => {
+    if (open() && query().trim()) scheduleDeepLoad()
+    else cancelDeepLoad()
+  })
+  onCleanup(cancelDeepLoad)
+
+  // 历史前插会让既有出现的 index 后移:按身份(unitID+indexInUnit)追踪并对齐游标;
+  // 深挖后从 0 → 有命中时自动定位到首个(pendingAnchor 联动在途时让位)
+  const occurrenceKey = (occurrence: Occurrence) => `${occurrence.unitID}:${occurrence.indexInUnit}`
+  let activeKey: string | undefined
+  createEffect(
+    on(occurrences, (list) => {
+      if (open() && active() === -1 && list.length > 0 && !pendingAnchor()) {
+        jumpTo(0)
+        return
+      }
+      if (!activeKey || active() < 0) return
+      const currentAt = list[active()]
+      if (currentAt && occurrenceKey(currentAt) === activeKey) return
+      const realigned = list.findIndex((occurrence) => occurrenceKey(occurrence) === activeKey)
+      if (realigned >= 0) setActive(realigned)
+    }),
+  )
+
   const step = (direction: 1 | -1) => {
     setPendingAnchor(undefined)
+    // ⇧Enter 到达最早已加载出现时,若还有更早历史:先拉一批再步进(最多 5 页/次)
+    if (direction === -1 && active() === 0 && props.history.more()) {
+      void (async () => {
+        const before = occurrences().length
+        for (let i = 0; i < 5 && props.history.more(); i++) {
+          await props.history.loadMore()
+          if (occurrences().length > before) break
+        }
+        const grown = occurrences().length - before
+        if (grown > 0) jumpTo(grown - 1)
+        else if (total() > 0) jumpTo(stepIndex(0, total(), -1))
+      })()
+      return
+    }
     const next = stepIndex(active(), total(), direction)
     if (next === -1) return
     jumpTo(next)
   }
 
   const openBar = (initialQuery?: string, anchorID?: string) => {
+    autoPages = 0
     batch(() => {
       setOpen(true)
       if (initialQuery !== undefined) setQuery(initialQuery)
@@ -173,6 +235,8 @@ export function SessionFindBar(props: {
 
   const close = () => {
     cancelFrames()
+    cancelDeepLoad()
+    activeKey = undefined
     setOpen(false)
     setActive(-1)
     setPendingAnchor(undefined)
@@ -309,7 +373,12 @@ export function SessionFindBar(props: {
             }}
           />
           <span class="text-12-regular text-text-weak whitespace-nowrap min-w-8 text-center" data-find-count>
-            {total() > 0 ? `${Math.max(active(), 0) + 1}/${total()}` : "0/0"}
+            {/* V2:更早历史仍在加载/存在时挂 "+",总数随深挖收敛 */}
+            {total() > 0
+              ? `${Math.max(active(), 0) + 1}/${total()}${props.history.more() ? "+" : ""}`
+              : props.history.more() || props.history.loading()
+                ? "0/0+"
+                : "0/0"}
           </span>
           <IconButton
             icon="arrow-up"

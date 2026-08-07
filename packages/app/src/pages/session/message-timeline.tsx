@@ -1324,12 +1324,26 @@ export function MessageTimeline(props: {
 
   return (
     <div class="relative w-full h-full min-w-0">
-      {/* FORK: REQ-097 会话内查找条 [feat: in-session-find] */}
+      {/* FORK: REQ-097 会话内查找条(V2 接历史分页,深位未加载命中可遍历)[feat: in-session-find] */}
       <SessionFindBar
         sessionID={sessionID}
         units={findUnits}
         reveal={revealFindOccurrence}
         scroller={() => listRoot}
+        history={{
+          more: () => {
+            const id = sessionID()
+            return id ? sync.session.history.more(id) : false
+          },
+          loading: () => {
+            const id = sessionID()
+            return id ? sync.session.history.loading(id) : false
+          },
+          loadMore: async () => {
+            const id = sessionID()
+            if (id) await sync.session.history.loadMore(id)
+          },
+        }}
       />
       <div
         class="absolute left-1/2 -translate-x-1/2 bottom-6 z-[60] pointer-events-none transition-all duration-200 ease-out"
