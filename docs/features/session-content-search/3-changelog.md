@@ -90,3 +90,17 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 **风险评估**:上游侵入合计 42 行(17+23+2),全部 FORK 标记;触发器挂上游表但 DDL 全在 fork-only 文件、可整体 DROP;查询/启动全链路 catchCause 降级,最坏情况 = 内容搜索分组消失,不影响任何既有功能。
 
 **⚠️ 配额修正**:1-spec 阶段估算"本笔为 Q3 第 2 笔"**不准确**。实际 `git log --since=2026-07-01 --grep=override-blacklist` 显示 Q3 已有 **5 笔**(REQ-069 / REQ-069-072-Win / v2026.8.4 squash / REQ-081 / REQ-079),其中 REQ-081 时已就"超基线 ≤2"向 user 专门报备。本笔将是 **Q3 第 6 笔**,请 user 在此口径下重新确认。
+
+## Follow-up:中文单字查询被门槛拦死(2026-08-07,fix/content-search-cjk-single-char)
+
+**现象**:user 真机(Win 本地版)⌘K 输「南」→「未找到结果」,数据里明明有含「南」的消息。
+
+**根因**:前端 `dialog-select-file.tsx` 内容分组数据源有一道 `query.length < 2` 门槛,单字符查询直接不发请求。对 ASCII 合理(单字母搜内容无意义),对 CJK 完全错误——中文单字查询高频且有效。后端无此门槛(`plan()` 对短 token 走 LIKE 降级,1 字可查)。
+
+**为什么原测试没抓到**:e2e 用例全部多字符查询,1-spec 测试清单没列 CJK 单字边界(R8 教训:边界用例要显式列)。
+
+**修法**(Tiny,全白名单):门槛谓词抽成 `isContentSearchQuery`(session-search-snippet.ts,Logic 清单):≥2 字符放行;单字符仅当含 CJK(Han/假名/谚文)放行。组件调用点 1 行替换。
+
+**测试**(bug-repro 同 commit):unit 5 用例(单字中文/日/韩放行、ASCII 单字符与空串仍拦、≥2 放行)+ e2e 1 条(「南」→ 会话内容分组可见)。真机 CDP 复验:修后「南」出分组与命中。
+
+**回退**:单笔 revert,无 schema/数据影响。

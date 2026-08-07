@@ -1,6 +1,6 @@
 // FORK-ONLY test: REQ-095 会话内容搜索 — snippet 解析 [feat: session-content-search]
 import { describe, expect, test } from "bun:test"
-import { parseSnippet, SNIPPET_HL_END, SNIPPET_HL_START } from "./session-search-snippet"
+import { isContentSearchQuery, parseSnippet, SNIPPET_HL_END, SNIPPET_HL_START } from "./session-search-snippet"
 
 const hl = (text: string) => `${SNIPPET_HL_START}${text}${SNIPPET_HL_END}`
 
@@ -36,5 +36,28 @@ describe("parseSnippet", () => {
   })
   test("不配对的结束标记不抛错", () => {
     expect(parseSnippet(`${SNIPPET_HL_END}文本`)).toEqual([{ text: "文本", highlight: false }])
+  })
+})
+
+// bug-repro:中文单字「南」被旧门槛 query.length < 2 拦死,内容搜索整组不发请求(真机截图复现 2026-08-07)
+describe("isContentSearchQuery", () => {
+  test("中文单字放行(高频有效查询)", () => {
+    expect(isContentSearchQuery("南")).toBe(true)
+    expect(isContentSearchQuery("错")).toBe(true)
+  })
+  test("日文假名/韩文单字放行", () => {
+    expect(isContentSearchQuery("が")).toBe(true)
+    expect(isContentSearchQuery("한")).toBe(true)
+  })
+  test("ASCII 单字符仍拦(单字母/数字搜内容无意义)", () => {
+    expect(isContentSearchQuery("a")).toBe(false)
+    expect(isContentSearchQuery("1")).toBe(false)
+  })
+  test("空串拦", () => {
+    expect(isContentSearchQuery("")).toBe(false)
+  })
+  test("≥2 字符一律放行", () => {
+    expect(isContentSearchQuery("ab")).toBe(true)
+    expect(isContentSearchQuery("南京")).toBe(true)
   })
 })

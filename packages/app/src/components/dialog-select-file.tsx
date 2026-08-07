@@ -19,7 +19,7 @@ import { createSessionTabs } from "@/pages/session/helpers"
 import { decode64 } from "@/utils/base64"
 import { getRelativeTime } from "@/utils/time"
 // FORK: REQ-095 会话内容搜索 [feat: session-content-search]
-import { parseSnippet } from "@/utils/session-search-snippet"
+import { isContentSearchQuery, parseSnippet } from "@/utils/session-search-snippet"
 // FORK: REQ-097 — 内容命中点击后带词打开会话查找条 [feat: in-session-find]
 import { setPendingFind } from "@/pages/session/find/find-request"
 
@@ -293,7 +293,8 @@ function createSessionContentEntries(props: {
 
   const contents = async (text: string, scope: "project" | "global"): Promise<Entry[]> => {
     const query = text.trim()
-    if (query.length < 2) return []
+    // 门槛下沉 isContentSearchQuery:中文单字必须放行(「南」这类单字查询高频有效),ASCII 单字符仍拦
+    if (!isContentSearchQuery(query)) return []
     const directory = props.projectDirectory()
     if (!directory) return []
     const key = `${scope}:${query}`

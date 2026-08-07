@@ -45,3 +45,12 @@ export function parseSnippet(snippet: string): SnippetSegment[] {
   }
   return merged
 }
+
+// CJK 单字即有意义(汉字/假名/谚文);ASCII 单字符搜内容无意义
+const CJK_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
+
+/** 内容搜索最短查询门槛:≥2 字符放行;单字符仅当是 CJK 时放行(中文单字查询高频且有效) */
+export function isContentSearchQuery(query: string): boolean {
+  if (query.length >= 2) return true
+  return CJK_RE.test(query)
+}
