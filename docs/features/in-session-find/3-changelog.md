@@ -58,6 +58,10 @@ CodeMirror 吞 Mod-F(capture 接管)/ e2e 按键早于组件挂载(toPass 重试
 
 fix 分支 `fix/in-session-find-jump`,commit `09494cd28e`。
 
+## V2:深位历史遍历(2026-08-07,user 要求补全)
+
+查找开着时**后台渐进加载更早历史**(250ms/页节流,封顶 40 页):总数收敛,未拉完挂 "+"(如 3/17+);0 命中且有深位历史时持续深挖,找到即自动定位;⇧Enter 到达最早已加载出现时按需再拉(5 页/次);历史前插导致 index 后移按身份(unitID+indexInUnit)对齐游标。纯前端(sync.session.history.more/loading/loadMore 现成管线),0 R4。e2e 新增 E1d(120 轮,唯一词只在未加载深位 → 收敛 1/1 且跳达);真机 200 轮种子会话跨 197 轮自动定位视口内(top=298)。commit:(V2回填)
+
 ## commit
 
 - 主体:`ec3f0650bb`(V1)

@@ -50,7 +50,7 @@ test.describe("smoke: in-session find", () => {
     await findInput(page).fill("signal")
     await expect(findCount(page)).not.toHaveText("0/0", { timeout: 10000 })
     const first = await findCount(page).innerText()
-    const total = Number(first.split("/")[1])
+    const total = Number(first.split("/")[1].replace("+", ""))
     expect(total).toBeGreaterThan(0)
 
     if (total > 1) {
@@ -103,6 +103,45 @@ test.describe("smoke: in-session find", () => {
     await expect(findCount(page)).toHaveText(/^1\/1$/, { timeout: 15000 })
     // 目标词必须滚动进入视口
     await expect(page.getByText("铂金海獭", { exact: false }).first()).toBeInViewport({ timeout: 15000 })
+  })
+
+  // E1d(V2):命中只存在于「未加载的深位历史」— 打开查找应后台渐进翻页,总数收敛并可跳达
+  test("deep-history-only match is found and reachable via progressive loading", async ({ page }) => {
+    const turns = 120
+    const mk = (i: number) => ({
+      info: {
+        id: `msg_deep_user_${String(i).padStart(3, "0")}`,
+        sessionID: fixture.targetID,
+        role: "user",
+        time: { created: 1700000000000 + i * 10000 },
+        agent: "build",
+        model: { providerID: "opencode", modelID: "claude-opus-4-6" },
+        summary: { diffs: [] },
+      },
+      parts: [
+        {
+          id: `prt_deep_user_${String(i).padStart(3, "0")}`,
+          sessionID: fixture.targetID,
+          messageID: `msg_deep_user_${String(i).padStart(3, "0")}`,
+          type: "text",
+          text: i === 2 ? "深位历史里的唯一词玄铁貂 藏在这里" : `第 ${i} 轮普通内容。`,
+        },
+      ],
+    })
+    const deepMessages = Array.from({ length: turns }, (_, i) => mk(i))
+    await bootstrap(page, {
+      pageMessages: (sessionID: string, limit: number, before?: string) => {
+        if (sessionID !== fixture.targetID) return pageMessages(sessionID, limit, before)
+        const end = before ? Math.max(0, deepMessages.findIndex((m) => m.info.id === before)) : deepMessages.length
+        const start = Math.max(0, end - limit)
+        return { items: deepMessages.slice(start, end), cursor: start > 0 ? deepMessages[start]!.info.id : undefined }
+      },
+    })
+    await openFind(page)
+    await findInput(page).fill("玄铁貂")
+    // 初始窗口(最近 80 轮)没有该词 → 后台深挖 → 总数收敛为 1(且 "+" 消失 = 历史拉完)
+    await expect(findCount(page)).toHaveText("1/1", { timeout: 30000 })
+    await expect(page.getByText("玄铁貂", { exact: false }).first()).toBeInViewport({ timeout: 15000 })
   })
 
   // E1b:无命中显示 0/0
