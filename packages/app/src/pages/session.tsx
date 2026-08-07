@@ -1119,7 +1119,9 @@ export default function Page() {
   )
 
   const reviewPanel = () => (
-    <div class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
+    // FORK: REQ-097 — 文件预览区 ⌘F 不触发会话查找(data-deskfox-find-ignore = 查找作用域
+    // 注册口,将来预览区自建查找时在此接管)[feat: in-session-find]
+    <div data-deskfox-find-ignore class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
         {reviewContent({
           diffStyle: layout.review.diffStyle(),

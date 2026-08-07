@@ -1764,6 +1764,8 @@ export function FileTabContent(props: {
       // anchor.closest('[data-component="file-viewer"]') 命中即认为选区在本 tab 内,
       // 跨 tab 不相同节点,自动隔离。2026-05-29
       data-component="file-viewer"
+      // FORK: REQ-097 — 文件预览区 ⌘F 不触发会话查找(查找作用域注册口)[feat: in-session-find]
+      data-deskfox-find-ignore
       ref={(el: HTMLElement) => { viewerRootRef = el }}
     >
       <Show when={editing()}>
