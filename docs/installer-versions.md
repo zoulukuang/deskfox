@@ -12,6 +12,26 @@
 
 
 
+## [Windows] 2026.9.0 - 2026-08-07 14:20
+
+**主题**:会话检索三件套(⌘K 全文搜索 + 会话列表操作 + ⌘F 会话内查找)+ 稳定性/日常体验双专项批次 + 原生菜单 i18n;大版本波次进"次"位(2026.8.6 → 2026.9.0)。
+
+**本次内容**(自 `ship-prod-2026.8.5` 起,38 笔非 merge commit / 11 个 feat 分支):
+- **session-content-search**(REQ-095,`e71b0ba15`+`5efb6855a`):⌘K 新增「会话内容」分组 — 会话记录全文检索(sidecar trigram FTS5 + LIKE 短词降级),高亮片段 + `#message-` 锚点跳转 + 「在所有项目中搜索/只搜当前项目」切换;FTS 不可用整组静默隐藏。
+- **session-list-ux**(REQ-096,`d47b30849`+`333be8b75`+`c7cf6d50c`):会话行右键菜单(改名/分享/复制链接/归档/删除)+ 标题失焦即保存 + 归档撤销 toast;修取消归档被投影层静默丢失(重启即复原)的上游隐性 bug。
+- **in-session-find**(REQ-097,`ec3f0650b`+`09494cd28`+`f91711b70`):⌘F 会话内查找条 — CSS Highlight 高亮 + 计数 + Enter/⇧Enter 轮次环形跳转;修真实长会话「计数走视图不动」(虚拟列表几何失效+reveal 竞态+scrollTop 钳制);V2 深位历史后台渐进加载(总数收敛,几百轮前的命中可跳达)+ ⌘K 内容命中点击带词开条联动。
+- **稳定性专项**(REQ-087/049/078/085,`a35091984`/`fe784b7cd`/`3894243df`/`dbeff2a4b`):renderer 快照 OOM 治理(写盘节流+历史剥图+熔断+连环崩自愈)/ sidecar 内存刹车(execArgv 硬帽+采样软刹车+断连提示)/ 并发第二权限弹窗藏死修复 / 浮层 Enter 穿透误 toggle 预览区修复。
+- **日常体验专项**(REQ-086/092/093/079/094/026,`a128e3782`/`4db83ce12`/`102678729`/`785b7049e`/`335fee7f4`/`ce948764f`+`ff3fcca8d`):飞书绑定默认当前项目+重绑保留 model/workspace / 启动期侧栏即点即应 / 飞书 LLM 重试期播报 / 侧栏列表提速(heal stat 3s 竞速+进程闩)/ imbot agent 按 schemaVersion 自动升级 / 图片能力前端拦截(能力徽标挤爆行宽已撤除)。
+- **native-menu-i18n**(`1e3ad74ca`):原生右键菜单标签跟随 app 语言设置,切语言 IPC 重挂即时生效。
+- **真机自查批次**(`c2115cfd9`+`c10451385`+`fe4e214cc`+`6ca544566`):中文单字(如「南」)⌘K 内容搜索放行(CJK 单字高频有效,ASCII 单字符仍拦)/ ⌘K→查找条联动在打包产物断裂修复(同会话 hash 导航重挂竞态,消费登记+垂死回投+TTL)/ e2e 竞态断言修复 / handoff 跨 chunk 单例同类加固。
+- **发版前 code-review**:无高危。主进程改动全带 FORK 标记且经各批次 R9 验收;发版内容全量验证 — typecheck 26 包 / app 单测 606 / e2e 32×2 轮 / 真机冒烟 21 项 / 冷启动 2×CLEAN(打包产物)/ 真机 CDP 逐项(内容搜索/联动接力/右键菜单/归档撤销/复制链接)。
+- **渠道**:prod;tag `ship-prod-2026.9.0`
+- **Release**:https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.9.0 + Gitee release(正文挂 CDN 链)
+- **installer**:`packages/desktop/dist-deskfox/DeskFox-2026.9.0-win-x64.exe`;国内 CDN `https://dl.clawtray.com/DeskFox-2026.9.0-win-x64.exe`
+- **升级源**:electron `updates.deskfox.ai/electron/prod/latest.yml` + Tauri 迁移桥 `…/v1/latest/desktop/windows/latest.json` 均 version=2026.9.0
+
+---
+
 ## [macOS] 2026.8.6 - 2026-07-14 18:40
 
 **主题**:三 feature 波次(与 Win 2026.8.5 同内容)—「加入聊天」浮窗键位对齐 + 首启新手引导(含老用户升级不打扰)+ 运行期数据命名空间隔离(与上游 OpenCode 物理分家);另含 e2e session-timeline flaky 根治。**REQ-081 双 arch 首战**:arm64 + x64 同版本双包,单本 latest-mac.yml 分流。
