@@ -72,7 +72,9 @@ function sessionRow(info: SessionV1.SessionInfo): typeof SessionTable.$inferInse
     time_created: info.time.created,
     time_updated: info.time.updated,
     time_compacting: info.time.compacting,
-    time_archived: info.time.archived,
+    // FORK: REQ-096 — 取消归档时 archived 为 undefined,drizzle .set() 会跳过 undefined 列导致
+    // DB 永远清不掉;显式落 null 才会写 NULL [feat: session-list-ux]
+    time_archived: info.time.archived ?? null,
   }
 }
 
