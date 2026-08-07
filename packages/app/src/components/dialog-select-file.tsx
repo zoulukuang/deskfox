@@ -20,6 +20,8 @@ import { decode64 } from "@/utils/base64"
 import { getRelativeTime } from "@/utils/time"
 // FORK: REQ-095 会话内容搜索 [feat: session-content-search]
 import { parseSnippet } from "@/utils/session-search-snippet"
+// FORK: REQ-097 — 内容命中点击后带词打开会话查找条 [feat: in-session-find]
+import { setPendingFind } from "@/pages/session/find/find-request"
 
 // FORK: REQ-095 — 新增「会话内容」命中(content)与范围切换行(content-scope)[feat: session-content-search]
 type EntryType = "command" | "file" | "session" | "content" | "content-scope"
@@ -379,11 +381,15 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
   const { contents } = createSessionContentEntries({ projectDirectory, serverSDK, language })
   // FORK-END
 
+  // FORK: REQ-097 — 记录最近一次输入词,内容命中点击时传给会话查找条 [feat: in-session-find]
+  let lastContentQuery = ""
+
   const items = async (text: string) => {
     const query = text.trim()
     // FORK: REQ-095 — scope 信号必须在首个 await 前同步读取,List 的 createResource 源才会
     // 追踪它,切换范围自动重查 [feat: session-content-search]
     const scope = contentScope()
+    lastContentQuery = query
     setGrouped(query.length > 0)
 
     if (!query && filesOnly()) {
@@ -463,6 +469,10 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
     // FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
     if (item.type === "content") {
       if (!item.directory || !item.sessionID || !item.anchorMessageID) return
+      // FORK: REQ-097 — 带词打开会话查找条并定位到命中轮次 [feat: in-session-find]
+      if (lastContentQuery) {
+        setPendingFind({ sessionID: item.sessionID, query: lastContentQuery, anchorID: item.anchorMessageID })
+      }
       navigate(`/${base64Encode(item.directory)}/session/${item.sessionID}#message-${item.anchorMessageID}`)
       return
     }

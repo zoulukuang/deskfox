@@ -72,6 +72,8 @@ import { messageAgentColor } from "@/utils/agent"
 import { sessionTitle } from "@/utils/session-title"
 import { makeTimer } from "@solid-primitives/timer"
 import { MessageComment, SummaryDiff, Timeline, TimelineRow, TimelineRowMap } from "./message-timeline.data"
+// FORK: REQ-097 会话内查找 [feat: in-session-find]
+import { SessionFindBar } from "./find/find-bar"
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -499,12 +501,15 @@ export function MessageTimeline(props: {
     ),
   )
 
+  // FORK: REQ-097 — reveal 逻辑抽为本地函数,查找条与 setRevealMessage 共用 [feat: in-session-find]
+  const revealMessageLocal = (id: string) => {
+    const index = messageRowIndex().get(id)
+    if (index === undefined) return
+    virtualizer?.scrollToIndex(index, { align: "center" })
+  }
+
   createEffect(() => {
-    props.setRevealMessage?.((id) => {
-      const index = messageRowIndex().get(id)
-      if (index === undefined) return
-      virtualizer?.scrollToIndex(index, { align: "center" })
-    })
+    props.setRevealMessage?.(revealMessageLocal)
   })
 
   let cacheSessionKey = sessionKey()
@@ -1260,8 +1265,36 @@ export function MessageTimeline(props: {
     return renderTimelineRow(() => props.row)
   }
 
+  // FORK-BEGIN: REQ-097 会话内查找 — 轮次文本(user 消息 + 其 assistant 回复的 text part)
+  // [feat: in-session-find]
+  const findTurns = createMemo(() => {
+    const turns: { anchorID: string; text: string }[] = []
+    for (const message of sessionMessages()) {
+      if (message.role !== "user") continue
+      const chunks: string[] = []
+      for (const part of getMsgParts(message.id)) {
+        if (part.type === "text" && part.text && !part.synthetic) chunks.push(part.text)
+      }
+      for (const assistant of assistantMessagesByParent().get(message.id) ?? []) {
+        for (const part of getMsgParts(assistant.id)) {
+          if (part.type === "text" && part.text) chunks.push(part.text)
+        }
+      }
+      turns.push({ anchorID: message.id, text: chunks.join("\n") })
+    }
+    return turns
+  })
+  // FORK-END
+
   return (
     <div class="relative w-full h-full min-w-0">
+      {/* FORK: REQ-097 会话内查找条 [feat: in-session-find] */}
+      <SessionFindBar
+        sessionID={sessionID}
+        turns={findTurns}
+        revealMessage={revealMessageLocal}
+        scroller={() => listRoot}
+      />
       <div
         class="absolute left-1/2 -translate-x-1/2 bottom-6 z-[60] pointer-events-none transition-all duration-200 ease-out"
         classList={{
