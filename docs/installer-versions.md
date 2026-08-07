@@ -27,8 +27,9 @@
 - **发版前 code-review**:无高危。主进程改动全带 FORK 标记且经各批次 R9 验收;发版内容全量验证 — typecheck 26 包 / app 单测 606 / e2e 32×2 轮 / 真机冒烟 21 项 / 冷启动 2×CLEAN(打包产物)/ 真机 CDP 逐项(内容搜索/联动接力/右键菜单/归档撤销/复制链接)。
 - **渠道**:prod;tag `ship-prod-2026.9.0`
 - **Release**:https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.9.0 + Gitee release(正文挂 CDN 链)
-- **installer**:`packages/desktop/dist-deskfox/DeskFox-2026.9.0-win-x64.exe`;国内 CDN `https://dl.clawtray.com/DeskFox-2026.9.0-win-x64.exe`
-- **升级源**:electron `updates.deskfox.ai/electron/prod/latest.yml` + Tauri 迁移桥 `…/v1/latest/desktop/windows/latest.json` 均 version=2026.9.0
+- **installer**:`packages/desktop/dist-deskfox/DeskFox-2026.9.0-win-x64.exe`;国内下载 `https://downloadbot.oss-rg-china-mainland.aliyuncs.com/DeskFox-2026.9.0-win-x64.exe`(OSS 直链)
+- **升级源**:electron `updates.deskfox.ai/electron/prod/latest.yml` + Tauri 迁移桥 `…/v1/latest/desktop/windows/latest.json` 均 version=2026.9.0,下载 url 均指 OSS 直链
+- **⚠️ 证书事件**:发版时发现 `dl.clawtray.com` HTTPS 证书 **2026-07-14 已过期**(SEC_E_CERT_EXPIRED,国内下载与升级下载全断,裸奔约三周无人发现)。本次国内链路(latest.yml / 迁移桥 / 官网 / Gitee / GH notes)**全部临时切 OSS 直链**(阿里官方证书,实测 206 可下载)。**待办**:阿里云控制台给 CDN 域名续期/重新部署免费证书 → 后续 ship 可切回 `dl.clawtray.com`(deploy-electron-updater.sh 第 77 行硬编码基址,切换时留意)。
 
 ---
 
