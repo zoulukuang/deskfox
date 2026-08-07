@@ -172,6 +172,18 @@ export function SessionRowMenu(props: {
     })
   }
 
+  const copyLink = async () => {
+    const url = new URL(
+      `/${base64Encode(props.session.directory)}/session/${props.session.id}`,
+      location.href,
+    ).toString()
+    if (!(await copyText(url))) {
+      showToast({ title: language.t("toast.session.share.copyFailed.title"), variant: "error" })
+      return
+    }
+    showToast({ title: language.t("session.share.copy.copied"), variant: "success" })
+  }
+
   return (
     <ContextMenu modal={false}>
       <ContextMenu.Trigger as="div" class="contents" data-session-menu={props.session.id}>
@@ -187,6 +199,11 @@ export function SessionRowMenu(props: {
               <ContextMenu.ItemLabel>{language.t("session.share.action.share")}</ContextMenu.ItemLabel>
             </ContextMenu.Item>
           </Show>
+          {/* 复制会话内部链接(oc://renderer/<b64dir>/session/<id>,与原 Electron 原生菜单 Copy Link
+              同格式;dump-session 等工作流以此引用会话)— user 2026-08-07 要求补回 */}
+          <ContextMenu.Item data-action="session-copy-link" onSelect={() => void copyLink()}>
+            <ContextMenu.ItemLabel>{language.t("session.share.copy.copyLink")}</ContextMenu.ItemLabel>
+          </ContextMenu.Item>
           <ContextMenu.Item data-action="session-archive" onSelect={() => void props.archiveSession(props.session)}>
             <ContextMenu.ItemLabel>{language.t("common.archive")}</ContextMenu.ItemLabel>
           </ContextMenu.Item>
