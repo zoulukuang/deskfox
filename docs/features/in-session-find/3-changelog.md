@@ -56,7 +56,7 @@ CodeMirror 吞 Mod-F(capture 接管)/ e2e 按键早于组件挂载(toPass 重试
 
 **验证**:真机 user 真实会话逐跳视口断言 4/4(每跳落点 574/968/574/574,精准中线);⌘K 联动(跨会话+同会话)PASS;新增 bug-repro e2e(40 轮长会话深位命中跳转必须可见);全量 e2e 30/30、app 596 单测、typecheck 全绿。
 
-fix 分支 `fix/in-session-find-jump`,commit:(回填)。
+fix 分支 `fix/in-session-find-jump`,commit `09494cd28e`。
 
 ## commit
 
