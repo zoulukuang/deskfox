@@ -9,24 +9,36 @@ type HandoffSession = {
 //   directory/sessionKey 做 key:既避开 fromLegacy/fromRoute 的 key 形态差异,也避开隔离测试里
 //   /var 与 /private/var(macOS symlink,realpath 后)导致的目录精确匹配失败。session.tsx 第一次
 //   项目就绪(sdk.directory)时取出并清空,走完整 openChatFileTab。[feat: first-launch-onboarding]
-let pendingOpenFile: string | undefined
+//
+// ⚠️ 状态挂 globalThis 不用模块级变量:本文件被 layout(写)与 session(读)两个 chunk 跨界使用,
+//   vite/rollup 小模块内联一旦把它复制进多个 chunk,模块单例就退化成多份独立变量,写读两侧
+//   对不上(find-request.ts 真机实锤的同类隐患,2026-08-07 自查统一加固)。
+
+type HandoffState = {
+  pendingOpenFile: string | undefined
+  session: Map<string, HandoffSession>
+  terminal: Map<string, string[]>
+}
+
+const state: HandoffState = ((globalThis as unknown as { __deskfoxHandoff?: HandoffState }).__deskfoxHandoff ??= {
+  pendingOpenFile: undefined,
+  session: new Map(),
+  terminal: new Map(),
+})
 
 export const setPendingOpenFile = (file: string) => {
-  pendingOpenFile = file
+  state.pendingOpenFile = file
 }
 
 export const takePendingOpenFile = () => {
-  const file = pendingOpenFile
-  pendingOpenFile = undefined
+  const file = state.pendingOpenFile
+  state.pendingOpenFile = undefined
   return file
 }
 
 const MAX = 40
 
-const store = {
-  session: new Map<string, HandoffSession>(),
-  terminal: new Map<string, string[]>(),
-}
+const store = state
 
 const touch = <K, V>(map: Map<K, V>, key: K, value: V) => {
   map.delete(key)
