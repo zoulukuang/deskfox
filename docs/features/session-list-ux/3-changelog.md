@@ -5,7 +5,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 # REQ-096 会话列表操作体验 — 3-changelog
 
 > 开发完成 2026-08-07,user 审批放行(Q3 override 第 7 笔口径)。
-> commit 列表:笔 1(override,opencode+core)`d47b30849e`;笔 2(app+docs)hash 见回填 commit。
+> commit 列表:笔 1(override,opencode+core)`d47b30849e`;笔 2(app+docs)`333be8b75b`。
 
 ## 实际改动
 
