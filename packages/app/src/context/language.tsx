@@ -232,6 +232,14 @@ export const { use: useLanguage, provider: LanguageProvider } = createSimpleCont
       if (typeof document !== "object") return
       document.documentElement.lang = locale()
       document.cookie = cookie(locale())
+      // FORK: native-menu-i18n — 原生右键菜单标签跟随 app 语言(仅桌面端;web 无此桥,静默跳过)
+      // [feat: native-menu-i18n]
+      void import("@/utils/native")
+        .then((native) => {
+          if (!native.isDesktopApp()) return
+          return native.invoke("set_context_menu_language", { locale: locale() })
+        })
+        .catch(() => undefined)
     })
 
     return {
