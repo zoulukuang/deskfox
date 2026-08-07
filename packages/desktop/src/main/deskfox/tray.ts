@@ -5,29 +5,37 @@
 //   - 关 GUI ≠ 退主进程:主窗口 close 默认拦截 → hide;仅"退出"菜单放行真退
 //   - 防休眠勾选项与设置页双入口同步(订阅 prevent-sleep onPreventSleepChanged)
 // 图标内联 base64(对齐 Tauri include_image! 编译期嵌入,运行时无文件 IO,dev/打包一致)。
-// 4 状态图标当前为同一占位图(renderer 不驱动状态);状态切换接口留 setTrayStatus 备用。
 // 菜单文案 hardcode 中文(DeskFox 中文环境定调,同 Tauri 版)。
+//
+// REQ-099(2026-08-07):托盘接上 sidecar 看门狗健康状态 —— 三态图标 + 菜单文案。
+// 图标常量改由 tray-icons.generated.ts 提供(生成脚本 branding/scripts/gen-tray-icons.py),
+// 状态→文案/图标的映射在 tray-status.ts(纯函数可单测)。[feat: tray-health-status]
 
 import { app, Tray, Menu, nativeImage, BrowserWindow, type MenuItemConstructorOptions } from "electron"
 import { getPreventSleep, setPreventSleep, onPreventSleepChanged } from "./prevent-sleep"
 import { write as writeLog } from "../logging"
+import { mapWatchdogStatusToTray, TRAY_STATUS_READY, type TrayIconKey } from "./tray-status"
+import { TRAY_ICON_COLOR_BASE64, TRAY_ICON_MAC_TEMPLATE_BASE64 } from "./tray-icons.generated"
 
-// FORK: 托盘狐狸字形,品牌深蓝 #3D63A0(与 logo 同色;原黑色模板在 Win 托盘渲染发暗/不清)。
-// 32x32 RGBA base64 内联,源 = branding/src/assets/tray-icons/default.png(由 icon-tray-template.svg fill=#3D63A0 生成)。
-const TRAY_ICON_PNG_BASE64 =
-  "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"
-
-// FORK: macOS 菜单栏专用 template image —— 纯黑 fox 廓形 + alpha,32x32 当 @2x(=16pt 逻辑,Retina 清晰)。
-// setTemplateImage(true) 后系统按菜单栏明暗自动反色(暗菜单栏显白),与其他菜单栏图标风格统一。
-// 源 = branding/src/assets/tray-icons/source/tray-template-mac-32.png(icon-tray-template.svg fill=#000 经 resvg)。
-// [feat: viewer-selection-tray-style] 2026-06-14
-const TRAY_ICON_MAC_TEMPLATE_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACTUlEQVR4nL3W4VGjUBSG4e9WsNgBqcBYgViBsQJJB7GC3Q42ViCpIGwFwQrWVCAlYAW77/EmC7kCATKz78zjDyHmHIY7o9P5IlSYUoQKnZ0bIJa0OpjS+qBURw59ZZJuMcOU3vGKVB05dBXL/wHrBm8Y0xy/Yc1QqiWHrjJJj7CesMaYfkj6DmuDVC05tBWr3t56ww3GZNvPcWyGUkEObWWqtz92hQpDinW6gLVBqiCHsFhfP2wtkWlYqaQXhM1QqpFD2BYLhP1C2+/bynGPsA1SNXJolkjaoa0KVxjSH3R1h0KHHJrtkKi7B+Toa4Etuirkh/jM4VgiP0Bfz1ihr0xfX+CwOxQih2M7JOqvlH+R+npHrP4K+SHkYMXyk4dVeEOzNSq0FWGFZnNECEvFQo4flt1QSLrG/2iPRCxyHMCK5bf9hq7sg9fo69w9H5ijFDk0swuF2odYIpO/fou2XpHIP94XhNmXJ/KLfuYQtsAWYWtsYNditVfKH9VHrBBm13L8y6GtVO0bXNISmYIcusrkN2m2R4W+Ilyj2TNW+FLfAFam0yEKHc5vTzskqtsgVUcOfUUodLrRE9Zoa4WfOLZHop6ndm4AK0KheogKNyh1Wiz/T0gEa49E/v7OHIY0R6H6eOZ4QLPmo/9AosZx62roANYcheohHpDDWmAL6wOJBny5NWYAK1V9PCvMYL0jgrVEpoE5jC1VPUQOawFriUwjcphSptPjaW2QamQOU8txD2uDVBNymFqEQr5E/p0Y3SUDWBGsCpO6dICL+wuaA3ghvcb8qQAAAABJRU5ErkJggg=="
+// FORK: 托盘图标三态(ok / restarting / gave-up)x 两模式,均为 32x32 RGBA base64 内联,
+// 由 packages/branding/scripts/gen-tray-icons.py 生成 -> ./tray-icons.generated.ts(勿手改)。
+//   - 彩色版(Win/Linux 托盘):品牌深蓝 #3D63A0 狐狸 + 状态徽标(纯黑模板在 Win 托盘发暗/不清)
+//   - mac template 版:纯黑 alpha 廓形,setTemplateImage(true) 后系统按菜单栏明暗自动反色;
+//     32px buffer 当 @2x(scaleFactor:2)-> 16pt 逻辑尺寸(Retina 清晰)
+//   /!\ template 只保留 alpha、颜色全丢 -> gave-up 的感叹号必须【挖成透明洞】才与 restarting 有别。
+// [feat: viewer-selection-tray-style / tray-health-status]
 
 let tray: Tray | null = null
 let isQuittingFlag = false
 let statusItem: MenuItem | null = null
 let preventSleepItem: MenuItem | null = null
+
+// FORK: REQ-099 —— 当前状态存模块级变量,buildMenu() 读它。
+// 修 bug:原先 setTrayStatus 先写 statusItem.label 再 setContextMenu(buildMenu()),
+// 而 buildMenu() 从模板重建、label 写死"状态:就绪"并重新给 statusItem 赋值
+// → 刚设的文案当场被覆盖,预留接口"调了也没用"。[feat: tray-health-status]
+let currentStatusLabel = TRAY_STATUS_READY.label
+let currentIcon: TrayIconKey = TRAY_STATUS_READY.icon
 
 // Electron MenuItem 类型(从 Menu.items 取),避免引入额外导入
 type MenuItem = Electron.MenuItem
@@ -52,7 +60,7 @@ export function showMainWindow(): void {
 function buildMenu(): Menu {
   const template: MenuItemConstructorOptions[] = [
     { id: "open", label: "打开 DeskFox", click: () => showMainWindow() },
-    { id: "status", label: "状态:就绪", enabled: false },
+    { id: "status", label: currentStatusLabel, enabled: false },
     {
       id: "prevent-sleep",
       label: "保持电脑不休眠",
@@ -76,20 +84,24 @@ function buildMenu(): Menu {
   return menu
 }
 
+// FORK: macOS 用 template image(纯黑 alpha,系统按菜单栏明暗反色 → 暗菜单栏显白,与系统图标统一);
+// 32px buffer 当 @2x(scaleFactor:2)→ 16pt 逻辑尺寸(Retina 清晰,原 32 偏大)。
+// Win/Linux 无 template 反色概念,纯黑在浅色托盘发暗,保留品牌蓝彩色固定色。[feat: viewer-selection-tray-style]
+function buildIcon(key: TrayIconKey): Electron.NativeImage {
+  if (process.platform === "darwin") {
+    const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_MAC_TEMPLATE_BASE64[key], "base64"), {
+      scaleFactor: 2,
+    })
+    icon.setTemplateImage(true)
+    return icon
+  }
+  return nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_COLOR_BASE64[key], "base64"))
+}
+
 /** app.whenReady 后调用一次,注册托盘图标 + 菜单。 */
 export function createTray(): Tray {
   if (tray) return tray
-  // FORK: macOS 用 template image(纯黑 alpha,系统按菜单栏明暗反色 → 暗菜单栏显白,与系统图标统一);
-  // 32px buffer 当 @2x(scaleFactor:2)→ 16pt 逻辑尺寸(Retina 清晰,原 32 偏大)。
-  // Win/Linux 无 template 反色概念,纯黑在浅色托盘发暗,保留品牌蓝彩色固定色。[feat: viewer-selection-tray-style]
-  let icon: Electron.NativeImage
-  if (process.platform === "darwin") {
-    icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_MAC_TEMPLATE_BASE64, "base64"), { scaleFactor: 2 })
-    icon.setTemplateImage(true)
-  } else {
-    icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_PNG_BASE64, "base64"))
-  }
-  tray = new Tray(icon)
+  tray = new Tray(buildIcon(currentIcon))
   tray.setToolTip("DeskFox")
   tray.setContextMenu(buildMenu())
   // 左键单击(Win/mac)→ 打开主窗口
@@ -102,10 +114,34 @@ export function createTray(): Tray {
   return tray
 }
 
-/** 切换托盘状态菜单文案(状态来源在主进程,renderer 不驱动)。预留接口。 */
-export function setTrayStatus(label: string): void {
-  if (statusItem) statusItem.label = label
-  if (tray) tray.setContextMenu(buildMenu()) // 重建以反映文案(Electron 菜单 label 改后需重设)
+/**
+ * FORK: REQ-099 —— 看门狗状态 → 托盘图标 + 菜单文案。
+ * 状态来源在主进程(index.ts 的 watchdog emit 回调直接调,不经 renderer / 不新增 IPC)。
+ * 未知状态(含 memory-brake 的 memory-pressure)由映射函数返 undefined → 不改托盘。
+ * [feat: tray-health-status] 2026-08-07
+ */
+export function setTrayStatus(status: string): void {
+  const view = mapWatchdogStatusToTray(status)
+  if (!view) return
+  if (view.label === currentStatusLabel && view.icon === currentIcon) return // 无变化不刷新(避免图标闪烁)
+  const iconChanged = view.icon !== currentIcon
+  currentStatusLabel = view.label
+  currentIcon = view.icon
+  writeLog("utility", "[deskfox-tray] status changed", { status, label: view.label, icon: view.icon })
+  // 重建菜单以反映文案(Electron 菜单 label 改后需重设);buildMenu() 读 currentStatusLabel
+  if (tray) {
+    tray.setContextMenu(buildMenu())
+    if (iconChanged) tray.setImage(buildIcon(currentIcon))
+  }
+}
+
+/** 仅供测试:重置模块级状态(bun:test 同进程复用模块)。 */
+export function __resetTrayStateForTest(): void {
+  tray = null
+  statusItem = null
+  preventSleepItem = null
+  currentStatusLabel = TRAY_STATUS_READY.label
+  currentIcon = TRAY_STATUS_READY.icon
 }
 
 /**

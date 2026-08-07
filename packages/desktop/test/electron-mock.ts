@@ -20,6 +20,49 @@ const electronMock: Record<string, unknown> = {
   dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
   // navigation-guard.ts(REQ-075 测试加载)顶层 import { shell }
   shell: { openExternal: async () => {} },
+  // logging.ts(tray.ts 依赖,REQ-099 测试加载)顶层 import { crashReporter, netLog }
+  crashReporter: { start: () => {} },
+  netLog: { currentlyLogging: false, startLogging: async () => {}, stopLogging: async () => "" },
+  // tray.ts(REQ-099 测试加载)顶层 import { Tray, Menu, nativeImage }
+  Menu: {
+    buildFromTemplate: (template: Array<Record<string, unknown>>) => ({
+      items: template.map((item) => ({ ...item })),
+      getMenuItemById(id: string) {
+        return (this as { items: Array<Record<string, unknown>> }).items.find((i) => i.id === id) ?? null
+      },
+    }),
+  },
+  nativeImage: {
+    createFromBuffer: (buffer: Buffer, options?: unknown) => ({
+      __buffer: buffer,
+      __options: options,
+      __template: false,
+      setTemplateImage(value: boolean) {
+        ;(this as { __template: boolean }).__template = value
+      },
+    }),
+  },
+  Tray: class FakeTray {
+    image: unknown
+    menu: unknown
+    tooltip = ""
+    handlers: Record<string, () => void> = {}
+    constructor(image: unknown) {
+      this.image = image
+    }
+    setToolTip(value: string) {
+      this.tooltip = value
+    }
+    setContextMenu(menu: unknown) {
+      this.menu = menu
+    }
+    setImage(image: unknown) {
+      this.image = image
+    }
+    on(event: string, handler: () => void) {
+      this.handlers[event] = handler
+    }
+  },
 }
 // store.ts 用 `import electron from "electron"`(default 形态)→ default 自指,同时满足 default + named import。
 electronMock.default = electronMock

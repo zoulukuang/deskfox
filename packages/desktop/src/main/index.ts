@@ -23,7 +23,7 @@ import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 import { registerDeskfoxIpc } from "./deskfox/ipc"
 // FORK: 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] 2026-06-13
 import { initTelemetry, emitAppOpen } from "./deskfox/telemetry"
-import { createTray, attachCloseToTray, setQuitting, isQuitting, showMainWindow } from "./deskfox/tray"
+import { createTray, attachCloseToTray, setQuitting, isQuitting, showMainWindow, setTrayStatus } from "./deskfox/tray"
 import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 // FORK: 运行期数据/配置命名空间隔离(与上游 opencode 分家,防共用 opencode.db schema 冲突)
 //   [feat: deskfox-data-namespace-isolation] 2026-07-12
@@ -432,7 +432,13 @@ const main = Effect.gen(function* () {
       respawn: respawnSidecar,
       // FORK: REQ-049 修通道 — preload 桥订阅的是 "deskfox:" 前缀通道,原裸通道 renderer 收不到;
       //   payload 统一为 { status } 对象与 memory-pressure 同形 [feat: sidecar-oom-brake] 2026-08-02
-      emit: (status) => mainWindow?.webContents.send("deskfox:sidecar-watchdog", { status }),
+      // FORK: REQ-099 托盘同步反映健康状态 —— 托盘就在主进程,同一回调直接调即可,
+      //   不新增 IPC / 不经 renderer(窗口已隐藏或已销毁时 renderer 收不到,托盘仍要更新)
+      //   [feat: tray-health-status] 2026-08-07
+      emit: (status) => {
+        mainWindow?.webContents.send("deskfox:sidecar-watchdog", { status })
+        setTrayStatus(status)
+      },
       log: (message, data) => writeLog("utility", message, data ?? {}, "warn"),
     })
     sidecarWatchdog.start()

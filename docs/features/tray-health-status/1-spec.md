@@ -1,5 +1,5 @@
 feat-id: tray-health-status
-status: spec
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-099 托盘图标不反映后台健康状态
