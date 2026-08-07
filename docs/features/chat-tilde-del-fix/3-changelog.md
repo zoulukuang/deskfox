@@ -6,7 +6,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 **规模**:Medium(新增 4 文件,改上游 2 文件各 ~4 行)
 **分支**:`feat/small-cost-cleanup-batch`
-**commit**:`<待回填>`
+**commit**:`96c9e50ddf`(R4 override,user 2026-08-07 审批通过)
 **R4 override**:**需要**(`packages/ui/` + `packages/web/` 整包在 pre-commit 黑名单)—— 论证见文末
 
 ## 实际改动

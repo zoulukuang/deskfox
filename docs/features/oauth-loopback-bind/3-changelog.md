@@ -6,7 +6,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 **规模**:Tiny(代码 3 行)+ 配套(2 测试文件 + 治理文档)
 **分支**:`feat/small-cost-cleanup-batch`
-**commit**:`<待回填>`
+**commit**:`6fe215459f`(R4 override,user 2026-08-07 审批通过)
 **R4 override**:**需要**(`packages/opencode/` 整包在 pre-commit 黑名单)—— 论证见文末
 
 ## 实际改动

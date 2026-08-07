@@ -1,5 +1,5 @@
 feat-id: oauth-loopback-bind
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-019 上游 OAuth callback server 绑 0.0.0.0
