@@ -65,3 +65,17 @@ fix 分支 `fix/in-session-find-jump`,commit `09494cd28e`。
 ## commit
 
 - 主体:`ec3f0650bb`(V1)
+
+## Follow-up:⌘K 联动真机断裂 — 垂死实例吃纸条(2026-08-07,fix/content-search-cjk-single-char 分支)
+
+**现象**(user 真机报障):⌘K 内容命中点击后正常跳到目标会话,但查找条没有承接打开。
+
+**根因**(真机 CDP 三段探针 + MutationObserver 实证):同会话 `#message-` hash 导航会让 timeline(连同 SessionFindBar)**重挂** —— 旧实例消费联动请求、开条(DOM 实测 ADD),~180ms 后随重挂被卸载(REMOVE),查找条陪葬且请求已被一次性消费,新实例挂载时两手空空。mock e2e 数据即取即得不重挂,测不出;属「CDP mock 自测 ≠ 真产物」类。
+
+**修法**(全 fork-only 文件):
+1. `find-bar.tsx`:消费即登记;onCleanup 时若距消费 <2s(= 重挂竞态窗口)把请求**回投**,新实例挂载重新领取。
+2. `find-request.ts`:存储挂 globalThis(防 vite 小模块内联复制 chunk 后单例退化,一劳永逸)+ 纸条带时间戳 + 10s TTL(防回投残留陈腐弹条)。
+
+**测试**:find-request 单测 5 用例(globalThis 契约/一次性/会话匹配/回投接力/TTL 作废);回投行为真机 CDP 验证(修后同会话命中 → 查找条带词打开+定位)。
+
+**回退**:单笔 revert,无数据影响。

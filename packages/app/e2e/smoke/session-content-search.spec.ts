@@ -109,6 +109,18 @@ test.describe("smoke: session content search", () => {
     await expect(page.getByText("Search this project only")).toBeVisible()
   })
 
+  // bug-repro:中文单字查询被旧门槛 query.length < 2 拦死,内容搜索整组不发请求(真机「南」截图复现 2026-08-07)
+  test("single CJK character query still reaches content search", async ({ page }) => {
+    await bootstrap(page, ({ query, scope }) => {
+      if (scope === "project" && query === "南") return { hits: [projectHit] }
+      return { hits: [] }
+    })
+    await openPaletteAndType(page, "南")
+
+    await expect(page.getByText("Session content")).toBeVisible()
+    await expect(page.getByText("analysis snippet", { exact: false })).toBeVisible()
+  })
+
   // 降级:unavailable → 分组整组不出现,其余分组正常
   test("unavailable backend hides the content group silently", async ({ page }) => {
     await bootstrap(page, () => ({ unavailable: true, hits: [] }))

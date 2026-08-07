@@ -21,7 +21,7 @@ import {
   highlightSupported,
   locateRangeInUnit,
 } from "./dom-highlight"
-import { consumePendingFind } from "./find-request"
+import { consumePendingFind, setPendingFind, type FindRequest } from "./find-request"
 
 const FIND_STYLE = `
 ::highlight(${FIND_HIGHLIGHT}) { background-color: color-mix(in srgb, var(--surface-warning-strong, #f5c518) 45%, transparent); }
@@ -276,16 +276,25 @@ export function SessionFindBar(props: {
 
   // ⌘K 内容命中联动:进入会话后带词开条并定位。
   // 依赖含 location.hash:目标就是当前会话时 sessionID/units 都不变,靠 hash 变化触发消费
+  // ⚠️ 垂死实例回投:同会话 #message- hash 导航会让 timeline(连同本组件)重挂 —— 旧实例
+  //   消费请求、开条,~200ms 后随重挂被卸载,查找条陪葬且纸条已被吃掉,新实例两手空空
+  //   (真机实锤 2026-08-07;mock e2e 数据即取即得不重挂,测不出)。消费即登记,卸载发生
+  //   在消费后 2s 内则回投,新实例挂载时重新领取;陈腐防线在 find-request 的 TTL。
+  let consumedLink: { request: FindRequest; at: number } | undefined
   createEffect(
     on(
       () => [props.sessionID(), props.units().length, location.hash] as const,
       () => {
         const request = consumePendingFind(props.sessionID())
         if (!request) return
+        consumedLink = { request, at: Date.now() }
         openBar(request.query, request.anchorID)
       },
     ),
   )
+  onCleanup(() => {
+    if (consumedLink && Date.now() - consumedLink.at < 2000) setPendingFind(consumedLink.request)
+  })
 
   // 查询/数据变化时刷新高亮;查询变化重置游标到首个出现
   createEffect(
