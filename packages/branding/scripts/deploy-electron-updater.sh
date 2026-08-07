@@ -74,7 +74,7 @@ esac
 SERVER="${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}"
 REMOTE_DIR="/var/www/updates/electron/$ENV"
 VERIFY_URL="https://updates.deskfox.ai/electron/$ENV/$YML_NAME"
-OSS_CDN_BASE="https://dl.clawtray.com"
+OSS_CDN_BASE="${DESKFOX_ASSET_BASE:-https://dl.clawtray.com}"  # 应急可覆盖(如 CDN 证书故障时切 bucket 直链)
 # SSH key 探测(Mac/Win 文件名不同)
 SSH_KEY="${SSH_KEY:-}"
 if [[ -z "$SSH_KEY" ]]; then

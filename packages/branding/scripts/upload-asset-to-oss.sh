@@ -180,7 +180,7 @@ if [[ "$NO_VERIFY" -eq 0 ]]; then
   for i in 1 2 3 4 5; do
     code=$(curl -s -o /dev/null -w "%{http_code}" -I --connect-timeout 20 --max-time 60 "$DOWNLOAD_URL" || echo "000")
     if [[ "$code" == "200" ]]; then ok=1; break; fi
-    echo "      第 $i 次 HEAD=$code，2s 后重试..."; sleep 2
+    echo "      第 $i 次 HEAD=${code}，2s 后重试..."; sleep 2
   done
   if [[ "$ok" -ne 1 ]]; then
     echo -e "${YELLOW}⚠️  CDN HEAD 未返回 200（可能缓存未刷新）。OSS 已上传成功，链接稍后可访问。${RESET}" >&2

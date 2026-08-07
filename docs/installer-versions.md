@@ -15,7 +15,18 @@
 
 ## [macOS] 2026.9.0 - 2026-08-07 14:42
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:「找回内容」功能波次 — ⌘K 会话内容全文检索(REQ-095,trigram FTS5 中文子串+锚点跳转)+ ⌘F 会话内查找(REQ-097,计数/跳转/高亮/⌘K 联动/深位历史渐进遍历)+ 会话列表操作体验(REQ-096,标题 blur 保存/行右键菜单 重命名-分享-复制链接-归档-删除/归档撤销,含投影层取消归档持久化修复)+ 原生右键菜单 i18n(19 语言跟随 app 设置)。
+
+- **渠道**:prod;tag `ship-mac-prod-2026.9.0`;main `5328d49f33`(bump merge)
+- **产物**(Developer ID 签名 + 公证 + staple,双 arch):
+  - `DeskFox-2026.9.0-mac-arm64.dmg` sha256 `4e1a457df63700fe5b8ff4da80675e9b520da6abaaf8227f5f4f23a7fbbaf5d3`
+  - `DeskFox-2026.9.0-mac-x64.dmg` sha256 `61b59df8f1a9552444675418ee09982b3b899415caf4c393e45af613e92b9eac`
+- **公证**:两 dmg 均 Accepted + staple + spctl Notarized Developer ID ✅
+- **升级源**:A latest-mac.yml version=2026.9.0(双 arch 4 资产)✅;B 迁移桥 latest.json version=2026.9.0(arm64 tar.gz + minisign)✅
+- **⚠️ 运维事件(本次发版撞出)**:CDN `dl.clawtray.com` **SSL 证书 2026-07-14 已过期**(存量用户自动升级三周静默失败);本次两条升级源资产 URL 应急切 **OSS bucket 直链**(`downloadbot.oss-rg-china-mainland.aliyuncs.com`,证书正常)恢复升级;Gitee 正文同用直链。**证书续期(阿里云 CDN 控制台)待办**,修复后可切回 CDN 域名(脚本已支持 `DESKFOX_ASSET_BASE` 覆盖)。
+- **附带脚本修复**:`upload-asset-to-oss.sh` HEAD 校验段 `$code` 后跟全角逗号被 bash 3.2 吞进变量名致 set -u 崩(本次 3 次触发,上传本体不受影响);`deploy/bridge-electron-updater.sh` CDN base 支持 `DESKFOX_ASSET_BASE` 环境覆盖。
+- **发版 code-review**:4 finder 无高危;8 条 minor 备案(FTS 首搜 backfill 同步阻塞规模边界~100MB 文本、触屏归档入口、深挖 loading 暂停等,详见 workflow 记录)
+- **已知包构建怪相**:x64 electron-builder appOutDir 落 `mac/`(非脚本预期 `mac-x64/`)覆盖 arm64 .app,产物 dmg/zip 不受影响;迁移桥 .app 从 arm64 zip 恢复。待查 builder 目录约定(follow-up)。
 
 ---
 ## [macOS] 2026.8.6 - 2026-07-14 18:40

@@ -64,7 +64,7 @@ fi
 SERVER="${DESKFOX_UPDATE_SSH:-ubuntu@updates.deskfox.ai}"
 REMOTE_DIR="/var/www/updates/v1/latest/$CHANNEL/darwin"
 VERIFY_URL="https://updates.deskfox.ai/v1/latest/$CHANNEL/darwin/latest.json"
-OSS_CDN_BASE="https://dl.clawtray.com"
+OSS_CDN_BASE="${DESKFOX_ASSET_BASE:-https://dl.clawtray.com}"  # 应急可覆盖(如 CDN 证书故障时切 bucket 直链)
 OBJ="DeskFox-${VERSION}-darwin.app.tar.gz"
 OSS_URL="$OSS_CDN_BASE/$OBJ"
 SSH_KEY="${SSH_KEY:-}"
