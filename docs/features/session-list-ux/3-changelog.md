@@ -55,7 +55,7 @@ SDK regen 无 diff(Effect OpenAPI 生成器把 NullOr 折叠为 number,服务端
 
 ## Follow-up:复制链接补回(2026-08-07,user 反馈)
 
-右键菜单接管后原生 "Copy Link" 消失,user 要求补回:菜单加「复制链接」项(重命名/分享/**复制链接**/归档/删除),复制 `oc://renderer/<b64dir>/session/<id>` 同格式内部链接(dump-session 等工作流以此引用会话),成功 toast「已复制」。文案复用现有 `session.share.copy.copyLink` / `.copied` 键(19 语言零新增)。e2e E5 补剪贴板内容断言。fix 分支 `fix/session-row-copy-link`,commit hash 回填:(待)。
+右键菜单接管后原生 "Copy Link" 消失,user 要求补回:菜单加「复制链接」项(重命名/分享/**复制链接**/归档/删除),复制 `oc://renderer/<b64dir>/session/<id>` 同格式内部链接(dump-session 等工作流以此引用会话),成功 toast「已复制」。文案复用现有 `session.share.copy.copyLink` / `.copied` 键(19 语言零新增)。e2e E5 补剪贴板内容断言。fix 分支 `fix/session-row-copy-link`,commit `c7cf6d50c0`。
 
 ## 回退方法
 
