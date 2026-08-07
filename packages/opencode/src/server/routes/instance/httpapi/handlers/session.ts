@@ -228,7 +228,8 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
         })
       }
       if (ctx.payload.time?.archived !== undefined) {
-        yield* session.setArchived({ sessionID: ctx.params.sessionID, time: ctx.payload.time.archived })
+        // FORK: REQ-096 — null 透传为清除归档(setArchived 省略 time = 清)[feat: session-list-ux]
+        yield* session.setArchived({ sessionID: ctx.params.sessionID, time: ctx.payload.time.archived ?? undefined })
       }
       return yield* requireSession(ctx.params.sessionID)
     })
