@@ -6,7 +6,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 **规模**:Medium(新增 3 文件 + 生成物 + 2 测试文件,改 fork-only 文件 3 处)
 **分支**:`feat/small-cost-cleanup-batch`
-**commit**:`<待回填>`
+**commit**:`cc7d688025`(branding 图标生成 + 产物)+ `d94720afb4`(desktop 接线 + 修 bug)
+> 拆两笔:pre-commit §4.2 的 500 行阈值(base64 产物 + 测试),且两半天然可分别 revert(P4)。
 **R4 override**:**不需要** —— `packages/desktop/`(除 `src-tauri/` 子路径)与 `packages/branding/` 均不在 pre-commit 黑名单
 
 ## 实际改动

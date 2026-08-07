@@ -234,6 +234,13 @@ git push origin --tags
 #   - 上游侵入率:< 5%(改上游文件数 / 总文件数)
 #   - 漂移 commit 数:dev..upstream/dev,目标 ≤ 100
 #   - override 累计:每季 ≤ 2 笔
+
+# 5.6 REQ-019 OAuth loopback bind 复查(上游持续复制 listen 不带 hostname 的写法)
+grep -rnE '\.listen\([^,)]+,\s*(\(\s*\)|async\s*\(\s*\))\s*=>' packages/opencode/src
+# 期望:0 命中。有命中 = 上游新增了裸 listen(Node 默认绑 0.0.0.0,把端口暴露到 LAN/公网),
+#   按 REQ-019 补 "127.0.0.1"(参考 plugin/xai.ts:502);⚠️ 不要顺手改 redirect URI 的 localhost。
+# 机器版同一条断言在 packages/opencode/test/security/oauth-loopback-bind.test.ts —— merge 后
+#   跑 `cd packages/opencode && bun test test/security` 更省事,本 grep 是没跑测试时的人工兜底。
 ```
 
 **全过 → push**:

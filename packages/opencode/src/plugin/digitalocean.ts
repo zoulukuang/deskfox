@@ -184,7 +184,9 @@ async function startOAuthServer(): Promise<void> {
   })
 
   await new Promise<void>((resolve, reject) => {
-    oauthServer!.listen(OAUTH_PORT, () => {
+    // FORK: REQ-019 OAuth 回调 server 绑环回地址,勿绑 0.0.0.0(R6 网络监听安全;写法同 plugin/xai.ts:502)
+    //   ⚠️ 不要顺手改 redirectUri() 的 localhost —— redirect_uri 须与 provider 端注册值逐字匹配 2026-08-07
+    oauthServer!.listen(OAUTH_PORT, "127.0.0.1", () => {
       resolve()
     })
     oauthServer!.on("error", reject)

@@ -1,5 +1,5 @@
 feat-id: oauth-loopback-bind
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实施计划
