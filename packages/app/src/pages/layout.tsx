@@ -1038,7 +1038,45 @@ export default function Layout(props: ParentProps) {
         navigate(`/${params.dir}/session`)
       }
     }
+    // FORK-BEGIN: REQ-096 — 归档撤销 toast(事后救优于事前拦,防误触)[feat: session-list-ux]
+    showToast({
+      title: language.t("session.archive.toast.title"),
+      description: language.t("session.archive.toast.description"),
+      actions: [
+        {
+          label: language.t("common.undo"),
+          onClick: () => void undoArchiveSession(session),
+        },
+      ],
+    })
+    // FORK-END
   }
+
+  // FORK-BEGIN: REQ-096 — 取消归档:HTTP 层 null = 清除(sidecar 同批扩展);SDK 生成类型未表达
+  // null(Effect OpenAPI 生成器折叠 NullOr),此处窄点 cast [feat: session-list-ux]
+  async function undoArchiveSession(session: Session) {
+    const ok = await serverSDK.client.session
+      .update({
+        directory: session.directory,
+        sessionID: session.id,
+        time: { archived: null as unknown as number },
+      })
+      .then(() => true)
+      .catch(() => false)
+    if (!ok) {
+      showToast({ title: language.t("common.requestFailed"), variant: "error" })
+      return
+    }
+    const restored = { ...session, time: { ...session.time, archived: undefined } }
+    const [, setStore] = serverSync.child(session.directory)
+    setStore(
+      produce((draft) => {
+        const match = Binary.search(draft.session, session.id, (s) => s.id)
+        if (!match.found) draft.session.splice(match.index, 0, restored)
+      }),
+    )
+  }
+  // FORK-END
 
   command.register("layout", () => {
     const commands: CommandOption[] = [

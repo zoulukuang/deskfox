@@ -27,10 +27,21 @@ export function createInlineEditorController() {
     callback(next)
   }
 
-  const editorKeyDown = (event: KeyboardEvent, callback: (next: string) => void) => {
+  // FORK: REQ-096 — 提交语义收口:空值/未改动 → 仅关闭(恢复原值),否则保存;失焦走这里
+  // [feat: session-list-ux]
+  const commitEditor = (current: string, callback: (next: string) => void) => {
+    const next = editor.value.trim()
+    closeEditor()
+    if (!next || next === current) return
+    callback(next)
+  }
+
+  const editorKeyDown = (event: KeyboardEvent, callback: (next: string) => void, current?: string) => {
     if (event.key === "Enter") {
       event.preventDefault()
-      saveEditor(callback)
+      // FORK: REQ-096 — 有 current 时走 commit(跳过未改动),兼容旧调用 [feat: session-list-ux]
+      if (current !== undefined) commitEditor(current, callback)
+      else saveEditor(callback)
       return
     }
     if (event.key !== "Escape") return
@@ -98,9 +109,10 @@ export function createInlineEditorController() {
           onInput={(event) => setEditor("value", event.currentTarget.value)}
           onKeyDown={(event) => {
             event.stopPropagation()
-            editorKeyDown(event, props.onSave)
+            editorKeyDown(event, props.onSave, props.value())
           }}
-          onBlur={closeEditor}
+          // FORK: REQ-096 — 失焦保存(原丢弃);Esc 已在 keydown 显式放弃 [feat: session-list-ux]
+          onBlur={() => commitEditor(props.value(), props.onSave)}
           onPointerDown={stopPropagation}
           onClick={stopPropagation}
           onDblClick={stopPropagation}
@@ -119,6 +131,7 @@ export function createInlineEditorController() {
     openEditor,
     closeEditor,
     saveEditor,
+    commitEditor,
     editorKeyDown,
     setEditor,
     InlineEditor,

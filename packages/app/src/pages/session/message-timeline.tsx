@@ -1397,7 +1397,12 @@ export function MessageTimeline(props: {
                             closeTitleEditor()
                           }
                         }}
-                        onBlur={closeTitleEditor}
+                        // FORK: REQ-096 — 失焦保存(原丢弃);Esc 仍显式放弃,空/未改 saveTitleEditor 自回退。
+                        // 守卫 editing:Esc 关闭后 Chromium 会对被移除的聚焦元素补发 blur,不守卫会把
+                        // 已放弃的草稿存回去 [feat: session-list-ux]
+                        onBlur={() => {
+                          if (title.editing) saveTitleEditor()
+                        }}
                       />
                     </Show>
                   </Show>

@@ -1,13 +1,20 @@
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { Avatar } from "@opencode-ai/ui/avatar"
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
+// FORK: REQ-096 — 行内重命名输入框 + 归档 hover 图标移除(IconButton 不再使用)[feat: session-list-ux]
+import { InlineInput } from "@opencode-ai/ui/inline-input"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
+import { Binary } from "@opencode-ai/core/util/binary"
 import { A, useParams } from "@solidjs/router"
-import { type Accessor, createMemo, For, type JSX, Match, Show, Switch } from "solid-js"
+import { type Accessor, createMemo, createSignal, For, type JSX, Match, Show, Switch } from "solid-js"
+import { produce } from "solid-js/store"
+import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
+// FORK: REQ-096 — 会话行右键菜单 [feat: session-list-ux]
+import { SessionRowMenu } from "./session-row-menu"
+import { showToast } from "@/utils/toast"
 // FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
 import { creation } from "@/components/media-creation-store"
 import { useLanguage } from "@/context/language"
@@ -156,9 +163,11 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
   const notification = useNotification()
   const permission = usePermission()
   const serverSync = useServerSync()
+  // FORK: REQ-096 — 行内重命名 [feat: session-list-ux]
+  const serverSDK = useServerSDK()
   const unseenCount = createMemo(() => notification.session.unseenCount(props.session.id))
   const hasError = createMemo(() => notification.session.unseenHasError(props.session.id))
-  const [sessionStore] = serverSync.child(props.session.directory)
+  const [sessionStore, setSessionStore] = serverSync.child(props.session.directory)
   const hasPermissions = createMemo(() => {
     return !!sessionPermissionRequest(sessionStore.session, sessionStore.permission, props.session.id, (item) => {
       // FORK: REQ-078 共享 canResolve 过滤 [feat: permission-filter-concurrency] 2026-08-02
@@ -201,6 +210,36 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
     }
   }
 
+  // FORK-BEGIN: REQ-096 — 行内重命名(blur/Enter 保存,Esc 放弃,空/未改恢复原名)[feat: session-list-ux]
+  const [renaming, setRenaming] = createSignal(false)
+  const [renameDraft, setRenameDraft] = createSignal("")
+  const startRename = () => {
+    setRenameDraft(sessionTitle(props.session.title) ?? "")
+    setRenaming(true)
+  }
+  const commitRename = async () => {
+    if (!renaming()) return
+    const next = renameDraft().trim()
+    const current = sessionTitle(props.session.title) ?? ""
+    setRenaming(false)
+    if (!next || next === current) return
+    const ok = await serverSDK.client.session
+      .update({ directory: props.session.directory, sessionID: props.session.id, title: next })
+      .then(() => true)
+      .catch(() => false)
+    if (!ok) {
+      showToast({ title: language.t("common.requestFailed"), variant: "error" })
+      return
+    }
+    setSessionStore(
+      produce((draft) => {
+        const match = Binary.search(draft.session, props.session.id, (s) => s.id)
+        if (match.found) draft.session[match.index].title = next
+      }),
+    )
+  }
+  // FORK-END
+
   const item = (
     <SessionRow
       session={props.session}
@@ -219,15 +258,47 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
     />
   )
 
-  return (
-    <>
-      <div
-        data-session-id={props.session.id}
-        class="group/session relative w-full min-w-0 rounded-md cursor-default pr-3 transition-colors hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[[data-expanded]]:bg-surface-raised-base-hover has-[.active]:bg-surface-base-active"
-        style={{ "padding-left": `${8 + (props.level ?? 0) * 16}px` }}
-      >
-        <div class="flex min-w-0 items-center gap-1">
-          <div class="min-w-0 flex-1">
+  // FORK: REQ-096 — 归档 hover 图标移除(误触重灾区,动作收进右键菜单);行内容抽为函数以便
+  // 顶层行包 SessionRowMenu、子会话行保持原样 [feat: session-list-ux]
+  const row = () => (
+    <div
+      data-session-id={props.session.id}
+      class="group/session relative w-full min-w-0 rounded-md cursor-default pr-3 transition-colors hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[[data-expanded]]:bg-surface-raised-base-hover has-[.active]:bg-surface-base-active"
+      style={{ "padding-left": `${8 + (props.level ?? 0) * 16}px` }}
+    >
+      <div class="flex min-w-0 items-center gap-1">
+        <div class="min-w-0 flex-1">
+          <Show
+            when={!renaming()}
+            fallback={
+              <InlineInput
+                ref={(el) => {
+                  requestAnimationFrame(() => {
+                    if (!el.isConnected) return
+                    el.focus()
+                    el.select()
+                  })
+                }}
+                data-session-rename={props.session.id}
+                value={renameDraft()}
+                class="text-14-regular text-text-strong w-full min-w-0 my-1 rounded-[4px] pl-1"
+                onInput={(event) => setRenameDraft(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    void commitRename()
+                    return
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault()
+                    setRenaming(false)
+                  }
+                }}
+                onBlur={() => void commitRename()}
+              />
+            }
+          >
             <Show
               when={!tooltip()}
               fallback={
@@ -243,35 +314,20 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
             >
               {item}
             </Show>
-          </div>
-
-          <Show when={!props.level}>
-            <div
-              class="shrink-0 overflow-hidden transition-[width,opacity]"
-              classList={{
-                "w-6 opacity-100 pointer-events-auto": !!props.mobile,
-                "w-0 opacity-0 pointer-events-none": !props.mobile,
-                "group-hover/session:w-6 group-hover/session:opacity-100 group-hover/session:pointer-events-auto": true,
-                "group-focus-within/session:w-6 group-focus-within/session:opacity-100 group-focus-within/session:pointer-events-auto": true,
-              }}
-            >
-              <Tooltip value={language.t("common.archive")} placement="top">
-                <IconButton
-                  icon="archive"
-                  variant="ghost"
-                  class="size-6 rounded-md"
-                  aria-label={language.t("common.archive")}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    void props.archiveSession(props.session)
-                  }}
-                />
-              </Tooltip>
-            </div>
           </Show>
         </div>
       </div>
+    </div>
+  )
+
+  return (
+    <>
+      {/* FORK: REQ-096 — 顶层会话行挂右键菜单;子会话行(level>0)保持原样 [feat: session-list-ux] */}
+      <Show when={!props.level} fallback={row()}>
+        <SessionRowMenu session={props.session} onRename={startRename} archiveSession={props.archiveSession}>
+          {row()}
+        </SessionRowMenu>
+      </Show>
       <Show when={currentChild()} keyed>
         {(child) => (
           <div class="w-full">
