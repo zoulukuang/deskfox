@@ -66,30 +66,19 @@ export function clearHighlights(): void {
   highlights.delete(FIND_HIGHLIGHT_ACTIVE)
 }
 
-/** 在 scroller 已渲染内容中定位「anchor 轮次的第 localIndex 个出现」:
- *  取锚点元素(#message-<anchorID> 或 [data-message-id]),从其文档位置起筛出其后的 Range,
- *  下一个锚点行之前的第 localIndex 个即目标。找不到(未渲染/虚拟化)返回 undefined。 */
-export function locateActiveRange(
+/** 数据直达定位:在「出现所属的可定位单元」的行元素内取第 indexInUnit 个 Range。
+ *  - user 单元:行锚 [data-message-id=anchorID](一条 user 消息的全部 text part 同行渲染)
+ *  - assistant 单元:行标 [data-find-part-ids~=unitID](timeline 行帧铺设,fork 属性)
+ *  行未渲染(虚拟化卸载/深位未加载)返回 undefined,由调用方先 scrollToIndex 该行再重试。
+ *  不依赖跨行 DOM 顺序与几何 —— virtua 行复用使两者都不可信(真机实证)。 */
+export function locateRangeInUnit(
   scroller: HTMLElement,
-  ranges: Range[],
-  anchorID: string,
-  localIndex: number,
+  query: string,
+  unit: { anchorID: string; unitID: string; isUser: boolean; indexInUnit: number },
 ): Range | undefined {
-  const anchorEl =
-    scroller.querySelector(`[data-message-id="${CSS.escape(anchorID)}"]`) ??
-    scroller.ownerDocument.getElementById(`message-${anchorID}`)
-  if (!anchorEl) return undefined
-  const anchors = Array.from(scroller.querySelectorAll("[data-message-id]"))
-  const anchorIdx = anchors.indexOf(anchorEl as Element)
-  const nextAnchor = anchorIdx >= 0 ? anchors[anchorIdx + 1] : undefined
-  // node 属于本轮 = 在锚点行内或其后,且不落入下一锚点行内或其后
-  const inOrAfter = (node: Node, ref: Element) =>
-    ref.contains(node) || !!(ref.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
-  const inTurn = ranges.filter((range) => {
-    const node = range.startContainer
-    if (!inOrAfter(node, anchorEl as Element)) return false
-    if (nextAnchor && inOrAfter(node, nextAnchor)) return false
-    return true
-  })
-  return inTurn[localIndex]
+  const el = unit.isUser
+    ? scroller.querySelector(`[data-message-id="${CSS.escape(unit.anchorID)}"]`)
+    : scroller.querySelector(`[data-find-part-ids~="${CSS.escape(unit.unitID)}"]`)
+  if (!el) return undefined
+  return collectRanges(el, query)[unit.indexInUnit]
 }

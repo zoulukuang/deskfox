@@ -1,6 +1,6 @@
 // FORK-ONLY test: REQ-097 会话内查找纯逻辑 [feat: in-session-find]
 import { describe, expect, test } from "bun:test"
-import { buildOccurrences, countOccurrences, indexForAnchor, stepIndex } from "./find-core"
+import { buildOccurrences, countOccurrences, indexForAnchor, stepIndex, type TurnUnit } from "./find-core"
 
 describe("find-core.countOccurrences", () => {
   test("中文子串多次出现", () => {
@@ -18,21 +18,24 @@ describe("find-core.countOccurrences", () => {
   })
 })
 
+const units: TurnUnit[] = [
+  { anchorID: "m1", unitID: "m1", isUser: true, text: "报错一次" },
+  { anchorID: "m1", unitID: "prt_a", isUser: false, text: "回复里报错两次,报错" },
+  { anchorID: "m2", unitID: "m2", isUser: true, text: "没有" },
+  { anchorID: "m3", unitID: "prt_b", isUser: false, text: "报错" },
+]
+
 describe("find-core.buildOccurrences", () => {
-  const turns = [
-    { anchorID: "m1", text: "报错一次" },
-    { anchorID: "m2", text: "没有" },
-    { anchorID: "m3", text: "报错两次,报错" },
-  ]
-  test("按轮次序展开为扁平出现列表", () => {
-    expect(buildOccurrences(turns, "报错")).toEqual([
-      { anchorID: "m1", localIndex: 0 },
-      { anchorID: "m3", localIndex: 0 },
-      { anchorID: "m3", localIndex: 1 },
+  test("按单元序展开(单元内序即会话内容序)", () => {
+    expect(buildOccurrences(units, "报错")).toEqual([
+      { anchorID: "m1", unitID: "m1", isUser: true, indexInUnit: 0 },
+      { anchorID: "m1", unitID: "prt_a", isUser: false, indexInUnit: 0 },
+      { anchorID: "m1", unitID: "prt_a", isUser: false, indexInUnit: 1 },
+      { anchorID: "m3", unitID: "prt_b", isUser: false, indexInUnit: 0 },
     ])
   })
   test("空白查询返回空", () => {
-    expect(buildOccurrences(turns, "  ")).toEqual([])
+    expect(buildOccurrences(units, "  ")).toEqual([])
   })
 })
 
@@ -52,13 +55,9 @@ describe("find-core.stepIndex", () => {
 })
 
 describe("find-core.indexForAnchor", () => {
-  const occurrences = [
-    { anchorID: "m1", localIndex: 0 },
-    { anchorID: "m3", localIndex: 0 },
-    { anchorID: "m3", localIndex: 1 },
-  ]
+  const occurrences = buildOccurrences(units, "报错")
   test("定位到锚点轮次的第一个出现", () => {
-    expect(indexForAnchor(occurrences, "m3")).toBe(1)
+    expect(indexForAnchor(occurrences, "m3")).toBe(3)
   })
   test("锚点无命中回退 0;无锚点回退 0;空列表 -1", () => {
     expect(indexForAnchor(occurrences, "m9")).toBe(0)
