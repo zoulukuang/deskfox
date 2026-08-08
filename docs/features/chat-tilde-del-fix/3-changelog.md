@@ -53,7 +53,46 @@ GFM 内置 del tokenizer 定界符是 `~~?`(一或两个 `~`),同一行两个「
 所有产 HTML 的路径都走 `ui/context/marked.tsx` 的单一 parser 实例(`useMarked()` 经 context 下发);
 `markdown-stream.ts` 虽直接 import marked,但只用 `marked.lexer` 做代码围栏切块、不产 HTML,不受影响。
 
-**未做**:在打包后的桌面 App 里点开一条含该文本的真实会话做肉眼确认 —— 需要真发一次 LLM 请求或改动 user 的真实项目数据,收益低于成本。前端界面 e2e 已覆盖同一渲染链路且被反证有效。
+✅ **桌面侧真机已验(2026-08-08,user 实测)**:在本地版 DeskFox 里让模型回一段含两个数值区间的内容,肉眼确认不再被划掉。
+
+## ⚠️ share 分享页的实际生效范围(2026-08-08 追查澄清)
+
+**本 feat 改的 web 那半边,今天对用户不生效**,原因不是没改对,是**页面不归我们部署**:
+
+| 事实 | 位置 |
+|---|---|
+| 分享链接域名写死上游 `https://opncd.ai` | `packages/opencode/src/share/share-next.ts:210`(`enterprise?.url ?? "https://opncd.ai"`) |
+| DeskFox **不部署 web 站点**,只发桌面端 | — |
+| 仓内 share viewer 只有 **legacy `/s/<id>`** 路由 | `packages/web/src/pages/s/[id].astro`(SSR `fetch ${VITE_API_URL}/share_data?id=`) |
+| 新链接 `/share/<id>` 的页面代码**不在本仓**(`packages/console` 里也没有) | 上游自建部署 |
+
+→ 用户点「分享」拿到的链接由**上游服务器渲染上游代码**。本 feat 的 web 改动价值在于:① 将来自建分享站时不留坑 ② 把修复提 PR 给上游时是现成的。
+
+## ✅ share 页浏览器实操已补(2026-08-08,user 拍板执行)
+
+**新增 follow-up commit**:给 share 分享页补了真浏览器渲染的 e2e —— 之前只到组件层。
+
+| 文件 | 作用 |
+|---|---|
+| `packages/app/playwright.web-share.deskfox.config.ts` | 独立 playwright 配置(文件名带 `.deskfox` —— pre-commit 黑名单拦 `*.config.ts`,EXCEPTION 放行 fork 自有的 `*.deskfox.config.ts`)(启 Astro dev + 假后端;不并进主配置,免每次跑聊天页 e2e 白等 ~30s) |
+| `packages/app/e2e/utils/share-fixture.ts` | SSR 与 WebSocket 两条链路共用的 fixture |
+| `packages/app/e2e/utils/share-fixture-server.ts` | `/share_data` 假后端(node:http) |
+| `packages/app/e2e/web-share/share-tilde-del-v2026.8.7.spec.ts` | 真浏览器打开分享页,断言无 `<del>` + `~~删除~~` 不回归 |
+| `packages/app/package.json` | 加 `test:e2e:web-share` 脚本(零新增依赖,复用 app 已有 @playwright/test) |
+
+跑法:`bun run --cwd packages/app test:e2e:web-share` → **1 passed**。
+**反证有效**:撤掉 `content-markdown.tsx` 里的 `strictDelExtension` 重跑 → 1 failed,实测抓到
+`预计在 4.80<del>5.05 区间内震荡,突破 5.20</del>5.35 的概率低`。
+
+**测试文件放 `packages/app` 而非 `packages/web`**:web 在 pre-commit 黑名单且零测试基建(无 test 脚本、无 playwright 依赖),放这里零新增依赖、不动 `bun.lock`、不多耗一笔 R4 override。
+
+### 搭这套时踩的四个坑(都写进了配置注释)
+
+1. **Clash 代理劫 localhost** —— astro 的 SSR 跑在 Cloudflare adapter 的 wrangler/workerd 里,它认 `HTTP(S)_PROXY`;本机 `~/.zshenv` 全局设了 Clash 代理 → SSR fetch 报 `fetch failed / other side closed`(假后端**根本收不到请求**),页面 500。配置里把代理变量置空 + `NO_PROXY=127.0.0.1,localhost` 才通。同类坑见 `reference_local_test_env_false_failures`。
+2. **WebSocket 只能 mock 不能真起** —— `Share.tsx` 把 URL 强制成 `wss://`(`apiUrl.replace(/^https?:\/\//, "wss://")`),真起 WS 服务就得配自签 TLS;改用 Playwright `routeWebSocket` 直接在浏览器侧 mock,零 TLS。
+3. **SSR 的 fetch 拦不到** —— `/share_data` 发生在 astro 服务进程里,`page.route` 够不着 → 必须真起一个假后端。且**要用 `node:http`**:workerd 打 `Bun.serve` 会 `other side closed`。
+4. **路径必须带 `/docs` 前缀** —— 站点 base 是 `/docs`(starlight);裸 `/s/<id>` 在 `Accept: text/html` 下返回 404(非 HTML 请求反而 200,极易误判"路由没问题")。
+5. 本机跑需要 `PLAYWRIGHT_BROWSERS_PATH=/Volumes/ExtSSD/devcache/ms-playwright`(定义在 `~/.zshrc`,非交互 shell 取不到)。
 
 ## 回退方法
 
