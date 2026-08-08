@@ -5,7 +5,7 @@
 //    · 正文消息由 WebSocket 推送 → 这里用 Playwright routeWebSocket 直接 mock
 //      (Share.tsx 把 URL 强制成 wss://,真起 WS 服务就得配自签 TLS,得不偿失)
 import { expect, test } from "@playwright/test"
-import { RANGE_TEXT, SHARE_FIXTURE, STRIKE_TEXT, shareFrames } from "../utils/share-fixture"
+import { RANGE_TEXT, SHARE_FIXTURE, STRIKE_TEXT, shareFrames } from "../e2e/utils/share-fixture"
 
 test.describe("regression: share 分享页单波浪号误判删除线 (REQ-098)", () => {
   test("数值区间不被划掉,标准 ~~删除~~ 仍生效", async ({ page }) => {

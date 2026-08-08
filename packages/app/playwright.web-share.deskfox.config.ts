@@ -11,6 +11,11 @@
 // 为什么测试文件放 packages/app 而不是 packages/web:
 //   packages/web 在 pre-commit 路径黑名单里,且没有任何测试基建(无 test 脚本、无 playwright 依赖);
 //   放这里可以直接复用 app 已有的 @playwright/test,零新增依赖、不动 bun.lock、不多耗一笔 R4 override。
+//
+// 为什么 spec 放 e2e-web-share/ 而不是 e2e/web-share/:
+//   主配置 playwright.config.ts 的 testDir 是 ./e2e,会连带扫到这条 spec —— 它需要额外两个
+//   server,在主配置下裸跑必挂(pre-push 跑 e2e 时同样会炸)。挪出 e2e/ 即可,免去改
+//   playwright.config.ts(那个文件在 pre-commit 黑名单,动它要多耗一笔 R4 override)。
 import { defineConfig, devices } from "@playwright/test"
 
 const webPort = Number(process.env.PLAYWRIGHT_WEB_PORT ?? 4320)
@@ -18,8 +23,8 @@ const apiPort = Number(process.env.PLAYWRIGHT_SHARE_API_PORT ?? 4322)
 const baseURL = `http://127.0.0.1:${webPort}`
 
 export default defineConfig({
-  testDir: "./e2e/web-share",
-  outputDir: "./e2e/test-results/web-share",
+  testDir: "./e2e-web-share",
+  outputDir: "./e2e-web-share/test-results",
   timeout: 90_000,
   expect: { timeout: 15_000 },
   forbidOnly: !!process.env.CI,

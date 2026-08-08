@@ -77,7 +77,7 @@ GFM 内置 del tokenizer 定界符是 `~~?`(一或两个 `~`),同一行两个「
 | `packages/app/playwright.web-share.deskfox.config.ts` | 独立 playwright 配置(文件名带 `.deskfox` —— pre-commit 黑名单拦 `*.config.ts`,EXCEPTION 放行 fork 自有的 `*.deskfox.config.ts`)(启 Astro dev + 假后端;不并进主配置,免每次跑聊天页 e2e 白等 ~30s) |
 | `packages/app/e2e/utils/share-fixture.ts` | SSR 与 WebSocket 两条链路共用的 fixture |
 | `packages/app/e2e/utils/share-fixture-server.ts` | `/share_data` 假后端(node:http) |
-| `packages/app/e2e/web-share/share-tilde-del-v2026.8.7.spec.ts` | 真浏览器打开分享页,断言无 `<del>` + `~~删除~~` 不回归 |
+| `packages/app/e2e-web-share/share-tilde-del-v2026.8.7.spec.ts` | 真浏览器打开分享页,断言无 `<del>` + `~~删除~~` 不回归 |
 | `packages/app/package.json` | 加 `test:e2e:web-share` 脚本(零新增依赖,复用 app 已有 @playwright/test) |
 
 跑法:`bun run --cwd packages/app test:e2e:web-share` → **1 passed**。
@@ -92,7 +92,8 @@ GFM 内置 del tokenizer 定界符是 `~~?`(一或两个 `~`),同一行两个「
 2. **WebSocket 只能 mock 不能真起** —— `Share.tsx` 把 URL 强制成 `wss://`(`apiUrl.replace(/^https?:\/\//, "wss://")`),真起 WS 服务就得配自签 TLS;改用 Playwright `routeWebSocket` 直接在浏览器侧 mock,零 TLS。
 3. **SSR 的 fetch 拦不到** —— `/share_data` 发生在 astro 服务进程里,`page.route` 够不着 → 必须真起一个假后端。且**要用 `node:http`**:workerd 打 `Bun.serve` 会 `other side closed`。
 4. **路径必须带 `/docs` 前缀** —— 站点 base 是 `/docs`(starlight);裸 `/s/<id>` 在 `Accept: text/html` 下返回 404(非 HTML 请求反而 200,极易误判"路由没问题")。
-5. 本机跑需要 `PLAYWRIGHT_BROWSERS_PATH=/Volumes/ExtSSD/devcache/ms-playwright`(定义在 `~/.zshrc`,非交互 shell 取不到)。
+5. **spec 必须放 `e2e-web-share/` 而非 `e2e/web-share/`** —— 主配置 `playwright.config.ts` 的 testDir 是 `./e2e`,会连带扫到这条 spec(它要额外两个 server,裸跑必挂,pre-push 跑 e2e 时同样炸)。挪出去即可,免改黑名单里的主配置。
+6. 本机跑需要 `PLAYWRIGHT_BROWSERS_PATH=/Volumes/ExtSSD/devcache/ms-playwright`(定义在 `~/.zshrc`,非交互 shell 取不到)。
 
 ## 回退方法
 
