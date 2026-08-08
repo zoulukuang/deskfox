@@ -152,7 +152,9 @@ export async function ensureRunning(redirectUri?: string): Promise<void> {
 
   server = createServer(handleRequest)
   await new Promise<void>((resolve, reject) => {
-    server!.listen(currentPort, () => {
+    // FORK: REQ-019 OAuth 回调 server 绑环回地址,勿绑 0.0.0.0(R6 网络监听安全;写法同 plugin/xai.ts:502)
+    //   本处 redirect URI 本来就是 127.0.0.1 字面量(mcp/oauth-provider.ts),零兼容风险 2026-08-07
+    server!.listen(currentPort, "127.0.0.1", () => {
       resolve()
     })
     server!.on("error", reject)
