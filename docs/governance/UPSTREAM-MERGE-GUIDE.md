@@ -56,9 +56,17 @@ git log --oneline upstream/dev ^HEAD | wc -l   # 漂移指标:这数字代表要
 # 3.5 列改动文件,提前看哪些会 conflict
 git diff --name-only HEAD...upstream/dev | grep -v "^docs/\|^packages/branding/\|^改动日志.md"
 # 上面这些路径 fork-only 不会冲突,只看其余的
+
+# 3.6 记下受守护的 fork 关键参数当前值(REQ-104),merge 后逐条比对
+grep -E '"test:unit(:watch)?"[[:space:]]*:' packages/app/package.json
+# 期望两行都含 --conditions=browser。抄下来,§5.7 要跟这份比。
 ```
 
 **红线**:如果 3.5 列出的文件包含本仓有 FORK marker 的(grep `// FORK:` / `// FORK-BEGIN:`),提前知道这些是高风险冲突点,merge 时重点关注。
+
+> ⚠️ **`package.json` 是特殊高危项**:它必然被撞(见 §4.4 类型 1/2 机械冲突),但**写不了注释、没有 FORK marker 载体**。`packages/app/package.json` 的 `--conditions=browser` 是当前已知最危险的一处 —— 缺了它 bun 把 solid-js 解析到 server 构建、`createEffect` 变 no-op。
+>
+> **2026-08-09 实测(别信"静默假绿"那个旧说法)**:删掉该参数跑全量 app 单测 = **604 pass / 2 fail**,并非全绿。两条 fail 都在 `src/pages/layout/project-restore.test.ts`。**但报错内容只说"REQ-072 折叠竞态…补回"失败,零线索指向 package.json** —— 真正的危险是**误诊**:你会以为 merge 破坏了 project-restore 的业务逻辑,跑去调试(甚至"修")那段代码。加上该信号只挂在一个 fork-only 测试文件上(被重构即归零)、且只占 2/606(容易被其它 fail 淹没),所以仍需机器断言兜底:该文件内有 `_fork_notes` 键就地说明,`.husky/pre-commit` §4.6 有断言无条件拦截。
 
 ## 4. Merge 操作 — rebase vs merge
 
@@ -241,6 +249,15 @@ grep -rnE '\.listen\([^,)]+,\s*(\(\s*\)|async\s*\(\s*\))\s*=>' packages/opencode
 #   按 REQ-019 补 "127.0.0.1"(参考 plugin/xai.ts:502);⚠️ 不要顺手改 redirect URI 的 localhost。
 # 机器版同一条断言在 packages/opencode/test/security/oauth-loopback-bind.test.ts —— merge 后
 #   跑 `cd packages/opencode && bun test test/security` 更省事,本 grep 是没跑测试时的人工兜底。
+
+# 5.7 fork 关键参数复查(REQ-104)—— 与 §3.6 抄下的值逐条比对
+grep -E '"test:unit(:watch)?"[[:space:]]*:' packages/app/package.json
+# 期望:两行都仍含 --conditions=browser,且与 §3.6 记录一致。
+# 丢了 = 解冲突时被上游版本覆盖 → 补回来。
+# ⚠️ 反过来的用法更值钱:merge 后若 project-restore.test.ts 报 effect 没生效
+#   (expect(t.opened).toEqual([...]) 收到 []),**先查这个参数**,别急着调业务代码 ——
+#   2026-08-09 实测确认那正是丢参数的表现(604 pass / 2 fail),而报错本身不会告诉你。
+# 机器版断言在 .husky/pre-commit §4.6(无条件跑,commit 时自动拦),本 grep 是人工兜底。
 ```
 
 **全过 → push**:
@@ -259,7 +276,7 @@ git reset --hard pre-rebase-<日期>
 
 | 工具 | 状态 | 用途 |
 |---|---|---|
-| `scripts/install-hooks.sh` | ✅ 已实现 | 装 pre-commit 护栏(白名单 + diff 阈值 + 大小写) |
+| `scripts/install-hooks.sh` | ✅ 已实现 | 装 pre-commit 护栏(白名单 + diff 阈值 + 大小写 + 网络绑定 + §4.6 fork 关键参数) |
 | FORK marker 检测 hook | 待加 | pre-commit 时若改了上游文件且没 FORK marker 报警 |
 | `scripts/fork-health.sh` | 待加 | 一键算上游侵入率 / 漂移 / override 三项指标 |
 | `scripts/check-merge-readiness.sh` | 待加 | 跑本文档第 3 节的 checklist |
