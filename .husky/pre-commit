@@ -115,4 +115,55 @@ if [ -n "$unsafe_bind_files" ]; then
   exit 1
 fi
 
-echo "✅ pre-commit: 白名单 / diff 阈值 / 大小写 / 网络绑定 四项检查通过"
+# ------------------------------------------------------------
+# 4.6 fork 关键参数守卫(2026-08-09 立,REQ-104)
+# ------------------------------------------------------------
+# 防止 fork 必需的构建/测试参数在上游 merge 解冲突时被静默丢掉。
+#
+# 当前守护:packages/app/package.json 的 test:unit / test:unit:watch 必须带
+#   --conditions=browser
+# 为什么非守不可:缺了它 bun 会把 solid-js 解析到 **server 构建**,createEffect
+#   变成 no-op,effect 不执行。参数由 fork commit defc4fe3ea 引入。
+#
+#   ⚠️ 2026-08-09 实测更正(REQ-104 立项时沿用的"静默假绿"说法**不准确**):
+#   实测删掉该参数跑全量 app 单测 = 604 pass / **2 fail**(不是全绿)。两条 fail 都在
+#   src/pages/layout/project-restore.test.ts,报的是 `expect(t.opened).toEqual([DIR_A])`
+#   收到 `[]` —— 即 effect 没跑。所以**有信号,不是无声**。
+#   但这条断言依然必要,因为那个信号是**误导性**的:
+#     (a) 报错内容 100% 指向 project-restore 的业务逻辑("REQ-072 折叠竞态…补回"),
+#         **零线索指向 package.json 参数** → 解冲突的人会去调试业务代码甚至"修"错东西;
+#     (b) 信号只挂在**一个 fork-only 测试文件**上,该文件一旦被重构/删除,信号归零;
+#     (c) 只占 2/606,merge 后若本来就有其它 fail(见 REQ-105 Windows 基线),会被淹没。
+#   ⇒ 本断言的价值 = 把"两个业务测试莫名其妙红了"换成"一行说清参数丢了"。
+#
+# 无条件跑(不只在该文件 staged 时):参数可能在任何一笔 commit 里被丢掉。
+# 加新的受守护参数时在 GUARDED_SCRIPTS 追加即可。
+
+APP_PKG="packages/app/package.json"
+GUARDED_SCRIPTS="test:unit test:unit:watch"
+REQUIRED_FLAG="--conditions=browser"
+
+if [ -f "$APP_PKG" ]; then
+  param_violations=""
+  for s in $GUARDED_SCRIPTS; do
+    line=$(grep -E "\"$s\"[[:space:]]*:" "$APP_PKG" || true)
+    if [ -z "$line" ]; then
+      param_violations="$param_violations\n  $s —— 脚本整条不见了"
+    elif ! echo "$line" | grep -q -- "$REQUIRED_FLAG"; then
+      param_violations="$param_violations\n  $s —— 缺 $REQUIRED_FLAG"
+    fi
+  done
+
+  if [ -n "$param_violations" ]; then
+    echo "❌ pre-commit (4.6 fork 关键参数守卫): $APP_PKG 的必需参数被改动:"
+    printf "%b\n" "$param_violations"
+    echo ""
+    echo "$REQUIRED_FLAG 是 FORK 必需(REQ-104):缺了 bun 把 solid-js 解析到 server 构建,"
+    echo "createEffect 变 no-op → effect 类单测**静默假绿**(照常 pass,不会变红)。"
+    echo "上游 merge 解冲突时最容易丢这个参数,请恢复后再 commit。"
+    echo "背景与豁免流程见 docs/governance/UPSTREAM-MERGE-GUIDE.md"
+    exit 1
+  fi
+fi
+
+echo "✅ pre-commit: 白名单 / diff 阈值 / 大小写 / 网络绑定 / fork 参数 五项检查通过"

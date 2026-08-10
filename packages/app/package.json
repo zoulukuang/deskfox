@@ -3,6 +3,9 @@
   "version": "1.17.4",
   "description": "",
   "type": "module",
+  "_fork_notes": {
+    "conditions=browser": "FORK 必需(REQ-104,原始来源 commit defc4fe3ea):test:unit / test:unit:watch 的 --conditions=browser 不可删。缺了 bun 会把 solid-js 解析到 server 构建,createEffect 变 no-op,effect 不执行。2026-08-09 实测:删掉它跑全量 = 604 pass / 2 fail,两条都在 src/pages/layout/project-restore.test.ts,但报错内容只指向该文件的业务逻辑、不会提示是本参数丢了 —— 极易被误诊成 merge 引入的代码问题。上游 merge 撞到本文件时务必保留该参数;.husky/pre-commit §4.6 有断言会拦。详见 docs/governance/UPSTREAM-MERGE-GUIDE.md"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./desktop-menu": "./src/desktop-menu.ts",
