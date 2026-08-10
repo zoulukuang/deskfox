@@ -258,6 +258,13 @@ grep -E '"test:unit(:watch)?"[[:space:]]*:' packages/app/package.json
 #   (expect(t.opened).toEqual([...]) 收到 []),**先查这个参数**,别急着调业务代码 ——
 #   2026-08-09 实测确认那正是丢参数的表现(604 pass / 2 fail),而报错本身不会告诉你。
 # 机器版断言在 .husky/pre-commit §4.6(无条件跑,commit 时自动拦),本 grep 是人工兜底。
+
+# 5.8 移动 upstream-base tag(REQ-048 动态豁免的基准树,必做)
+git tag -f upstream-base <本次 merge 的上游侧 parent sha>
+git push origin -f refs/tags/upstream-base
+# pre-commit §4.1 靠这个 tag 判定「fork 自建 vs 上游文件」(在树中不存在 = fork 自建 → 豁免)。
+# 不移 = 上游本次新增的文件会被误判成 fork 自建 → 黑名单闸变松。
+# 上游侧 parent 怎么找:git log -1 --format=%P <merge commit> 的第二个 parent。
 ```
 
 **全过 → push**:
