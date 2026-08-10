@@ -103,10 +103,11 @@ describe("REQ-098 单波浪号误判删除线", () => {
   })
 
   describe("防漂移守卫:web share 页那份副本", () => {
+    // Win core.autocrlf=true 时 checkout 出来是 CRLF,归一化后守卫正则(要求 `/` 紧贴 `\n`)才能双端一致
     const webCopy = readFileSync(
       join(import.meta.dir, "../../../web/src/components/share/marked-del-strict.ts"),
       "utf-8",
-    )
+    ).replace(/\r\n/g, "\n")
 
     test("web 副本存在且导出同名扩展", () => {
       expect(webCopy).toContain("export const strictDelExtension")
