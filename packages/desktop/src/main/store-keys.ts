@@ -9,3 +9,4 @@ export const FIRST_LAUNCH_DONE_KEY = "firstLaunchDone"
 // FORK: REQ-083 设置项 — onboarding.openOnFirstLaunch(默认 true)/ onboarding.completed
 export const ONBOARDING_OPEN_ON_FIRST_LAUNCH_KEY = "onboarding.openOnFirstLaunch"
 export const ONBOARDING_COMPLETED_KEY = "onboarding.completed"
+export const WINDOW_IDS_KEY = "windowIds"

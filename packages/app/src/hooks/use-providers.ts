@@ -4,7 +4,8 @@ import { decode64 } from "@/utils/base64"
 import { GETBOT_PROVIDER_ID, GETBOT_PROVIDER_NAME } from "@/utils/getbot"
 import { useParams } from "@solidjs/router"
 import { Iterable, pipe } from "effect"
-import { createMemo } from "solid-js"
+import type { Accessor } from "solid-js"
+import { selectProviderCatalog } from "./provider-catalog"
 
 export const popularProviders = [
   // FORK: getbot 紧跟 opencode/zen 之后(model 选择器自然顺序);provider 弹窗里另外 override 把它顶到首位 2026-04-26
@@ -37,16 +38,25 @@ function withGetbot<T extends { id: string }>(list: readonly T[]): T[] {
 }
 // FORK-END
 
-export function useProviders() {
+export function useProviders(directory?: Accessor<string | undefined>) {
   const serverSync = useServerSync()
   const params = useParams()
-  const dir = createMemo(() => decode64(params.dir) ?? "")
+  const dir = () => (directory ? directory() : decode64(params.dir))
   const providers = () => {
-    if (dir()) {
-      const [projectStore] = serverSync().child(dir())
-      if (projectStore.provider_ready) return projectStore.provider
-    }
-    return serverSync().data.provider
+    const value = dir()
+    const projectStore = value ? serverSync().child(value)[0] : undefined
+    if (directory)
+      return selectProviderCatalog({
+        explicit: true,
+        directory: value,
+        catalog: projectStore && { ready: projectStore.provider_ready, providers: projectStore.provider },
+      })
+    return selectProviderCatalog({
+      explicit: false,
+      directory: value,
+      catalog: projectStore && { ready: projectStore.provider_ready, providers: projectStore.provider },
+      global: serverSync().data.provider,
+    })
   }
   return {
     // FORK: all() 保持上游 Map(消费者用 .get/.values/.size);getbot 合成项只注入 popular() + provider 弹窗自身 [feat: electron-replatform]

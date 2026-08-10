@@ -20,8 +20,10 @@ import { it } from "./lib/effect"
 
 const execAsync = promisify(exec)
 
-// 用真实文件系统(FSUtil.defaultLayer)跑 IO 测试
-const fsLayer = FSUtil.defaultLayer
+// 用真实文件系统跑 IO 测试(2026-08-11 sync v1.17.13:上游 layer→node 体系,defaultLayer 移除)
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+const fsLayer = AppNodeBuilder.build(LayerNode.group([FSUtil.node]))
 
 // 辅助:在 Effect 中创建/销毁临时目录,并 provide fsLayer
 function withTmpdir<A, E>(body: (dir: string) => Effect.Effect<A, E, FSUtil.Service>) {

@@ -1,4 +1,4 @@
-import { Component, Show } from "solid-js"
+import { type Accessor, Component, Show } from "solid-js"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { Dialog } from "@opencode-ai/ui/dialog"
@@ -12,9 +12,9 @@ import { DialogCustomProvider } from "./dialog-custom-provider"
 import { GETBOT_PROVIDER_ID, GETBOT_PROVIDER_NAME } from "@/utils/getbot" // FORK: getbot 合成项 [feat: electron-replatform]
 const CUSTOM_ID = "_custom"
 
-export const DialogSelectProvider: Component = () => {
+export const DialogSelectProvider: Component<{ directory?: Accessor<string | undefined> }> = (props) => {
   const dialog = useDialog()
-  const providers = useProviders()
+  const providers = useProviders(props.directory)
   const language = useLanguage()
 
   const popularGroup = () => language.t("dialog.provider.group.popular")
@@ -68,10 +68,10 @@ export const DialogSelectProvider: Component = () => {
         onSelect={(x) => {
           if (!x) return
           if (x.id === CUSTOM_ID) {
-            dialog.show(() => <DialogCustomProvider back="providers" />)
+            dialog.show(() => <DialogCustomProvider back="providers" directory={props.directory} />)
             return
           }
-          dialog.show(() => <DialogConnectProvider provider={x.id} />)
+          dialog.show(() => <DialogConnectProvider provider={x.id} directory={props.directory} />)
         }}
       >
         {(i) => (

@@ -1,3 +1,6 @@
+// FORK: document-viewer(fork 自有)依赖的 media 工具 — 上游把 ui/src/pierre/media.ts 迁入 session-ui,
+// ui 反向依赖 session-ui 会成环;此文件为 fork 保留副本(与 session-ui/src/pierre/media.ts 同源,
+// merge 上游时若该文件更新需同步)。2026-08-11 [feat: upstream-sync-2026-08]
 import type { FileContent } from "@opencode-ai/sdk/v2"
 // FORK: office-pdf-ref protocol — side-band MIME marker shared with opencode/file/index.ts;跟上游 shared → core rename 走 2026-05-03
 import { isOfficePdfRefMime } from "@opencode-ai/core/office-pdf-protocol"

@@ -6,7 +6,7 @@ import path from "path"
 import { AbsolutePath } from "./schema"
 import { FSUtil } from "./fs-util"
 import { Git } from "./git"
-import { LayerNode } from "./effect/layer-node"
+import { makeGlobalNode } from "./effect/app-node"
 import { Hash } from "./util/hash"
 import { ProjectDirectoryTable } from "./project/sql"
 // FORK: REQ-069 锚读桥接 — resolve 读锚以支撑非 git 文件夹稳定身份 2026-07-05
@@ -54,7 +54,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ProjectV2") {}
 
-export const layer = Layer.effect(
+const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -73,8 +73,8 @@ export const layer = Layer.effect(
       )
     })
 
-    const remote = Effect.fnUntraced(function* (repo: Git.Repo) {
-      const origin = yield* git.remote(repo)
+    const remote = Effect.fnUntraced(function* (repo: Git.Repository) {
+      const origin = yield* git.remote.get(repo)
       if (!origin) return undefined
       const normalized = url(origin)
       if (!normalized) return undefined
@@ -105,19 +105,19 @@ export const layer = Layer.effect(
       return `${host.toLowerCase()}/${pathname}`
     }
 
-    const root = Effect.fnUntraced(function* (repo: Git.Repo) {
-      const root = (yield* git.roots(repo))[0]
+    const root = Effect.fnUntraced(function* (repo: Git.Repository) {
+      const root = (yield* git.history.rootCommits(repo))[0]
       return root ? ID.make(root) : undefined
     })
 
     const resolve = Effect.fn("Project.resolve")(function* (input: AbsolutePath) {
-      // FORK-BEGIN: REQ-069 锚读+桥接优先级 2026-07-05
+      // FORK-BEGIN: REQ-069 锚读+桥接优先级 2026-07-05(2026-08-11 适配上游 git.repo.discover / commonDirectory API)
       // resolve 无条件读锚(B4 裁决:flag 门控不下沉 core,core 无法访问 opencode 的 RuntimeFlags;
       // 「flag 关时项目身份仍按 global」由 U4 编排层强制)。resolve 保持纯读,绝不 mintId/writeAnchor(铸写在 U4)。
       // 用 layer 闭包内已解析的 fs 满足 readAnchor 的 FSUtil.Service 需求(与 cached/commit 同源)。
       const anchor = yield* readAnchor(input).pipe(Effect.provideService(FSUtil.Service, fs))
 
-      const repo = yield* git.find(input)
+      const repo = yield* git.repo.discover(input)
       if (!repo) {
         // 【有锚】返锚 id + 真实打开目录(B2 裁决:真实目录修复仅在绑定锚存在时生效,不无条件生效)
         if (anchor) return { previous: anchor, id: anchor, directory: input, vcs: undefined }
@@ -129,14 +129,15 @@ export const layer = Layer.effect(
       // git 分支:previous 链 = cached(.git/opencode) ?? 锚id;
       // id 全序 remote > .git/opencode(cached) > 锚id > root(即 remote ?? cached ?? 锚id ?? root)。
       // .git/opencode 与锚不一致时 cached 优先(钉死3);git init 未 commit(remote/cached/root 全无)有锚 → id=锚id 不掉 global。
-      const cachedId = yield* cached(repo.store)
+      const cachedId = yield* cached(repo.commonDirectory)
       const previous = cachedId ?? anchor
       const id = (yield* remote(repo)) ?? cachedId ?? anchor ?? (yield* root(repo))
+      // FORK-END
       return {
         previous,
         id: id ?? ID.global,
-        directory: repo.directory,
-        vcs: { type: "git" as const, store: repo.store },
+        directory: repo.worktree,
+        vcs: { type: "git" as const, store: repo.commonDirectory },
       }
       // FORK-END
     })
@@ -149,9 +150,8 @@ export const layer = Layer.effect(
   }),
 )
 
-export const defaultLayer = layer.pipe(
-  Layer.provide(FSUtil.defaultLayer),
-  Layer.provide(Git.defaultLayer),
-  Layer.provideMerge(ProjectDirectories.defaultLayer),
-)
-export const node = LayerNode.make(layer, [FSUtil.node, Git.node, ProjectDirectories.node])
+export const node = makeGlobalNode({
+  service: Service,
+  layer: layer,
+  deps: [FSUtil.node, Git.node, ProjectDirectories.node],
+})

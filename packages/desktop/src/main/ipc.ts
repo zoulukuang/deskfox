@@ -8,10 +8,10 @@ import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
 import type { FatalRendererError, ServerReadyData, TitlebarTheme } from "../preload/types"
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { assertAttachmentBudget, createPickedFileAuthorizations } from "./attachment-picker"
-import { getStore } from "./store"
+import { getStore, removeStoreFileIfEmpty } from "./store"
 // FORK: REQ-068 路径探测结果类型 [feat: stale-path-hardening]
 import type { PathProbeResult } from "./fs-probe"
-import { getPinchZoomEnabled, setPinchZoomEnabled, setTitlebar, updateTitlebar } from "./windows"
+import { getPinchZoomEnabled, getWindowID, setPinchZoomEnabled, setTitlebar, updateTitlebar } from "./windows"
 import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
 // FORK: 原生菜单跟随应用内语言 [feat: settings-panel-cleanup] 2026-06-15
@@ -105,9 +105,11 @@ export function registerIpcHandlers(deps: Deps) {
   })
   ipcMain.handle("store-delete", (_event: IpcMainInvokeEvent, name: string, key: string) => {
     getStore(name).delete(key)
+    void removeStoreFileIfEmpty(name)
   })
   ipcMain.handle("store-clear", (_event: IpcMainInvokeEvent, name: string) => {
     getStore(name).clear()
+    void removeStoreFileIfEmpty(name)
   })
   ipcMain.handle("store-keys", (_event: IpcMainInvokeEvent, name: string) => {
     const store = getStore(name)
@@ -203,6 +205,14 @@ export function registerIpcHandlers(deps: Deps) {
   })
 
   ipcMain.handle("get-window-count", () => BrowserWindow.getAllWindows().length)
+
+  ipcMain.handle("get-window-id", (event: IpcMainInvokeEvent) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) throw new Error("Window not found")
+    const id = getWindowID(win)
+    if (!id) throw new Error("Window ID not found")
+    return id
+  })
 
   ipcMain.handle("get-window-focused", (event: IpcMainInvokeEvent) => {
     const win = BrowserWindow.fromWebContents(event.sender)

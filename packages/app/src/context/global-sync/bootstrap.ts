@@ -6,31 +6,29 @@ import type {
   Project,
   ProviderAuthResponse,
   QuestionRequest,
+  ReferenceInfo,
   Session,
-  Todo,
 } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@/utils/toast"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { retry } from "@opencode-ai/core/util/retry"
 import { batch } from "solid-js"
-import { reconcile, type SetStoreFunction, type Store } from "solid-js/store"
+import { produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { State, VcsCache } from "./types"
+import type { ServerSession } from "../server-session"
 import { applyReconciledSessionStatus, healClearedSessionOrphans } from "./session-status-reconcile"
 import { cmp, normalizeAgentList, normalizeProviderList } from "./utils"
 // FORK: 加 isTransientStartupError(coldstart 守卫)+ skipToken [feat: electron-replatform]
 import { formatServerError, isTransientStartupError, isUnservableDirError } from "@/utils/server-errors"
 import { QueryClient, queryOptions, skipToken } from "@tanstack/solid-query"
-import { loadMcpQuery } from "../server-sync"
-import { NormalizedProviderListResponse } from "@opencode-ai/ui/context"
+import { loadMcpQuery, loadMcpResourcesQuery } from "../server-sync"
+import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import { ScopedKey, type ServerScope } from "@/utils/server-scope"
 
 type GlobalStore = {
   ready: boolean
   path: Path
   project: Project[]
-  session_todo: {
-    [sessionID: string]: Todo[]
-  }
   provider: NormalizedProviderListResponse
   provider_auth: ProviderAuthResponse
   config: Config
@@ -200,6 +198,13 @@ export const loadPathQuery = (scope: ServerScope, directory: string | null, sdk:
     queryFn: () => retry(() => sdk.path.get().then((x) => x.data!)),
   })
 
+export const loadReferencesQuery = (scope: ServerScope, directory: string, sdk: OpencodeClient) =>
+  queryOptions<ReferenceInfo[]>({
+    queryKey: [scope, directory, "references"] as const,
+    queryFn: () => retry(() => sdk.v2.reference.list().then((x) => x.data?.data ?? [])).catch(() => []),
+    placeholderData: [],
+  })
+
 export async function bootstrapDirectory(input: {
   directory: string
   scope: ServerScope
@@ -217,6 +222,7 @@ export async function bootstrapDirectory(input: {
     provider: NormalizedProviderListResponse
   }
   queryClient: QueryClient
+  session?: ServerSession
 }) {
   const loading = input.store.status !== "complete"
   const seededProject = projectID(input.directory, input.global.project)
@@ -240,14 +246,34 @@ export async function bootstrapDirectory(input: {
           .then((data) => input.setStore("agent", data)),
       () =>
         retry(() => input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false })))),
-      // FORK: 对账清掉进程死/事件丢/sidecar 重启后残留的 stale 状态。两份独立:① session_status
-      // 残留 busy(主视图「思考中」)用 reconcile 整体替换清掉;② 被清会话末条 assistant 残骸
-      // (侧边栏转圈,heal-interrupted 重连路径不触发)前端补盖 completed。[feat: stuck-working-status-reconcile] 2026-06-13
       () =>
         retry(() =>
-          input.sdk.session.status().then((x) => {
-            const cleared = applyReconciledSessionStatus(input.store, input.setStore, x.data)
-            healClearedSessionOrphans(input.store, input.setStore, cleared)
+          input.sdk.session.status().then(async (x) => {
+            if (input.session) {
+              const statuses = x.data ?? {}
+              await Promise.all(
+                Object.keys(statuses).map((sessionID) => input.session!.resolve(sessionID).catch(() => undefined)),
+              )
+              input.session.set(
+                "session_status",
+                produce((draft) => {
+                  for (const sessionID of Object.keys(draft)) {
+                    if (statuses[sessionID]) continue
+                    if (input.session?.get(sessionID)?.directory === input.directory) delete draft[sessionID]
+                  }
+                }),
+              )
+              for (const [sessionID, status] of Object.entries(statuses)) {
+                input.session.set("session_status", sessionID, reconcile(status))
+              }
+            }
+            if (!input.session) {
+              // FORK: legacy store 路径保留对账 — ① 清 stale busy(上游新 session 路径已自带删除)
+              // ② 被清会话末条 assistant 残骸补盖 completed(新路径依赖上游 resolve/heal-interrupted,
+              // 若回归再评估移植)[feat: stuck-working-status-reconcile] 2026-06-13/2026-08-11
+              const cleared = applyReconciledSessionStatus(input.store, input.setStore, x.data)
+              healClearedSessionOrphans(input.store, input.setStore, cleared)
+            }
           }),
         ),
       !seededProject &&
@@ -267,6 +293,7 @@ export async function bootstrapDirectory(input: {
           }),
         ),
       input.mcp && (() => retry(() => input.sdk.command.list().then((x) => input.setStore("command", x.data ?? [])))),
+      () => input.queryClient.fetchQuery(loadReferencesQuery(input.scope, input.directory, input.sdk)),
       () =>
         retry(() =>
           input.sdk.permission.list().then((x) => {
@@ -274,21 +301,25 @@ export async function bootstrapDirectory(input: {
             const grouped = groupBySession(
               (x.data ?? []).filter((perm): perm is PermissionRequest => !!perm?.id && !!perm.sessionID),
             )
-            return warmSessions({ ids, store: input.store, setStore: input.setStore, sdk: input.sdk }).then(() =>
+            const warm = input.session
+              ? Promise.all(ids.map((sessionID) => input.session!.resolve(sessionID))).then(() => undefined)
+              : warmSessions({ ids, store: input.store, setStore: input.setStore, sdk: input.sdk })
+            return warm.then(() =>
               batch(() => {
-                for (const sessionID of Object.keys(input.store.permission)) {
+                const current = input.session?.data.permission ?? input.store.permission
+                for (const sessionID of Object.keys(current)) {
                   if (grouped[sessionID]) continue
-                  input.setStore("permission", sessionID, [])
+                  if (input.session?.get(sessionID)?.directory !== input.directory) continue
+                  if (input.session) input.session.set("permission", sessionID, [])
+                  if (!input.session) input.setStore("permission", sessionID, [])
                 }
                 for (const [sessionID, permissions] of Object.entries(grouped)) {
-                  input.setStore(
-                    "permission",
-                    sessionID,
-                    reconcile(
-                      permissions.filter((p) => !!p?.id).sort((a, b) => cmp(a.id, b.id)),
-                      { key: "id" },
-                    ),
+                  const value = reconcile(
+                    permissions.filter((p) => !!p?.id).sort((a, b) => cmp(a.id, b.id)),
+                    { key: "id" },
                   )
+                  if (input.session) input.session.set("permission", sessionID, value)
+                  if (!input.session) input.setStore("permission", sessionID, value)
                 }
               }),
             )
@@ -299,21 +330,25 @@ export async function bootstrapDirectory(input: {
           input.sdk.question.list().then((x) => {
             const ids = (x.data ?? []).map((question) => question?.sessionID).filter((id): id is string => !!id)
             const grouped = groupBySession((x.data ?? []).filter((q): q is QuestionRequest => !!q?.id && !!q.sessionID))
-            return warmSessions({ ids, store: input.store, setStore: input.setStore, sdk: input.sdk }).then(() =>
+            const warm = input.session
+              ? Promise.all(ids.map((sessionID) => input.session!.resolve(sessionID))).then(() => undefined)
+              : warmSessions({ ids, store: input.store, setStore: input.setStore, sdk: input.sdk })
+            return warm.then(() =>
               batch(() => {
-                for (const sessionID of Object.keys(input.store.question)) {
+                const current = input.session?.data.question ?? input.store.question
+                for (const sessionID of Object.keys(current)) {
                   if (grouped[sessionID]) continue
-                  input.setStore("question", sessionID, [])
+                  if (input.session?.get(sessionID)?.directory !== input.directory) continue
+                  if (input.session) input.session.set("question", sessionID, [])
+                  if (!input.session) input.setStore("question", sessionID, [])
                 }
                 for (const [sessionID, questions] of Object.entries(grouped)) {
-                  input.setStore(
-                    "question",
-                    sessionID,
-                    reconcile(
-                      questions.filter((q) => !!q?.id).sort((a, b) => cmp(a.id, b.id)),
-                      { key: "id" },
-                    ),
+                  const value = reconcile(
+                    questions.filter((q) => !!q?.id).sort((a, b) => cmp(a.id, b.id)),
+                    { key: "id" },
                   )
+                  if (input.session) input.session.set("question", sessionID, value)
+                  if (!input.session) input.setStore("question", sessionID, value)
                 }
               }),
             )
@@ -321,6 +356,7 @@ export async function bootstrapDirectory(input: {
         ),
       () => Promise.resolve(input.loadSessions(input.directory)),
       input.mcp && (() => input.queryClient.fetchQuery(loadMcpQuery(input.scope, input.directory, input.sdk))),
+      input.mcp && (() => input.queryClient.fetchQuery(loadMcpResourcesQuery(input.scope, input.directory, input.sdk))),
       () =>
         input.queryClient.fetchQuery(loadProvidersQuery(input.scope, input.directory, input.sdk)).catch((err) => {
           // FORK: 冷启动重载竞态(sdk/后端未 ready)不弹 toast — transient,ready 后重跑即恢复 [feat: coldstart-project-reload-toast]

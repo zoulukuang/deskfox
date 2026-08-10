@@ -685,8 +685,6 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.description": "在時間軸中預設展開 shell 工具區塊",
   "settings.general.row.editToolPartsExpanded.title": "展開 edit 工具區塊",
   "settings.general.row.editToolPartsExpanded.description": "在時間軸中預設展開 edit、write 和 patch 工具區塊",
-  "settings.general.row.showSessionProgressBar.title": "顯示工作階段進度列",
-  "settings.general.row.showSessionProgressBar.description": "當代理程式正在運作時，在工作階段頂部顯示動畫進度列",
   "settings.general.row.pinchZoom.title": "捏合縮放",
   "settings.general.row.pinchZoom.description": "允許觸控板捏合和 Ctrl+滾輪手勢縮放",
   "settings.general.row.telemetry.title": "匿名使用統計",

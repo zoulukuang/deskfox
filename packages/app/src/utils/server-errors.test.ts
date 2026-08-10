@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import type { SessionNotFoundError } from "@opencode-ai/sdk/v2/client"
 import type { ConfigInvalidError, ProviderModelNotFoundError } from "./server-errors"
 import {
   formatServerError,
+  isSessionNotFoundError,
   parseReadableConfigInvalidError,
   isTransientServerError,
   isRetryableListError,
@@ -200,5 +202,35 @@ describe("isUnservableDirError (切缺失目录项目 503 空 body)", () => {
     expect(isUnservableDirError("")).toBe(false)
     expect(isUnservableDirError(null)).toBe(false)
     expect(isUnservableDirError(undefined)).toBe(false)
+  })
+})
+
+describe("isSessionNotFoundError", () => {
+  test("matches an SDK-wrapped error for the requested session", () => {
+    const body = {
+      _tag: "SessionNotFoundError",
+      sessionID: "ses_missing",
+      message: "Session not found",
+    } satisfies SessionNotFoundError
+
+    expect(isSessionNotFoundError(new Error(body.message, { cause: { body, status: 404 } }), body.sessionID)).toBe(true)
+  })
+
+  test("rejects errors for other sessions and other 404 responses", () => {
+    const body = {
+      _tag: "SessionNotFoundError",
+      sessionID: "ses_parent",
+      message: "Session not found",
+    } satisfies SessionNotFoundError
+
+    expect(isSessionNotFoundError(new Error(body.message, { cause: { body, status: 404 } }), "ses_tab")).toBe(false)
+    expect(
+      isSessionNotFoundError(
+        new Error("Provider not found", {
+          cause: { body: { _tag: "ProviderNotFoundError", providerID: "missing" }, status: 404 },
+        }),
+        "ses_tab",
+      ),
+    ).toBe(false)
   })
 })

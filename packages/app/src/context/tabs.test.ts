@@ -1,6 +1,30 @@
 import { describe, expect, test } from "bun:test"
+import { createRoot, getOwner, onCleanup } from "solid-js"
+import { createTabMemory } from "./tab-memory"
+
+describe("tab memory", () => {
+  test("keeps state until its tab is removed", () => {
+    createRoot((dispose) => {
+      const memory = createTabMemory(getOwner())
+      let disposed = 0
+      const first = memory.ensure("tab", "prompt", () => {
+        onCleanup(() => disposed++)
+        return { value: "prompt" }
+      })
+
+      expect(memory.ensure("tab", "prompt", () => ({ value: "other" }))).toBe(first)
+      expect(memory.ensure("other", "prompt", () => ({ value: "other" }))).not.toBe(first)
+
+      memory.remove("tab")
+      expect(disposed).toBe(1)
+      expect(memory.ensure("tab", "prompt", () => ({ value: "new" }))).not.toBe(first)
+      dispose()
+    })
+  })
+})
+
 import type { Session } from "@opencode-ai/sdk/v2/client"
-import { sessionHasOpenTab } from "./tabs-dedup"
+import { sessionHasOpenTab } from "./tabs"
 import type { Tab } from "./tabs"
 import type { ServerConnection } from "./server"
 
@@ -10,10 +34,10 @@ import type { ServerConnection } from "./server"
 const server = "server-1" as ServerConnection.Key
 const other = "server-2" as ServerConnection.Key
 
-const sessionTab = (sessionId: string, dirBase64: string): Tab => ({
+// 2026-08-11 sync v1.17.13:上游 SessionTab 去掉 dirBase64(href 改 server-keyed),第二参保留仅为兼容旧用例签名
+const sessionTab = (sessionId: string, _dirBase64?: string): Tab => ({
   type: "session",
   server,
-  dirBase64,
   sessionId,
 })
 

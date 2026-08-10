@@ -7,7 +7,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 import type { Event } from "electron"
-import { app, BrowserWindow } from "electron"
+import { app } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
 // FORK: native-menu-i18n — contextMenu 收口到 deskfox/context-menu(按语言重挂)[feat: native-menu-i18n]
@@ -47,11 +47,13 @@ import { createSidecarWatchdog } from "./deskfox/sidecar-watchdog"
 import { handleRendererGone } from "./deskfox/renderer-crash-guard"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
 import {
-  createMainWindow,
+  getLastFocusedWindow,
   registerRendererProtocol,
   setRelaunchHandler,
+  setAppQuitting,
   setBackgroundColor,
   setDockIcon,
+  restoreMainWindows,
 } from "./windows"
 import { createWslServersController } from "./wsl/servers"
 import { registerWslIpcHandlers } from "./wsl/ipc"
@@ -65,11 +67,14 @@ import {
   shouldAutoOpenOnboarding,
 } from "./deskfox/onboarding"
 import { getStore } from "./store"
+import { cleanupStoreFiles } from "./store-cleanup"
 
 // FORK-BEGIN: DeskFox 应用身份 — 继承 Tauri 版三档 identifier(ai.deskfox.app,治理规则 R3/应用身份-命名规则)
 //   userData 与旧 Tauri 版同目录(Roaming/<id>):前端偏好迁移同目录原地完成,Win 任务栏固定/通知
 //   身份(AppUserModelId)延续,升级无感。[feat: electron-replatform] 2026-06-13
 // FORK: app 名复用 constants 的 PRODUCT_NAMES 单一事实源(原本地 APP_NAMES 与之重复)[feat: electron-brand-cleanup]
+// FORK: 多窗口化后保留 mainWindow 兼容指针(首窗;托盘/看门狗/onboarding 旧调用点用)2026-08-11
+let mainWindow: import("electron").BrowserWindow | null = null
 const APP_NAMES = PRODUCT_NAMES
 const APP_IDS: Record<string, string> = {
   local: "ai.deskfox.app.local",
@@ -84,7 +89,6 @@ const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 const MAIN_DIR = dirname(fileURLToPath(import.meta.url))
 
 let logger: ReturnType<typeof initLogging>
-let mainWindow: BrowserWindow | null = null
 let server: SidecarListener | null = null
 // FORK: sidecar 看门狗句柄(stopSidecars 主动停时先 stop,防误重启)[feat: sidecar-watchdog-respawn]
 let sidecarWatchdog: { start: () => void; stop: () => void } | null = null
@@ -103,7 +107,8 @@ function useEnvProxy() {
 function emitDeepLinks(urls: string[]) {
   if (urls.length === 0) return
   pendingDeepLinks.push(...urls)
-  if (mainWindow) sendDeepLinks(mainWindow, urls)
+  const win = getLastFocusedWindow()
+  if (win) sendDeepLinks(win, urls)
 }
 
 async function killSidecar() {
@@ -236,9 +241,10 @@ const main = Effect.gen(function* () {
       logger.log("deep link received via second-instance", { urls })
       emitDeepLinks(urls)
     }
-    if (mainWindow) {
-      mainWindow.show()
-      mainWindow.focus()
+    const win = getLastFocusedWindow()
+    if (win) {
+      win.show()
+      win.focus()
     }
   })
 
@@ -260,6 +266,7 @@ const main = Effect.gen(function* () {
   app.on("before-quit", () => {
     // FORK: 真退出意图 — 让关闭到托盘的 close 拦截放行(Cmd+Q / 菜单退出 / app.quit)[feat: electron-replatform]
     setQuitting()
+    setAppQuitting()
     void stopSidecars()
   })
 
@@ -271,6 +278,7 @@ const main = Effect.gen(function* () {
   })
 
   app.on("will-quit", () => {
+    setAppQuitting()
     void stopSidecars()
   })
 
@@ -307,6 +315,20 @@ const main = Effect.gen(function* () {
   const namespaceResult = TEST_ONBOARDING
     ? undefined
     : yield* Effect.promise(() => applyDeskfoxDataNamespace())
+
+  yield* Effect.promise(() => cleanupStoreFiles(app.getPath("userData"))).pipe(
+    Effect.tap((result) =>
+      Effect.sync(() => {
+        if (result.deleted.length === 0) return
+        logger.log("cleaned scoped store files", { count: result.deleted.length, scanned: result.scanned })
+      }),
+    ),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        logger.warn("failed to clean scoped store files", error)
+      }),
+    ),
+  )
   app.setAsDefaultProtocolClient("opencode")
   registerRendererProtocol()
   setDockIcon()
@@ -466,14 +488,16 @@ const main = Effect.gen(function* () {
 
   yield* Fiber.await(loadingTask)
 
-  mainWindow = createMainWindow()
-  if (mainWindow) {
-    // FORK: 系统托盘 + 关闭到托盘(关 GUI ≠ 退主进程,飞书/边车常驻)[feat: electron-replatform]
-    createTray()
-    attachCloseToTray(mainWindow)
+  const windows = restoreMainWindows()
+  // FORK: 系统托盘 + 关闭到托盘(关 GUI ≠ 退主进程,飞书/边车常驻)。多窗口化后托盘全局一份,
+  //   close-to-tray 逐窗挂接;mainWindow 兼容指针取首窗(onboarding/updater 等旧调用点用)2026-08-11
+  mainWindow = windows[0] ?? null
+  createTray()
+  for (const win of windows) attachCloseToTray(win)
+  if (windows.length) {
     createMenu({
       trigger: (id) => {
-        const win = BrowserWindow.getFocusedWindow() ?? mainWindow
+        const win = getLastFocusedWindow()
         if (win) sendMenuCommand(win, id)
       },
       checkForUpdates: () => {

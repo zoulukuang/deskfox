@@ -7,6 +7,7 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
@@ -83,6 +84,7 @@ const playDemoSound = (id: string | undefined) => {
 
 export const SettingsGeneral: Component = () => {
   const theme = useTheme()
+  const dialog = useDialog()
   const language = useLanguage()
   const permission = usePermission()
   const platform = usePlatform()
@@ -362,20 +364,26 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
+        {/* 原 FORK(settings-panel-cleanup 2026-06-15)隐藏此开关;2026-08-11 D1 过渡期恢复暴露 —
+            默认仍经典布局,但用户可自愿切 v2 提前体验(段4 随上游翻默认) */}
         <SettingsRow
-          title={language.t("settings.general.row.showSessionProgressBar.title")}
-          description={language.t("settings.general.row.showSessionProgressBar.description")}
+          title={language.t("settings.general.row.newLayoutDesigns.title")}
+          description={language.t("settings.general.row.newLayoutDesigns.description")}
         >
-          <div data-action="settings-show-session-progress-bar">
+          <div data-action="settings-new-layout-designs">
             <Switch
-              checked={settings.general.showSessionProgressBar()}
-              onChange={(checked) => settings.general.setShowSessionProgressBar(checked)}
+              checked={settings.general.newLayoutDesigns()}
+              onChange={(checked) => {
+                settings.general.setNewLayoutDesigns(checked)
+                if (!checked) return
+                void import("@/components/settings-v2").then((module) => {
+                  dialog.show(() => <module.DialogSettings />)
+                })
+              }}
             />
           </div>
         </SettingsRow>
 
-        {/* FORK: 隐藏上游「New layout and designs」实验开关 — DeskFox 默认经典布局(newLayoutDesignsDefault=false),
-            v2 布局与既有交互差异大,不对用户暴露切换入口;保留底层字段 + 默认值不变 [feat: settings-panel-cleanup] 2026-06-15 */}
         {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
         <Show when={platform.getTelemetryEnabled}>
           <SettingsRow

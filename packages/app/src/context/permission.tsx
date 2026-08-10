@@ -1,4 +1,4 @@
-import { createEffect, createMemo, getOwner, onCleanup, runWithOwner } from "solid-js"
+import { type Accessor, createEffect, createMemo, getOwner, onCleanup, runWithOwner } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 // FORK: REQ-078 方案D 共享过滤层 [feat: permission-filter-concurrency] 2026-08-02
 import { candidateSignature, createResolvableCache } from "./permission-resolvable"
@@ -49,13 +49,13 @@ function hasPermissionPromptRules(permission: unknown) {
 export const { use: usePermission, provider: PermissionProvider } = createSimpleContext({
   name: "Permission",
   gate: false,
-  init: () => {
+  init: (props: { directory?: Accessor<string | undefined> }) => {
     const params = useParams()
     const serverSDK = useServerSDK()
     const serverSync = useServerSync()
 
     const permissionsEnabled = createMemo(() => {
-      const directory = decode64(params.dir)
+      const directory = props.directory?.() ?? decode64(params.dir)
       if (!directory) return false
       const [store] = serverSync().child(directory)
       return hasPermissionPromptRules(store.config.permission)
@@ -87,7 +87,7 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
     // When config has permission: "allow", auto-enable directory-level auto-accept
     createEffect(() => {
       if (!ready()) return
-      const directory = decode64(params.dir)
+      const directory = props.directory?.() ?? decode64(params.dir)
       if (!directory) return
       const [childStore] = serverSync().child(directory)
       const perm = childStore.config.permission

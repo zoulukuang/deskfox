@@ -58,7 +58,18 @@ test.describe("smoke: session timeline", () => {
       await page.mouse.wheel(0, -120)
       await page.waitForTimeout(20)
     }
-    const keys = ["prt_user_text_smoke_0032", "prt_text_2_smoke_0032", "prt_tool_apply_patch_8_smoke_0032"]
+    const keys = await scroller.evaluate((element) => {
+      const view = element.getBoundingClientRect()
+      return [...element.querySelectorAll<HTMLElement>("[data-timeline-part-id]")]
+        .filter((row) => {
+          const rect = row.getBoundingClientRect()
+          return rect.bottom > view.top && rect.top < view.bottom
+        })
+        .map((row) => row.dataset.timelinePartId)
+        .filter((id): id is string => !!id)
+        .slice(0, 3)
+    })
+    expect(keys.length).toBeGreaterThan(0)
     const positions = () =>
       scroller.evaluate((element, keys) => {
         const top = element.getBoundingClientRect().top
@@ -116,7 +127,7 @@ test.describe("smoke: session timeline", () => {
     await page.addInitScript(
       ({ dirBase64, sourceID, targetID }) => {
         localStorage.setItem(
-          "opencode.global.dat:tabs",
+          "opencode.window.browser.dat:tabs",
           JSON.stringify(
             [sourceID, targetID].map((sessionId) => ({
               type: "session",
@@ -242,7 +253,7 @@ test.describe("smoke: session timeline", () => {
     await page.addInitScript(
       ({ dirBase64, sourceID, targetID }) => {
         localStorage.setItem(
-          "opencode.global.dat:tabs",
+          "opencode.window.browser.dat:tabs",
           JSON.stringify(
             [sourceID, targetID].map((sessionId) => ({
               type: "session",
@@ -337,6 +348,21 @@ test.describe("smoke: session timeline", () => {
     const expectedMessageIDs = fixture.expected.targetMessageIDs
     await expectSessionTimelineReady(page, expectedPartIDs, expectedMessageIDs, errors)
     await expectCanScrollToStart(page, expectedPartIDs, expectedMessageIDs, errors)
+
+    // FORK(2026-08-11 sync v1.17.13):DeskFox 将 bash 纳入「已探索」折叠组(message-part-grouping,
+    // 降噪设计:组内渲染命令摘要行而非完整 shell 输出;新旧版本一致行为)。上游「bash 独立成行 +
+    // 展开看 $ 输出 + 收起看 subtitle」断言不适用,改断:所在组存在、可展开、含该命令摘要行。
+    const shellGroup = page.locator(`[data-timeline-part-ids*="${fixture.expected.expandedShellPartID}"]`)
+    await expect(shellGroup).toHaveCount(1)
+    const shellGroupTrigger = shellGroup.locator('[data-slot="collapsible-trigger"]').first()
+    if ((await shellGroupTrigger.getAttribute("aria-expanded")) === "false") {
+      await shellGroupTrigger.scrollIntoViewIfNeeded()
+      await shellGroupTrigger.click()
+    }
+    await expect(shellGroupTrigger).toHaveAttribute("aria-expanded", "true")
+    await expect(
+      shellGroup.locator('[data-slot="context-tool-group-item"]').filter({ hasText: "bun typecheck" }).first(),
+    ).toBeVisible()
   })
 })
 
@@ -715,7 +741,7 @@ async function navigateToSession(page: Page, directory: string, sessionId: strin
 }
 
 async function switchTitlebarSession(page: Page, sessionID: string, title: string) {
-  const href = `/${base64Encode(fixture.directory)}/session/${sessionID}`
+  const href = `/server/${base64Encode(fixture.serverKey)}/session/${sessionID}`
   const tab = page.locator(`[data-slot="titlebar-tabs"] a[href="${href}"]`).first()
   await expect(tab).toBeVisible()
   await tab.click()

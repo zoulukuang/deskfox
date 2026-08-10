@@ -50,8 +50,9 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                 </span>
               )
 
+            // FORK: 聊天引用卡 tooltip 显示引用预览(400ms);文件卡跟随上游路径样式(800ms)[feat: 聊天选区-卡片化-换行]
             return (
-              <Tooltip value={tooltipValue} placement="top" openDelay={isChatQuote ? 400 : 2000}>
+              <Tooltip value={tooltipValue} placement="top" openDelay={isChatQuote ? 400 : 800}>
                 <div
                   classList={{
                     "group shrink-0 flex flex-col rounded-[6px] pl-2 pr-1 py-1 max-w-[200px] h-12 cursor-default transition-all transition-transform shadow-xs-border hover:shadow-xs-border-hover": true,

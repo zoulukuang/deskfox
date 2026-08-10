@@ -8,8 +8,9 @@ import { ConfigProvider, Effect, Layer } from "effect"
 import { RuntimeFlags } from "../../src/effect/runtime-flags"
 import { it } from "../lib/effect"
 
+// 2026-08-11 sync v1.17.13:上游 defaultLayer 移除,直接用 Service.layer 提供 config
 const fromConfig = (input: Record<string, unknown>) =>
-  RuntimeFlags.defaultLayer.pipe(Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(input))))
+  RuntimeFlags.Service.layer.pipe(Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(input))), Layer.orDie)
 
 const readFlags = RuntimeFlags.Service.useSync((flags) => flags)
 

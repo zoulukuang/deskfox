@@ -24,30 +24,14 @@ import path from "path"
 import { tmpdirScoped } from "../fixture/fixture"
 import { Effect, Layer } from "effect"
 import { testEffect } from "../lib/effect"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 
-const projectLayerWithFlag = (nonGitFolderIdentity: boolean) =>
-  Project.layer.pipe(
-    Layer.provide(RuntimeFlags.layer({ nonGitFolderIdentity })),
-    Layer.provide(EventV2Bridge.defaultLayer),
-    Layer.provide(ProjectV2.defaultLayer),
-    // FORK: 上游删除 ProjectCopy.defaultLayer,按上游 core/test/project-copy.test.ts 范式等价组装(2026-08-11 sync v1.17.8)
-    Layer.provide(
-      ProjectCopy.layer.pipe(
-        Layer.provide(Database.defaultLayer),
-        Layer.provide(ProjectDirectories.defaultLayer),
-        Layer.provide(EventV2.defaultLayer),
-        Layer.provide(FSUtil.defaultLayer),
-        Layer.provide(Git.defaultLayer),
-      ),
-    ),
-    Layer.provide(AppProcess.defaultLayer),
-    Layer.provide(CrossSpawnSpawner.defaultLayer),
-    Layer.provide(FSUtil.defaultLayer),
-    Layer.provide(Database.defaultLayer),
-  )
-
-const baseLayer = (flag: boolean) =>
-  Layer.mergeAll(projectLayerWithFlag(flag), Database.defaultLayer, CrossSpawnSpawner.defaultLayer)
+// 2026-08-11 sync v1.17.13:上游 layer→node 体系,按 opencode/test/project/project.test.ts 范式改
+// AppNodeBuilder + RuntimeFlags 覆盖注入(替代原 defaultLayer 组装)
+const projectTestNode = LayerNode.group([Project.node, Database.node, CrossSpawnSpawner.node])
+const baseLayer = (nonGitFolderIdentity: boolean) =>
+  AppNodeBuilder.build(projectTestNode, [[RuntimeFlags.node, RuntimeFlags.layer({ nonGitFolderIdentity })]])
 
 const itOn = testEffect(baseLayer(true))
 
