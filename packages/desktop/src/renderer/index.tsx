@@ -27,6 +27,7 @@ import { render } from "solid-js/web"
 import pkg from "../../package.json"
 import { initI18n, t } from "./i18n"
 import { initializationData, initializationReady } from "./initialization"
+import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
 import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
@@ -225,6 +226,9 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
       }
       return window.api.openPath(path, app)
     },
+    async revealPath(path: string) {
+      return window.api.revealPath(path)
+    },
 
     back() {
       window.history.back()
@@ -243,6 +247,8 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     },
 
     exportDebugLogs: () => window.api.exportDebugLogs(),
+
+    setForceFocus: (enabled) => window.api.setForceFocus(enabled),
 
     recordFatalRendererError: (error) => window.api.recordFatalRendererError(error),
 
@@ -382,6 +388,7 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
   const router = (props: BaseRouterProps) => (
     <DesktopMemoryRouter {...props} windowID={platform.windowID ?? "browser"} />
   )
+  const onboarding = Promise.withResolvers<void>()
 
   function handleClick(e: MouseEvent) {
     const link = (e.target as HTMLElement).closest("a.external-link") as HTMLAnchorElement | null
@@ -419,7 +426,8 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
   function App() {
     const wslServers = useWslServers()
     const ready = createMemo(
-      () => !defaultServer.loading && !sidecar.loading && !windowCount.loading && !locale.loading,
+      () =>
+        !defaultServer.loading && !sidecar.loading && !windowCount.loading && !locale.loading && !wslServers.isLoading,
     )
     const servers = createMemo(() => {
       const data = initializationData(sidecar)
@@ -442,12 +450,22 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
     const effectiveDefaultServer = createMemo(() =>
       ServerConnection.Key.make(availableStartupServer(defaultServer.latest, wslServers.data)),
     )
-
     return (
       <Show when={ready()} fallback={<LoadingSplash />}>
         <Show when={effectiveDefaultServer()} keyed>
           {(key) => (
-            <AppInterface defaultServer={key} servers={servers()} router={router}>
+            <AppInterface
+              defaultServer={key}
+              servers={servers()}
+              router={router}
+              startup={onboarding.promise}
+              serverScoped={
+                <DesktopFirstLaunchOnboarding
+                  initialUrl={getLastActiveUrl(platform.windowID ?? "browser")}
+                  onLoaded={onboarding.resolve}
+                />
+              }
+            >
               <Inner />
             </AppInterface>
           )}

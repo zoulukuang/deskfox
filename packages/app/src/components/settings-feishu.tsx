@@ -108,7 +108,7 @@ export const SettingsFeishu: Component = () => {
   // useDialog 当前不支持 dialog stack(show 时把上一个 dispose),只能这样补救
   const reshowSettings = () => {
     void import("./dialog-settings").then((m) => {
-      dialog.show(() => <m.DialogSettings defaultTab="feishu" />)
+      dialog.show(() => <m.DialogSettings defaultValue="feishu" />)
     })
   }
 

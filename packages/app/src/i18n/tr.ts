@@ -27,6 +27,9 @@ export const dict = {
 
   "command.sidebar.toggle": "Kenar çubuğunu aç/kapat",
   "command.project.open": "Proje aç",
+  "command.project.previous": "Önceki proje",
+  "command.project.next": "Sonraki proje",
+  "command.project.index": "{{index}} numaralı projeye geç",
   "command.provider.connect": "Sağlayıcı bağla",
   "command.server.switch": "Sunucu değiştir",
   "command.settings.open": "Ayarları aç",
@@ -49,6 +52,7 @@ export const dict = {
   "command.session.new": "Yeni oturum",
   "command.file.open": "Dosya aç",
   "command.tab.close": "Sekmeyi kapat",
+  "command.tab.reopenClosed": "Kapatılan sekmeyi yeniden aç",
   "command.context.addSelection": "Seçimi bağlama ekle",
   "command.context.addSelection.description": "Mevcut dosyadan seçili satırları ekle",
   "command.input.focus": "Girişi odakla",
@@ -93,6 +97,7 @@ export const dict = {
   "command.session.unshare.description": "Bu oturumun paylaşımını durdur",
 
   "palette.search.placeholder": "Dosya, komut ve oturum ara",
+  "palette.search.placeholder.home": "Komut ve oturum ara",
   "palette.empty": "Sonuç bulunamadı",
   "palette.group.commands": "Komutlar",
   "palette.group.files": "Dosyalar",
@@ -135,7 +140,7 @@ export const dict = {
   "provider.connect.status.waiting": "Yetkilendirme bekleniyor...",
   "provider.connect.status.failed": "Yetkilendirme başarısız: {{error}}",
   "provider.connect.apiKey.description":
-    "{{provider}} hesabınızı bağlamak ve OpenCode'da {{provider}} modellerini kullanmak için {{provider}} API anahtarınızı girin.",
+    "{{provider}} hesabınızı bağlamak ve OpenCode'da {{provider}} modellerini kullanmak için API anahtarınızı girin.",
   "provider.connect.apiKey.label": "{{provider}} API anahtarı",
   "provider.connect.apiKey.placeholder": "API anahtarı",
   "provider.connect.apiKey.required": "API anahtarı gerekli",
@@ -146,10 +151,10 @@ export const dict = {
   "provider.connect.opencodeZen.visit.prefix": "",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
   "provider.connect.opencodeZen.visit.suffix": " adresini ziyaret ederek API anahtarınızı alın.",
-  "provider.connect.oauth.code.visit.prefix":
-    "Hesabınızı bağlamak ve OpenCode'da {{provider}} modellerini kullanmak için ",
+  "provider.connect.oauth.code.visit.prefix": "Yetkilendirme kodunuzu almak için ",
   "provider.connect.oauth.code.visit.link": "bu bağlantıya",
-  "provider.connect.oauth.code.visit.suffix": " tıklayarak yetkilendirme kodunuzu alın.",
+  "provider.connect.oauth.code.visit.suffix":
+    " gidin; ardından hesabınızı bağlayarak OpenCode'da {{provider}} modellerini kullanın.",
   "provider.connect.oauth.code.label": "{{method}} yetkilendirme kodu",
   "provider.connect.oauth.code.placeholder": "Yetkilendirme kodu",
   "provider.connect.oauth.code.required": "Yetkilendirme kodu gerekli",
@@ -216,6 +221,11 @@ export const dict = {
   "model.input.video": "video",
   "model.input.pdf": "pdf",
   "model.tooltip.allows": "Kabul eder: {{inputs}}",
+  "model.tooltip.context.label": "Bağlam",
+  "model.tooltip.inputs": "Girdiler",
+  "model.tooltip.model": "Model",
+  "model.tooltip.provider": "Sağlayıcı",
+  "model.tooltip.reasoning": "Akıl yürütme",
   "model.tooltip.reasoning.allowed": "Akıl yürütme destekler",
   "model.tooltip.reasoning.none": "Akıl yürütme yok",
   "model.tooltip.context": "Bağlam limiti {{limit}}",
@@ -226,6 +236,7 @@ export const dict = {
   "common.loading": "Yükleniyor",
   "common.loading.ellipsis": "...",
   "common.cancel": "İptal",
+  "common.clear": "Temizle",
   "common.connect": "Bağlan",
   "common.disconnect": "Bağlantı Kes",
   "common.continue": "Gönder",
@@ -243,6 +254,8 @@ export const dict = {
   "prompt.mode.shell": "Kabuk",
   "prompt.mode.normal": "Komut",
   "prompt.mode.shell.exit": "çıkmak için esc",
+  "session.child.promptDisabled": "Alt ajan oturumlarına istem gönderilemez.",
+  "session.child.backToParent": "Ana oturuma dön.",
 
   "prompt.example.1": "Kod tabanındaki bir TODO'yu düzelt",
   "prompt.example.2": "Bu projenin teknoloji yığını nedir?",
@@ -282,6 +295,11 @@ export const dict = {
   "prompt.context.removeActiveFile": "Aktif dosyayı bağlamdan çıkar",
   "prompt.context.removeFile": "Dosyayı bağlamdan çıkar",
   "prompt.action.attachFile": "Dosya ekle",
+  "prompt.menu.addImagesAndFiles": "Dosya ve daha fazlasını ekle",
+  "prompt.menu.imagesAndFiles": "Görseller ve dosyalar",
+  "prompt.menu.commands": "Komutlar",
+  "prompt.menu.context": "Bağlam",
+  "prompt.menu.shellCommand": "Kabuk komutu",
   "prompt.attachment.remove": "Eki kaldır",
   "prompt.action.send": "Gönder",
   "prompt.action.stop": "Durdur",
@@ -349,6 +367,75 @@ export const dict = {
   "dialog.server.menu.delete": "Sil",
   "dialog.server.current": "Mevcut Sunucu",
   "dialog.server.status.default": "Varsayılan",
+  "wsl.server.add": "WSL sunucusu ekle",
+  "wsl.server.addShort": "WSL ekle",
+  "wsl.server.label": "WSL",
+  "wsl.server.menu.label": "WSL sunucusu",
+  "wsl.server.retryStart": "Başlatmayı yeniden dene",
+  "wsl.server.updating": "Güncelleniyor...",
+  "wsl.onboarding.step.distro": "Dağıtım seç",
+  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.checkingRuntime": "WSL kontrol ediliyor...",
+  "wsl.onboarding.restartRequired": "WSL kurulumunu tamamlamak için Windows'un yeniden başlatılması gerekiyor.",
+  "wsl.onboarding.ready": "WSL hazır.",
+  "wsl.onboarding.required": "Devam etmek için WSL gerekli.",
+  "wsl.onboarding.checkingDistros": "Dağıtımlar kontrol ediliyor...",
+  "wsl.onboarding.installingDistro": "{{distro}} kuruluyor...",
+  "wsl.onboarding.checkingDistro": "{{distro}} kontrol ediliyor...",
+  "wsl.onboarding.listingDistros": "Dağıtımlar listeleniyor...",
+  "wsl.onboarding.distroReady": "{{distro}} hazır.",
+  "wsl.onboarding.distroNotInstalled": "{{distro}} henüz kurulu değil.",
+  "wsl.onboarding.openDistroOnce": "Kurulumu tamamlamak için {{distro}} dağıtımını bir kez açın.",
+  "wsl.onboarding.finishingDistro": "{{distro}} kurulumu tamamlanıyor.",
+  "wsl.onboarding.pickDistro": "Bir dağıtım seçin veya aşağıdan bir dağıtım kurun.",
+  "wsl.onboarding.checkingOpencode": "OpenCode kontrol ediliyor...",
+  "wsl.onboarding.checkingOpencodeIn": "{{distro}} içinde OpenCode kontrol ediliyor...",
+  "wsl.onboarding.updatingOpencode": "OpenCode güncelleniyor...",
+  "wsl.onboarding.updatingOpencodeIn": "{{distro}} içinde OpenCode güncelleniyor...",
+  "wsl.onboarding.updateOpencodeIn": "{{distro}} içindeki OpenCode'u güncelleyin.",
+  "wsl.onboarding.updateOpencode": "OpenCode'u güncelle",
+  "wsl.onboarding.opencodeReadyIn": "{{distro}} içinde OpenCode hazır.",
+  "wsl.onboarding.opencodeReady": "OpenCode hazır.",
+  "wsl.onboarding.installOpencodeIn": "OpenCode'u {{distro}} içine kurun.",
+  "wsl.onboarding.installOpencode": "OpenCode'u kur",
+  "wsl.onboarding.chooseDistroFirst": "Önce bir dağıtım seçin.",
+  "wsl.onboarding.loadFailed": "WSL durumu yüklenemedi.",
+  "wsl.onboarding.loading": "Yükleniyor...",
+  "wsl.onboarding.installedDistros": "Kurulu dağıtımlar",
+  "wsl.onboarding.checkAgain": "Tekrar kontrol et",
+  "wsl.onboarding.distroStatus.ready": "Hazır",
+  "wsl.onboarding.distroStatus.checking": "Kontrol ediliyor...",
+  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode kurulu değil",
+  "wsl.onboarding.distroStatus.missingTools": "bash ve curl eksik",
+  "wsl.onboarding.distroStatus.unsupported": "Desteklenmiyor · WSL 2 kullanın",
+  "wsl.onboarding.needAnotherDistro": "Başka bir dağıtım mı gerekiyor?",
+  "wsl.onboarding.needAnotherDistroHint": "WSL kataloğundan bir Linux dağıtımı kurun",
+  "wsl.onboarding.wslNotInstalled.title": "WSL kurulu değil",
+  "wsl.onboarding.wslNotInstalled.description":
+    "OpenCode'un WSL sunucusu ekleyebilmesi için önce WSL (Linux için Windows Alt Sistemi) kurulmalıdır",
+  "wsl.onboarding.wslUnavailable.title": "WSL kullanılamıyor",
+  "wsl.onboarding.wslUnavailable.description": "OpenCode bu makinede WSL'yi doğrulayamadı.",
+  "wsl.onboarding.installWsl": "WSL'yi kur",
+  "wsl.onboarding.windowsRestartRequired":
+    "WSL kurulumunu tamamlamak için Windows'u yeniden başlatın, ardından OpenCode'u tekrar açın.",
+  "wsl.onboarding.next": "İleri",
+  "wsl.onboarding.refresh": "Yenile",
+  "wsl.onboarding.allDistrosAdded": "Kurulu tüm dağıtımlar zaten eklenmiş.",
+  "wsl.onboarding.noDistros": "Henüz dağıtım algılanmadı.",
+  "wsl.onboarding.install": "Kur",
+  "wsl.onboarding.installing": "Kuruluyor...",
+  "wsl.onboarding.installDistro": "Dağıtım kur",
+  "wsl.onboarding.searchDistros": "Dağıtım ara",
+  "wsl.onboarding.wsl2Required": "WSL 2 gerekli.",
+  "wsl.onboarding.toolsRequired": "Bu dağıtım için bash ve curl gerekli.",
+  "wsl.onboarding.openTerminal": "Terminali aç",
+  "wsl.onboarding.path": "Yol: {{path}}",
+  "wsl.onboarding.notFound": "bulunamadı",
+  "wsl.onboarding.version": "Sürüm: {{version}}",
+  "wsl.onboarding.unknown": "bilinmiyor",
+  "wsl.onboarding.desktopVersion": "masaüstü {{version}}",
+  "wsl.onboarding.versionMismatch": "Kurulu sürüm masaüstü uygulamasının sürümüyle eşleşmiyor.",
+  "wsl.onboarding.adding": "Ekleniyor...",
 
   "dialog.project.edit.title": "Projeyi düzenle",
   "dialog.project.edit.name": "Ad",
@@ -411,6 +498,7 @@ export const dict = {
   "language.no": "Norsk",
   "language.br": "Português (Brasil)",
   "language.bs": "Bosanski",
+  "language.uk": "Українська",
   "language.th": "ไทย",
   "language.tr": "Türkçe",
 
@@ -459,10 +547,12 @@ export const dict = {
 
   "error.page.title": "Bir şeyler yanlış gitti",
   "error.page.description": "Uygulama yüklenirken bir hata oluştu.",
+  "error.page.description.localServerStartup": "Yerel sunucu başlatılırken bir hata oluştu.",
   "error.page.details.label": "Hata Detayları",
   "error.page.action.restart": "Yeniden Başlat",
   "error.page.action.report": "Hatayı Bildir",
   "error.page.action.reported": "Hata Bildirildi",
+  "error.page.action.exportLogs": "Günlükleri Dışa Aktar",
   "error.page.action.checking": "Kontrol ediliyor...",
   "error.page.action.checkUpdates": "Güncellemeleri kontrol et",
   "error.page.action.updateTo": "{{version}} sürümüne güncelle",
@@ -513,11 +603,34 @@ export const dict = {
   "home.welcome.title": "Kişisel AI asistanınız hazır",
   "home.welcome.description": "Yerel proje klasörünüzü Fox'a teslim edin; proje yapınızı derinlemesine anlayacak ve size her zaman yardımcı olacak",
   "home.welcome.open": "Klasörü aç",
+  "home.empty.title": "Son proje yok",
+  "home.empty.description": "Yerel bir proje açarak başlayın",
+  "home.title": "Ana Sayfa",
+  "home.projects": "Projeler",
+  "home.project.add": "Proje ekle",
+  "home.recentlyClosed": "Yakın zamanda kapatılanlar",
+  "home.server.collapse": "Sunucu projelerini daralt",
+  "home.server.expand": "Sunucu projelerini genişlet",
+  "home.sessions.search.placeholder": "Oturum ara",
+  "home.sessions.search.placeholder.scoped": "{{scope}} kapsamında oturum ara",
+  "home.sessions.search.sessions": "Oturumlar",
+  "home.sessions.search.noResults": "{{query}} için oturum bulunamadı",
+  "home.sessions.empty": "Henüz burada bir şey yok",
+  "home.sessions.empty.description": "Başlamak için bir oturum oluşturun",
+  "home.sessions.group.today": "Bugün",
+  "home.sessions.group.yesterday": "Dün",
+  "home.sessions.group.older": "Daha eski",
+  "home.providerTip": "Claude, GPT, Gemini ve diğer modelleri kullanmak için 75'ten fazla sağlayıcıya bağlanın",
 
   "session.tab.session": "Oturum",
   "session.tab.review": "İnceleme",
   "session.tab.context": "Bağlam",
+  "session.tab.unknown": "Bilinmeyen Oturum",
   "session.panel.reviewAndFiles": "İnceleme ve dosyalar",
+  "session.error.notFound": "Bu oturum bulunamıyor",
+  "session.error.notFound.description": "Bu sekme, artık bu sunucuda bulunmayan bir oturuma yönlendiriyor.",
+  "session.error.notFound.closeTab": "Sekmeyi Kapat",
+  "session.error.serverConnection": "Bu sunucuya bağlanılamıyor",
   "session.review.filesChanged": "{{count}} Dosya Değişti",
   "session.review.change.one": "Değişiklik",
   "session.review.change.other": "Değişiklik",
@@ -527,6 +640,8 @@ export const dict = {
   "session.review.noSnapshot":
     "Yapılandırmada anlık görüntü takibi devre dışı bırakıldı, bu nedenle oturum değişiklikleri kullanılamıyor",
   "session.review.noChanges": "Değişiklik yok",
+  "session.review.noUncommittedChanges": "Henüz commit edilmemiş değişiklik yok",
+  "session.review.noBranchChanges": "Henüz dal değişikliği yok",
 
   "session.files.selectToOpen": "Açmak için bir dosya seçin",
   "session.files.all": "Tüm dosyalar",
@@ -543,6 +658,10 @@ export const dict = {
   "session.todo.title": "Görevler",
   "session.todo.collapse": "Daralt",
   "session.todo.expand": "Genişlet",
+  "session.question.minimize": "Soruyu küçült",
+  "session.question.restore": "Soruyu geri yükle",
+  "session.question.pending.one": "{{count}} bekleyen soru",
+  "session.question.pending.other": "{{count}} bekleyen soru",
   "session.followupDock.summary.one": "{{count}} sıradaki mesaj",
   "session.followupDock.summary.other": "{{count}} sıradaki mesaj",
   "session.followupDock.sendNow": "Şimdi gönder",
@@ -556,9 +675,17 @@ export const dict = {
   "session.revertDock.restore": "Mesajı geri yükle",
 
   "session.new.title": "İstediğini yap",
+  "session.new.project.new": "Yeni proje",
+  "session.new.project.search": "Proje ara",
+  "session.new.project.add": "Proje ekle",
   "session.new.worktree.main": "Ana dal",
   "session.new.worktree.mainWithBranch": "Ana dal ({{branch}})",
   "session.new.worktree.create": "Yeni çalışma ağacı oluştur",
+  "session.new.workspace.runIn": "Oturumu şurada çalıştır",
+  "session.new.workspace.triggerLocal": "Yerel",
+  "session.new.workspace.local": "Yerel depo",
+  "session.new.workspace.existing": "Çalışma alanı…",
+  "session.new.git.none": "Git yok",
   "session.new.lastModified": "Son değişiklik",
 
   "session.header.search.placeholder": "{{project}} ara",
@@ -634,6 +761,8 @@ export const dict = {
   "sidebar.project.recentSessions": "Son oturumlar",
   "sidebar.project.viewAllSessions": "Tüm oturumları görüntüle",
   "sidebar.project.clearNotifications": "Bildirimleri temizle",
+  "sidebar.empty.title": "Açık proje yok",
+  "sidebar.empty.description": "Başlamak için bir proje açın",
 
   "app.name.desktop": "OpenCode Masaüstü",
 
@@ -646,6 +775,7 @@ export const dict = {
   "settings.desktop.wsl.description": "OpenCode sunucusunu Windows'ta WSL içinde çalıştırın.",
 
   "settings.general.section.appearance": "Görünüm",
+  "settings.general.section.advanced": "Gelişmiş",
   "settings.general.section.notifications": "Sistem bildirimleri",
   "settings.general.section.updates": "Güncellemeler",
   "settings.general.section.sounds": "Ses efektleri",
@@ -654,6 +784,11 @@ export const dict = {
 
   "settings.general.row.language.title": "Dil",
   "settings.general.row.language.description": "OpenCode'un görünüm dilini değiştirin",
+  "settings.general.row.shell.title": "Terminal Kabuğu",
+  "settings.general.row.shell.description":
+    "Terminalinizde kullanılacak kabuğu seçin. Uyumlu kabuklar, ajan araç çağrılarında da kullanılır.",
+  "settings.general.row.shell.autoDefault": "Otomatik (Varsayılan)",
+  "settings.general.row.shell.terminalOnly": "yalnızca terminal",
   "settings.general.row.appearance.title": "Görünüm",
   "settings.general.row.appearance.description": "OpenCode'un cihazınızdaki görünümünü özelleştirin",
   "settings.general.row.colorScheme.title": "Renk şeması",
@@ -663,8 +798,8 @@ export const dict = {
   "settings.general.row.theme.description": "OpenCode'un temasını özelleştirin.",
   "settings.general.row.font.title": "Kod Yazı Tipi",
   "settings.general.row.font.description": "Kod bloklarında kullanılan yazı tipini özelleştirin",
-  "settings.general.row.terminalFont.title": "Terminal Font",
-  "settings.general.row.terminalFont.description": "Customise the font used in the terminal",
+  "settings.general.row.terminalFont.title": "Terminal yazı tipi",
+  "settings.general.row.terminalFont.description": "Terminalde kullanılan yazı tipini özelleştirin",
   "settings.general.row.uiFont.title": "Arayüz Yazı Tipi",
   "settings.general.row.uiFont.description": "Arayüz genelinde kullanılan yazı tipini özelleştirin",
   "settings.general.row.followup.title": "Takip davranışı",
@@ -672,6 +807,21 @@ export const dict = {
     "Takip komutlarının hemen yönlendirilmesini mi yoksa sırada beklemesini mi istediğinizi seçin",
   "settings.general.row.followup.option.queue": "Sıra",
   "settings.general.row.followup.option.steer": "Yönlendir",
+  "settings.general.row.showFileTree.title": "Dosya ağacı",
+  "settings.general.row.showFileTree.description": "Oturumlarda dosya ağacı panelini göster",
+  "settings.general.row.showNavigation.title": "Gezinme denetimleri",
+  "settings.general.row.showNavigation.description": "Masaüstü başlık çubuğunda geri ve ileri düğmelerini göster",
+  "settings.general.row.showSearch.title": "Komut paleti",
+  "settings.general.row.showSearch.description": "Başlık çubuğunda arama ve komut paleti düğmesini göster",
+  "settings.general.row.showTerminal.title": "Terminal",
+  "settings.general.row.showTerminal.description": "Masaüstü başlık çubuğunda terminal düğmesini göster",
+  "settings.general.row.showStatus.title": "Sunucu durumu",
+  "settings.general.row.showStatus.description": "Başlık çubuğunda sunucu durumu düğmesini göster",
+  "settings.general.row.mobileTitlebarBottom.title": "Alt gezinme",
+  "settings.general.row.mobileTitlebarBottom.description":
+    "Mobil cihazlarda başlık çubuğunu ve oturum sekmelerini ekranın altına yerleştir",
+  "settings.general.row.showCustomAgents.title": "Özel ajanlar",
+  "settings.general.row.showCustomAgents.description": "Yazma alanında ajan seçiciyi göster",
   "settings.general.row.reasoningSummaries.title": "Akıl yürütme özetlerini göster",
   "settings.general.row.reasoningSummaries.description": "Zaman çizelgesinde model akıl yürütme özetlerini görüntüle",
   "settings.general.row.shellToolPartsExpanded.title": "Kabuk araç bileşenlerini genişlet",
@@ -680,6 +830,16 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "Düzenleme araç bileşenlerini genişlet",
   "settings.general.row.editToolPartsExpanded.description":
     "Zaman çizelgesinde düzenleme, yazma ve yama araç bileşenlerini varsayılan olarak genişletilmiş göster",
+  "settings.general.row.newInterface.title": "Yeni düzen",
+  "settings.general.row.newInterface.badge": "Yeni",
+  "settings.general.row.newInterface.description":
+    "Yeni sekmeleri ve ana sayfa düzenini kullanın. Sınırlı bir süre boyunca düzenler arasında geçiş yapabilirsiniz.",
+  "settings.general.row.newInterfaceNotice.title": "Artık yeni düzeni kullanıyorsunuz",
+  "settings.general.row.newInterfaceNotice.description": "Önceki düzen artık kullanılamıyor",
+  "settings.general.row.newInterfaceNotice.dismiss": "Kapat",
+  "settings.general.row.pinchZoom.title": "Sıkıştırarak yakınlaştır",
+  "settings.general.row.pinchZoom.description":
+    "İzleme dörtgeninde sıkıştırma ve Ctrl-kaydırma hareketleriyle yakınlaştırmaya izin ver",
 
   "settings.general.row.wayland.title": "Yerel Wayland kullan",
   "settings.general.row.wayland.description":
@@ -696,6 +856,8 @@ export const dict = {
   "settings.updates.row.check.description": "Elle güncelleme kontrolü yap ve varsa yükle",
   "settings.updates.action.checkNow": "Şimdi kontrol et",
   "settings.updates.action.checking": "Kontrol ediliyor...",
+  "settings.updates.action.downloading": "İndiriliyor...",
+  "settings.updates.action.installing": "Kuruluyor...",
   "settings.updates.toast.latest.title": "Güncelsiniz",
   "settings.updates.toast.latest.description": "OpenCode'un en son sürümünü kullanıyorsunuz.",
 
@@ -953,4 +1115,191 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Kalıcı proje simgesi oluşturulamadı",
   "error.childStore.storeCreateFailed": "Depo oluşturulamadı",
   "terminal.connectionLost.abnormalClose": "WebSocket anormal şekilde kapandı: {{code}}",
+  "dialog.provider.custom.label": "Custom OpenAI-compatible provider", // FORK-i18n-backfill(en 兜底)
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK-i18n-backfill(en 兜底)
+  "dialog.model.unpaid.viewMoreProviders": "See 70+ more providers", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line1": "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.prefix": "Visit ", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.link": "getbot.me", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.suffix": " to collect your API key.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.fetchModels.failed": "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.timeout": "Request to api.getbot.me timed out (15s). Please check your network and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels": "Refresh models", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.title": "AI modified this file", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.", // FORK-i18n-backfill(en 兜底)
+  "session.header.reveal.finder": "Reveal in Finder", // FORK-i18n-backfill(en 兜底)
+  "session.header.reveal.fileExplorer": "Reveal in File Explorer", // FORK-i18n-backfill(en 兜底)
+  "session.header.reveal.containingFolder": "Open containing folder", // FORK-i18n-backfill(en 兜底)
+  "common.closeOtherTabs": "Close Other Tabs", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.title": "Anonymous usage statistics", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.description": "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.locked": "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.rename": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.revealInFolder": "Reveal in folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyPath": "Copy path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.cut": "Cut", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toFolder": "Paste into this folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toRoot": "Paste to project root", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFile": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFolder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.refresh": "Refresh", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyRelativePath": "Copy Relative Path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.openInTerminal": "Open in Terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.expandAll": "Expand All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.collapseAll": "Collapse All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.collapsePreviewHint": "Click to collapse preview", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.title": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.label": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.placeholder": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.title": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.label": "Folder name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.placeholder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.fileTitle": "Rename file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.folderTitle": "Rename folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.label": "New name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.confirm": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.unchanged": "Name unchanged", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageSingle": "Are you sure you want to delete \"{{name}}\"?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.confirm": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.create": "Create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.empty": "Name cannot be empty", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.operationFailed": "Operation failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.openFailed": "Failed to open", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedSingle": "Delete failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.createFailed": "Failed to create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.renameFailed": "Failed to rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.single": "Deleted \"{{name}}\"", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.bulk": "Deleted {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.hint": "Recoverable from system trash", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.single": "Moved 1 item", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.bulk": "Moved {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undo": "Undo", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedSingle": "Move failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedSingle": "Copy failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedSingle": "Paste failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessSingle": "Path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessSingle": "Relative path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessBulk": "{{count}} relative paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.terminalFailed": "Failed to open terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.error": "Failed to load file tree", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.title": "Name conflict", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.replace": "Replace", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.keepBoth": "Keep both", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.skip": "Skip", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocx": "Export as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxFail": "Export failed", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.line": "Ln {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.col": "Col {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.addToChat": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.submit": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled", // FORK-i18n-backfill(en 兜底)
+  "settings.tab.feishu": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.title": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.title": "Keep computer awake", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.title": "No Lark account bound", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.add": "Add Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.title": "Bind Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.label": "Domain", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.feishu": "Feishu (China)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.lark": "Lark (Global)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusPending": "Waiting for authorization...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusSuccess": "Bound successfully", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusDenied": "Authorization denied by user", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusExpired": "QR code expired", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusError": "Error: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.done": "Done", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.qrLoading": "Generating QR code...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.edit": "Edit", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelLabel": "model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelDefault": "(use default)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.title": "Edit account settings", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelSectionTitle": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.advancedSectionTitle": "Advanced", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.groupCommand.info": "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.label": "Allow AI to read all group messages without @ mention", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.hint": "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.saving": "Saving...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerLabel": "Provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelLabel": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel.hint": "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerPlaceholder": "Select provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelPlaceholder": "Select model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.save": "Save", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.default": "Default (global home base)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.pick": "Choose folder", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.clear": "Reset to default", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.hintFollow": "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.security": "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.projectListWarning": "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceDefaulted": "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceFallback": "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)
 } satisfies Partial<Record<Keys, string>>

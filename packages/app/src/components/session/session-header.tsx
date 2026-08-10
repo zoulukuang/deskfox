@@ -24,6 +24,7 @@ import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
+import { fileManagerApp } from "@/utils/file-manager"
 import { Persist, persisted } from "@/utils/persist"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
@@ -31,6 +32,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { reviewTooltipKeybind } from "../command-tooltip-keybind"
+import { useTitlebarRightMount } from "../titlebar"
 
 const OPEN_APPS = [
   "vscode",
@@ -176,11 +178,7 @@ export function SessionHeader() {
     return LINUX_APPS
   })
 
-  const fileManager = createMemo(() => {
-    if (os() === "macos") return { label: "session.header.open.finder", icon: "finder" as const }
-    if (os() === "windows") return { label: "session.header.open.fileExplorer", icon: "file-explorer" as const }
-    return { label: "session.header.open.fileManager", icon: "finder" as const }
-  })
+  const fileManager = createMemo(() => fileManagerApp(os()))
 
   createEffect(() => {
     if (platform.platform !== "desktop") return
@@ -246,12 +244,6 @@ export function SessionHeader() {
     reviewVisible: isDesktop(),
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
-    // FORK: 文件树显隐开关(贴近左侧文件树模块)[feat: titlebar-icons-mirror] 2026-06-13
-    fileTreeVisible: tree(),
-    fileTreeLabel: language.t("command.fileTree.toggle"),
-    fileTreeKeybind: command.keybind("fileTree.toggle"),
-    fileTreeOpened: layout.fileTree.opened(),
-    onFileTreeToggle: () => layout.fileTree.toggle(),
   }))
 
   const selectApp = (app: OpenApp) => {
@@ -292,12 +284,13 @@ export function SessionHeader() {
   }
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)
-  // FORK: 镜像布局下文件树/预览/状态面板在左,工具组图标也挂左 portal(贴近各自模块)
-  //   原挂 right portal 是非镜像残留,迁移时未跟随镜像翻转 [feat: titlebar-icons-mirror] 2026-06-13
-  const [toolbarMount, setToolbarMount] = createSignal<HTMLElement | null>(null)
+  // FORK 撤销记录:titlebar-icons-mirror 曾把工具组图标挂左 portal(镜像布局贴近模块);
+  //   2026-08-11 sync v1.18.4 按 D4 决策(v2 先用上游原生布局)挂回 right portal —— 上游 v2
+  //   自 v1.17.19 起 isV2 分支恒真(SessionHeaderV2Actions 全模式渲染),挂左会让上游 v2
+  //   review/subagent 族 e2e 找不到 Toggle review;镜像诉求段4 后按 v2 实际观感再评估
+  const rightMount = useTitlebarRightMount()
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
-    setToolbarMount(document.getElementById("opencode-titlebar-left"))
   })
 
   return (
@@ -332,7 +325,7 @@ export function SessionHeader() {
           </Portal>
         )}
       </Show>
-      <Show when={toolbarMount()}>
+      <Show when={rightMount()}>
         {(mount) => (
           <Portal mount={mount()}>
             <Show
@@ -566,12 +559,6 @@ type SessionHeaderV2ActionsState = {
   reviewVisible: boolean
   reviewOpened: boolean
   onReviewToggle: () => void
-  // FORK: 文件树显隐开关 [feat: titlebar-icons-mirror] 2026-06-13
-  fileTreeVisible: boolean
-  fileTreeLabel: string
-  fileTreeKeybind: string
-  fileTreeOpened: boolean
-  onFileTreeToggle: () => void
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
@@ -579,27 +566,13 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
 
   return (
     <div class="flex items-center gap-2">
-      {/* FORK: 顺序 状态→文件树→审查(user 指定 2,1,3)[feat: titlebar-icons-rearrange] 2026-06-13 */}
+      {/* FORK 撤销记录:titlebar-icons-rearrange 曾在此加文件树按钮(顺序 状态→文件树→审查);
+          2026-08-11 sync v1.18.4 按 D4 摘除 —— 上游 v2 的文件树开关在 review 侧栏
+          (session-review-v2-sidebar-toggle),标题栏再放一个=同名双按钮,上游 e2e strict 撞名 */}
       <Show when={props.state.statusVisible}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
         </Tooltip>
-      </Show>
-      <Show when={props.state.fileTreeVisible}>
-        <TooltipKeybind title={props.state.fileTreeLabel} keybind={props.state.fileTreeKeybind}>
-          <IconButtonV2
-            type="button"
-            variant="ghost-muted"
-            size="large"
-            class="!w-9 shrink-0"
-            state={props.state.fileTreeOpened ? "pressed" : undefined}
-            onClick={props.state.onFileTreeToggle}
-            aria-label={props.state.fileTreeLabel}
-            aria-expanded={props.state.fileTreeOpened}
-            aria-controls="file-tree-panel"
-            icon={<Icon size="small" name={props.state.fileTreeOpened ? "file-tree-active" : "file-tree"} />}
-          />
-        </TooltipKeybind>
       </Show>
       <Show when={props.state.reviewVisible}>
         <TooltipV2

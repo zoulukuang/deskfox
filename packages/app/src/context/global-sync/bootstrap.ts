@@ -249,31 +249,29 @@ export async function bootstrapDirectory(input: {
       () =>
         retry(() =>
           input.sdk.session.status().then(async (x) => {
-            if (input.session) {
-              const statuses = x.data ?? {}
-              await Promise.all(
-                Object.keys(statuses).map((sessionID) => input.session!.resolve(sessionID).catch(() => undefined)),
-              )
-              input.session.set(
-                "session_status",
-                produce((draft) => {
-                  for (const sessionID of Object.keys(draft)) {
-                    if (statuses[sessionID]) continue
-                    if (input.session?.get(sessionID)?.directory === input.directory) delete draft[sessionID]
-                  }
-                }),
-              )
-              for (const [sessionID, status] of Object.entries(statuses)) {
-                input.session.set("session_status", sessionID, reconcile(status))
-              }
-            }
             if (!input.session) {
-              // FORK: legacy store 路径保留对账 — ① 清 stale busy(上游新 session 路径已自带删除)
-              // ② 被清会话末条 assistant 残骸补盖 completed(新路径依赖上游 resolve/heal-interrupted,
-              // 若回归再评估移植)[feat: stuck-working-status-reconcile] 2026-06-13/2026-08-11
-              const cleared = applyReconciledSessionStatus(input.store, input.setStore, x.data)
-              healClearedSessionOrphans(input.store, input.setStore, cleared)
+              input.setStore("session_status", x.data!)
+              return
             }
+            const statuses = x.data ?? {}
+            input.session.set(
+              "session_status",
+              produce((draft) => {
+                for (const sessionID of Object.keys(draft)) {
+                  if (statuses[sessionID]) continue
+                  if (input.session?.get(sessionID)?.directory === input.directory) delete draft[sessionID]
+                }
+              }),
+            )
+            for (const [sessionID, status] of Object.entries(statuses)) {
+              input.session.set("session_status", sessionID, reconcile(status))
+            }
+            // Warm session info only after seeding statuses so a stalled session
+            // fetch cannot park busy indicators behind it, mirroring how live
+            // session.status events apply first and resolve info in the background.
+            await Promise.all(
+              Object.keys(statuses).map((sessionID) => input.session!.resolve(sessionID).catch(() => undefined)),
+            )
           }),
         ),
       !seededProject &&

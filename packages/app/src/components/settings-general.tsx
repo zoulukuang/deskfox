@@ -6,6 +6,7 @@ import { Select } from "@opencode-ai/ui/select"
 import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useParams } from "@solidjs/router"
@@ -277,6 +278,50 @@ export const SettingsGeneral: Component = () => {
     triggerVariant: "settings" as const,
   })
 
+  const InterfaceSection = () => (
+    <div class="flex flex-col gap-1">
+      <SettingsList>
+        <SettingsRow
+          title={
+            <span class="flex items-center gap-2">
+              {language.t("settings.general.row.newInterface.title")}
+              <Tag variant="accent">{language.t("settings.general.row.newInterface.badge")}</Tag>
+            </span>
+          }
+          description={language.t("settings.general.row.newInterface.description")}
+        >
+          <div data-action="settings-new-layout-designs">
+            <Switch
+              checked={settings.general.newLayoutDesigns()}
+              onChange={(checked) => {
+                settings.general.setNewLayoutDesigns(checked)
+                if (!checked) return
+                void import("@/components/settings-v2").then((module) => {
+                  void dialog.show(() => <module.DialogSettings />)
+                })
+              }}
+            />
+          </div>
+        </SettingsRow>
+      </SettingsList>
+    </div>
+  )
+
+  const InterfaceNoticeSection = () => (
+    <div class="flex flex-col gap-1">
+      <SettingsList>
+        <SettingsRow
+          title={language.t("settings.general.row.newInterfaceNotice.title")}
+          description={language.t("settings.general.row.newInterfaceNotice.description")}
+        >
+          <Button size="small" variant="ghost" onClick={settings.general.dismissNewInterfaceNotice}>
+            {language.t("settings.general.row.newInterfaceNotice.dismiss")}
+          </Button>
+        </SettingsRow>
+      </SettingsList>
+    </div>
+  )
+
   const GeneralSection = () => (
     <div class="flex flex-col gap-1">
       <SettingsList>
@@ -364,26 +409,6 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
-        {/* 原 FORK(settings-panel-cleanup 2026-06-15)隐藏此开关;2026-08-11 D1 过渡期恢复暴露 —
-            默认仍经典布局,但用户可自愿切 v2 提前体验(段4 随上游翻默认) */}
-        <SettingsRow
-          title={language.t("settings.general.row.newLayoutDesigns.title")}
-          description={language.t("settings.general.row.newLayoutDesigns.description")}
-        >
-          <div data-action="settings-new-layout-designs">
-            <Switch
-              checked={settings.general.newLayoutDesigns()}
-              onChange={(checked) => {
-                settings.general.setNewLayoutDesigns(checked)
-                if (!checked) return
-                void import("@/components/settings-v2").then((module) => {
-                  dialog.show(() => <module.DialogSettings />)
-                })
-              }}
-            />
-          </div>
-        </SettingsRow>
-
         {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
         <Show when={platform.getTelemetryEnabled}>
           <SettingsRow
@@ -426,11 +451,6 @@ export const SettingsGeneral: Component = () => {
             value={(o) => o.value}
             label={(o) => o.label}
             onSelect={(option) => option && theme.setColorScheme(option.value)}
-            onHighlight={(option) => {
-              if (!option) return
-              theme.previewColorScheme(option.value)
-              return () => theme.cancelPreview()
-            }}
             variant="secondary"
             size="small"
             triggerVariant="settings"
@@ -456,11 +476,6 @@ export const SettingsGeneral: Component = () => {
             onSelect={(option) => {
               if (!option) return
               theme.setTheme(option.id)
-            }}
-            onHighlight={(option) => {
-              if (!option) return
-              theme.previewTheme(option.id)
-              return () => theme.cancelPreview()
             }}
             variant="secondary"
             size="small"
@@ -714,6 +729,14 @@ export const SettingsGeneral: Component = () => {
       </div>
 
       <div class="flex flex-col gap-8 w-full">
+        <Show when={settings.general.layoutTransitionAvailable()}>
+          <InterfaceSection />
+        </Show>
+
+        <Show when={settings.general.newInterfaceNoticeVisible()}>
+          <InterfaceNoticeSection />
+        </Show>
+
         <GeneralSection />
 
         <AppearanceSection />

@@ -637,7 +637,10 @@ export function FileTabContent(props: {
     }
     window.addEventListener("deskfox-flush-now", handler)
     let unlisten: (() => void) | undefined
-    void listen("deskfox-flush-before-close", handler).then((u) => (unlisten = u))
+    // FORK: 2026-08-11 — 浏览器/e2e 环境无 preload 桥,native.listen 同步 throw 会炸全屏
+    //   ErrorBoundary(上游 v1.18.4 v2 review e2e 首次在浏览器 mount 本组件暴露);桥不在时
+    //   仅走 DOM 事件路径(deskfox-flush-now)兜底
+    if (isDesktopApp()) void listen("deskfox-flush-before-close", handler).then((u) => (unlisten = u))
     onCleanup(() => {
       window.removeEventListener("deskfox-flush-now", handler)
       unlisten?.()
@@ -1935,4 +1938,19 @@ export function FileTabContent(props: {
       </Show>
     </Tabs.Content>
   )
+}
+
+// FORK 兼容层(2026-08-11 sync v1.18.4):上游把文件渲染抽成 SessionFileView(v2 inline file browser 用),
+// DeskFox 保留段2 文件查看器主体;此 shim 复用 FileTabContent 满足 v2 浏览器 tab 的最小契约
+// (diff 详情增强等 v2 专属能力待段4 评估)。
+import type { RenderDiff as V2RenderDiff } from "@/pages/session/v2/review-diff-kinds"
+export type SessionFileViewProps = {
+  tab: string
+  diff?: V2RenderDiff
+  diffVersion?: number
+  loadDiff?: (path: string, version?: number) => Promise<V2RenderDiff | undefined>
+  expandUnchanged?: boolean
+}
+export function SessionFileView(props: SessionFileViewProps) {
+  return <FileTabContent tab={props.tab} />
 }

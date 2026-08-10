@@ -20,8 +20,6 @@ import { createSessionTabs } from "@/pages/session/helpers"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { UserMessage } from "@opencode-ai/sdk/v2"
 import { useSessionLayout } from "@/pages/session/session-layout"
-import { useTabs } from "@/context/tabs"
-import { requireServerKey } from "@/utils/session-route"
 import { createSessionOwnership } from "./session-ownership"
 
 export type SessionCommandContext = {
@@ -29,6 +27,7 @@ export type SessionCommandContext = {
   setActiveMessage: (message: UserMessage | undefined) => void
   focusInput: () => void
   review?: () => boolean
+  fileBrowser?: () => boolean
 }
 
 const withCategory = (category: string) => {
@@ -50,7 +49,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const settings = useSettings()
   const sync = useSync()
   const terminal = useTerminal()
-  const sessionTabs = useTabs()
   const layout = useLayout()
   const navigate = useNavigate()
   const { params, sessionKey, tabs, view } = useSessionLayout()
@@ -88,6 +86,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     normalizeTab,
     review: actions.review,
     hasReview,
+    fileBrowser: actions.fileBrowser,
   })
   const activeFileTab = tabState.activeFileTab
   const closableTab = tabState.closableTab
@@ -267,8 +266,17 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   }
 
   const openTerminal = () => {
-    if (terminal.all().length > 0) terminal.new()
+    if (terminal.all().length > 0) terminal.new({ focus: true })
+    if (terminal.all().length === 0) terminal.requestFocus()
     view().terminal.open()
+  }
+
+  const closeTerminal = () => {
+    const id = terminal.active()
+    if (!id) return
+    const last = terminal.all().length === 1
+    void terminal.close(id)
+    if (last) view().terminal.close()
   }
 
   const chooseMcp = () => {
@@ -413,11 +421,11 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.session.new"),
       keybind: "mod+shift+s",
       slash: "new",
-      onSelect: () => {
+      onSelect: (source) => {
         // FORK: 新建会话清空首页创作 draft [feat: media-creation-mode]
         creation.resetDraft()
-        if (params.serverKey) {
-          sessionTabs.newDraft({ server: requireServerKey(params.serverKey), directory: sdk().directory })
+        if (settings.general.newLayoutDesigns()) {
+          command.trigger("tab.new", source)
           return
         }
         navigate(`/${params.dir}/session`)
@@ -464,7 +472,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
         id: "file.open",
         title: language.t("command.file.open"),
         description: language.t("palette.search.placeholder"),
-        keybind: "mod+k,mod+p",
+        keybind: "mod+p",
         slash: "open",
         onSelect: openFile,
       }),
@@ -495,7 +503,15 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.terminal.toggle"),
       keybind: "ctrl+`",
       slash: "terminal",
-      onSelect: () => view().terminal.toggle(),
+      onSelect: () => {
+        if (view().terminal.opened()) {
+          terminal.cancelFocus()
+          view().terminal.close()
+          return
+        }
+        terminal.requestFocus(terminal.active())
+        view().terminal.open()
+      },
     }),
     viewCommand({
       id: "review.toggle",
@@ -522,6 +538,14 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   ]
 
   const terminalCmds = () => [
+    terminalCommand({
+      id: "terminal.close",
+      title: language.t("terminal.close"),
+      keybind: "mod+w",
+      hidden: true,
+      when: (event) => event.target instanceof Element && !!event.target.closest('[data-component="terminal"]'),
+      onSelect: closeTerminal,
+    }),
     terminalCommand({
       id: "terminal.new",
       title: language.t("command.terminal.new"),

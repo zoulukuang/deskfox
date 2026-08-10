@@ -3,8 +3,10 @@
 // "Client-only API called on the server side"。helper extract → Logic 清单。2026-06-19
 import type { Part as PartType, ToolPart } from "@opencode-ai/sdk/v2"
 
-// FORK: 把 bash 纳入「已探索」折叠组,连续 shell 调用默认收起、点击展开,消除竖向铺开。2026-06-19
-export const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list", "bash"])
+// FORK 撤销记录:2026-06-19 曾把 bash 纳入折叠组消除竖向铺开;2026-08-11 sync v1.18.4 撤销、
+// 对齐上游 —— 上游 v2 时间线已用 shellToolPartsExpanded 默认收起解决同一问题,且新增 10+ 条
+// shell 族 e2e 断言 bash 独立成行,保留定制=长期改写上游 spec。决策见 upstream-sync-2026-08/2-plan.md
+export const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
 
 export function isContextGroupTool(part: PartType): part is ToolPart {
   return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)

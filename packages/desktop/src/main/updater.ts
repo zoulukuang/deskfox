@@ -12,6 +12,7 @@ import { track, trackBlocking } from "./deskfox/telemetry"
 
 // 每版本只发一次 update_downloaded(check 每 10 分钟跑,status=ready 会反复命中)
 const downloadedReported = new Set<string>()
+import { setAppQuitting } from "./windows"
 
 const { autoUpdater } = pkg
 const key = "ready"
@@ -35,9 +36,26 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
   return createUpdaterController({
     enabled: UPDATER_ENABLED,
     currentVersion: app.getVersion(),
-    // FORK: 包一层 — install 点 quitAndInstall 前先 setQuitting(),否则 macOS 下窗口被「关闭到托盘」
-    //   拦成 hide、app 不真退,Squirrel.Mac 无法替换 bundle(详见 updater-backend.ts)。
-    backend: withQuitIntent(autoUpdater, setQuitting),
+    backend: {
+      checkForUpdates: () => autoUpdater.checkForUpdates(),
+      downloadUpdate: () => autoUpdater.downloadUpdate(),
+      quitAndInstall: () => {
+        // quitAndInstall closes all windows before emitting before-quit, so
+        // flag the quit first to keep window ids persisted for restore.
+        // FORK: 同步置托盘退出意图 — 否则 macOS 下窗口被「关闭到托盘」拦成 hide、app 不真退,
+        //   Squirrel.Mac 无法替换 bundle(原 withQuitIntent 包装随上游重构收编于此)[feat: electron-macos-updater]
+        setQuitting()
+        setAppQuitting()
+        try {
+          autoUpdater.quitAndInstall()
+        } catch (error) {
+          // The install failed and the app keeps running; clear the flag so
+          // deliberate window closes prune ids again.
+          setAppQuitting(false)
+          throw error
+        }
+      },
+    },
     persistence: {
       get() {
         const value = store.get(key)

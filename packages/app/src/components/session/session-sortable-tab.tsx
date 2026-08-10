@@ -13,7 +13,7 @@ import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useCommand } from "@/context/command"
 
-export function FileVisual(props: { path: string; active?: boolean }): JSX.Element {
+export function FileVisual(props: { path: string; active?: boolean; temporary?: boolean }): JSX.Element {
   return (
     <div class="flex items-center gap-x-1.5 min-w-0">
       <Show
@@ -25,14 +25,18 @@ export function FileVisual(props: { path: string; active?: boolean }): JSX.Eleme
           <FileIcon node={{ path: props.path, type: "file" }} mono class="absolute inset-0 size-4 tab-fileicon-mono" />
         </span>
       </Show>
-      <span class="text-14-medium truncate">{getFilename(props.path)}</span>
+      <span class="text-14-medium truncate" classList={{ italic: props.temporary }}>
+        {getFilename(props.path)}
+      </span>
     </div>
   )
 }
 
 export function SortableTab(props: {
   tab: string
+  temporary?: boolean
   onTabClose: (tab: string) => void
+  onTabDoubleClick?: (tab: string) => void
   // FORK: 右键「关闭其他标签」回调,caller 传(关掉除本 tab 外所有已开 tab)[feat: file-tab-close-others] 2026-06-09
   onCloseOthers?: (tab: string) => void
 }): JSX.Element {
@@ -44,7 +48,7 @@ export function SortableTab(props: {
   const content = createMemo(() => {
     const value = path()
     if (!value) return
-    return <FileVisual path={value} />
+    return <FileVisual path={value} temporary={props.temporary} />
   })
   // FORK: tab 右键菜单(照搬 terminal tab 的 DropdownMenu 定位模式)[feat: file-tab-close-others] 2026-06-09
   const [store, setStore] = createStore({ menuOpen: false, menuPosition: { x: 0, y: 0 } })
@@ -78,6 +82,7 @@ export function SortableTab(props: {
           }
           hideCloseButton
           onMiddleClick={() => props.onTabClose(props.tab)}
+          onDblClick={() => props.onTabDoubleClick?.(props.tab)}
         >
           <Show when={content()}>{(value) => value()}</Show>
         </Tabs.Trigger>

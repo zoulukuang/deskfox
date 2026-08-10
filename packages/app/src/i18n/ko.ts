@@ -82,6 +82,7 @@ export const dict = {
   "command.session.unshare": "세션 공유 중지",
   "command.session.unshare.description": "이 세션 공유 중지",
   "palette.search.placeholder": "파일, 명령어 및 세션 검색",
+  "palette.search.placeholder.home": "명령어 및 세션 검색",
   "palette.empty": "결과 없음",
   "palette.group.commands": "명령어",
   "palette.group.files": "파일",
@@ -257,6 +258,11 @@ export const dict = {
   "prompt.context.removeActiveFile": "컨텍스트에서 활성 파일 제거",
   "prompt.context.removeFile": "컨텍스트에서 파일 제거",
   "prompt.action.attachFile": "파일 첨부",
+  "prompt.menu.addImagesAndFiles": "파일 및 기타 항목 추가",
+  "prompt.menu.imagesAndFiles": "이미지 및 파일",
+  "prompt.menu.commands": "명령어",
+  "prompt.menu.context": "컨텍스트",
+  "prompt.menu.shellCommand": "셸 명령",
   "prompt.attachment.remove": "첨부 파일 제거",
   "prompt.action.send": "전송",
   "prompt.action.stop": "중지",
@@ -585,8 +591,8 @@ export const dict = {
   "settings.general.row.theme.description": "OpenCode 테마 사용자 지정",
   "settings.general.row.font.title": "코드 글꼴",
   "settings.general.row.font.description": "코드 블록에 사용되는 글꼴을 사용자 지정",
-  "settings.general.row.terminalFont.title": "Terminal Font",
-  "settings.general.row.terminalFont.description": "Customise the font used in the terminal",
+  "settings.general.row.terminalFont.title": "터미널 글꼴",
+  "settings.general.row.terminalFont.description": "터미널에서 사용할 글꼴을 설정합니다",
   "settings.general.row.uiFont.title": "UI 글꼴",
   "settings.general.row.uiFont.description": "인터페이스 전반에 사용되는 글꼴을 사용자 지정",
   "settings.general.row.followup.title": "후속 조치 동작",
@@ -858,4 +864,351 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "영구 프로젝트 아이콘 생성 실패",
   "error.childStore.storeCreateFailed": "저장소 생성 실패",
   "terminal.connectionLost.abnormalClose": "WebSocket이 비정상적으로 닫힘: {{code}}",
+
+  "command.project.previous": "이전 프로젝트",
+  "command.project.next": "다음 프로젝트",
+  "command.project.index": "{{index}}번 프로젝트로 전환",
+  "command.tab.reopenClosed": "닫은 탭 다시 열기",
+  "model.tooltip.context.label": "컨텍스트",
+  "model.tooltip.inputs": "입력",
+  "model.tooltip.model": "모델",
+  "model.tooltip.provider": "공급자",
+  "model.tooltip.reasoning": "추론",
+  "common.clear": "지우기",
+  "session.child.promptDisabled": "하위 에이전트 세션에는 프롬프트를 입력할 수 없습니다.",
+  "session.child.backToParent": "메인 세션으로 돌아가기.",
+
+  "wsl.server.add": "WSL 서버 추가",
+  "wsl.server.addShort": "WSL 추가",
+  "wsl.server.label": "WSL",
+  "wsl.server.menu.label": "WSL 서버",
+  "wsl.server.retryStart": "시작 재시도",
+  "wsl.server.updating": "업데이트 중...",
+  "wsl.onboarding.step.distro": "배포판 선택",
+  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.checkingRuntime": "WSL 확인 중...",
+  "wsl.onboarding.restartRequired": "WSL 설치를 완료하려면 Windows를 다시 시작해야 합니다.",
+  "wsl.onboarding.ready": "WSL이 준비되었습니다.",
+  "wsl.onboarding.required": "계속하려면 WSL이 필요합니다.",
+  "wsl.onboarding.checkingDistros": "배포판 확인 중...",
+  "wsl.onboarding.installingDistro": "{{distro}} 배포판 설치 중...",
+  "wsl.onboarding.checkingDistro": "{{distro}} 배포판 확인 중...",
+  "wsl.onboarding.listingDistros": "배포판 목록 확인 중...",
+  "wsl.onboarding.distroReady": "{{distro}} 배포판이 준비되었습니다.",
+  "wsl.onboarding.distroNotInstalled": "{{distro}} 배포판이 아직 설치되지 않았습니다.",
+  "wsl.onboarding.openDistroOnce": "설정을 완료하려면 {{distro}} 배포판을 한 번 여세요.",
+  "wsl.onboarding.finishingDistro": "{{distro}} 배포판 설정을 마무리하는 중입니다.",
+  "wsl.onboarding.pickDistro": "배포판을 선택하거나 아래에서 설치하세요.",
+  "wsl.onboarding.checkingOpencode": "OpenCode 확인 중...",
+  "wsl.onboarding.checkingOpencodeIn": "{{distro}}에서 OpenCode 확인 중...",
+  "wsl.onboarding.updatingOpencode": "OpenCode 업데이트 중...",
+  "wsl.onboarding.updatingOpencodeIn": "{{distro}}에서 OpenCode 업데이트 중...",
+  "wsl.onboarding.updateOpencodeIn": "{{distro}}에서 OpenCode를 업데이트하세요.",
+  "wsl.onboarding.updateOpencode": "OpenCode 업데이트",
+  "wsl.onboarding.opencodeReadyIn": "{{distro}}에서 OpenCode를 사용할 준비가 되었습니다.",
+  "wsl.onboarding.opencodeReady": "OpenCode가 준비되었습니다.",
+  "wsl.onboarding.installOpencodeIn": "{{distro}}에 OpenCode를 설치하세요.",
+  "wsl.onboarding.installOpencode": "OpenCode 설치",
+  "wsl.onboarding.chooseDistroFirst": "먼저 배포판을 선택하세요.",
+  "wsl.onboarding.loadFailed": "WSL 상태를 불러오지 못했습니다.",
+  "wsl.onboarding.loading": "로딩 중...",
+  "wsl.onboarding.installedDistros": "설치된 배포판",
+  "wsl.onboarding.checkAgain": "다시 확인",
+  "wsl.onboarding.distroStatus.ready": "준비됨",
+  "wsl.onboarding.distroStatus.checking": "확인 중...",
+  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode가 설치되지 않음",
+  "wsl.onboarding.distroStatus.missingTools": "bash, curl 없음",
+  "wsl.onboarding.distroStatus.unsupported": "지원되지 않음 · WSL 2 사용",
+  "wsl.onboarding.needAnotherDistro": "다른 배포판이 필요하신가요?",
+  "wsl.onboarding.needAnotherDistroHint": "WSL 카탈로그에서 Linux 배포판을 설치하세요",
+  "wsl.onboarding.wslNotInstalled.title": "WSL이 설치되지 않음",
+  "wsl.onboarding.wslNotInstalled.description":
+    "OpenCode에서 WSL 서버를 추가하려면 WSL (Windows Subsystem for Linux)이 필요합니다",
+  "wsl.onboarding.wslUnavailable.title": "WSL을 사용할 수 없음",
+  "wsl.onboarding.wslUnavailable.description": "OpenCode에서 이 컴퓨터의 WSL을 확인할 수 없습니다.",
+  "wsl.onboarding.installWsl": "WSL 설치",
+  "wsl.onboarding.windowsRestartRequired": "WSL 설치를 완료하려면 Windows를 다시 시작한 다음 OpenCode를 다시 여세요.",
+  "wsl.onboarding.next": "다음",
+  "wsl.onboarding.refresh": "새로 고침",
+  "wsl.onboarding.allDistrosAdded": "설치된 모든 배포판이 이미 추가되었습니다.",
+  "wsl.onboarding.noDistros": "아직 감지된 배포판이 없습니다.",
+  "wsl.onboarding.install": "설치",
+  "wsl.onboarding.installing": "설치 중...",
+  "wsl.onboarding.installDistro": "배포판 설치",
+  "wsl.onboarding.searchDistros": "배포판 검색",
+  "wsl.onboarding.wsl2Required": "WSL 2가 필요합니다.",
+  "wsl.onboarding.toolsRequired": "이 배포판에는 bash와 curl이 필요합니다.",
+  "wsl.onboarding.openTerminal": "터미널 열기",
+  "wsl.onboarding.path": "경로: {{path}}",
+  "wsl.onboarding.notFound": "찾을 수 없음",
+  "wsl.onboarding.version": "버전: {{version}}",
+  "wsl.onboarding.unknown": "알 수 없음",
+  "wsl.onboarding.desktopVersion": "데스크톱 {{version}}",
+  "wsl.onboarding.versionMismatch": "설치된 버전이 데스크톱 앱 버전과 일치하지 않습니다.",
+  "wsl.onboarding.adding": "추가 중...",
+
+  "language.uk": "Українська",
+  "error.page.description.localServerStartup": "로컬 서버를 시작하는 동안 오류가 발생했습니다.",
+  "error.page.action.exportLogs": "로그 내보내기",
+
+  "home.title": "홈",
+  "home.projects": "프로젝트",
+  "home.project.add": "프로젝트 추가",
+  "home.recentlyClosed": "최근에 닫은 항목",
+  "home.server.collapse": "서버 프로젝트 접기",
+  "home.server.expand": "서버 프로젝트 펼치기",
+  "home.sessions.search.placeholder": "세션 검색",
+  "home.sessions.search.placeholder.scoped": "{{scope}}에서 세션 검색",
+  "home.sessions.search.sessions": "세션",
+  "home.sessions.search.noResults": "{{query}}에 해당하는 세션을 찾을 수 없습니다",
+  "home.sessions.empty": "아직 아무것도 없습니다",
+  "home.sessions.empty.description": "세션을 생성하여 시작하세요",
+  "home.sessions.group.today": "오늘",
+  "home.sessions.group.yesterday": "어제",
+  "home.sessions.group.older": "이전",
+  "home.providerTip": "75개 이상의 제공업체에 연결하여 Claude, GPT, Gemini 등의 다른 모델을 사용하세요",
+
+  "session.tab.unknown": "알 수 없는 세션",
+  "session.error.notFound": "이 세션을 찾을 수 없습니다",
+  "session.error.notFound.description": "이 탭은 이 서버에 더 이상 존재하지 않는 세션을 가리킵니다.",
+  "session.error.notFound.closeTab": "탭 닫기",
+  "session.error.serverConnection": "이 서버에 연결할 수 없습니다",
+  "session.review.noUncommittedChanges": "아직 커밋되지 않은 변경 사항이 없습니다",
+  "session.review.noBranchChanges": "아직 브랜치 변경 사항이 없습니다",
+  "session.question.minimize": "질문 최소화",
+  "session.question.restore": "질문 복원",
+  "session.question.pending.one": "{{count}}개의 대기 중인 질문",
+  "session.question.pending.other": "{{count}}개의 대기 중인 질문",
+  "session.new.project.new": "새 프로젝트",
+  "session.new.project.search": "프로젝트 검색",
+  "session.new.project.add": "프로젝트 추가",
+  "session.new.workspace.runIn": "세션 실행 위치",
+  "session.new.workspace.triggerLocal": "로컬",
+  "session.new.workspace.local": "로컬 저장소",
+  "session.new.workspace.existing": "작업 공간…",
+  "session.new.git.none": "Git 없음",
+
+  "sidebar.empty.title": "열린 프로젝트 없음",
+  "sidebar.empty.description": "프로젝트를 열어 시작하세요",
+
+  "settings.general.section.advanced": "고급",
+  "settings.general.row.shell.title": "터미널 셸",
+  "settings.general.row.shell.description":
+    "터미널에서 사용할 셸을 선택하세요. 호환되는 셸은 에이전트 도구 호출에도 사용됩니다.",
+  "settings.general.row.shell.autoDefault": "자동 (기본값)",
+  "settings.general.row.shell.terminalOnly": "터미널 전용",
+  "settings.general.row.showFileTree.title": "파일 트리",
+  "settings.general.row.showFileTree.description": "세션에 파일 트리 패널 표시",
+  "settings.general.row.showNavigation.title": "탐색 컨트롤",
+  "settings.general.row.showNavigation.description": "데스크톱 제목 표시줄에 뒤로 및 앞으로 버튼 표시",
+  "settings.general.row.showSearch.title": "명령 팔레트",
+  "settings.general.row.showSearch.description": "제목 표시줄에 검색 및 명령 팔레트 버튼 표시",
+  "settings.general.row.showTerminal.title": "터미널",
+  "settings.general.row.showTerminal.description": "데스크톱 제목 표시줄에 터미널 버튼 표시",
+  "settings.general.row.showStatus.title": "서버 상태",
+  "settings.general.row.showStatus.description": "제목 표시줄에 서버 상태 버튼 표시",
+  "settings.general.row.mobileTitlebarBottom.title": "하단 탐색",
+  "settings.general.row.mobileTitlebarBottom.description": "모바일에서 제목 표시줄과 세션 탭을 화면 하단에 배치",
+  "settings.general.row.showCustomAgents.title": "사용자 지정 에이전트",
+  "settings.general.row.showCustomAgents.description": "입력창에 에이전트 선택기 표시",
+  "settings.general.row.newInterface.title": "새 레이아웃",
+  "settings.general.row.newInterface.badge": "신규",
+  "settings.general.row.newInterface.description":
+    "새 탭과 홈 화면 레이아웃을 사용합니다. 제한된 기간 동안 레이아웃을 전환할 수 있습니다.",
+  "settings.general.row.newInterfaceNotice.title": "이제 새 레이아웃을 사용 중입니다",
+  "settings.general.row.newInterfaceNotice.description": "이전 레이아웃은 더 이상 사용할 수 없습니다",
+  "settings.general.row.newInterfaceNotice.dismiss": "닫기",
+  "settings.general.row.pinchZoom.title": "핀치 줌",
+  "settings.general.row.pinchZoom.description": "트랙패드 핀치 및 Ctrl-스크롤 제스처로 확대/축소 허용",
+  "settings.updates.action.downloading": "다운로드 중...",
+  "settings.updates.action.installing": "설치 중...",
+  "dialog.provider.custom.label": "Custom OpenAI-compatible provider", // FORK-i18n-backfill(en 兜底)
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK-i18n-backfill(en 兜底)
+  "dialog.model.unpaid.viewMoreProviders": "See 70+ more providers", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line1": "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.prefix": "Visit ", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.link": "getbot.me", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.suffix": " to collect your API key.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.fetchModels.failed": "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.timeout": "Request to api.getbot.me timed out (15s). Please check your network and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels": "Refresh models", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.title": "AI modified this file", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.", // FORK-i18n-backfill(en 兜底)
+  "home.empty.title": "No recent projects", // FORK-i18n-backfill(en 兜底)
+  "home.empty.description": "Get started by opening a local project", // FORK-i18n-backfill(en 兜底)
+  "session.header.reveal.finder": "Reveal in Finder", // FORK-i18n-backfill(en 兜底)
+  "session.header.reveal.fileExplorer": "Reveal in File Explorer", // FORK-i18n-backfill(en 兜底)
+  "session.header.reveal.containingFolder": "Open containing folder", // FORK-i18n-backfill(en 兜底)
+  "common.closeOtherTabs": "Close Other Tabs", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.title": "Anonymous usage statistics", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.description": "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.locked": "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.rename": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.revealInFolder": "Reveal in folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyPath": "Copy path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.cut": "Cut", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toFolder": "Paste into this folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toRoot": "Paste to project root", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFile": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFolder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.refresh": "Refresh", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyRelativePath": "Copy Relative Path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.openInTerminal": "Open in Terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.expandAll": "Expand All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.collapseAll": "Collapse All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.collapsePreviewHint": "Click to collapse preview", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.title": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.label": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.placeholder": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.title": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.label": "Folder name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.placeholder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.fileTitle": "Rename file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.folderTitle": "Rename folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.label": "New name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.confirm": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.unchanged": "Name unchanged", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageSingle": "Are you sure you want to delete \"{{name}}\"?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.confirm": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.create": "Create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.empty": "Name cannot be empty", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.operationFailed": "Operation failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.openFailed": "Failed to open", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedSingle": "Delete failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.createFailed": "Failed to create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.renameFailed": "Failed to rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.single": "Deleted \"{{name}}\"", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.bulk": "Deleted {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.hint": "Recoverable from system trash", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.single": "Moved 1 item", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.bulk": "Moved {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undo": "Undo", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedSingle": "Move failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedSingle": "Copy failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedSingle": "Paste failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessSingle": "Path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessSingle": "Relative path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessBulk": "{{count}} relative paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.terminalFailed": "Failed to open terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.error": "Failed to load file tree", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.title": "Name conflict", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.replace": "Replace", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.keepBoth": "Keep both", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.skip": "Skip", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocx": "Export as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxFail": "Export failed", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.line": "Ln {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.col": "Col {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.addToChat": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.submit": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled", // FORK-i18n-backfill(en 兜底)
+  "settings.tab.feishu": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.title": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.title": "Keep computer awake", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.title": "No Lark account bound", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.add": "Add Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.title": "Bind Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.label": "Domain", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.feishu": "Feishu (China)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.lark": "Lark (Global)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusPending": "Waiting for authorization...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusSuccess": "Bound successfully", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusDenied": "Authorization denied by user", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusExpired": "QR code expired", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusError": "Error: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.done": "Done", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.qrLoading": "Generating QR code...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.edit": "Edit", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelLabel": "model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelDefault": "(use default)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.title": "Edit account settings", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelSectionTitle": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.advancedSectionTitle": "Advanced", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.groupCommand.info": "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.label": "Allow AI to read all group messages without @ mention", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.hint": "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.saving": "Saving...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerLabel": "Provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelLabel": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel.hint": "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerPlaceholder": "Select provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelPlaceholder": "Select model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.save": "Save", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.default": "Default (global home base)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.pick": "Choose folder", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.clear": "Reset to default", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.hintFollow": "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.security": "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.projectListWarning": "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceDefaulted": "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceFallback": "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)
 }

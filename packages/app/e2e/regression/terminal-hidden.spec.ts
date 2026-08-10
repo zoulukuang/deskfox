@@ -7,7 +7,7 @@ const projectID = "proj_hidden_terminal_regression"
 const sessionID = "ses_hidden_terminal_regression"
 const title = "Hidden terminal regression"
 
-test("unmounts the terminal renderer while the pane is hidden", async ({ page }) => {
+test("unmounts the terminal panel while it is hidden", async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 })
   await mockOpenCodeServer(page, {
     directory,
@@ -55,6 +55,11 @@ test("unmounts the terminal renderer while the pane is hidden", async ({ page })
   )
   await page.routeWebSocket("**/pty/pty_hidden_terminal/connect", () => undefined)
 
+  // FORK: 本 spec v1.18.4 起断言 v2 终端语义(关闭即卸载);上游靠 v2 默认,DeskFox e2e 基线
+  //   为经典布局(mock-server 种子),此处显式开 v2。2026-08-11 [feat: upstream-sync-2026-08]
+  await page.addInitScript(() => {
+    localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: true } }))
+  })
   await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
 
@@ -64,13 +69,14 @@ test("unmounts the terminal renderer while the pane is hidden", async ({ page })
   await expect(page.locator('[data-component="terminal"]')).toBeVisible()
 
   await page.keyboard.press("Control+Backquote")
-  await expect(panel).toHaveAttribute("aria-hidden", "true")
+  await expect(panel).toHaveCount(0)
   await expect(page.locator('[data-component="terminal"]')).toHaveCount(0)
 
   await page.setViewportSize({ width: 1200, height: 700 })
   await expect(page.locator('[data-component="terminal"]')).toHaveCount(0)
 
   await page.keyboard.press("Control+Backquote")
+  await expect(panel).toBeVisible()
   await expect(page.locator('[data-component="terminal"]')).toBeVisible()
 })
 

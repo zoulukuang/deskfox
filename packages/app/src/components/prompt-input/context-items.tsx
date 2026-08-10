@@ -1,8 +1,10 @@
 import { Component, For, Show } from "solid-js"
+import { Dynamic } from "solid-js/web"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/core/util/path"
 import type { ContextItem } from "@/context/prompt"
 
@@ -13,6 +15,7 @@ type ContextItemsProps = {
   active: (item: PromptContextItem) => boolean
   openComment: (item: PromptContextItem) => void
   remove: (item: PromptContextItem) => void
+  newLayoutDesigns: boolean
   t: (key: string) => string
 }
 
@@ -35,24 +38,32 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
               ? props.t("prompt.context.chatQuoteLabel")
               : getFilenameTruncated(item.path, 14)
             const selected = props.active(item)
-            const tooltipValue = isChatQuote
-              ? (
-                <span class="flex max-w-[320px] whitespace-pre-wrap break-words">
-                  {item.preview ?? ""}
-                </span>
-              )
-              : (
-                <span class="flex max-w-[300px]">
-                  <span class="text-text-invert-base truncate-start [unicode-bidi:plaintext] min-w-0">
-                    {directory}
-                  </span>
-                  <span class="shrink-0">{filename}</span>
-                </span>
-              )
 
-            // FORK: 聊天引用卡 tooltip 显示引用预览(400ms);文件卡跟随上游路径样式(800ms)[feat: 聊天选区-卡片化-换行]
             return (
-              <Tooltip value={tooltipValue} placement="top" openDelay={isChatQuote ? 400 : 800}>
+              <Dynamic
+                component={props.newLayoutDesigns ? TooltipV2 : Tooltip}
+                // FORK: 聊天引用卡 tooltip 显示引用预览 [feat: 聊天选区-卡片化-换行]
+                value={
+                  isChatQuote ? (
+                    <span class="flex max-w-[320px] whitespace-pre-wrap break-words">{item.preview ?? ""}</span>
+                  ) : (
+                  <span class="flex max-w-[300px]">
+                    <span
+                      classList={{
+                        "truncate-start [unicode-bidi:plaintext] min-w-0": true,
+                        "text-v2-text-text-muted": props.newLayoutDesigns,
+                        "text-text-invert-base": !props.newLayoutDesigns,
+                      }}
+                    >
+                      {directory}
+                    </span>
+                    <span class="shrink-0">{filename}</span>
+                  </span>
+                  )
+                }
+                placement="top"
+                openDelay={isChatQuote ? 400 : 800}
+              >
                 <div
                   classList={{
                     "group shrink-0 flex flex-col rounded-[6px] pl-2 pr-1 py-1 max-w-[200px] h-12 cursor-default transition-all transition-transform shadow-xs-border hover:shadow-xs-border-hover": true,
@@ -100,7 +111,7 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                     {(comment) => <div class="text-12-regular text-text-strong ml-5 pr-1 truncate">{comment()}</div>}
                   </Show>
                 </div>
-              </Tooltip>
+              </Dynamic>
             )
           }}
         </For>

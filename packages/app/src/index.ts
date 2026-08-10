@@ -1,4 +1,11 @@
 export { AppBaseProviders, AppInterface } from "./app"
+export { useLayout } from "./context/layout"
+export { useServerSDK } from "./context/server-sdk"
+export { useServerSync } from "./context/server-sync"
+export { useServer } from "./context/server"
+export { useSettings } from "./context/settings"
+export { useTabs } from "./context/tabs"
+export { useProviders } from "./hooks/use-providers"
 export { ACCEPTED_FILE_EXTENSIONS, ACCEPTED_FILE_TYPES, filePickerFilters } from "./constants/file-picker"
 export { useCommand } from "./context/command"
 // FORK: 导出 useLanguage 供桌面端监听 locale 变化、同步原生菜单语言 [feat: settings-panel-cleanup] 2026-06-15

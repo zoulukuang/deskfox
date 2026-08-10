@@ -13,7 +13,14 @@ const emptyList = new Set([
   "/find/file",
   "/find/symbol",
 ])
-const emptyObject = new Set(["/global/config", "/config", "/provider/auth", "/mcp", "/session/status"])
+const emptyObject = new Set([
+  "/global/config",
+  "/config",
+  "/provider/auth",
+  "/mcp",
+  "/session/status",
+  "/experimental/resource",
+])
 
 export interface MockServerConfig {
   provider: unknown
@@ -23,7 +30,10 @@ export interface MockServerConfig {
   pageMessages: (sessionId: string, limit: number, before?: string) => { items: unknown[]; cursor?: string }
   vcsDiff?: unknown[]
   messageDelay?: number
+  beforeMessagesResponse?: (input: { sessionID: string; before?: string }) => Promise<void>
   onMessages?: (input: { sessionID: string; before?: string; phase: "start" | "end" }) => void
+  message?: (sessionID: string, messageID: string) => unknown
+  onMessage?: (input: { sessionID: string; messageID: string }) => void
   events?: () => unknown[]
   // FORK: 可选 —— mock `/file?path=` 列目录(给文件树类 spec 用,如 REQ-062 选中态)。
   //   返回该目录下的条目数组;不提供则 /file 返回 []。2026-06-18
@@ -35,9 +45,26 @@ export interface MockServerConfig {
   todos?: (sessionID: string) => unknown[]
   permissions?: unknown[] | (() => unknown[])
   questions?: unknown[] | (() => unknown[])
+  fileList?: (path: string) => unknown | Promise<unknown>
+  fileContent?: (path: string) => unknown | Promise<unknown>
+  findFiles?: (input: { query: string; dirs?: string; limit?: number }) => unknown
+  sessionStatus?: unknown
 }
 
 export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
+  // FORK: e2e 布局基线 = 经典(段3 上游把 newLayoutDesigns 默认翻 true;fork 用例的被测对象是
+  //   经典模式的 DeskFox 定制)。仅在用例未自带 settings.v3 时种默认;要测 v2 的用例显式 seed
+  //   newLayoutDesigns: true 即可覆盖(后写胜出)。2026-08-11 [feat: upstream-sync-2026-08]
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("settings.v3")) {
+      localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: false } }))
+    }
+    // 配套:伪装「已越过 v1.17.19 cutoff 的既有安装」— 否则 layoutUpgrade 一次性迁移(升级跨
+    // cutoff / 全新安装)会无视偏好强制 v2,经典布局种子失效
+    if (!localStorage.getItem("app-version.v1")) {
+      localStorage.setItem("app-version.v1", JSON.stringify({ version: "1.18.0" }))
+    }
+  })
   const cursors = new Map<string, string>()
   let nextCursor = 0
   const staticRoutes: Record<string, unknown> = {
@@ -67,11 +94,39 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
     const path = url.pathname
     if (path === "/global/event" || path === "/event") return sse(route, config.events?.(), config.eventRetry)
     if (path === "/global/health") return json(route, { healthy: true })
+    if (path === "/api/session")
+      return json(route, {
+        data: config.sessions.map((session) => v2Session(session, config.directory)),
+        cursor: {},
+      })
+    if (path === "/experimental/capabilities") return json(route, { backgroundSubagents: false })
     if (path === "/permission")
       return json(route, typeof config.permissions === "function" ? config.permissions() : (config.permissions ?? []))
     if (path === "/question")
       return json(route, typeof config.questions === "function" ? config.questions() : (config.questions ?? []))
+    if (path === "/session/status") return json(route, config.sessionStatus ?? {})
     if (path === "/vcs/diff" && config.vcsDiff) return json(route, config.vcsDiff)
+    if (path === "/file" && config.fileList)
+      return json(route, await config.fileList(url.searchParams.get("path") ?? ""))
+    if (path === "/file/content" && config.fileContent)
+      return json(route, await config.fileContent(url.searchParams.get("path") ?? ""))
+    if (path === "/find/file" && config.findFiles)
+      return json(
+        route,
+        await config.findFiles({
+          query: url.searchParams.get("query") ?? "",
+          dirs: url.searchParams.get("dirs") ?? undefined,
+          limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
+        }),
+      )
+    if (path === "/api/reference")
+      return json(route, {
+        location: {
+          directory: config.directory,
+          project: { id: (config.project as { id?: string }).id, directory: config.directory },
+        },
+        data: [],
+      })
     if (emptyObject.has(path)) return json(route, {})
     if (emptyList.has(path)) return json(route, [])
     if (path in staticRoutes) return json(route, staticRoutes[path])
@@ -91,6 +146,18 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       return json(route, session ?? {})
     }
 
+    const projectMatch = path.match(/^\/project\/([^/]+)$/)
+    if (projectMatch) return json(route, config.project)
+
+    const messageMatch = path.match(/^\/session\/([^/]+)\/message\/([^/]+)$/)
+    if (messageMatch) {
+      config.onMessage?.({ sessionID: messageMatch[1]!, messageID: messageMatch[2]! })
+      if (config.messageDelay !== undefined) await new Promise((resolve) => setTimeout(resolve, config.messageDelay))
+      const message = config.message?.(messageMatch[1]!, messageMatch[2]!)
+      if (message === undefined) return json(route, { error: "Message not found" }, undefined, 404)
+      return json(route, message)
+    }
+
     const todoMatch = path.match(/^\/session\/([^/]+)\/todo$/)
     if (todoMatch) return json(route, config.todos?.(todoMatch[1]!) ?? [])
     if (/^\/session\/[^/]+\/(children|diff)$/.test(path)) return json(route, [])
@@ -101,7 +168,8 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       const before = token ? cursors.get(token) : undefined
       if (token && !before) return json(route, { error: "Invalid cursor" }, undefined, 400)
       config.onMessages?.({ sessionID: messagesMatch[1], before, phase: "start" })
-      if (config.messageDelay) await new Promise((resolve) => setTimeout(resolve, config.messageDelay))
+      await config.beforeMessagesResponse?.({ sessionID: messagesMatch[1]!, before })
+      if (config.messageDelay !== undefined) await new Promise((resolve) => setTimeout(resolve, config.messageDelay))
       const limit = Number(url.searchParams.get("limit") ?? 80)
       const pageData = config.pageMessages(messagesMatch[1], limit, before)
       config.onMessages?.({ sessionID: messagesMatch[1], before, phase: "end" })
@@ -114,6 +182,30 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
     if (url.port === targetPort && targetPort !== appPort) return json(route, {})
     return route.fallback()
   })
+}
+
+function v2Session(session: { id: string } & Record<string, unknown>, fallbackDirectory: string) {
+  const time = session.time && typeof session.time === "object" ? session.time : {}
+  return {
+    id: session.id,
+    parentID: session.parentID,
+    projectID: session.projectID ?? "project",
+    cost: session.cost ?? 0,
+    tokens: session.tokens ?? { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: {
+      created: "created" in time && typeof time.created === "number" ? time.created : 0,
+      updated: "updated" in time && typeof time.updated === "number" ? time.updated : 0,
+      ...(session.time && typeof session.time === "object" && "archived" in session.time
+        ? { archived: session.time.archived }
+        : {}),
+    },
+    title: session.title ?? session.id,
+    location: {
+      directory: typeof session.directory === "string" ? session.directory : fallbackDirectory,
+      ...(typeof session.workspaceID === "string" ? { workspaceID: session.workspaceID } : {}),
+    },
+    ...(typeof session.path === "string" ? { subpath: session.path } : {}),
+  }
 }
 
 function json(route: Route, body: unknown, headers?: Record<string, string>, status = 200) {

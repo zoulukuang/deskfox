@@ -2,6 +2,7 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { type Accessor, batch, createMemo } from "solid-js"
 import { createStore, type SetStoreFunction, type Store } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
+import { pathKey } from "@/utils/path-key"
 import { ServerScope } from "@/utils/server-scope"
 // FORK: win-anchor-hide-case-fold — 持久化匹配层统一走大小写不敏感目录比较(Windows 大小写不敏感;
 //   POSIX 大小写敏感=零回归)。防持久化 worktree(历史/深链/手输,大小写不受控)与后端 realpath 规范化
@@ -11,8 +12,18 @@ import { sameDirectory } from "@/utils/same-directory"
 // FORK: REQ-072 — 持久化 id,供改名后 stale 条目锚扫描 relocate(旧文件夹已消失、读不到锚,靠这个记住身份)
 type StoredProject = { worktree: string; expanded: boolean; id?: string }
 type StoredServer = string | ServerConnection.HttpBase | ServerConnection.Http
-type ServerProjectState = { projects: Record<string, StoredProject[]>; lastProject: Record<string, string> }
+type ServerProjectState = {
+  projects: Record<string, StoredProject[]>
+  lastProject: Record<string, string>
+  recentlyClosed: Record<string, string[]>
+}
 const HEALTH_POLL_INTERVAL_MS = 10_000
+// The store retains more history than is displayed. Consumers filter recently closed entries
+// against the live project list (dropping deleted projects) and then cap the visible count via
+// RECENTLY_CLOSED_DISPLAY_LIMIT. Retaining extra history ensures entries that are temporarily
+// filtered out do not evict still-visible ones from the persisted store.
+const RECENTLY_CLOSED_HISTORY_LIMIT = 16
+export const RECENTLY_CLOSED_DISPLAY_LIMIT = 5
 
 export function normalizeServerUrl(input: string) {
   const trimmed = input.trim()
@@ -77,19 +88,44 @@ export function createServerProjects<T extends ServerProjectState>(input: {
 }) {
   const setStore = input.setStore as unknown as SetStoreFunction<ServerProjectState>
   const current = () => input.store.projects[input.scope()] ?? []
+  const currentClosed = () => input.store.recentlyClosed?.[input.scope()] ?? []
+  const remove = (directory: string) => {
+    setStore(
+      "projects",
+      input.scope(),
+      // FORK: win-anchor-hide-case-fold — Windows 盘符/大小写不受控,匹配用大小写不敏感比较
+      current().filter((project) => !sameDirectory(project.worktree, directory)),
+    )
+  }
   return {
     list: current,
+    recentlyClosed: currentClosed,
+    remove,
     open(directory: string) {
       const scope = input.scope()
+      const key = pathKey(directory)
+      const closed = currentClosed()
+      if (closed.some((worktree) => pathKey(worktree) === key)) {
+        setStore(
+          "recentlyClosed",
+          scope,
+          closed.filter((worktree) => pathKey(worktree) !== key),
+        )
+      }
+      // FORK: win-anchor-hide-case-fold 大小写不敏感
       if (current().some((project) => sameDirectory(project.worktree, directory))) return
       setStore("projects", scope, [{ worktree: directory, expanded: true }, ...current()])
     },
+    // User-initiated close: removes the project and records it in recently closed.
+    // Internal, non-user removals (e.g. sandbox/worktree normalization) should use remove().
     close(directory: string) {
-      setStore(
-        "projects",
-        input.scope(),
-        current().filter((project) => !sameDirectory(project.worktree, directory)),
+      remove(directory)
+      const key = pathKey(directory)
+      const closed = [directory, ...currentClosed().filter((worktree) => pathKey(worktree) !== key)].slice(
+        0,
+        RECENTLY_CLOSED_HISTORY_LIMIT,
       )
+      setStore("recentlyClosed", input.scope(), closed)
     },
     expand(directory: string) {
       const index = current().findIndex((project) => sameDirectory(project.worktree, directory))
@@ -275,6 +311,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
         list: [] as StoredServer[],
         projects: {} as Record<string, StoredProject[]>,
         lastProject: {} as Record<string, string>,
+        recentlyClosed: {} as Record<string, string[]>,
       }),
     )
 
@@ -317,7 +354,10 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       })
     }
 
-    const isReady = createMemo(() => ready() && !!state.active)
+    const isReady = Object.assign(
+      createMemo(() => ready() && !!state.active),
+      { promise: ready.promise },
+    )
 
     const scope = (key = state.active) => ServerScope.fromServerKey(key, props.canonicalLocalServer)
     const projects = createServerProjects({ scope, store, setStore })

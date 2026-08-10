@@ -123,7 +123,7 @@ export type PromptInputControls = {
       open: () => void
     }
   }
-  newLayoutDesigns: boolean
+  newLayoutDesigns?: boolean
 }
 
 export function createPromptInputHistory(): PromptInputHistory {
@@ -355,6 +355,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
   )
 
+  // FORK: 段3 上游 transient-state 移除 variantOpen,本地信号替代(模型 variant 弹层开合)2026-08-11
+  const [variantOpen, setVariantOpen] = createSignal(false)
   const [store, setStore] = createPromptInputTransientState(
     () => prompt.capture(),
     Math.floor(Math.random() * EXAMPLES.length),
@@ -1542,7 +1544,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     model: props.controls.model.selection,
     providerID: props.controls.model.selection.current()?.provider?.id,
     modelName: props.controls.model.selection.current()?.name ?? language.t("dialog.model.select.title"),
-    newLayoutDesigns: props.controls.newLayoutDesigns,
+    newLayoutDesigns: props.controls.newLayoutDesigns ?? false,
     style: control(),
     onClose: restoreFocus,
     onUnpaidClick: () => {
@@ -1579,6 +1581,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     <div class="relative size-full flex flex-col gap-0">
       {(promptReady(), null)}
       <PromptPopover
+        newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
         popover={store.popover}
         setSlashPopoverRef={(el) => (slashPopoverRef = el)}
         atFlat={atFlat()}
@@ -1592,7 +1595,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         onSlashSelect={handleSlashSelect}
         commandKeybind={command.keybind}
         commandKeybindParts={command.keybindParts}
-        newLayoutDesigns={props.controls.newLayoutDesigns}
+        // FORK: 段3 上游新增 slash-menu 契约,legacy composer 提供最小实现 2026-08-11
+        slashMenu={store.slashMenu}
+        slashMenuQuery={store.slashMenuQuery}
+        onSlashMenuInput={(value) => setStore("slashMenuQuery", value)}
+        onSlashMenuKeyDown={() => {}}
         t={(key) => language.t(key as Parameters<typeof language.t>[0])}
       />
       <Switch>
@@ -1614,6 +1621,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 )}
               />
               <PromptContextItems
+                  newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
                 items={contextItems()}
                 active={(item) => {
                   const active = comments.active()
@@ -1627,6 +1635,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 t={(key) => language.t(key as Parameters<typeof language.t>[0])}
               />
               <PromptImageAttachments
+                  newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
                 attachments={imageAttachments()}
                 onOpen={(attachment) =>
                   dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />)
@@ -1719,7 +1728,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       classList={{
                         "animate-in fade-in": providersShouldFadeIn(),
                         "hidden group-hover/prompt-input:block group-focus-within/prompt-input:block":
-                          !props.controls.model.selection.variant.current() && !store.variantOpen,
+                          !props.controls.model.selection.variant.current() && !variantOpen(),
                       }}
                     >
                       <TooltipV2
@@ -1736,7 +1745,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                           gutter={6}
                           modal={false}
                           placement="top-start"
-                          onOpenChange={(open) => setStore("variantOpen", open)}
+                          onOpenChange={(open) => setVariantOpen(open)}
                         >
                           <MenuV2.Trigger
                             as={ButtonV2}
@@ -1812,6 +1821,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               )}
             />
             <PromptContextItems
+                  newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
               items={contextItems()}
               active={(item) => {
                 const active = comments.active()
@@ -1825,6 +1835,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               t={(key) => language.t(key as Parameters<typeof language.t>[0])}
             />
             <PromptImageAttachments
+                  newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
               attachments={imageAttachments()}
               onOpen={(attachment) =>
                 dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />)

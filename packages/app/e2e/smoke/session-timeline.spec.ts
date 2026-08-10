@@ -315,18 +315,9 @@ test.describe("smoke: session timeline", () => {
       ).__coldTabSamples!
       return samples.find((sample) => sample.destination)!
     })
-    // FORK: bash 纳入折叠组(message-part-grouping)后冷会话行数比上游少,目标消息在量高沉降
-    //   完成前一帧即已可见(上游行多,可见时刻天然晚于沉降,该瞬时帧取不到)。放宽为:首个
-    //   可见帧起 2 帧内必须精确贴底(message-timeline 锁底沉降 FORK 保证),最终状态仍精确。2026-08-11
-    const allSamples = await page.evaluate(
-      () =>
-        (window as Window & { __coldTabSamples?: Array<{ destination: boolean; last: boolean; bottomError?: number }> })
-          .__coldTabSamples!,
-    )
-    const firstIdx = allSamples.findIndex((s) => s.destination)
-    const anchored = allSamples.slice(firstIdx, firstIdx + 2).find((s) => Math.abs(s.bottomError ?? Infinity) <= 1)
+    // 2026-08-11 sync v1.18.4:bash 出折叠组对齐上游后行构成一致,恢复上游原断言
     expect(result.last).toBe(true)
-    expect(anchored).toBeTruthy()
+    expect(Math.abs(result.bottomError ?? Infinity)).toBeLessThanOrEqual(1)
   })
 
   test("renders seeded timeline in order while paging through history", async ({ page }) => {
@@ -349,20 +340,18 @@ test.describe("smoke: session timeline", () => {
     await expectSessionTimelineReady(page, expectedPartIDs, expectedMessageIDs, errors)
     await expectCanScrollToStart(page, expectedPartIDs, expectedMessageIDs, errors)
 
-    // FORK(2026-08-11 sync v1.17.13):DeskFox 将 bash 纳入「已探索」折叠组(message-part-grouping,
-    // 降噪设计:组内渲染命令摘要行而非完整 shell 输出;新旧版本一致行为)。上游「bash 独立成行 +
-    // 展开看 $ 输出 + 收起看 subtitle」断言不适用,改断:所在组存在、可展开、含该命令摘要行。
-    const shellGroup = page.locator(`[data-timeline-part-ids*="${fixture.expected.expandedShellPartID}"]`)
-    await expect(shellGroup).toHaveCount(1)
-    const shellGroupTrigger = shellGroup.locator('[data-slot="collapsible-trigger"]').first()
-    if ((await shellGroupTrigger.getAttribute("aria-expanded")) === "false") {
-      await shellGroupTrigger.scrollIntoViewIfNeeded()
-      await shellGroupTrigger.click()
-    }
-    await expect(shellGroupTrigger).toHaveAttribute("aria-expanded", "true")
-    await expect(
-      shellGroup.locator('[data-slot="context-tool-group-item"]').filter({ hasText: "bun typecheck" }).first(),
-    ).toBeVisible()
+    // 2026-08-11 sync v1.18.4:bash 出折叠组对齐上游(撤销 2026-06-19 定制),恢复上游原断言
+    const shell = page.locator(`[data-timeline-part-id="${fixture.expected.expandedShellPartID}"]`)
+    const shellTrigger = shell.locator('[data-slot="collapsible-trigger"]')
+    const shellSubtitle = shell.locator('[data-slot="basic-tool-tool-subtitle"]')
+    await expect(shellSubtitle).toHaveCount(0)
+    await expect(shell.locator('[data-slot="bash-pre"]')).toContainText("$ bun typecheck")
+    await shellTrigger.click()
+    await expect(shellTrigger).toHaveAttribute("aria-expanded", "false")
+    await expect(shellSubtitle).toHaveText("bun typecheck")
+    await shellTrigger.click()
+    await expect(shellTrigger).toHaveAttribute("aria-expanded", "true")
+    await expect(shellSubtitle).toHaveCount(0)
   })
 })
 
@@ -749,5 +738,5 @@ async function switchTitlebarSession(page: Page, sessionID: string, title: strin
 }
 
 async function expectSessionReady(page: Page) {
-  await expectAppVisible(page.getByRole("textbox", { name: /Ask anything/i }))
+  await expectAppVisible(page.getByRole("textbox", { name: "Prompt" }))
 }

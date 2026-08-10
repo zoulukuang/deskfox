@@ -44,6 +44,7 @@ import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
+import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
 import { toggleMcp } from "./global-sync/mcp"
 import { createServerSession } from "./server-session"
@@ -159,6 +160,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   })
 
   const queryClient = useQueryClient()
+  const homeSessions = createHomeSessionIndexCache(queryClient, ServerConnection.key(serverSDK.server))
 
   let bootedAt = 0
   let bootingRoot = false
@@ -386,6 +388,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     const recent = bootingRoot || Date.now() - bootedAt < 1500
 
     session.apply(event)
+    if (event.type === "session.created" || event.type === "session.updated" || event.type === "session.deleted") {
+      homeSessions.apply(event)
+    }
+    homeSessions.refresh(event.type)
 
     if (directory === "global") {
       applyGlobalEvent({
@@ -400,6 +406,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       if (event.type === "server.connected" || event.type === "global.disposed") {
         if (recent) return
         for (const directory of Object.keys(children.children)) {
+          if (!children.active(directory)) continue
           queue.push(directory)
         }
       }
@@ -415,15 +422,19 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       directory,
       store,
       setStore,
-      push: queue.push,
+      push: (directory) => {
+        if (children.active(directory)) queue.push(directory)
+      },
       retainedLimit: sessionMeta.get(key)?.limit,
       sessionContent: false,
       permission: session.data.permission,
       vcsCache: children.vcsCache.get(key),
       loadLsp: () => {
+        if (!children.active(key)) return
         void queryClient.fetchQuery(queryOptionsApi.lsp(key))
       },
       loadReferences: () => {
+        if (!children.active(key)) return
         void queryClient.fetchQuery(queryOptionsApi.references(key))
       },
     })
@@ -507,6 +518,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     refreshProviders,
     project: projectApi,
     session,
+    homeSessions,
     mcp: {
       toggle: async (directory: string, name: string) => {
         const key = directoryKey(directory)

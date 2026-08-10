@@ -5,12 +5,13 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useServerSync } from "./server-sync"
 import { useServerSDK } from "./server-sdk"
-import { ServerConnection, useServer } from "./server"
+import { RECENTLY_CLOSED_DISPLAY_LIMIT, ServerConnection, useServer } from "./server"
 import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 // FORK: REQ-041/042 — 文件 tab 项目级 key + 会话级伪标签合成 [feat: iconbar-left-decouple] 2026-06-02
 import { projectTabKey, synthTabs, type SessionPseudoTab } from "./session-key"
+import { pathKey } from "@/utils/path-key"
 import { decode64 } from "@/utils/base64"
 // FORK: REQ-042 #2 — 关项目时按项目 key 删其文件 tab [feat: file-tabs-project-level] 2026-06-02
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -24,6 +25,7 @@ import { createSessionKeyReader, ensureSessionKey, pruneSessionKeys } from "./la
 import { resolveLocalIconOverride } from "./project-icon-override"
 import { requireServerKey } from "@/utils/session-route"
 import { type DraftTab, useTabs } from "./tabs"
+import { closeSessionTab, openSessionTab, previewSessionTab, type SessionTabs } from "./layout-tabs"
 
 export { createSessionKeyReader, ensureSessionKey, pruneSessionKeys }
 
@@ -51,23 +53,28 @@ export function getAvatarColors(key?: string) {
 }
 
 export function getProjectAvatarVariant(key?: string): ProjectAvatarVariant {
-  if (key === "orange") return "orange"
-  if (key === "pink") return "pink"
-  if (key === "cyan") return "cyan"
-  if (key === "purple") return "purple"
   if (key === "mint") return "cyan"
   if (key === "lime") return "green"
+  if (
+    key === "orange" ||
+    key === "yellow" ||
+    key === "cyan" ||
+    key === "green" ||
+    key === "red" ||
+    key === "pink" ||
+    key === "blue" ||
+    key === "purple" ||
+    key === "gray"
+  )
+    return key
   return "gray"
-}
-
-type SessionTabs = {
-  active?: string
-  all: string[]
 }
 
 type SessionView = {
   scroll: Record<string, SessionScroll>
   reviewOpen?: string[]
+  reviewMode?: ReviewChangeMode
+  reviewFile?: string
   pendingMessage?: string
   pendingMessageAt?: number
   todoCollapsed?: boolean
@@ -86,6 +93,7 @@ export type LocalProject = Partial<Project> & { worktree: string; expanded: bool
 export type HomeProjectSelection = { server: ServerConnection.Key; directory?: string }
 
 export type ReviewDiffStyle = "unified" | "split"
+export type ReviewChangeMode = "git" | "branch" | "turn"
 export type ReviewPanelSource = "context-button" | "other"
 
 export type LayoutRoute =
@@ -94,13 +102,6 @@ export type LayoutRoute =
   | { type: "dir-new-sesssion"; dir: string; dirBase64: string; server?: ServerConnection.Key }
   | { type: "session"; sessionId: string; server?: ServerConnection.Key }
 
-function nextSessionTabsForOpen(current: SessionTabs | undefined, tab: string): SessionTabs {
-  const all = current?.all ?? []
-  if (tab === "review") return { all: all.filter((x) => x !== "review"), active: tab }
-  if (tab === "context") return { all: [tab, ...all.filter((x) => x !== tab)], active: tab }
-  if (!all.includes(tab)) return { all: [...all, tab], active: tab }
-  return { all, active: tab }
-}
 
 const sessionPath = (key: string) => {
   const dir = SessionStateKey.route(key).split("/")[0]
@@ -321,6 +322,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     )
     const [ephemeral, setEphemeral] = createStore({
       reviewPanelSource: "other" as ReviewPanelSource,
+      sessionTabPreview: {} as Record<string, string | undefined>,
     })
 
     const MAX_SESSION_KEYS = 50
@@ -379,6 +381,12 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
 
       scroll.drop(drop)
       dropSessionState(drop)
+      setEphemeral(
+        "sessionTabPreview",
+        produce((draft) => {
+          for (const key of drop) delete draft[key]
+        }),
+      )
 
       for (const key of drop) {
         usage.used.delete(key)
@@ -516,7 +524,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           const [child] = serverSync().child(project.worktree, { bootstrap: false })
           if (child.path?.worktree === project.worktree) continue
 
-          server.projects.close(project.worktree)
+          server.projects.remove(project.worktree)
 
           if (!seen.has(root)) {
             server.projects.open(root)
@@ -646,6 +654,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       },
       projects: {
         list,
+        recentlyClosed: createMemo(() => {
+          const known = new Set(serverSync().data.project.map((project) => pathKey(project.worktree)))
+          return server.projects
+            .recentlyClosed()
+            .filter((worktree) => known.has(pathKey(worktree)))
+            .slice(0, RECENTLY_CLOSED_DISPLAY_LIMIT)
+            .map((worktree) => enrich({ worktree, expanded: false }))
+        }),
         open(directory: string) {
           const root = rootFor(directory)
           if (server.projects.list().find((x) => x.worktree === root)) return
@@ -828,6 +844,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       view(sessionKey: string | Accessor<string>) {
         const key = createSessionKeyReader(sessionKey, ensureKey)
         const s = createMemo(() => store.sessionView[key()] ?? { scroll: {} })
+        const reviewMode = createMemo(() => {
+          const mode = s().reviewMode
+          if (mode === "git" || mode === "branch" || mode === "turn") return mode
+        })
+        const reviewFile = createMemo(() => {
+          const file = s().reviewFile
+          if (typeof file === "string") return file
+        })
         const terminalOpened = createMemo(() => store.terminal?.opened ?? false)
         const reviewPanelOpened = createMemo(() => store.review?.panelOpened ?? DEFAULT_REVIEW_PANEL_OPENED)
         const reviewPanelSource = createMemo(() => (reviewPanelOpened() ? ephemeral.reviewPanelSource : "other"))
@@ -911,6 +935,32 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             },
           },
           review: {
+            mode: reviewMode,
+            setMode(mode: ReviewChangeMode) {
+              const session = key()
+              const current = store.sessionView[session]
+              if (!current) {
+                setStore("sessionView", session, { scroll: {}, reviewMode: mode })
+                prune(session)
+                return
+              }
+              if (current.reviewMode === mode) return
+              setStore("sessionView", session, "reviewMode", mode)
+              prune(session)
+            },
+            file: reviewFile,
+            setFile(file: string) {
+              const session = key()
+              const current = store.sessionView[session]
+              if (!current) {
+                setStore("sessionView", session, { scroll: {}, reviewFile: file })
+                prune(session)
+                return
+              }
+              if (current.reviewFile === file) return
+              setStore("sessionView", session, "reviewFile", file)
+              prune(session)
+            },
             open: createMemo(() => s().reviewOpen ?? []),
             setOpen(open: string[]) {
               const session = key()
@@ -1009,6 +1059,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           tabs,
           active: createMemo(() => tabs().active),
           all: createMemo(() => tabs().all.filter((tab) => tab !== "review")),
+          // FORK: 预览态按 projectKey 存(项目级 tab 体系,strip 跨会话共享)2026-08-11
+          preview: createMemo(() => ephemeral.sessionTabPreview[projectKey()]),
           setActive(tab: string | undefined) {
             const next = tab ? normalize(tab) : tab
             if (next === "review") return setPseudo({ active: "review" })
@@ -1019,15 +1071,47 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           },
           setAll(all: string[]) {
             // 仅设文件 tab 列表(项目级);伪标签(review/context)不进文件存储
-            setFileAll(normalizeAll(all).filter((tab) => tab !== "review" && tab !== "context"))
+            const next = normalizeAll(all).filter((tab) => tab !== "review" && tab !== "context")
+            batch(() => {
+              setFileAll(next)
+              const pk = projectKey()
+              const preview = ephemeral.sessionTabPreview[pk]
+              if (preview && !next.includes(preview)) setEphemeral("sessionTabPreview", pk, undefined)
+            })
           },
+          // FORK: 文件 tab 操作委托上游纯函数(open/preview/close 语义与上游一致,含单击预览
+          //   tab 替换/双击转永久),仅存储落项目级 projectTabs + preview 按 projectKey。
+          //   2026-08-11 sync v1.18.4(推翻此前「无预览态,单击即真开」兼容层 — 上游 v2
+          //   review e2e 断言预览替换语义)
           async open(tab: string) {
             const n = normalize(tab)
             if (n === "review") return setPseudo({ active: "review" })
             if (n === "context") return setPseudo({ active: "context", context: true })
-            // 打开文件:加入项目级文件 tab + active;离开会话伪标签
-            setStore("projectTabs", projectKey(), nextSessionTabsForOpen(store.projectTabs[projectKey()], n))
-            setPseudo({ active: undefined })
+            const pk = projectKey()
+            const next = openSessionTab(
+              { tabs: store.projectTabs[pk] ?? { all: [] }, preview: ephemeral.sessionTabPreview[pk] },
+              n,
+            )
+            batch(() => {
+              setStore("projectTabs", pk, next.tabs)
+              setEphemeral("sessionTabPreview", pk, next.preview)
+              setPseudo({ active: undefined })
+            })
+          },
+          async previewTab(tab: string) {
+            const n = normalize(tab)
+            if (n === "review") return setPseudo({ active: "review" })
+            if (n === "context") return setPseudo({ active: "context", context: true })
+            const pk = projectKey()
+            const next = previewSessionTab(
+              { tabs: store.projectTabs[pk] ?? { all: [] }, preview: ephemeral.sessionTabPreview[pk] },
+              n,
+            )
+            batch(() => {
+              setStore("projectTabs", pk, next.tabs)
+              setEphemeral("sessionTabPreview", pk, next.preview)
+              setPseudo({ active: undefined })
+            })
           },
           close(tab: string) {
             if (tab === "review") {
@@ -1039,20 +1123,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
               setPseudo(wasActive ? { context: false, active: undefined } : { context: false })
               return
             }
-            // 文件 tab
+            // 文件 tab:委托上游 closeSessionTab(active 递补 + preview 清理)
             const pk = projectKey()
             const current = store.projectTabs[pk]
             if (!current) return
-            const all = current.all.filter((x) => x !== tab)
-            if (current.active !== tab) {
-              setStore("projectTabs", pk, "all", all)
-              return
-            }
-            const index = current.all.findIndex((f) => f === tab)
-            const next = current.all[index - 1] ?? current.all[index + 1] ?? all[0]
+            const next = closeSessionTab({ tabs: current, preview: ephemeral.sessionTabPreview[pk] }, tab)
             batch(() => {
-              setStore("projectTabs", pk, "all", all)
-              setStore("projectTabs", pk, "active", next)
+              setStore("projectTabs", pk, next.tabs)
+              setEphemeral("sessionTabPreview", pk, next.preview)
             })
           },
           move(tab: string, to: number) {

@@ -56,7 +56,7 @@ import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis, getDraggableId } from "@/utils/solid-dnd"
 import { DebugBar } from "@/components/debug-bar"
-import { HelpButton } from "@/components/help-button"
+import { TabsInfoPopup } from "@/components/help-button"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { useDirectoryPicker } from "@/components/directory-picker"
 import { ServerConnection, useServer } from "@/context/server"
@@ -163,6 +163,7 @@ export default function LegacyLayout(props: ParentProps) {
     sizing: false,
     peek: undefined as string | undefined,
     peeked: false,
+    debugTools: true,
   })
 
   const updateVersion = () => {
@@ -1183,9 +1184,9 @@ export default function LegacyLayout(props: ParentProps) {
 
   function connectProvider() {
     const run = ++dialogRun
-    void import("@/components/dialog-select-provider").then((x) => {
+    void import("@/components/dialog-connect-provider").then((x) => {
       if (dialogDead || dialogRun !== run) return
-      dialog.show(() => <x.DialogSelectProvider />)
+      void dialog.show(() => <x.DialogConnectProvider />)
     })
   }
 
@@ -2380,32 +2381,21 @@ export default function LegacyLayout(props: ParentProps) {
   // FORK: 段2 上游删除 newDesign 局部 memo,本地补回(legacy return 块沿用)2026-08-11
   const newDesign = createMemo(() => settings.general.newLayoutDesigns())
   return (
-    <>
-      {/* 唯一 toast region:必须在 Show 之外,不受 design-mode 分支影响 */}
-      <ToastRegion v2={newDesign()} />
-      {/* update toast 也在 Show 之外,两个 design-mode 分支均可触发 */}
+    <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+      {autoselecting() ?? ""}
+      <Titlebar
+        update={titlebarUpdate}
+        debugTools={
+          import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEBUG_BAR !== "1"
+            ? { visible: state.debugTools, toggle: () => setState("debugTools", (value) => !value) }
+            : undefined
+        }
+      />
       <Show when={updateVersion() !== undefined}>
         <UpdateAvailableToast version={updateVersion() ?? ""} install={installUpdate} language={language} />
       </Show>
-      <Show
-        when={!newDesign()}
-        fallback={
-          <div class="relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
-            {autoselecting() ?? ""}
-            <Titlebar update={titlebarUpdate} />
-            <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
-              <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
-                {props.children}
-              </Show>
-            </main>
-            {import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEBUG_BAR !== "1" && <DebugBar />}
-            <HelpButton />
-          </div>
-        }
-      >
-      <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
-        {autoselecting() ?? ""}
-        <Titlebar update={titlebarUpdate} />
+      {/* 2026-08-11 sync v1.18.4:v2 分支移交 NewAppLayout(app.tsx),本文件回归 legacy 专属,
+          原 Show/newDesign 双分支包装拆除;UpdateAvailableToast 保留(fork U4 单一 toast 修) */}
         <div class="flex-1 min-h-0 min-w-0 flex">
           <div class="flex-1 min-h-0 relative">
             <div class="size-full relative overflow-x-hidden">
@@ -2565,12 +2555,11 @@ export default function LegacyLayout(props: ParentProps) {
               </div>
             </div>
           </div>
-          {import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEBUG_BAR !== "1" && <DebugBar />}
-        </div>
-        <HelpButton />
+        {import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEBUG_BAR !== "1" && state.debugTools && <DebugBar />}
       </div>
-    </Show>
-    </>
+      <TabsInfoPopup />
+      <ToastRegion v2={false} />
+    </div>
   )
 }
 // FORK-END: U4 检查更新重复 toast

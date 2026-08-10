@@ -84,7 +84,8 @@ describe("REQ-098 单波浪号误判删除线", () => {
   describe("实现陷阱", () => {
     test("非匹配返回 undefined(返 false 会回退内置 `~~?` 规则,等于没改)", () => {
       const lexer = { inlineTokens: () => [] }
-      const del = strictDelExtension.tokenizer!.del!
+      // 2026-08-11 marked 17.x tokenizer 形参签名扩展,测试侧窄化 this-call 类型
+      const del = strictDelExtension.tokenizer!.del! as unknown as (this: unknown, src: string) => unknown
       expect(del.call({ lexer } as never, "4.80~5.05 区间")).toBeUndefined()
     })
 

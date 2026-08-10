@@ -34,6 +34,12 @@ import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as 
 import { parseMarkdown } from "./markdown"
 import { createMenu } from "./menu"
 import {
+  finishFirstLaunchOnboarding,
+  initializeOldLayoutEligibility,
+  isFirstLaunchOnboardingPending,
+  isOldLayoutEligible,
+} from "./onboarding"
+import {
   getDefaultServerUrl,
   preferAppEnv,
   setDefaultServerUrl,
@@ -46,6 +52,7 @@ import { createSidecarWatchdog } from "./deskfox/sidecar-watchdog"
 // FORK: REQ-087 renderer 连环崩自愈 [feat: renderer-snapshot-oom] 2026-08-02
 import { handleRendererGone } from "./deskfox/renderer-crash-guard"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
+import { safeWebContentsURL } from "./window-state"
 import {
   getLastFocusedWindow,
   registerRendererProtocol,
@@ -177,6 +184,7 @@ const main = Effect.gen(function* () {
     onboardingTestRoot ? join(onboardingTestRoot, "desktop") : join(app.getPath("appData"), appId),
   )
   if (onboardingTestRoot) app.setPath("sessionData", join(onboardingTestRoot, "session"))
+  initializeOldLayoutEligibility(app.getPath("userData"))
   logger = initLogging()
   initCrashReporter()
 
@@ -203,6 +211,7 @@ const main = Effect.gen(function* () {
     wslServers.stopAll()
   }
   const relaunch = () => {
+    setAppQuitting()
     void stopSidecars().finally(() => {
       app.relaunch()
       app.exit(0)
@@ -287,7 +296,7 @@ const main = Effect.gen(function* () {
   })
 
   app.on("render-process-gone", (_event, webContents, details) => {
-    writeLog("window", "app render process gone", { url: webContents.getURL(), details }, "error")
+    writeLog("window", "app render process gone", { url: safeWebContentsURL(webContents), details }, "error")
     // FORK: REQ-087 连环崩自愈 — 崩溃循环时隔离快照 .dat 再 reload,打破「一开就崩」
     //   [feat: renderer-snapshot-oom] 2026-08-02
     void handleRendererGone(webContents, details.reason, (message, data) => writeLog("window", message, data, "error"))
@@ -299,6 +308,7 @@ const main = Effect.gen(function* () {
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
+      setAppQuitting()
       void stopSidecars().finally(() => app.exit(0))
     })
   }
@@ -356,6 +366,9 @@ const main = Effect.gen(function* () {
     consumeInitialDeepLinks: () => pendingDeepLinks.splice(0),
     getDefaultServerUrl: () => getDefaultServerUrl(),
     setDefaultServerUrl: (url) => setDefaultServerUrl(url),
+    isFirstLaunchOnboardingPending,
+    finishFirstLaunchOnboarding,
+    isOldLayoutEligible,
     getDisplayBackend: async () => null,
     setDisplayBackend: async () => undefined,
     parseMarkdown: async (markdown) => parseMarkdown(markdown),
