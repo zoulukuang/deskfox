@@ -11,7 +11,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | 段 | 目标 | 状态 | merge commit | 备注 |
 |---|---|---|---|---|
 | 1 | v1.17.8 `8716c4309a`(06-17) | ✅ done | `ea3ea31315` | 时间线重写段,25 冲突,e2e 37/37 |
-| 2 | v1.17.13 `1e73b76ea6`(07-01) | pending | - | markdown → session-ui 段 |
+| 2 | v1.17.13 `1e73b76ea6`(07-01) | ✅ done | `3faa8a76f4` | markdown→session-ui 搬家,42 冲突,e2e 48/48 |
 | 3 | v1.18.4 `d36a2d8981`(07-20) | pending | - | v2 tokens + provider 对话框段 |
 | 4 | v1.18.16 `550d1ffd24`(08-10) | pending | - | 收尾 + i18n 段 |
 
@@ -36,3 +36,17 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   - **Win 基线**:opencode `instance-bootstrap.test.ts` 纯上游 worktree 同样 2 fail(REQ-105 方法学),非合并引入。
   - virtua 上游已删(catalog+patch),fork csv-table 还用 → app 内钉版本 `0.49.1`。
   - 上游测试 worktree 留存 `D:/tmp/upstream-v1178`(v1.17.8,基线判定用,段4 后删)。
+- 2026-08-11 段2 完成(`3faa8a76f4`),关键决策与踩坑:
+  - **markdown 定制全家随 rename 检测自动迁 session-ui**(远超预期顺利);需手工补:DOMPurify import、
+    mermaid 依赖声明、fork css 段整体迁移、资产重写移出 `data-new-layout` 早退(否则经典布局文件查看器图片全断)。
+  - **ui→session-ui 依赖方向**:document-viewer(fork 自有,在 ui 包)依赖的 pierre/media 被上游迁走,
+    反向导入会成环 → ui 侧建 fork 副本(`packages/ui/src/pierre/media.ts`,merge 时需跟源同步)。
+  - **再撤两项 FORK(上游已自带)**:REQ-019 oauth-callback 环回绑定、REQ-072 tabs-dedup(上游内联同语义)。
+  - **layer→node 体系**:上游 defaultLayer 全面移除;7 个 fork 测试转 `AppNodeBuilder.build(LayerNode.group([...]))`
+    + RuntimeFlags 覆盖注入范式(照 upstream project.test.ts)。
+  - **bash 折叠组 vs 上游新断言**:上游时间线用例新增「bash 独立成行展开看输出」断言;fork 设计里组内 bash
+    仅摘要行(降噪,新旧一致)→ 用例改 fork 语义断言(组存在/可展开/含命令摘要行)。
+  - **v2 壳过渡态**:上游 v2 换 NewAppLayout(layout-new.tsx 自带唯一 ToastRegion),命令(theme.cycle 等)
+    仍只注册 legacy Layout → v2 下键触发 toast 不可行;toast 回归用例收敛为单 region 断言,段4 复核。
+  - **上游删了 session 进度条功能**(showSessionProgressBar 设置+行+i18n 键全撤,跟随)。
+  - **恢复暴露「新布局」开关**(原 settings-panel-cleanup 隐藏):D1 过渡期让用户可自愿尝鲜 v2。
