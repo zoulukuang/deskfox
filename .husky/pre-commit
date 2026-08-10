@@ -29,14 +29,61 @@ BLACKLIST_REGEX='^(packages/(console|containers|core|desktop-electron|docs|enter
 EXCEPTION_REGEX='^packages/ui/src/components/provider-icons/(sprite\.svg|types\.ts)$|^\.github/workflows/.*-deskfox\.yml$|.*\.deskfox\.config\.(ts|js|mjs)$|^packages/ui/src/theme/themes/fox-blue\.(json|test\.ts)$'
 SCRIPTS_ALLOWED='^scripts/install-hooks\.sh$'
 
-violations=$(git diff --cached --name-only | grep -E "$BLACKLIST_REGEX" | grep -vE "$EXCEPTION_REGEX" || true)
+# 2026-08-10 动态「上游基准树」豁免(REQ-048 最小子集):
+# 黑名单按 packages/<dir>/ 整目录前缀拦,但这些目录下 fork 自建文件已有 47 个
+# (office-installer.ts / libreoffice.ts 等,上游根本不存在),改它们不是"动上游",
+# 却每次触发 R4 override(fork 已累计 69 笔),枚举豁免必然滞后。改为动态判定:
+#   命中黑名单 packages 目录前缀段的文件,若在 tag `upstream-base`
+#   (= main 最近一次上游 merge 的上游侧 parent,当前 be227503af @1.17.4)
+#   的树中**不存在** → fork 自建 → 豁免;存在 → 上游文件 → 照旧拦。
+# 约束:
+#   - 只对 packages 目录前缀段生效;命中其余黑名单段(根 package.json / bun.lock /
+#     *.config.* / .github/ 等)的文件不走此逻辑,行为不变。
+#   - fail-closed:tag 不存在(新 clone 未拉 tag)→ 退回纯黑名单行为并提示
+#     `git fetch --tags`,绝不 fail-open。
+#   - 每次上游 sync 合入后必须把 upstream-base 移到新的上游侧 parent
+#     (UPSTREAM-MERGE-GUIDE §5.8),不移则上游新增文件会被误判 fork 自建,闸变松。
+# 详见 docs/features/pre-commit-forkfile-exempt/。
+PKGDIR_REGEX='^packages/(console|containers|core|desktop-electron|docs|enterprise|extensions|function|identity|opencode|plugin|script|sdk|shared|slack|storybook|ui|web)/'
+OTHER_BLACKLIST_REGEX='^packages/desktop/src-tauri/(tauri\..+\.conf\.json|build\.rs|capabilities/|icons/|entitlements\.plist)|^\.github/|^bunfig\.toml$|.*\.config\.(ts|js|mjs)$|^package\.json$|^bun\.lock$|^tsconfig\.json$|^flake\.lock$|^LICENSE$'
+UPSTREAM_BASE_TAG='upstream-base'
+
+violations_raw=$(git diff --cached --name-only | grep -E "$BLACKLIST_REGEX" | grep -vE "$EXCEPTION_REGEX" || true)
 scripts_violations=$(git diff --cached --name-only | grep -E "^scripts/" | grep -vE "$SCRIPTS_ALLOWED" || true)
+
+have_base_tag=0
+if git cat-file -e "${UPSTREAM_BASE_TAG}^{commit}" 2>/dev/null; then
+  have_base_tag=1
+fi
+
+violations=""
+if [ -n "$violations_raw" ]; then
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ "$have_base_tag" = 1 ] \
+      && printf '%s' "$f" | grep -qE "$PKGDIR_REGEX" \
+      && ! printf '%s' "$f" | grep -qE "$OTHER_BLACKLIST_REGEX" \
+      && ! git cat-file -e "${UPSTREAM_BASE_TAG}:$f" 2>/dev/null; then
+      # 上游基准树中不存在 = fork 自建文件,豁免
+      continue
+    fi
+    violations="${violations}${f}
+"
+  done <<EOF
+$violations_raw
+EOF
+fi
 
 if [ -n "$violations" ] || [ -n "$scripts_violations" ]; then
   echo "❌ pre-commit (4.1): 黑名单文件，禁止 commit:"
-  [ -n "$violations" ] && echo "$violations"
+  [ -n "$violations" ] && printf '%s' "$violations"
   [ -n "$scripts_violations" ] && echo "$scripts_violations"
   echo ""
+  if [ "$have_base_tag" = 0 ]; then
+    echo "⚠️ 本地没有 tag '${UPSTREAM_BASE_TAG}'(fork 自建文件动态豁免未生效,fail-closed)。"
+    echo "   若上面文件其实是 fork 自建的,先: git fetch --tags 再重试 commit。"
+    echo ""
+  fi
   echo "如果确认要改: git commit --no-verify -m '... [override-blacklist: 理由]'"
   echo "且必须在 改动日志.md 显式记录 override 理由。"
   exit 1
