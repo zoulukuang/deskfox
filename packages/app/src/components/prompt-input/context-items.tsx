@@ -62,6 +62,7 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                   onClick={() => props.openComment(item)}
                 >
                   <div class="flex items-center gap-1.5">
+                    {/* FORK: 聊天引用上下文项用气泡图标(非文件图标)[feat: chat-quote-context] */}
                     <Show
                       when={isChatQuote}
                       fallback={
@@ -70,7 +71,7 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                     >
                       <Icon name="bubble-5" class="shrink-0 size-3.5 text-text-weak" />
                     </Show>
-                    <div class="flex items-center text-11-regular min-w-0 font-medium">
+                    <div class="flex items-center text-[12px] min-w-0 font-medium leading-5">
                       <span class="text-text-strong whitespace-nowrap">{label}</span>
                       <Show when={!isChatQuote && item.selection}>
                         {(sel) => (

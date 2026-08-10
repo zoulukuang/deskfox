@@ -14,7 +14,7 @@ export function useSessionTabAvatarState(
   const permission = usePermission()
   const hasPermissions = createMemo(() => {
     if (!active()) return false
-    const [store] = globalSync.child(directory(), { bootstrap: false })
+    const [store] = globalSync().child(directory(), { bootstrap: false })
     return !!sessionPermissionRequest(store.session, store.permission, sessionId(), (item) => {
       // FORK: REQ-078 共享 canResolve 过滤 [feat: permission-filter-concurrency] 2026-08-02
       return !permission.autoResponds(item, directory()) && permission.canResolve(item, directory())
@@ -24,7 +24,7 @@ export function useSessionTabAvatarState(
   const loading = createMemo(() => {
     if (!active()) return false
     if (hasPermissions()) return false
-    const [store] = globalSync.child(directory(), { bootstrap: false })
+    const [store] = globalSync().child(directory(), { bootstrap: false })
     return store.session_working(sessionId())
   })
   return { unread, loading }

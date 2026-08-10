@@ -182,6 +182,7 @@ export interface MessagePartProps {
   onToolOpenChange?: (open: boolean) => void
   deferToolContent?: boolean
   virtualizeDiff?: boolean
+  onContentRendered?: () => void
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
 }
@@ -191,13 +192,14 @@ export type PartComponent = Component<MessagePartProps>
 export const PART_MAPPING: Record<string, PartComponent | undefined> = {}
 
 const TEXT_RENDER_PACE_MS = 24
+const TEXT_RENDER_IMMEDIATE = 512
 const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/
 
 function step(size: number) {
   if (size <= 12) return 2
   if (size <= 48) return 4
   if (size <= 96) return 8
-  return Math.min(24, Math.ceil(size / 8))
+  return Math.min(256, Math.ceil(size / 4))
 }
 
 function next(text: string, start: number) {
@@ -236,6 +238,10 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
       sync(text)
       return
     }
+    if (text.length - shown.length <= TEXT_RENDER_IMMEDIATE) {
+      sync(text)
+      return
+    }
     const end = next(text, shown.length)
     sync(text.slice(0, end))
     if (end < text.length) timeout = setTimeout(run, TEXT_RENDER_PACE_MS)
@@ -249,6 +255,11 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
       return
     }
     if (!text.startsWith(shown) || text.length < shown.length) {
+      clear()
+      sync(text)
+      return
+    }
+    if (text.length - shown.length <= TEXT_RENDER_IMMEDIATE) {
       clear()
       sync(text)
       return
@@ -1195,6 +1206,7 @@ export function Part(props: MessagePartProps) {
         onToolOpenChange={props.onToolOpenChange}
         deferToolContent={props.deferToolContent}
         virtualizeDiff={props.virtualizeDiff}
+        onContentRendered={props.onContentRendered}
         showAssistantCopyPartID={props.showAssistantCopyPartID}
         turnDurationMs={props.turnDurationMs}
       />
@@ -1215,6 +1227,7 @@ export interface ToolProps {
   onOpenChange?: (open: boolean) => void
   deferContent?: boolean
   virtualizeDiff?: boolean
+  onContentRendered?: () => void
   forceOpen?: boolean
   locked?: boolean
 }
@@ -1361,6 +1374,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               onOpenChange={props.onToolOpenChange ? handleToolOpenChange : undefined}
               deferContent={props.deferToolContent}
               virtualizeDiff={props.virtualizeDiff}
+              onContentRendered={props.onContentRendered}
             />
           </Match>
         </Switch>
@@ -1501,11 +1515,12 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
   )
 }
 
+// FORK-撤销记录: 原 REQ-053/058「思考链默认收起」Collapsible 定制(2026-06-17)于 2026-08-11 撤销 —
+// 上游 v1.17.8 起 showReasoningSummaries 默认 false,reasoning part 在时间线整层过滤不渲染
+// (rows.ts renderable()),默认体验已优于折叠;用户显式开启即为「要看全文」,折叠反而拧巴,
+// 且 Collapsible 高度动画破坏新虚拟化时间线的首帧锚底(cold-tab e2e 实测)。跟随上游原样渲染。
 PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   const data = useData()
-  const i18n = useI18n()
-  // FORK: REQ-053/058 — 思考链对齐 DeskFox 原生:默认收起。复用原生 Collapsible(同 tool 折叠)。2026-06-17
-  const [open, setOpen] = createSignal(false)
   const part = () => props.part as ReasoningPart
   const streaming = createMemo(
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
@@ -1515,28 +1530,9 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   return (
     <Show when={text()}>
       <div data-component="reasoning-part" data-timeline-part-id={part().id}>
-        {/* FORK: REQ-053/058 — 思考过程在正文上方(stream 顺序天然保证 reasoning 先于 text)+ 默认收起 +
-            点击向下展开。复用原生 Collapsible / ToolStatusTitle / Arrow,与工具折叠同款外观,不自创。2026-06-17 */}
-        <Collapsible open={open()} onOpenChange={setOpen} variant="ghost" class="tool-collapsible">
-          <Collapsible.Trigger>
-            <div data-component="reasoning-trigger">
-              <span data-slot="reasoning-label" class="min-w-0 flex items-center gap-2 text-14-medium text-text-strong">
-                <ToolStatusTitle
-                  active={streaming()}
-                  activeText={i18n.t("ui.sessionTurn.status.thinking")}
-                  doneText={i18n.t("ui.sessionTurn.status.thinking")}
-                  split={false}
-                />
-              </span>
-              <Collapsible.Arrow />
-            </div>
-          </Collapsible.Trigger>
-          <Collapsible.Content>
-            <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
-              <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
-            </Show>
-          </Collapsible.Content>
-        </Collapsible>
+        <Show when={streaming()} fallback={<Markdown text={text()} cacheKey={part().id} streaming={false} />}>
+          <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+        </Show>
       </div>
     </Show>
   )
@@ -1966,7 +1962,13 @@ ToolRegistry.register({
               }
             >
               <div data-component="edit-content">
-                <Dynamic component={fileComponent} mode="diff" virtualize={props.virtualizeDiff} {...fileCompProps()} />
+                <Dynamic
+                  component={fileComponent}
+                  mode="diff"
+                  virtualize={props.virtualizeDiff}
+                  onRendered={props.onContentRendered}
+                  {...fileCompProps()}
+                />
               </div>
             </ToolFileAccordion>
           </Show>
@@ -2025,6 +2027,7 @@ ToolRegistry.register({
                     cacheKey: checksum(props.input.content),
                   }}
                   overflow="scroll"
+                  onRendered={props.onContentRendered}
                 />
               </div>
             </ToolFileAccordion>
@@ -2153,6 +2156,7 @@ ToolRegistry.register({
                                   virtualize={props.virtualizeDiff}
                                   fileDiff={file.view.fileDiff}
                                   hunkSeparators={file.view.fileDiff.isPartial ? "simple" : "line-info-basic"}
+                                  onRendered={props.onContentRendered}
                                 />
                               </div>
                             </Show>
@@ -2228,6 +2232,7 @@ ToolRegistry.register({
                   mode="diff"
                   virtualize={props.virtualizeDiff}
                   fileDiff={single()!.view.fileDiff}
+                  onRendered={props.onContentRendered}
                 />
               </div>
             </ToolFileAccordion>

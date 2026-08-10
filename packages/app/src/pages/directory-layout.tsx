@@ -23,7 +23,7 @@ export function DirectoryDataProvider(props: ParentProps<{ directory: string; dr
   createEffect(() => {
     // A draft lives at /new-session?draftId=… and has no directory segment to normalize.
     if (props.draftID) return
-    const next = sync.data.path.directory
+    const next = sync().data.path.directory
     if (!next || next === props.directory) return
     const path = location.pathname.slice(slug().length + 1)
     navigate(`/${base64Encode(next)}${path}${location.search}${location.hash}`, { replace: true })
@@ -44,9 +44,10 @@ export function DirectoryDataProvider(props: ParentProps<{ directory: string; dr
   // session 时主动 sync)也可能拿到 stale error,但他们期望 surface 出来不是静默,各自决定 UX。
   createResource(
     () => params.id,
+    // FORK-BEGIN: stale session 自愈导航(其余错误跟随上游吞掉)[feat: session-heal] 2026-08-11 适配上游 sync() 访问器
     async (id) => {
       try {
-        return await sync.session.sync(id)
+        return await sync().session.sync(id)
       } catch (e) {
         if (isStaleSessionError(e)) {
           console.warn("[stale-session-fallback] navigate away from stale session", {
@@ -54,17 +55,17 @@ export function DirectoryDataProvider(props: ParentProps<{ directory: string; dr
             error: e instanceof Error ? e.message : e,
           })
           navigate(`/${slug()}`, { replace: true })
-          return
         }
-        throw e
+        // 上游行为:sync 失败静默(.catch(() => {})),不再向上抛
       }
     },
+    // FORK-END
   )
   // FORK-END
 
   return (
     <DataProvider
-      data={sync.data}
+      data={sync().data}
       directory={props.directory}
       onNavigateToSession={(sessionID: string) => navigate(`/${slug()}/session/${sessionID}`)}
       onSessionHref={(sessionID: string) => `/${slug()}/session/${sessionID}`}

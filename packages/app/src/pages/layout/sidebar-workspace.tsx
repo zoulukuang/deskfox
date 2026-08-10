@@ -72,7 +72,7 @@ export const WorkspaceDragOverlay = (props: {
     const directory = props.activeWorkspace()
     if (!directory) return
 
-    const [workspaceStore] = serverSync.child(directory, { bootstrap: false })
+    const [workspaceStore] = serverSync().child(directory, { bootstrap: false })
     const kind =
       directory === project.worktree ? language.t("workspace.type.local") : language.t("workspace.type.sandbox")
     const name = props.workspaceLabel(directory, workspaceStore.vcs?.branch, project.id)
@@ -314,7 +314,7 @@ export const SortableWorkspace = (props: {
   const queryOptions = useQueryOptions()
   const language = useLanguage()
   const sortable = createSortable(props.directory)
-  const [workspaceStore, setWorkspaceStore] = serverSync.child(props.directory, { bootstrap: false })
+  const [workspaceStore, setWorkspaceStore] = serverSync().child(props.directory, { bootstrap: false })
   const [menu, setMenu] = createStore({
     open: false,
     pendingRename: false,
@@ -332,16 +332,16 @@ export const SortableWorkspace = (props: {
   const boot = createMemo(() => open() || active())
   const count = createMemo(() => sessions()?.length ?? 0)
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
-  const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.directory)))
+  const fetching = useIsFetching(() => queryOptions().sessions(pathKey(props.directory)))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
   // FORK: REQ-092 启动期(bootstrap 未完成)也亮 skeleton [feat: startup-sidebar-feedback] 2026-08-02
-  const loading = () => showSessionSkeleton(fetching(), count(), serverSync.ready)
+  const loading = () => showSessionSkeleton(fetching(), count(), serverSync().ready)
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
-    // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15)[feat: session-list-load-more-30]
+    // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15;上游现改 +5 仍保 30)[feat: session-list-load-more-30]
     setWorkspaceStore("limit", (limit) => (limit ?? 0) + 30)
-    await serverSync.project.loadSessions(props.directory)
+    await serverSync().project.loadSessions(props.directory)
   }
 
   const workspaceEditActive = createMemo(() => props.ctx.editorOpen(`workspace:${props.directory}`))
@@ -370,7 +370,7 @@ export const SortableWorkspace = (props: {
 
   createEffect(() => {
     if (!boot()) return
-    serverSync.child(props.directory, { bootstrap: true })
+    serverSync().child(props.directory, { bootstrap: true })
   })
 
   return (
@@ -466,7 +466,7 @@ export const LocalWorkspace = (props: {
   const queryOptions = useQueryOptions()
   const language = useLanguage()
   const workspace = createMemo(() => {
-    const [store, setStore] = serverSync.child(props.project.worktree)
+    const [store, setStore] = serverSync().child(props.project.worktree)
     return { store, setStore }
   })
   const slug = createMemo(() => base64Encode(props.project.worktree))
@@ -479,14 +479,14 @@ export const LocalWorkspace = (props: {
     return [...sortedRootSessions(store, now), ...orphanRootSessions(store, [props.project.worktree], now)]
   })
   const count = createMemo(() => sessions()?.length ?? 0)
-  const fetching = useIsFetching(() => queryOptions.sessions(pathKey(props.project.worktree)))
+  const fetching = useIsFetching(() => queryOptions().sessions(pathKey(props.project.worktree)))
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
   // FORK: REQ-092 启动期(bootstrap 未完成)也亮 skeleton [feat: startup-sidebar-feedback] 2026-08-02
-  const loading = () => showSessionSkeleton(fetching(), count(), serverSync.ready)
+  const loading = () => showSessionSkeleton(fetching(), count(), serverSync().ready)
   const loadMore = async () => {
-    // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15)[feat: session-list-load-more-30]
+    // FORK: 加载更多每次 +30(user 要求 2026-06-15,原 +15;上游现改 +5 仍保 30)[feat: session-list-load-more-30]
     workspace().setStore("limit", (limit) => (limit ?? 0) + 30)
-    await serverSync.project.loadSessions(props.project.worktree)
+    await serverSync().project.loadSessions(props.project.worktree)
   }
 
   return (

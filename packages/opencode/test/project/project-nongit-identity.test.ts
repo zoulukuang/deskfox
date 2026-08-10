@@ -16,6 +16,9 @@ import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectCopy } from "@opencode-ai/core/project/copy"
 import { AppProcess } from "@opencode-ai/core/process"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { ProjectDirectories } from "@opencode-ai/core/project/directories"
+import { EventV2 } from "@opencode-ai/core/event"
+import { Git } from "@opencode-ai/core/git"
 import { ANCHOR_DIR, ANCHOR_FILE } from "@opencode-ai/core/project/anchor"
 import { Effect, Layer } from "effect"
 import { testEffect } from "../lib/effect"
@@ -27,7 +30,16 @@ const projectLayerWithFlag = (nonGitFolderIdentity: boolean) =>
     Layer.provide(RuntimeFlags.layer({ nonGitFolderIdentity })),
     Layer.provide(EventV2Bridge.defaultLayer),
     Layer.provide(ProjectV2.defaultLayer),
-    Layer.provide(ProjectCopy.defaultLayer),
+    // FORK: 上游删除 ProjectCopy.defaultLayer,按上游 core/test/project-copy.test.ts 范式等价组装(2026-08-11 sync v1.17.8)
+    Layer.provide(
+      ProjectCopy.layer.pipe(
+        Layer.provide(Database.defaultLayer),
+        Layer.provide(ProjectDirectories.defaultLayer),
+        Layer.provide(EventV2.defaultLayer),
+        Layer.provide(FSUtil.defaultLayer),
+        Layer.provide(Git.defaultLayer),
+      ),
+    ),
     Layer.provide(AppProcess.defaultLayer),
     Layer.provide(CrossSpawnSpawner.defaultLayer),
     Layer.provide(FSUtil.defaultLayer),

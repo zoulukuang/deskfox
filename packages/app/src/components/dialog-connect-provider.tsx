@@ -53,7 +53,7 @@ export function DialogConnectProvider(props: { provider: string }) {
   })
 
   const provider = createMemo(() => {
-    const found = providers.all().get(props.provider) ?? serverSync.data.provider.all.get(props.provider)
+    const found = providers.all().get(props.provider) ?? serverSync().data.provider.all.get(props.provider)
     if (found) return found
     // FORK: getbot 合成项只在 popular() / 选择弹窗里,不在 all();直连 getbot 时 found 为 undefined,
     //   原 `!` 断言在运行时无效 → provider() 为 undefined → 下方 provider().id/.name 渲染 TypeError 崩溃。
@@ -70,16 +70,16 @@ export function DialogConnectProvider(props: { provider: string }) {
   const [auth] = createResource(
     () => props.provider,
     async () => {
-      const cached = serverSync.data.provider_auth[props.provider]
+      const cached = serverSync().data.provider_auth[props.provider]
       if (cached) return cached
-      const res = await serverSDK.client.provider.auth()
+      const res = await serverSDK().client.provider.auth()
       if (!alive.value) return fallback()
-      serverSync.set("provider_auth", res.data ?? {})
+      serverSync().set("provider_auth", res.data ?? {})
       return res.data?.[props.provider] ?? fallback()
     },
   )
-  const loading = createMemo(() => auth.loading && !serverSync.data.provider_auth[props.provider])
-  const methods = createMemo(() => auth.latest ?? serverSync.data.provider_auth[props.provider] ?? fallback())
+  const loading = createMemo(() => auth.loading && !serverSync().data.provider_auth[props.provider])
+  const methods = createMemo(() => auth.latest ?? serverSync().data.provider_auth[props.provider] ?? fallback())
   const [store, setStore] = createStore({
     methodIndex: undefined as undefined | number,
     authorization: undefined as undefined | ProviderAuthAuthorization,
@@ -176,8 +176,8 @@ export function DialogConnectProvider(props: { provider: string }) {
       }
       dispatch({ type: "auth.pending" })
       const start = Date.now()
-      await serverSDK.client.provider.oauth
-        .authorize(
+      await serverSDK()
+        .client.provider.oauth.authorize(
           {
             providerID: props.provider,
             method: index,
@@ -349,9 +349,9 @@ export function DialogConnectProvider(props: { provider: string }) {
   })
 
   async function complete() {
-    await serverSDK.client.global.dispose()
+    await serverSDK().client.global.dispose()
     // FORK: REQ-052 — 连接收尾强制失效 providers query,使列表和模型选择器立即刷新 2026-06-18
-    serverSync.refreshProviders()
+    serverSync().refreshProviders()
     dialog.close()
     showToast({
       variant: "success",
@@ -449,7 +449,7 @@ export function DialogConnectProvider(props: { provider: string }) {
 
       setFormStore("submitting", true)
       try {
-        await serverSDK.client.auth.set({
+        await serverSDK().client.auth.set({
           providerID: props.provider,
           auth: {
             type: "api",
@@ -463,6 +463,7 @@ export function DialogConnectProvider(props: { provider: string }) {
     }
 
     // FORK-BEGIN: getbot apiKey 提交流程 — 先拉 /v1/models 校验 key,通过后再保存 2026-04-26
+    //   (2026-08-11 适配上游 serverSDK()/serverSync() 访问器)
     async function handleGetbotSubmit(apiKey: string) {
       let chatIds: string[]
       let fetchError: string | undefined
@@ -485,18 +486,18 @@ export function DialogConnectProvider(props: { provider: string }) {
       }
 
       try {
-        await serverSDK.client.auth.set({
+        await serverSDK().client.auth.set({
           providerID: GETBOT_PROVIDER_ID,
           auth: { type: "api", key: apiKey },
         })
         // 关键:把自己从 disabled_providers 清出去（用户之前断开过会留这一行,不清的话连了等于没连）
-        const beforeDisabled = serverSync.data.config.disabled_providers ?? []
+        const beforeDisabled = serverSync().data.config.disabled_providers ?? []
         const nextDisabled = beforeDisabled.filter((id) => id !== GETBOT_PROVIDER_ID)
         // FORK: REQ-054 — 首连也走 mergeGetbotModels:保留已有能力标注(重连场景),新模型推断兜底 2026-06-18
-        const existingModels = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+        const existingModels = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
         const mergedModels = mergeGetbotModels(existingModels, chatIds)
         const freshConfig = buildGetbotProviderConfig(apiKey, [])
-        await serverSync.updateConfig({
+        await serverSync().updateConfig({
           provider: { [GETBOT_PROVIDER_ID]: { ...freshConfig, models: mergedModels } },
           ...(nextDisabled.length !== beforeDisabled.length ? { disabled_providers: nextDisabled } : {}),
         })
@@ -512,7 +513,7 @@ export function DialogConnectProvider(props: { provider: string }) {
           title: language.t("provider.connect.toast.connected.title", { provider: provider().name }),
           description: language.t("provider.connect.getbot.fetchModels.failed", { error: fetchError }),
         })
-        await serverSDK.client.global.dispose()
+        await serverSDK().client.global.dispose()
         dialog.close()
         return
       }
@@ -605,8 +606,8 @@ export function DialogConnectProvider(props: { provider: string }) {
       }
 
       setFormStore("error", undefined)
-      const result = await serverSDK.client.provider.oauth
-        .callback({
+      const result = await serverSDK()
+        .client.provider.oauth.callback({
           providerID: props.provider,
           method: store.methodIndex,
           code,
@@ -658,8 +659,8 @@ export function DialogConnectProvider(props: { provider: string }) {
 
     onMount(() => {
       void (async () => {
-        const result = await serverSDK.client.provider.oauth
-          .callback({
+        const result = await serverSDK()
+          .client.provider.oauth.callback({
             providerID: props.provider,
             method: store.methodIndex,
           })

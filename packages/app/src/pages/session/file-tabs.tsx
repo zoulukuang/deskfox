@@ -470,7 +470,7 @@ export function FileTabContent(props: {
   }
   const startEdit = async () => {
     const p = path()
-    const root = sdk.directory
+    const root = sdk().directory
     if (!p || !root) return
     try {
       const mtime = await invoke<number>("get_file_mtime", { root, path: p })
@@ -505,7 +505,7 @@ export function FileTabContent(props: {
   // [feat: auto-save-debounce-flush] 2026-05-21
   const saveEditCore = async (opts: { silent: boolean }) => {
     const p = path()
-    const root = sdk.directory
+    const root = sdk().directory
     if (!p || !root || draft() === null) return
     try {
       // FORK: 标记 self-writing 短期窗口,防 watcher 误识别为外部 AI 修改弹 toast
@@ -597,10 +597,10 @@ export function FileTabContent(props: {
   onCleanup(() => {
     autoSave.cancel()
     const oldPath = path()
-    if (editing() && dirty() && oldPath && sdk.directory) {
+    if (editing() && dirty() && oldPath && sdk().directory) {
       const snap = draft() ?? ""
       const mtime = loadedMtime()
-      const root = sdk.directory
+      const root = sdk().directory
       void (async () => {
         try {
           file.markSelfWriting(oldPath)
@@ -1167,7 +1167,7 @@ export function FileTabContent(props: {
       p.replace(/\\/g, "/").split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "untitled"
     // mdFileDir = .md 文件所在目录绝对路径(同 mdAssetRewriter 计算逻辑),
     // 让 helper 把 ![](./img.png) 等本地图替换为 base64 dataURL 嵌入 docx
-    const root = sdk.directory
+    const root = sdk().directory
     const mdFileDir = root && p ? pathDirname(`${root}/${p}`.replace(/\\/g, "/")) : undefined
 
     await exportMdAsDocx({
@@ -1287,9 +1287,9 @@ export function FileTabContent(props: {
   })
 
   // FORK: 给 <Markdown> 注入本地资源 src 重写(.md 同目录/相对目录 <img>/<video>/<audio> 走 localasset:// 而非 404)2026-05-05
-  // baseDir = 当前 .md 文件所在目录的绝对路径(sdk.directory + dirname(path()));聊天侧不传 rewriteAssetSrc 钩子,无回归
+  // baseDir = 当前 .md 文件所在目录的绝对路径(sdk().directory + dirname(path()));聊天侧不传 rewriteAssetSrc 钩子,无回归
   const mdAssetRewriter = createMemo(() => {
-    const root = sdk.directory
+    const root = sdk().directory
     const p = path()
     if (!root || !p) return undefined
     const fileAbs = `${root}/${p}`.replace(/\\/g, "/")
@@ -1305,9 +1305,9 @@ export function FileTabContent(props: {
   // FORK: REQ-075 — 逻辑提取到 md-link-click.ts 与聊天区共享,此处 baseDir=当前文件所在目录,
   // 行为不变(R1 回归用例守护)[feat: batch-port-edit-mdlink] 2026-07-07
   const handleMdLinkClick = createMdLinkClickHandler({
-    root: () => sdk.directory,
+    root: () => sdk().directory,
     baseDir: () => {
-      const root = sdk.directory
+      const root = sdk().directory
       const p = path()
       if (!root || !p) return undefined
       return pathDirname(`${root}/${p}`.replace(/\\/g, "/"))
@@ -1341,7 +1341,7 @@ export function FileTabContent(props: {
     if (!p) return null
     const m = mediaKindFromPath(p)
     if (!m) return null
-    const root = sdk.directory
+    const root = sdk().directory
     if (!root) return null
     return { root, path: p, mimes: m.mimes, kind: m.kind }
   })
@@ -1384,7 +1384,7 @@ export function FileTabContent(props: {
   })
 
   const openMediaInSystemPlayer = async () => {
-    const root = sdk.directory
+    const root = sdk().directory
     const p = path()
     if (!root || !p) return
     const absPath = `${root}/${p}`.replace(/\\/g, "/")
@@ -1520,17 +1520,17 @@ export function FileTabContent(props: {
             // FORK: office 路由已在后端 HttpApi(/office-tooling/*),SDK 已 regen 生成 office.tooling.* 方法 [feat: electron-replatform]
             
             getStatus: async () =>
-              sdk.client.office.tooling
+              sdk().client.office.tooling
                 .status()
                 .then((x) => x.data as any)
                 .catch(() => undefined),
             startInstall: async () =>
-              sdk.client.office.tooling
+              sdk().client.office.tooling
                 .install()
                 .then((x) => x.data as any)
                 .catch(() => undefined),
             getProgress: async () =>
-              sdk.client.office.tooling
+              sdk().client.office.tooling
                 .progress()
                 .then((x) => x.data as any)
                 .catch(() => undefined),
@@ -1540,7 +1540,7 @@ export function FileTabContent(props: {
             if (p) void file.load(p, { force: true })
           },
           onOpenExternal: () => {
-            const root = sdk.directory
+            const root = sdk().directory
             const p = path()
             if (!root || !p) return
             const absPath = `${root}/${p}`.replace(/\\/g, "/")
@@ -1553,12 +1553,12 @@ export function FileTabContent(props: {
             })
           },
           loadOfficePdf: async (filePath: string) => {
-            const cacheKey = `${sdk.directory ?? ""}::${filePath}`
+            const cacheKey = `${sdk().directory ?? ""}::${filePath}`
             const cached = officePdfCacheGet(cacheKey)
             if (cached) return cached
             try {
               // FORK: /file/office-pdf 路由已在后端,SDK 已 regen 生成 file.officePdf [feat: electron-replatform]
-              const res = await sdk.client.file.officePdf(
+              const res = await sdk().client.file.officePdf(
                 { path: filePath },
                 { parseAs: "arrayBuffer" } as any,
               )
@@ -1596,7 +1596,7 @@ export function FileTabContent(props: {
             <button
               type="button"
               onClick={() => {
-                const root = sdk.directory
+                const root = sdk().directory
                 const p = path()
                 if (!root || !p) return
                 const absPath = `${root}/${p}`.replace(/\\/g, "/")
@@ -1627,7 +1627,7 @@ export function FileTabContent(props: {
   // 大文件(>10MB)走 placeholder(预览 + 编辑同卡,渲染源码也无意义)
   // FORK: 2026-05-14 去顶部 toolbar(预览/源码 toggle 删除)+ 阈值 2MB→10MB + 右键菜单接入 [feat: html-viewer-ux-polish]
   const renderHtml = (source: string) => {
-    const root = sdk.directory
+    const root = sdk().directory
     const p = path()
     const sourceLen = source?.length ?? 0
     const tooLargeForPreview = sourceLen > HTML_PREVIEW_MAX_BYTES
@@ -1717,7 +1717,7 @@ export function FileTabContent(props: {
       <CsvTable
         text={source}
         onOpenExternal={() => {
-          const root = sdk.directory
+          const root = sdk().directory
           const p = path()
           if (!root || !p) return
           invoke("open_path", { path: `${root}/${p}`.replace(/\\/g, "/"), appName: null }).catch((e) => {
@@ -1737,7 +1737,7 @@ export function FileTabContent(props: {
       return (
         <FileTooLarge
           path={p}
-          root={sdk.directory ?? ""}
+          root={sdk().directory ?? ""}
           size={tooLarge.size}
           category={tooLarge.category}
           limit={tooLarge.limit}
@@ -1801,7 +1801,7 @@ export function FileTabContent(props: {
                 extraExtensions={
                   isMarkdownPath(path())
                     ? markdownEditorExtensions({
-                        projectRoot: sdk.directory,
+                        projectRoot: sdk().directory,
                         filePathRel: path() ?? undefined,
                         locale: language.locale(),
                       })

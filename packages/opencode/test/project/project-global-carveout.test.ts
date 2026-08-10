@@ -17,6 +17,9 @@ import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectCopy } from "@opencode-ai/core/project/copy"
 import { AppProcess } from "@opencode-ai/core/process"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { ProjectDirectories } from "@opencode-ai/core/project/directories"
+import { EventV2 } from "@opencode-ai/core/event"
+import { Git } from "@opencode-ai/core/git"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { ProjectTable, ProjectDirectoryTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -33,7 +36,16 @@ const projectLayerWithFlag = (nonGitFolderIdentity: boolean) =>
     Layer.provide(RuntimeFlags.layer({ nonGitFolderIdentity })),
     Layer.provide(EventV2Bridge.defaultLayer),
     Layer.provide(ProjectV2.defaultLayer),
-    Layer.provide(ProjectCopy.defaultLayer),
+    // FORK: 上游删除 ProjectCopy.defaultLayer,按上游 core/test/project-copy.test.ts 范式等价组装(2026-08-11 sync v1.17.8)
+    Layer.provide(
+      ProjectCopy.layer.pipe(
+        Layer.provide(Database.defaultLayer),
+        Layer.provide(ProjectDirectories.defaultLayer),
+        Layer.provide(EventV2.defaultLayer),
+        Layer.provide(FSUtil.defaultLayer),
+        Layer.provide(Git.defaultLayer),
+      ),
+    ),
     Layer.provide(AppProcess.defaultLayer),
     Layer.provide(CrossSpawnSpawner.defaultLayer),
     Layer.provide(FSUtil.defaultLayer),
@@ -127,17 +139,19 @@ describe("REQ-069 M8 存量 global session 析出回归", () => {
       const otherRow = yield* sessionProjectId(other)
       expect(otherRow!.project_id).toBe(GLOBAL)
 
-      // saveProjectDirectory 对新 id 落了 main 行,directory=真实目录
+      // saveProjectDirectory 对新 id 落了目录行,directory=真实目录
+      // (2026-08-11 sync v1.17.8:上游 ProjectDirectories.create 改写 strategy 语义,
+      //  不再写 type 列 — type 保留为遗留列,新行为 null;M6 恢复逻辑对 null 有 candidates[0] 回落)
       const dirRow = yield* Database.Service.use(({ db }) =>
         db
           .select()
           .from(ProjectDirectoryTable)
-          .where(and(eq(ProjectDirectoryTable.project_id, p.id), eq(ProjectDirectoryTable.directory, dir)))
+          .where(and(eq(ProjectDirectoryTable.project_id, p.id), eq(ProjectDirectoryTable.directory, AbsolutePath.make(dir))))
           .get()
           .pipe(Effect.orDie),
       )
       expect(dirRow).toBeDefined()
-      expect(dirRow!.type).toBe("main")
+      expect(dirRow!.type).toBeNull()
     }),
   )
 

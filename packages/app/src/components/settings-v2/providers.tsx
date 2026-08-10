@@ -90,7 +90,7 @@ export const SettingsProvidersV2: Component = () => {
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 
   const isConfigCustom = (providerID: string) => {
-    const provider = serverSync.data.config.provider?.[providerID]
+    const provider = serverSync().data.config.provider?.[providerID]
     if (!provider) return false
     if (provider.npm !== "@ai-sdk/openai-compatible") return false
     if (!provider.models || Object.keys(provider.models).length === 0) return false
@@ -100,7 +100,7 @@ export const SettingsProvidersV2: Component = () => {
   // FORK-BEGIN: REQ-054 — getbot 刷新模型列表 handler (v2 layout) 2026-06-18
   const refreshGetbotModels = async () => {
     if (getbotRefreshing()) return
-    const apiKey = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
+    const apiKey = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
       | string
       | undefined
     if (!apiKey) {
@@ -110,15 +110,15 @@ export const SettingsProvidersV2: Component = () => {
     setGetbotRefreshing(true)
     try {
       const remoteIds = await fetchGetbotChatModels(apiKey, { fetch: platform.fetch })
-      const existingModels = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+      const existingModels = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
       const merged = mergeGetbotModels(existingModels, remoteIds)
       // AC2: 整块替换 — 读取现有 provider config 展开,避免只写 models 字典时丢失 name/npm/options
-      const existingProviderConfig = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID] ?? {}
+      const existingProviderConfig = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID] ?? {}
       const freshConfig = buildGetbotProviderConfig(apiKey, [])
-      await serverSync.updateConfig({
+      await serverSync().updateConfig({
         provider: { [GETBOT_PROVIDER_ID]: { ...freshConfig, ...existingProviderConfig, models: merged } },
       })
-      serverSync.refreshProviders()
+      serverSync().refreshProviders()
       showToast({
         variant: "success",
         icon: "circle-check",
@@ -137,11 +137,11 @@ export const SettingsProvidersV2: Component = () => {
   // FORK-END
 
   const disableProvider = async (providerID: string, name: string) => {
-    const before = serverSync.data.config.disabled_providers ?? []
+    const before = serverSync().data.config.disabled_providers ?? []
     const next = before.includes(providerID) ? before : [...before, providerID]
-    serverSync.set("config", "disabled_providers", next)
+    serverSync().set("config", "disabled_providers", next)
 
-    await serverSync
+    await serverSync()
       .updateConfig({ disabled_providers: next })
       .then(() => {
         showToast({
@@ -152,7 +152,7 @@ export const SettingsProvidersV2: Component = () => {
         })
       })
       .catch((err: unknown) => {
-        serverSync.set("config", "disabled_providers", before)
+        serverSync().set("config", "disabled_providers", before)
         const message = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description: message })
       })
@@ -160,16 +160,18 @@ export const SettingsProvidersV2: Component = () => {
 
   const disconnect = async (providerID: string, name: string) => {
     if (isConfigCustom(providerID)) {
-      await serverSdk.client.auth.remove({ providerID }).catch(() => undefined)
+      await serverSdk()
+        .client.auth.remove({ providerID })
+        .catch(() => undefined)
       await disableProvider(providerID, name)
       return
     }
-    await serverSdk.client.auth
-      .remove({ providerID })
+    await serverSdk()
+      .client.auth.remove({ providerID })
       .then(async () => {
-        await serverSdk.client.global.dispose()
+        await serverSdk().client.global.dispose()
         // FORK: REQ-052 — 断开收尾强制失效 providers query,使列表立即消失,无需重启 2026-06-18
-        serverSync.refreshProviders()
+        serverSync().refreshProviders()
         showToast({
           variant: "success",
           icon: "circle-check",

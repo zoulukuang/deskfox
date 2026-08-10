@@ -43,10 +43,10 @@ export function useProviders() {
   const dir = createMemo(() => decode64(params.dir) ?? "")
   const providers = () => {
     if (dir()) {
-      const [projectStore] = serverSync.child(dir())
+      const [projectStore] = serverSync().child(dir())
       if (projectStore.provider_ready) return projectStore.provider
     }
-    return serverSync.data.provider
+    return serverSync().data.provider
   }
   return {
     // FORK: all() 保持上游 Map(消费者用 .get/.values/.size);getbot 合成项只注入 popular() + provider 弹窗自身 [feat: electron-replatform]

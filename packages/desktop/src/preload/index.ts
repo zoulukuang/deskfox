@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 // FORK: DeskFox 原生桥 — 自执行暴露 window.deskfox [feat: electron-replatform]
 import "./deskfox"
 import type { ElectronAPI, WslServersEvent } from "./types"
@@ -94,6 +94,7 @@ const api: ElectronAPI = {
   openFilePicker: (opts) => ipcRenderer.invoke("open-file-picker", opts),
   readPickedFile: (token, path) => ipcRenderer.invoke("read-picked-file", token, path),
   releasePickedFiles: (token) => ipcRenderer.invoke("release-picked-files", token),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   saveFilePicker: (opts) => ipcRenderer.invoke("save-file-picker", opts),
   openLink: (url) => ipcRenderer.send("open-link", url),
   openPath: (path, app) => ipcRenderer.invoke("open-path", path, app),

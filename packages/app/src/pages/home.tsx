@@ -26,7 +26,7 @@ import { DialogSelectServer, useServerManagementController } from "@/components/
 import { DialogServerV2 } from "@/components/settings-v2/dialog-server-v2"
 import { ServerConnection, useServer } from "@/context/server"
 import { sessionHasOpenTab, useTabs } from "@/context/tabs"
-import { useServerSync } from "@/context/server-sync"
+import { useServerSync, type ServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
 import {
@@ -87,7 +87,7 @@ const HOME_SEARCH_RESULT_META =
 let pendingHomeNavigation: { server: ServerConnection.Key; href: string } | undefined
 
 function buildHomeSessionRecords(input: {
-  sync: Pick<ReturnType<typeof useServerSync>, "child">
+  sync: Pick<ServerSync, "child">
   projectDirectories: () => string[]
   projects: () => LocalProject[]
   projectByID: () => Map<string, LocalProject>
@@ -156,7 +156,7 @@ function HomeDesign() {
     if (!conn) return
     return global.createServerCtx(conn)
   })
-  const focusedSync = () => focusedServerCtx()?.sync ?? sync
+  const focusedSync = () => focusedServerCtx()?.sync ?? sync()
   const projects = createMemo(() => focusedServerCtx()?.projects.list() ?? layout.projects.list())
   const selectedProject = createMemo(() => projects().find((project) => project.worktree === state.selection.directory))
   const newSessionProject = createMemo(
@@ -1129,10 +1129,10 @@ function LegacyHome() {
   const global = useGlobal()
   const server = useServer()
   const language = useLanguage()
-  const homedir = createMemo(() => sync.data.path.home)
+  const homedir = createMemo(() => sync().data.path.home)
   const recent = createMemo(() => {
-    return sync.data.project
-      .slice()
+    return sync()
+      .data.project.slice()
       .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
       .slice(0, 5)
   })
@@ -1157,7 +1157,7 @@ function LegacyHome() {
         const find = platform.findRelocatedProject
         // 优先后端权威项目列表(sync.data.project,id 与磁盘锚一致),回退持久化 StoredProject.id
         const id =
-          sync.data.project.find((p) => sameDirectory(p.worktree, directory))?.id ??
+          sync().data.project.find((p) => sameDirectory(p.worktree, directory))?.id ??
           serverCtx.projects.list().find((p) => sameDirectory(p.worktree, directory))?.id
         if (find && id && id !== "global") {
           const relocated = await find(directory, id).catch(() => null)
@@ -1239,8 +1239,8 @@ function LegacyHome() {
       </Button>
       {/* FORK-END */}
       <Switch>
-        <Match when={sync.data.project.length > 0}>
-          <div class="mt-18 w-full flex flex-col gap-4">
+        <Match when={sync().data.project.length > 0}>
+          <div class="mt-20 w-full flex flex-col gap-4">
             {/* FORK: 引导/打开入口已上移常驻,去掉重复的「打开项目」头部按钮 2026-06-09 */}
             <div class="text-14-medium text-text-strong pl-3">{language.t("home.recentProjects")}</div>
             <ul class="flex flex-col gap-2">
@@ -1262,7 +1262,7 @@ function LegacyHome() {
             </ul>
           </div>
         </Match>
-        <Match when={!sync.ready}>
+        <Match when={!sync().ready}>
           <div class="mt-30 mx-auto flex flex-col items-center gap-3">
             <div class="text-12-regular text-text-weak">{language.t("common.loading")}</div>
             <Button class="px-3" onClick={chooseProject}>

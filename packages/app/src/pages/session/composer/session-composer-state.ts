@@ -32,7 +32,7 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const permission = usePermission()
 
   const questionRequest = createMemo((): QuestionRequest | undefined => {
-    return sessionQuestionRequest(sync.data.session, sync.data.question, params.id)
+    return sessionQuestionRequest(sync().data.session, sync().data.question, params.id)
   })
 
   // FORK: 跨-instance 权限过滤(方案D)2026-07-06;REQ-078 改走 permission.canResolve 共享层 2026-08-02
@@ -42,9 +42,10 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   // 被陈旧快照 fail-closed 藏死(turn 挂死)。现由 context/permission 按「候选 id 集签名」refetch,
   // 无候选不发请求(e2e/离线 gate 语义保留),失败/加载中 fail-open。
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
-    return sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) => {
-      if (permission.autoResponds(item, sdk.directory)) return false
-      if (!permission.canResolve(item, sdk.directory)) return false
+    return sessionPermissionRequest(sync().data.session, sync().data.permission, params.id, (item) => {
+      if (permission.autoResponds(item, sdk().directory)) return false
+      // FORK: composer 卡片与侧栏徽标统一走 canResolve — 消灭「侧栏亮灯 composer 没卡」幻影
+      if (!permission.canResolve(item, sdk().directory)) return false
       return true
     })
   })
@@ -58,14 +59,14 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const todos = createMemo((): Todo[] => {
     const id = params.id
     if (!id) return []
-    return serverSync.data.session_todo[id] ?? []
+    return serverSync().data.session_todo[id] ?? []
   })
 
   const done = createMemo(
     () => todos().length > 0 && todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
   )
 
-  const live = createMemo(() => sync.data.session_working(params.id ?? "") || blocked())
+  const live = createMemo(() => sync().data.session_working(params.id ?? "") || blocked())
 
   const [store, setStore] = createStore({
     responding: undefined as string | undefined,
@@ -86,8 +87,8 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
-    sdk.client.permission
-      .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
+    sdk()
+      .client.permission.respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         // FORK: 飞书桥接权限跨-instance 优雅降级 2026-07-06
@@ -126,8 +127,8 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const clear = () => {
     const id = params.id
     if (!id) return
-    serverSync.todo.set(id, [])
-    sync.set("todo", id, [])
+    serverSync().todo.set(id, [])
+    sync().set("todo", id, [])
   }
 
   createEffect(

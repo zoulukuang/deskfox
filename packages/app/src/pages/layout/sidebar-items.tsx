@@ -44,7 +44,7 @@ export const ProjectIcon = (props: {
   const hasError = createMemo(() => dirs().some((directory) => notification.project.unseenHasError(directory)))
   const hasPermissions = createMemo(() =>
     dirs().some((directory) => {
-      const [store] = serverSync.child(directory, { bootstrap: false })
+      const [store] = serverSync().child(directory, { bootstrap: false })
       // FORK: REQ-078 与 composer 共享「本 instance 可 resolve」过滤,消灭幻影徽标
       //   [feat: permission-filter-concurrency] 2026-08-02
       return hasProjectPermissions(
@@ -167,7 +167,8 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
   const serverSDK = useServerSDK()
   const unseenCount = createMemo(() => notification.session.unseenCount(props.session.id))
   const hasError = createMemo(() => notification.session.unseenHasError(props.session.id))
-  const [sessionStore, setSessionStore] = serverSync.child(props.session.directory)
+  // FORK: 保留 setter — 下方 REQ-096 标题编辑局部更新用 2026-08-11
+  const [sessionStore, setSessionStore] = serverSync().child(props.session.directory)
   const hasPermissions = createMemo(() => {
     return !!sessionPermissionRequest(sessionStore.session, sessionStore.permission, props.session.id, (item) => {
       // FORK: REQ-078 共享 canResolve 过滤 [feat: permission-filter-concurrency] 2026-08-02
@@ -223,7 +224,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
     const current = sessionTitle(props.session.title) ?? ""
     setRenaming(false)
     if (!next || next === current) return
-    const ok = await serverSDK.client.session
+    const ok = await serverSDK().client.session
       .update({ directory: props.session.directory, sessionID: props.session.id, title: next })
       .then(() => true)
       .catch(() => false)

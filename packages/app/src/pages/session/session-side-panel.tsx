@@ -19,7 +19,6 @@ import { useCommand } from "@/context/command"
 import { useFile, type SelectedLineRange } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
-import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
@@ -55,7 +54,6 @@ export function SessionSidePanel(props: {
   size: Sizing
 }) {
   const layout = useLayout()
-  const platform = usePlatform()
   const settings = useSettings()
   const sync = useSync()
   const file = useFile()
@@ -65,16 +63,14 @@ export function SessionSidePanel(props: {
   const { sessionKey, tabs, view, params } = useSessionLayout()
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
-  const desktopV2 = () => platform.platform === "desktop" && settings.general.newLayoutDesigns()
-  const shown = createMemo(() => !desktopV2() || settings.general.showFileTree())
+  const shown = settings.visibility.fileTree
 
   const reviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
   const fileOpen = createMemo(
     () =>
       isDesktop() &&
       shouldShowFileTree({
-        desktopV2: desktopV2(),
-        showFileTree: settings.general.showFileTree(),
+        visible: shown(),
         opened: layout.fileTree.opened(),
       }),
   )
@@ -163,7 +159,7 @@ export function SessionSidePanel(props: {
   // FORK-BEGIN: LLM 响应结束(busy→idle)自动递归刷新文件树 [feat: file-tree-ux-polish] 2026-05-04
   createEffect(
     on(
-      () => sync.data.session_status[params.id ?? ""]?.type,
+      () => sync().data.session_status[params.id ?? ""]?.type,
       (next, prev) => {
         if (next !== "idle" || prev === undefined || prev === "idle") return
         void file.tree.refreshAll("")

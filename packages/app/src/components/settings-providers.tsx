@@ -102,7 +102,7 @@ const SettingsProvidersContent: Component = () => {
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 
   const isConfigCustom = (providerID: string) => {
-    const provider = serverSync.data.config.provider?.[providerID]
+    const provider = serverSync().data.config.provider?.[providerID]
     if (!provider) return false
     if (provider.npm !== "@ai-sdk/openai-compatible") return false
     if (!provider.models || Object.keys(provider.models).length === 0) return false
@@ -112,7 +112,7 @@ const SettingsProvidersContent: Component = () => {
   // FORK-BEGIN: REQ-054 — getbot 刷新模型列表 handler 2026-06-18
   const refreshGetbotModels = async () => {
     if (getbotRefreshing()) return
-    const apiKey = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
+    const apiKey = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
       | string
       | undefined
     if (!apiKey) {
@@ -122,14 +122,14 @@ const SettingsProvidersContent: Component = () => {
     setGetbotRefreshing(true)
     try {
       const remoteIds = await fetchGetbotChatModels(apiKey, { fetch: platform.fetch })
-      const existing = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+      const existing = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
       const merged = mergeGetbotModels(existing, remoteIds)
       // 写回:两步整块替换以规避 patchJsonc 只增不删的限制:
       // 步骤 1:注入 merged 模型(新模型出现 + 已有能力标注保留)
-      await serverSync.updateConfig({
+      await serverSync().updateConfig({
         provider: { [GETBOT_PROVIDER_ID]: { models: merged } },
       })
-      serverSync.refreshProviders()
+      serverSync().refreshProviders()
       showToast({
         variant: "success",
         icon: "circle-check",
@@ -148,11 +148,11 @@ const SettingsProvidersContent: Component = () => {
   // FORK-END
 
   const disableProvider = async (providerID: string, name: string) => {
-    const before = serverSync.data.config.disabled_providers ?? []
+    const before = serverSync().data.config.disabled_providers ?? []
     const next = before.includes(providerID) ? before : [...before, providerID]
-    serverSync.set("config", "disabled_providers", next)
+    serverSync().set("config", "disabled_providers", next)
 
-    await serverSync
+    await serverSync()
       .updateConfig({ disabled_providers: next })
       .then(() => {
         showToast({
@@ -163,7 +163,7 @@ const SettingsProvidersContent: Component = () => {
         })
       })
       .catch((err: unknown) => {
-        serverSync.set("config", "disabled_providers", before)
+        serverSync().set("config", "disabled_providers", before)
         const message = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description: message })
       })
@@ -171,16 +171,18 @@ const SettingsProvidersContent: Component = () => {
 
   const disconnect = async (providerID: string, name: string) => {
     if (isConfigCustom(providerID)) {
-      await serverSDK.client.auth.remove({ providerID }).catch(() => undefined)
+      await serverSDK()
+        .client.auth.remove({ providerID })
+        .catch(() => undefined)
       await disableProvider(providerID, name)
       return
     }
-    await serverSDK.client.auth
-      .remove({ providerID })
+    await serverSDK()
+      .client.auth.remove({ providerID })
       .then(async () => {
-        await serverSDK.client.global.dispose()
+        await serverSDK().client.global.dispose()
         // FORK: REQ-052 — 旧版同位置同处理:dispose 后强制失效 providers query 2026-06-18
-        serverSync.refreshProviders()
+        serverSync().refreshProviders()
         showToast({
           variant: "success",
           icon: "circle-check",

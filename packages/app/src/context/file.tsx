@@ -72,10 +72,10 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const language = useLanguage()
     const layout = useLayout()
 
-    const scope = createMemo(() => sdk.directory)
+    const scope = createMemo(() => sdk().directory)
     const path = createPathHelpers(scope)
     const tabs = layout.tabs(() =>
-      SessionStateKey.from(serverSDK.scope, SessionRouteKey.fromRoute(params.dir, params.id)),
+      SessionStateKey.from(serverSDK().scope, SessionRouteKey.fromRoute(params.dir, params.id)),
     )
 
     const inflight = new Map<string, Promise<void>>()
@@ -94,7 +94,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const listWithRetry = async (dir: string) => {
       for (let attempt = 0; ; attempt++) {
         try {
-          const res = await sdk.client.file.list({ path: dir })
+          const res = await sdk().client.file.list({ path: dir })
           return res.data ?? []
         } catch (e) {
           if (attempt >= LIST_RETRY_BACKOFF_MS.length || !isRetryableListError(e)) throw e
@@ -156,7 +156,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       })
     })
 
-    const viewCache = createFileViewCache(serverSDK.scope)
+    const viewCache = createFileViewCache(serverSDK().scope)
     const view = createMemo(() => viewCache.load(scope(), params.id))
 
     const ensure = (file: string) => {
@@ -260,7 +260,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
         }
 
         try {
-          const x = await sdk.client.file.read({ path: file })
+          const x = await sdk().client.file.read({ path: file })
           if (scope() !== directory) return
           const content = x.data
           setLoaded(file, content)
@@ -281,10 +281,12 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     }
 
     const search = (query: string, dirs: "true" | "false") =>
-      sdk.client.find.files({ query, dirs }).then(
-        (x) => (x.data ?? []).map(path.normalize),
-        () => [],
-      )
+      sdk()
+        .client.find.files({ query, dirs })
+        .then(
+          (x) => (x.data ?? []).map(path.normalize),
+          () => [],
+        )
 
     // FORK: 编辑态 dirty 守卫,防止 AI/外部写文件覆盖用户未保存草稿(查看器-自动刷新)2026-04-28
     const dirtyPaths = new Set<string>()
@@ -369,7 +371,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       }
     }
 
-    const stop = sdk.event.listen((e) => {
+    const stop = sdk().event.listen((e) => {
       invalidateFromWatcher(e.details, {
         normalize: path.normalize,
         hasFile: (file) => Boolean(store.file[file]),

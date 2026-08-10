@@ -1,7 +1,7 @@
 import { onMount } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { showToast } from "@/utils/toast"
-import { usePrompt, type ContentPart, type ImageAttachmentPart } from "@/context/prompt"
+import { type ContentPart, type ImageAttachmentPart, type usePrompt } from "@/context/prompt"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 // FORK: REQ-026 粘贴/拖图前查当前模型 image 能力 [feat: model-capability-ui] 2026-08-02
@@ -32,16 +32,18 @@ function dataUrl(file: File, mime: string) {
 }
 
 type PromptAttachmentsInput = {
+  prompt: ReturnType<typeof usePrompt>
   editor: () => HTMLDivElement | undefined
   isDialogActive: () => boolean
   setDraggingType: (type: "image" | "@mention" | null) => void
   focusEditor: () => void
   addPart: (part: ContentPart) => boolean
   readClipboardImage?: () => Promise<File | null>
+  getPathForFile?: (file: File) => string
 }
 
 export function createPromptAttachments(input: PromptAttachmentsInput) {
-  const prompt = usePrompt()
+  const prompt = input.prompt
   const language = useLanguage()
   // FORK: 多选拖动 abs→rel 需要项目根 [feat: file-tree-multi-drag-to-chat] 2026-05-15
   const sdk = useSDK()
@@ -91,6 +93,7 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
       type: "image",
       id: uuid(),
       filename: file.name,
+      sourcePath: input.getPathForFile?.(file) || undefined,
       mime,
       dataUrl: url,
     }
@@ -213,7 +216,7 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     // 单选时走下面 text/plain 路径(原行为)。 2026-05-15
     const multiJson = event.dataTransfer?.getData("application/x-deskfox-paths")
     if (multiJson) {
-      const paths = parseMultiPathDropPaths(multiJson, sdk.directory)
+      const paths = parseMultiPathDropPaths(multiJson, sdk().directory)
       if (paths.length > 0) {
         input.focusEditor()
         for (const p of paths) {

@@ -52,8 +52,11 @@ export interface Settings {
 export const monoDefault = "System Mono"
 export const sansDefault = "System Sans"
 export const terminalDefault = "JetBrainsMono Nerd Font Mono"
-// FORK: DeskFox 默认经典布局(sidebar rail + 会话面板,DeskFox 五栏 REQ-041 的基座);
-// 上游新 v2 布局(标签+聊天)与 DeskFox 既有交互差异大,默认关 [feat: electron-replatform] 2026-06-12
+// FORK: DeskFox 默认经典布局(sidebar rail + 会话面板)[feat: electron-replatform] 2026-06-12
+// ⏳ D1 过渡计划(2026-08-11,upstream-sync-2026-08):user 已拍板接受上游 v2 界面换代,
+//   但切换时点跟随上游节奏 — 上游 v1.17.8 时 prod 默认同样是经典(channel !== "prod"),
+//   v1.17.19+ 才切 true 并退役旧界面。本 fork 在 sync 段 4(v1.18.16)与上游同步翻转此默认,
+//   段 1-3 维持 false 保护既有 fork 布局定制与 e2e 基线。
 export const newLayoutDesignsDefault = false
 
 const monoFallback =
@@ -155,6 +158,15 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
   gate: false,
   init: () => {
     const [store, setStore, _, ready] = persisted("settings.v3", createStore<Settings>(defaultSettings))
+    const showFileTree = withFallback(() => store.general?.showFileTree, defaultSettings.general.showFileTree)
+    const showSearch = withFallback(() => store.general?.showSearch, defaultSettings.general.showSearch)
+    const showStatus = withFallback(() => store.general?.showStatus, defaultSettings.general.showStatus)
+    const showCustomAgents = withFallback(
+      () => store.general?.showCustomAgents,
+      defaultSettings.general.showCustomAgents,
+    )
+    const newLayoutDesigns = withFallback(() => store.general?.newLayoutDesigns, newLayoutDesignsDefault)
+    const visible = (preference: () => boolean) => createMemo(() => !newLayoutDesigns() || preference())
 
     createEffect(() => {
       if (typeof document === "undefined") return
@@ -189,7 +201,7 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setFollowup(value: "queue" | "steer") {
           setStore("general", "followup", value === "queue" ? "steer" : value)
         },
-        showFileTree: withFallback(() => store.general?.showFileTree, defaultSettings.general.showFileTree),
+        showFileTree,
         setShowFileTree(value: boolean) {
           setStore("general", "showFileTree", value)
         },
@@ -197,11 +209,11 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setShowNavigation(value: boolean) {
           setStore("general", "showNavigation", value)
         },
-        showSearch: withFallback(() => store.general?.showSearch, defaultSettings.general.showSearch),
+        showSearch,
         setShowSearch(value: boolean) {
           setStore("general", "showSearch", value)
         },
-        showStatus: withFallback(() => store.general?.showStatus, defaultSettings.general.showStatus),
+        showStatus,
         setShowStatus(value: boolean) {
           setStore("general", "showStatus", value)
         },
@@ -237,14 +249,20 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setShowSessionProgressBar(value: boolean) {
           setStore("general", "showSessionProgressBar", value)
         },
-        showCustomAgents: withFallback(() => store.general?.showCustomAgents, defaultSettings.general.showCustomAgents),
+        showCustomAgents,
         setShowCustomAgents(value: boolean) {
           setStore("general", "showCustomAgents", value)
         },
-        newLayoutDesigns: withFallback(() => store.general?.newLayoutDesigns, newLayoutDesignsDefault),
+        newLayoutDesigns,
         setNewLayoutDesigns(value: boolean) {
           setStore("general", "newLayoutDesigns", value)
         },
+      },
+      visibility: {
+        fileTree: visible(showFileTree),
+        search: visible(showSearch),
+        status: visible(showStatus),
+        customAgents: visible(showCustomAgents),
       },
       appearance: {
         fontSize: withFallback(() => store.appearance?.fontSize, defaultSettings.appearance.fontSize),

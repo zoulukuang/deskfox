@@ -602,7 +602,7 @@ export default function FileTree(props: {
     const refreshTargets = new Set<string>([targetDirRel])
     if (mode === "cut") {
       for (const parent of uniqueParents(valid)) {
-        const rel = absoluteToRelative(parent, sdk.directory)
+        const rel = absoluteToRelative(parent, sdk().directory)
         if (rel !== null) refreshTargets.add(rel)
       }
     }
@@ -633,7 +633,7 @@ export default function FileTree(props: {
   /** Ctrl+V 智能 paste:从 selection 推断 target(文件夹→自身;文件→其父目录);否则到项目根 */
   const pasteSmart = async () => {
     const sel = selection.paths()
-    let targetAbs = sdk.directory
+    let targetAbs = sdk().directory
     let targetRel = props.path
     if (sel.length >= 1) {
       // 用 selection 中第一个作锚(多选时通常用户视觉锚定的是第一个/最后一个)
@@ -646,7 +646,7 @@ export default function FileTree(props: {
       } else {
         // 文件 → 粘到其父目录
         const parentAbs = anchorAbs.replace(/[/\\][^/\\]+$/, "")
-        const parentRel = absoluteToRelative(parentAbs, sdk.directory)
+        const parentRel = absoluteToRelative(parentAbs, sdk().directory)
         if (parentRel !== null) {
           targetAbs = parentAbs
           targetRel = parentRel
@@ -659,7 +659,7 @@ export default function FileTree(props: {
   /** 通过遍历 children 找 node,避免 path normalize 不一致导致 file.tree.node(rel) 找不到 */
   const findNodeByAbsolute = (abs: string): FileNode | undefined => {
     const parentAbs = abs.replace(/[/\\][^/\\]+$/, "")
-    const parentRel = absoluteToRelative(parentAbs, sdk.directory)
+    const parentRel = absoluteToRelative(parentAbs, sdk().directory)
     if (parentRel === null) return undefined
     const children = file.tree.children(parentRel)
     return children.find((n) => n.absolute === abs)
@@ -719,7 +719,7 @@ export default function FileTree(props: {
     // 刷新涉及的目录(rel)
     const refreshRels = new Set<string>()
     for (const abs of result.refreshAbs) {
-      const rel = absoluteToRelative(abs, sdk.directory)
+      const rel = absoluteToRelative(abs, sdk().directory)
       if (rel !== null) refreshRels.add(rel)
     }
     await Promise.all([...refreshRels].map((r) => file.tree.refresh(r)))
@@ -1034,7 +1034,7 @@ export default function FileTree(props: {
     // 刷新源父目录(去重)+ 目标目录
     const refreshTargets = new Set<string>([targetRel])
     for (const parent of uniqueParents(valid)) {
-      const rel = absoluteToRelative(parent, sdk.directory)
+      const rel = absoluteToRelative(parent, sdk().directory)
       if (rel !== null) refreshTargets.add(rel)
     }
     await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
@@ -1184,7 +1184,7 @@ export default function FileTree(props: {
     }
     const refreshTargets = new Set<string>()
     for (const parent of uniqueParents(targets)) {
-      const rel = absoluteToRelative(parent, sdk.directory)
+      const rel = absoluteToRelative(parent, sdk().directory)
       if (rel !== null) refreshTargets.add(rel)
     }
     await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
@@ -1295,7 +1295,7 @@ export default function FileTree(props: {
   }
 
   const renderEmptyMenuItems = () => {
-    const rootAbs = sdk.directory
+    const rootAbs = sdk().directory
     const rootRel = props.path
     // FORK-BEGIN: 空白处右键菜单重整 — 2 组(新建/[粘贴] → 刷新);
     // 刷新改用 refreshAll 递归刷新所有 expanded 子目录,修"刷新但子目录没变"问题
@@ -1705,7 +1705,7 @@ export default function FileTree(props: {
   }
 
   // FORK-BEGIN: 树根空白区也接收 drop = 移到项目根;dragLeave 用 relatedTarget 判定真离开 2026-04-27
-  const rootDropHandlers = dropHandlers(sdk.directory, props.path)
+  const rootDropHandlers = dropHandlers(sdk().directory, props.path)
   const onRootDragLeave = (event: DragEvent) => {
     const root = event.currentTarget as HTMLElement | null
     const related = event.relatedTarget as Node | null
@@ -1720,12 +1720,12 @@ export default function FileTree(props: {
         as="div"
         data-component="filetree"
         // FORK: 给 Tauri onDragDropEvent 找 root target 用(commit #4)2026-04-28
-        data-tree-root-abs={sdk.directory}
+        data-tree-root-abs={sdk().directory}
         data-tree-root-rel={props.path}
         classList={{
           [bodyClass]: true,
           // 拖动时整个根区域淡蓝背景提示可 drop
-          "bg-surface-raised-base/30": isDragging() && dropTargetPath() === sdk.directory,
+          "bg-surface-raised-base/30": isDragging() && dropTargetPath() === sdk().directory,
         }}
         onDragOver={rootDropHandlers.onDragOver}
         onDragLeave={onRootDragLeave}
