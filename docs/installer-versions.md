@@ -12,6 +12,24 @@
 
 
 
+## [Windows] 2026.9.1 - 2026-08-10 23:16
+
+**主题**:小成本确定性收口批(REQ-098/019/099)— 聊天单波浪号误删除线修复 + OAuth 回调端口只绑本机(安全加固)+ 托盘健康状态;补丁版(2026.9.0 → 2026.9.1)。
+
+**本次内容**(自 `ship-prod-2026.9.0` 起,主要 commit):
+- **chat-tilde-del-fix**(REQ-098,`96c9e50ddf`+`de920bd4ad`+`91f7587c6d`+`444e740a18`):同行两个「数字~数字」区间(如 4.80~5.05 … 5.20~5.35)不再被 GFM 内置 `~~?` 规则误闭成删除线;ui/web 两包 marked tokenizer 覆盖(override-blacklist 备案),share 分享页同修 + 真浏览器 e2e;防漂移守卫兼容 Win CRLF checkout。
+- **oauth-loopback-bind**(REQ-019,`6fe215459f`):OAuth callback server 绑 `127.0.0.1` 不再绑 `0.0.0.0`(修前从本机非环回 IP 实测端口暴露在 LAN);override-blacklist 备案。
+- **tray-health-status**(REQ-099,`d94720afb4`+`cc7d688025`):托盘图标/菜单实时反映 sidecar 健康状态(三态图标),修 setTrayStatus 被 buildMenu 重建覆盖回「就绪」的自覆盖 bug。
+- **治理/测试**(不进产品包):pre-commit 黑名单对 fork 自建文件动态豁免(`d40c7a3f2c`)/ fork 关键参数 `--conditions=browser` 三道锁(`b3eefc5621`)/ REQ-105 opencode 单测可信基线 Mac 段(`664d9045b7`)。
+- **发版前 code-review**(high,16 agents):**无高危**,9 条备案留 follow-up — ① MCP OAuth 自定义 redirectUri 主机名不再被监听(CONFIRMED,仅影响自定义配置,默认 127.0.0.1 路径实测正常);② pre-commit upstream-base tag 过期后豁免静默失效(CONFIRMED,dev 工具);③④ DO/Codex OAuth 在 localhost 仅解析 ::1 的机器上回调断(PLAUSIBLE 边缘);⑤ watchdog emit 窗口销毁后可抛异常跳过 sidecar 重启(PLAUSIBLE);⑥-⑨ cleanup(死状态/死代码/守卫文案/e2e fixture 重复)。
+- **渠道**:prod;tag `ship-prod-2026.9.1`
+- **Release**:https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.9.1 + Gitee release(正文挂 OSS 直链)
+- **installer**:`packages/desktop/dist-deskfox/DeskFox-2026.9.1-win-x64.exe`(~263 MB);国内下载 `https://downloadbot.oss-rg-china-mainland.aliyuncs.com/DeskFox-2026.9.1-win-x64.exe`(OSS 直链)
+- **升级源**:electron `updates.deskfox.ai/electron/prod/latest.yml` + Tauri 迁移桥 `…/v1/latest/desktop/windows/latest.json` 均 version=2026.9.1,下载 url 均指 OSS 直链
+- **⚠️ 证书状态**:`dl.clawtray.com` 证书仍过期(notAfter 2026-07-14,本次 ship 前实查),国内链路继续全量走 OSS 直链(deploy 脚本 `DESKFOX_ASSET_BASE` 覆盖);续期仍待办。
+
+---
+
 ## [Windows] 2026.9.0 - 2026-08-07 14:20
 
 **主题**:会话检索三件套(⌘K 全文搜索 + 会话列表操作 + ⌘F 会话内查找)+ 稳定性/日常体验双专项批次 + 原生菜单 i18n;大版本波次进"次"位(2026.8.6 → 2026.9.0)。

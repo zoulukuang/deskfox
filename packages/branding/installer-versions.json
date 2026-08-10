@@ -1,6 +1,6 @@
 {
     "_doc": "版本号唯一数据源。规则见 docs/governance/版本号与发布渠道规范.md §三(含触点地图 §3.10)。key=channel×platform:裸<plat>=prod / dev-<plat>=预览 / beta-<plat>=候选(首发 beta 才加)。格式 YYYY.次.补 纯 semver,架构不进版本号(进文件名)。改号走 bump-installer-version.{ps1,sh},勿手编。",
-    "windows": "2026.9.0",
+    "windows": "2026.9.1",
     "macos": "2026.9.0",
     "linux": "2026.6.0",
     "dev-windows": "2026.7.0",
