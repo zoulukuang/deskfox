@@ -6,6 +6,8 @@ import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { SettingsGeneralV2 } from "./general"
 import { SettingsKeybinds } from "../settings-keybinds"
+// FORK: 飞书桥接设置面板(fork 自有)[feat: feishu-bridge] 2026-08-11
+import { SettingsFeishu } from "../settings-feishu"
 import { SettingsProvidersV2 } from "./providers"
 import { SettingsModelsV2 } from "./models"
 import "./settings-v2.css"
@@ -83,6 +85,12 @@ export const DialogSettings: Component<{
                       <Icon name="models" />
                       {language.t("settings.models.title")}
                     </TabsV2.Trigger>
+                    {/* FORK: 飞书桥接 Tab — 随 v2 换代回植(上游 v2 设置是全新组件,legacy 的 fork tab 未随迁,
+                        v2 默认后用户就进不去飞书账号管理)[feat: feishu-bridge] 2026-08-11 */}
+                    <TabsV2.Trigger value="feishu">
+                      <Icon name="comment" />
+                      {language.t("settings.tab.feishu")}
+                    </TabsV2.Trigger>
                   </div>
                 </div>
               </div>
@@ -107,6 +115,11 @@ export const DialogSettings: Component<{
         </TabsV2.Content>
         <TabsV2.Content value="models" class="settings-v2-panel">
           <SettingsModelsV2 />
+        </TabsV2.Content>
+        {/* FORK: 飞书桥接 Tab Content — 复用 legacy 面板组件(内容与布局无关,不必再造 v2 副本)
+            [feat: feishu-bridge] 2026-08-11 */}
+        <TabsV2.Content value="feishu" class="settings-v2-panel">
+          <SettingsFeishu />
         </TabsV2.Content>
       </TabsV2>
     </Dialog>

@@ -32,6 +32,12 @@ import {
   createPromptInputV2State,
   type PromptInputV2Interaction,
 } from "@opencode-ai/session-ui/v2/prompt-input/interaction"
+// FORK-BEGIN: 创作模式接入 v2 composer(上游 v2 默认后 legacy composer 不再渲染,定制随之失效)
+// [feat: media-creation-mode] 2026-08-11
+import { creation } from "./media-creation-store"
+import { MediaCreationControls, MediaModeMenu } from "./media-creation-bar"
+import { submitCreation } from "./prompt-input/creation-submit"
+// FORK-END
 
 export type PromptInputV2ComposerProps = {
   class?: string
@@ -59,19 +65,31 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
         modelControl={
-          <PromptInputV2ModelControl
-            loading={props.controller.model.loading}
-            paid={props.controller.model.paid}
-            title={language.t("command.model.choose")}
-            keybind={command.keybindParts("model.choose")}
-            model={props.controller.model.selection}
-            providerID={props.controller.model.selection.current()?.provider?.id}
-            modelName={props.controller.model.selection.current()?.name ?? language.t("dialog.model.select.title")}
-            onClose={props.controller.restoreFocus}
-            onUnpaidClick={() =>
-              dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controller.model.selection} />)
-            }
-          />
+          // FORK-BEGIN: 创作模式 — 创作档用生成模型控件顶替 model 控件,模式菜单常驻其后
+          // (上游 v2 composer 只暴露 modelControl 一个插槽,故走它,零改上游)
+          // [feat: media-creation-mode] 2026-08-11
+          <>
+            <Show when={creation.createMode()}>
+              <MediaCreationControls />
+            </Show>
+            <Show when={!creation.createMode()}>
+              <PromptInputV2ModelControl
+                loading={props.controller.model.loading}
+                paid={props.controller.model.paid}
+                title={language.t("command.model.choose")}
+                keybind={command.keybindParts("model.choose")}
+                model={props.controller.model.selection}
+                providerID={props.controller.model.selection.current()?.provider?.id}
+                modelName={props.controller.model.selection.current()?.name ?? language.t("dialog.model.select.title")}
+                onClose={props.controller.restoreFocus}
+                onUnpaidClick={() =>
+                  dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controller.model.selection} />)
+                }
+              />
+            </Show>
+            <MediaModeMenu />
+          </>
+          // FORK-END
         }
       />
     </div>
@@ -385,6 +403,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     view: {
       placeholder: designPlaceholder,
       get agent() {
+        // FORK: 创作档下让位创作控件(与 legacy composer 一致)[feat: media-creation-mode] 2026-08-11
+        if (creation.createMode()) return undefined
         return props.controls.agents.visible && props.controls.agents.options.length > 0
           ? {
               options: () => props.controls.agents.options.map((name) => ({ id: name, label: name })),
@@ -403,7 +423,23 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       submit: {
         stopping,
         working,
-        onSubmit: () => void submission.handleSubmit(new Event("submit")),
+        // FORK: 创作档把发送拦到生成编排(送单成功即吞掉本次 submit,否则回落普通发送)
+        // [feat: media-creation-mode] 2026-08-11
+        onSubmit: () => {
+          const cap = creation.createMode()
+          if (!cap) return void submission.handleSubmit(new Event("submit"))
+          void submitCreation(cap, {
+            creation,
+            parts: () => prompt.current(),
+            projectDir: () => sdk().directory,
+            reset: () => {
+              if (editor) editor.innerHTML = ""
+              prompt.reset()
+            },
+          }).then((accepted) => {
+            if (!accepted) void submission.handleSubmit(new Event("submit"))
+          })
+        },
         onStop: () => void submission.abort(),
       },
     },

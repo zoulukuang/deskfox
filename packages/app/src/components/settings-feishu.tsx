@@ -151,7 +151,9 @@ export const SettingsFeishu: Component = () => {
   }
 
   return (
-    <div class="flex flex-col gap-6 h-full overflow-y-auto no-scrollbar p-4 max-w-2xl">
+    // FORK: 稳定选择器锚点 — v2/v1 两套设置对话框共用本面板,e2e 靠它钉住"飞书页还在"
+    // [feat: upstream-sync-2026-08] 2026-08-11
+    <div data-component="settings-feishu" class="flex flex-col gap-6 h-full overflow-y-auto no-scrollbar p-4 max-w-2xl">
       {/* 标题 */}
       <div class="flex flex-col gap-1.5">
         <h2 class="text-16-medium">{language.t("settings.feishu.title")}</h2>

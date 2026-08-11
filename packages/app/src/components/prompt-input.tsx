@@ -69,7 +69,7 @@ import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
 // FORK-BEGIN: 创作模式 — 模式菜单 + 生成编排 [feat: media-creation-mode]
 import { creation } from "./media-creation-store"
 import { MediaModeMenu, MediaCreationControls } from "./media-creation-bar"
-import { buildCreationInput } from "./prompt-input/creation-input"
+import { submitCreation as submitCreation_ } from "./prompt-input/creation-submit"
 // FORK-END
 import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
@@ -1328,41 +1328,18 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   // FORK-BEGIN: 创作模式 — 启动拉取可用模型 + send 拦截到生成 [feat: media-creation-mode]
   void creation.loadModels()
+  // FORK: 编排已抽到 prompt-input/creation-submit.ts,与 v2 composer 共用一份
+  // (2026-08-11 upstream-sync-2026-08:v2 默认后本文件不再渲染,两侧必须同源)
   const submitCreation = async (cap: NonNullable<ReturnType<typeof creation.createMode>>) => {
-    const entry = creation.selectedModel(cap)
-    if (!entry) return
-    const parts = prompt.current()
-    // FORK: 2026-08-11 sync v1.18.16 — 附件 blob 化后,图生图/图生视频参考图先把 blob 解回 base64
-    let imageDataUrl: string | undefined
-    if (cap === "image_edit" || cap === "video_i2v") {
-      const imagePart = parts.find((p) => p.type === "image")
-      if (imagePart && "blob" in imagePart) {
-        imageDataUrl = await fetch(imagePart.blob.url)
-          .then((r) => r.blob())
-          .then(
-            (b) =>
-              new Promise<string>((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onload = () => resolve(String(reader.result))
-                reader.onerror = () => reject(reader.error)
-                reader.readAsDataURL(b)
-              }),
-          )
-          .catch(() => undefined)
-      }
-    }
-    const input = buildCreationInput({
-      parts,
-      capability: cap,
-      imageDataUrl,
-      projectDir: sdk().directory,
-      voice: cap === "tts" ? creation.currentVoice("tts") : undefined,
-      targetLang: cap === "translate" ? "English" : undefined,
-      voiceDesignHint: cap === "tts_design" ? creation.voiceDesignHint() : undefined,
+    await submitCreation_(cap, {
+      creation,
+      parts: () => prompt.current(),
+      projectDir: () => sdk().directory,
+      reset: () => {
+        clearEditor()
+        prompt.reset()
+      },
     })
-    clearEditor()
-    prompt.reset()
-    await creation.runCreation(entry, input, sdk().directory)
   }
   const handleFormSubmit = (event: Event) => {
     const cap = creation.createMode()
