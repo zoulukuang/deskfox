@@ -57,10 +57,19 @@ export interface Settings {
 export const monoDefault = "System Mono"
 export const sansDefault = "System Sans"
 export const terminalDefault = "JetBrainsMono Nerd Font Mono"
-const legacyNewLayoutDesignsDefault = import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"
-export const newLayoutDesignsDefault = true
-// Existing users can switch layouts until local midnight on this date. Set new Date(YYYY, M-1, D) to show.
-export const oldInterfaceSunset = new Date(2026, 8, 14)
+// FORK-BEGIN: DeskFox 不跟随上游的 v2 界面换代 —— user 2026-08-11 试用后决定继续用 fork 经典布局
+// (推翻 upstream-sync-2026-08 spec 的 D1)。上游有 4 条独立路径会把用户推到 v2,少堵一条就会
+// 在某个时点自己切回去,所以这里一次性全堵:
+//   ① 全渠道默认 legacy(上游原值:非 prod 渠道默认 v2 → dev/local 档会默认 v2)
+//   ② 新用户默认 legacy(上游原值 true)
+//   ③ 不设旧界面退役日(上游原值 2026-09-14,到期后强制 v2 且忽略用户开关)
+//   ④ 版本升级迁移不强切(见下方 shouldEnableNewLayout)
+// 开关本身保留:用户仍可在设置里自愿切到 v2 试用,只是不再是默认、也不会被强制。
+// [feat: keep-legacy-layout] 2026-08-11
+const legacyNewLayoutDesignsDefault = false
+export const newLayoutDesignsDefault = false
+export const oldInterfaceSunset = null as Date | null
+// FORK-END
 const newLayoutDesignsUpgradeCutoff = "1.17.19"
 
 function compareVersions(a: string, b: string) {
@@ -99,7 +108,15 @@ export function initialAgentVisibility(initialized: boolean | undefined, existin
   return existing || previousVersion !== undefined
 }
 
-export function shouldEnableNewLayout(previous: string | undefined, current: string | undefined) {
+// FORK-BEGIN: ④ 升级到 >= 1.17.19 时不把用户强切到 v2(上游的一次性迁移)。
+// 上游原实现原样保留在 upstreamShouldEnableNewLayout 里 —— 不删是为了下次 merge 能正常接上游改动,
+// 只是不再有人调用它。[feat: keep-legacy-layout] 2026-08-11
+export function shouldEnableNewLayout(_previous: string | undefined, _current: string | undefined) {
+  return false
+}
+
+export function upstreamShouldEnableNewLayout(previous: string | undefined, current: string | undefined) {
+  // FORK-END
   if (!current) return false
   const currentComparison = compareVersions(current, newLayoutDesignsUpgradeCutoff)
   if (!previous) return currentComparison !== undefined && currentComparison > 0

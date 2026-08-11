@@ -32,7 +32,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { reviewTooltipKeybind } from "../command-tooltip-keybind"
-import { useTitlebarRightMount } from "../titlebar"
+import { useTitlebarLeftMount, useTitlebarRightMount } from "../titlebar"
 
 const OPEN_APPS = [
   "vscode",
@@ -284,11 +284,15 @@ export function SessionHeader() {
   }
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)
-  // FORK 撤销记录:titlebar-icons-mirror 曾把工具组图标挂左 portal(镜像布局贴近模块);
-  //   2026-08-11 sync v1.18.4 按 D4 决策(v2 先用上游原生布局)挂回 right portal —— 上游 v2
-  //   自 v1.17.19 起 isV2 分支恒真(SessionHeaderV2Actions 全模式渲染),挂左会让上游 v2
-  //   review/subagent 族 e2e 找不到 Toggle review;镜像诉求段4 后按 v2 实际观感再评估
+  // FORK: 工具组挂载侧按布局分支 [feat: titlebar-icons-mirror] 2026-08-11
+  //   · 经典布局(DeskFox 默认)→ 左上 portal:工具组(文件树/审查/终端…)贴近它们控制的左侧面板,
+  //     这是 REQ-041「图标锚左解耦」的 UI 微调,user 2026-08-11 明确要求恢复。
+  //   · v2 → 仍挂右:上游 v2 自 v1.17.19 起 isV2 分支恒真,挂左会让上游 review/subagent 族 e2e
+  //     在 #opencode-titlebar-right 找不到 Toggle review(段3 撤销本定制的原因)。
+  //   两侧各自成立,不再二选一。
   const rightMount = useTitlebarRightMount()
+  const leftMount = useTitlebarLeftMount()
+  const toolsMount = () => (isV2() ? rightMount() : leftMount())
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
   })
@@ -325,7 +329,7 @@ export function SessionHeader() {
           </Portal>
         )}
       </Show>
-      <Show when={rightMount()} keyed>
+      <Show when={toolsMount()} keyed>
         {(mount) => (
           <Portal mount={mount}>
             <Show

@@ -63,6 +63,17 @@ export function useTitlebarRightMount() {
   return mount
 }
 
+// FORK: 左侧挂载点 —— 经典布局把工具组(文件树/审查/终端等)挂到左上、贴近它们控制的左侧面板
+// (REQ-041 图标锚左解耦的 UI 微调)。[feat: titlebar-icons-mirror] 2026-08-11 随 keep-legacy-layout 恢复
+export function useTitlebarLeftMount() {
+  const language = useLanguage()
+  const [mount, setMount] = createSignal<HTMLElement | null>(null)
+  const sync = () => setMount(document.getElementById("opencode-titlebar-left"))
+  onMount(sync)
+  createEffect(on(language.direction, sync, { defer: true }))
+  return mount
+}
+
 export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visible: boolean; toggle: () => void } }) {
   const layout = useLayout()
   const platform = usePlatform()
