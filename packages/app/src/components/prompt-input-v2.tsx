@@ -37,6 +37,7 @@ import {
 import { creation } from "./media-creation-store"
 import { MediaCreationControls, MediaModeMenu } from "./media-creation-bar"
 import { submitCreation } from "./prompt-input/creation-submit"
+import { CHAT_SELECTION_PATH } from "@/utils/context-menu-host/dom-provider"
 // FORK-END
 
 export type PromptInputV2ComposerProps = {
@@ -595,6 +596,9 @@ function openComment(
   comments: ReturnType<typeof useComments>,
 ) {
   if (!item.commentID) return
+  // FORK: 聊天引用卡片指向伪路径,不是真实文件 —— 点它不该在预览区开空白 tab
+  // (user 2026-08-12 反馈)[feat: 聊天选区-卡片化-换行]
+  if (item.path === CHAT_SELECTION_PATH) return
   const focus = { file: item.path, id: item.commentID }
   comments.setActive(focus)
   const queueFocus = (attempts = 6) => {

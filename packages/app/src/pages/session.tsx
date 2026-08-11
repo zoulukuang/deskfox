@@ -2194,6 +2194,11 @@ export default function Page() {
           <Match when={params.id}>
             <Show when={messagesReady() ? params.id : undefined} keyed>
               {(_id) => (
+                // FORK: REQ-075 聊天 md 内链拦截委托容器(display:contents 零布局影响,只借点击冒泡;
+                //   外链 a.external-link 由 desktop renderer 全局委托处理,不冲突)
+                //   2026-08-12:上游 merge 把这层包裹冲掉了(handler 还在定义、只是没人用),按 user
+                //   全面比对反馈接回。[feat: batch-port-edit-mdlink] 2026-07-07
+                <div class="contents" onClick={handleChatMdLinkClick}>
                 <MessageTimeline
                   actions={actions}
                   scroll={ui.scroll}
@@ -2237,6 +2242,7 @@ export default function Page() {
                     scrollToEnd = fn
                   }}
                 />
+                </div>
               )}
             </Show>
           </Match>

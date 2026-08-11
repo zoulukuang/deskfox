@@ -47,6 +47,9 @@ import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
 import { FileTabContent } from "@/pages/session/file-tabs"
 import {
   SESSION_OPEN_FILE_TAB,
+  // FORK: 右键「关闭其他标签」的实现(helper 一直在,2026-08 上游 merge 把调用点冲掉了)
+  // [feat: file-tab-close-others] 2026-08-12
+  closeOtherTabs,
   createOpenSessionFileTab,
   createSessionTabs,
   getTabReorderIndex,
@@ -370,7 +373,11 @@ export function SessionSidePanel(props: {
           <div
             class="size-full flex"
             classList={{
-              "border-l border-border-weaker-base": !settings.general.newLayoutDesigns(),
+              // FORK: 经典布局把【文件树】排到最左、审查/预览排到它右边(REQ-040 镜像的一部分,
+              //   2026-08 上游 merge 冲掉后按 user 2026-08-11 反馈恢复)。
+              //   侧面板整体在聊天左侧,故与聊天的分隔线走右缘(border-r)。
+              //   v2 维持上游原样。[feat: mirror-layout] 2026-08-11
+              "flex-row-reverse border-r border-border-weaker-base": !settings.general.newLayoutDesigns(),
             }}
           >
             <Show when={reviewOpen()}>
@@ -460,6 +467,10 @@ export function SessionSidePanel(props: {
                                           temporary={temporaryTab() === tab}
                                           onTabClose={tabs().close}
                                           onTabDoubleClick={temporaryTab() === tab ? openTab : undefined}
+                                          // FORK: 右键「关闭其他标签」[feat: file-tab-close-others] 2026-06-09
+                                          //   2026-08-12:上游 merge 冲掉了这个 prop(组件里的菜单项还在,
+                                          //   只是没人传 handler → 菜单项整个不渲染),按 user 反馈接回
+                                          onCloseOthers={(keep) => closeOtherTabs(openedTabs(), keep, tabs().close)}
                                         />
                                       }
                                     >
@@ -827,7 +838,12 @@ export function SessionSidePanel(props: {
               >
                 <div
                   class="h-full flex flex-col overflow-hidden group/filetree"
-                  classList={{ "border-l border-border-weaker-base": reviewOpen() }}
+                  classList={{
+                    // FORK: 经典布局文件树在左 → 与右侧审查的分隔线走右缘;v2 维持上游左缘
+                    // [feat: mirror-layout] 2026-08-11
+                    "border-r border-border-weaker-base": reviewOpen() && !settings.general.newLayoutDesigns(),
+                    "border-l border-border-weaker-base": reviewOpen() && settings.general.newLayoutDesigns(),
+                  }}
                 >
                   <Tabs
                     variant="pill"
@@ -836,7 +852,15 @@ export function SessionSidePanel(props: {
                     class="h-full"
                     data-scope="filetree"
                   >
-                    <Tabs.List>
+                    <Tabs.List
+                      classList={{
+                        // FORK: 经典布局把 [所有文件] 排到左、[N 更改] 排到右
+                        //   (REQ-041 的文件树 tab 顺序对调,2026-08 上游 merge 冲掉后按 user 反馈恢复)。
+                        //   只翻视觉不改 DOM 顺序 —— 上游若增删 tab 仍能正常 merge。
+                        //   v2 维持上游原样。[feat: iconbar-left-decouple] 2026-08-11
+                        "flex-row-reverse": !settings.general.newLayoutDesigns(),
+                      }}
+                    >
                       <Tabs.Trigger value="changes" class="flex-1" classes={{ button: "w-full" }}>
                         <Show
                           when={settings.general.newLayoutDesigns()}
@@ -893,6 +917,12 @@ export function SessionSidePanel(props: {
                               class="pt-3"
                               modified={diffFiles()}
                               kinds={kinds()}
+                              // FORK: 文件树里「当前正在看的那个文件」高亮 [feat: file-tree-ux-polish]
+                              active={activeFilePath()}
+                              // FORK: 预览区已开时,给「正在查看的那一行」加收起 hover tooltip(与 toggle 条件一致)
+                              //   [feat: filetree-hover-collapse-hint] 2026-06-09
+                              //   2026-08-12:两个 prop 都在上游 merge 中被冲掉(组件仍支持,只是没人传)
+                              viewerOpen={view().reviewPanel.opened()}
                               onFileClick={(node) => openTab(file.tab(node.path))}
                             />
                           </Match>
@@ -905,7 +935,9 @@ export function SessionSidePanel(props: {
                   <div onPointerDown={() => props.size.start()}>
                     <ResizeHandle
                       direction="horizontal"
-                      edge="start"
+                      // FORK: 经典布局文件树靠左 → 拖拽手柄锚右边界;v2 维持上游 start
+                      // [feat: mirror-layout] 2026-08-11
+                      edge={settings.general.newLayoutDesigns() ? "start" : "end"}
                       size={fileTreeWidth()}
                       min={FILE_TREE_WIDTH_MIN}
                       max={480}

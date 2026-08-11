@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { same } from "@/utils/same"
 import { SESSION_OPEN_FILE_TAB } from "@/context/layout-tabs"
+import { CHAT_SELECTION_PATH } from "@/utils/context-menu-host/dom-provider"
 
 export { SESSION_OPEN_FILE_TAB } from "@/context/layout-tabs"
 
@@ -47,6 +48,10 @@ export const createSessionTabs = (input: TabsInput) => {
         .flatMap((tab) => {
           if (tab === "context" || tab === "review") return []
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
+          // FORK: 聊天引用的伪路径不是真实文件,任何情况下都不该成为预览 tab(否则是一张空白页)。
+          //   入口已在 openComment 拦住,这里再兜一道 —— 让**已经存进项目 tab 的存量**也自动消失。
+          //   [feat: 聊天选区-卡片化-换行] 2026-08-12
+          if (tab.includes(CHAT_SELECTION_PATH)) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
           if (seen.has(value)) return []
           seen.add(value)

@@ -165,6 +165,25 @@ describe("getTabReorderIndex", () => {
 })
 
 describe("createSessionTabs", () => {
+  // FORK: [bug-repro: 聊天引用在文件预览区开出空白 tab] 2026-08-12
+  test("聊天引用的伪路径不进预览 tab(含已存进项目 tab 的存量)", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: undefined as string | undefined,
+        all: ["file://src/a.ts", "file://<chat selection>", "<chat selection>"],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => (tab.startsWith("file://") ? tab.slice("file://".length) : undefined),
+        normalizeTab: (tab) => tab,
+      })
+
+      expect(result.openedTabs()).toEqual(["file://src/a.ts"])
+      dispose()
+    })
+  })
+
   test("normalizes the effective file tab", () => {
     createRoot((dispose) => {
       const [state] = createStore({

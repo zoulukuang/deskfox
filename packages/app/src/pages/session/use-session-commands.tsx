@@ -510,7 +510,10 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
         id: "file.open",
         title: language.t("command.file.open"),
         description: language.t("palette.search.placeholder"),
-        keybind: "mod+p",
+        // FORK: 搜索/打开文件保留 mod+k 主键位(标题栏搜索框显示的就是它),mod+p 作兼容别名。
+        //   2026-08-12:上游 merge 把 mod+k 去掉只剩 mod+p,标题栏提示随之变成 Ctrl+P。
+        //   [feat: titlebar-icons-rearrange]
+        keybind: "mod+k,mod+p",
         slash: "open",
         onSelect: openFile,
       }),

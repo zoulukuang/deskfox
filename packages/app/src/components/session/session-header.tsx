@@ -244,6 +244,16 @@ export function SessionHeader() {
     reviewVisible: isDesktop(),
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
+    // FORK: 标题栏文件树开关(左侧三图标 状态→文件树→审查 之一)
+    // [feat: titlebar-icons-rearrange] 2026-06-13,2026-08-12 随 keep-legacy-layout 恢复
+    //   段3 曾整组摘除,理由是 v2 的文件树开关已在 review 侧栏、标题栏再放一个会与上游 e2e 撞名。
+    //   该理由只在 v2 成立 → 改为按布局分支:经典布局显示(DeskFox 默认,user 截图里的那个图标),
+    //   v2 仍不显示。
+    fileTreeVisible: !isV2() && tree(),
+    fileTreeLabel: language.t("command.fileTree.toggle"),
+    fileTreeKeybind: command.keybind("fileTree.toggle"),
+    fileTreeOpened: layout.fileTree.opened(),
+    onFileTreeToggle: () => layout.fileTree.toggle(),
   }))
 
   const selectApp = (app: OpenApp) => {
@@ -565,6 +575,12 @@ type SessionHeaderV2ActionsState = {
   reviewVisible: boolean
   reviewOpened: boolean
   onReviewToggle: () => void
+  // FORK: 文件树开关 [feat: titlebar-icons-rearrange] 2026-08-12
+  fileTreeVisible: boolean
+  fileTreeLabel: string
+  fileTreeKeybind: string
+  fileTreeOpened: boolean
+  onFileTreeToggle: () => void
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
@@ -572,12 +588,36 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
 
   return (
     <div class="flex items-center gap-2">
-      {/* FORK 撤销记录:titlebar-icons-rearrange 曾在此加文件树按钮(顺序 状态→文件树→审查);
-          2026-08-11 sync v1.18.4 按 D4 摘除 —— 上游 v2 的文件树开关在 review 侧栏
-          (session-review-v2-sidebar-toggle),标题栏再放一个=同名双按钮,上游 e2e strict 撞名 */}
       <Show when={props.state.statusVisible}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
+        </Tooltip>
+      </Show>
+      {/* FORK: 左侧三图标顺序 状态→文件树→审查 [feat: titlebar-icons-rearrange] 2026-06-13
+          fileTreeVisible 在 v2 下为 false(上游 v2 的开关在 review 侧栏,标题栏再放一个会与
+          上游 e2e strict 撞名);经典布局(DeskFox 默认)为 true。2026-08-12 恢复 */}
+      {/* 图标用 v1 Icon:v2 图标集里没有 file-tree/file-tree-active(照原版实现) */}
+      <Show when={props.state.fileTreeVisible}>
+        <Tooltip placement="bottom" value={props.state.fileTreeLabel}>
+          <Button
+            variant="ghost"
+            class="titlebar-icon w-8 h-6 p-0 box-border"
+            onClick={props.state.onFileTreeToggle}
+            aria-label={props.state.fileTreeLabel}
+            aria-expanded={props.state.fileTreeOpened}
+            aria-controls="file-tree-panel"
+          >
+            <div class="relative flex items-center justify-center size-4">
+              <Icon
+                size="small"
+                name={props.state.fileTreeOpened ? "file-tree-active" : "file-tree"}
+                classList={{
+                  "text-icon-strong": props.state.fileTreeOpened,
+                  "text-icon-weak": !props.state.fileTreeOpened,
+                }}
+              />
+            </div>
+          </Button>
         </Tooltip>
       </Show>
       <Show when={props.state.reviewVisible}>
