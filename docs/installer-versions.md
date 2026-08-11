@@ -13,9 +13,33 @@
 
 
 
-## [macOS] 2026.9.1 - 2026-08-11 15:55
+## [macOS] 2026.9.1 - 2026-08-11
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:与 Win 2026.9.1 同批次的小成本确定性收口批(REQ-098/019/099)—— 聊天单波浪号误删除线修复 + OAuth 回调端口只绑本机 + 托盘健康状态。补丁版(2026.9.0 → 2026.9.1)。
+
+**⚠️ 本次为分批发布:先发 arm64,x64 后补。**
+
+- **arm64**:全套完成 —— 深签 + `.app` 公证 staple + `.dmg` 公证 staple,门禁三项(stapler validate / spctl accepted / source=Notarized Developer ID)全过。
+- **x64**:已 build 完成、深签完成、**`.app` 公证已 Accepted 并 staple**;**卡在外层 `.dmg` 公证** —— 两笔提交(17:42 / 19:59)在 Apple 侧滞留 `In Progress` 超 4 小时(Apple 状态页显示 Notary Service 正常,属队列异常滞留)。产物暂存 `packages/desktop/dist-deskfox/_pending-x64/`,拿到票后 `stapler staple` 即可补挂,**无需重新 build 或重签**。
+
+**发布范围(本批)**:
+- GitHub Release `ship-mac-prod-2026.9.1`(`--latest`,arm64 dmg 一个 asset)
+- 阿里云 CDN:`https://dl.clawtray.com/DeskFox-2026.9.1-mac-arm64.dmg`
+- Gitee Release(元数据 + CDN 链接)
+
+**刻意推迟到 x64 就绪时一起做的两步**(避免半截状态伤 Intel 用户):
+- **updater manifest(A 链路)**:若此刻发 arm64-only 的 `latest-mac.yml`,Intel 机器在 `MacUpdater.filterFilesForArch` 里会把所有含 `arm64` 的条目过滤成空数组 → `findFile` 返回 null → 抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`(已读 electron-updater 6.8.9 源码确认)。**不会误装 arm64 包到 Intel 机(无破坏性)**,但会让 Intel 用户反复撞更新失败。
+- **官网 deskfox.ai**:首页 Mac 是「Apple 芯片 / Intel 芯片」两个并列按钮,现都指向 2026.9.0(一致可用)。半更新会让 Intel 按钮 404。
+
+**产物**:
+- arm64 dmg `DeskFox-2026.9.1-mac-arm64.dmg` — 325,433,580 bytes
+  sha256 `7fb53b3efd6cc9a356612f9674517c678328aff69ebd6bbebb217730471eeab2`(staple 后实算)
+
+**发版前 code-review**(4 finder,守 ≤5 预算):**无崩溃级**。逐行/删除行为/跨文件/清理四合一各一;marked 覆盖经 1200 个 md 对拍(零多划)+ 6 万条 fuzz;OAuth 改动经实测确认 localhost 双栈回落 IPv4,登录链路不回归。
+
+**本次踩到并已定位的问题**:
+- **`build-deskfox-electron.sh:63-64` arch→产物目录映射与 electron-builder 实际行为相反**(脚本:arm64→`mac`/x64→`mac-x64`;实际:arm64→`mac-arm64`/x64→`mac`)。后果:x64 因 `ls` 失败被 `set -euo pipefail` 中断 → `EXIT=1`,post-build 的 LibreOffice 完整性守卫一行没跑;arm64 则是**假绿** —— 去 `mac/` 找到的是上次 x64 构建的残留包,验的不是本次产物。本次已**手工补验双 arch**(soffice 可执行 + presets 非空 + 架构匹配,全过)。**修复待发版后单开 fix 分支处理**。
+- **CDN 证书**:`dl.clawtray.com` 证书原已于 2026-07-14 过期,**本日 16:54 已完成续期**(新证书有效期至 2026-11-09),国内链路恢复走 CDN,不再需要 `DESKFOX_ASSET_BASE` 切 OSS 直链绕行。
 
 ---
 ## [Windows] 2026.9.1 - 2026-08-10 23:16
