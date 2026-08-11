@@ -113,7 +113,7 @@ describe("prompt-input history", () => {
         end: 12,
         selection: { startLine: 1, startChar: 1, endLine: 2, endChar: 1 },
       },
-      { type: "image", id: "1", filename: "img.png", mime: "image/png", dataUrl: "data:image/png;base64,abc" },
+      { type: "image", id: "1", filename: "img.png", mime: "image/png", blob: { id: "blob", url: "blob:test" } },
     ]
     const copy = clonePromptParts(original)
     expect(copy).not.toBe(original)
@@ -160,7 +160,8 @@ describe("history image stripping (REQ-087)", () => {
     id: "img-1",
     filename: "shot.png",
     mime: "image/png",
-    dataUrl: "data:image/png;base64," + "A".repeat(1024),
+    // 2026-08-11 sync v1.18.16:附件 blob 化(dataUrl → blob 引用),剥离逻辑按 type 判定不受影响
+    blob: { id: "blob-1", url: "blob:mock/img-1" },
   }
   const textPart = (content: string) => ({ type: "text" as const, content, start: 0, end: content.length })
 

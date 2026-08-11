@@ -697,7 +697,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         type: "resource",
         name: resource.name,
         uri: resource.uri,
-        client: resource.client,
+        client: resource.server,
         display: resource.name,
         description: resource.description,
         mime: resource.mimeType,
@@ -815,7 +815,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       title: cmd.name,
       description: cmd.description,
       type: "custom" as const,
-      source: cmd.source,
+      // source: cmd.source,
     }))
 
     return [...custom, ...builtin]
@@ -1332,9 +1332,29 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const entry = creation.selectedModel(cap)
     if (!entry) return
     const parts = prompt.current()
+    // FORK: 2026-08-11 sync v1.18.16 — 附件 blob 化后,图生图/图生视频参考图先把 blob 解回 base64
+    let imageDataUrl: string | undefined
+    if (cap === "image_edit" || cap === "video_i2v") {
+      const imagePart = parts.find((p) => p.type === "image")
+      if (imagePart && "blob" in imagePart) {
+        imageDataUrl = await fetch(imagePart.blob.url)
+          .then((r) => r.blob())
+          .then(
+            (b) =>
+              new Promise<string>((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => resolve(String(reader.result))
+                reader.onerror = () => reject(reader.error)
+                reader.readAsDataURL(b)
+              }),
+          )
+          .catch(() => undefined)
+      }
+    }
     const input = buildCreationInput({
       parts,
       capability: cap,
+      imageDataUrl,
       projectDir: sdk().directory,
       voice: cap === "tts" ? creation.currentVoice("tts") : undefined,
       targetLang: cap === "translate" ? "English" : undefined,
@@ -1638,10 +1658,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
                 attachments={imageAttachments()}
                 onOpen={(attachment) =>
-                  dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />)
+                  dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />)
                 }
                 onRemove={removeAttachment}
                 removeLabel={language.t("prompt.attachment.remove")}
+                fileLabel={language.t("ui.common.file")}
               />
               <div
                 class="relative min-h-[52px]"
@@ -1835,13 +1856,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               t={(key) => language.t(key as Parameters<typeof language.t>[0])}
             />
             <PromptImageAttachments
-                  newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
+              newLayoutDesigns={props.controls.newLayoutDesigns ?? false}
               attachments={imageAttachments()}
               onOpen={(attachment) =>
-                dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />)
+                dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />)
               }
               onRemove={removeAttachment}
               removeLabel={language.t("prompt.attachment.remove")}
+              fileLabel={language.t("ui.common.file")}
             />
             <div
               class="relative"
@@ -2083,29 +2105,31 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                             >
                               <ModelSelectorPopover
                                 model={props.controls.model.selection}
-                                triggerAs={Button}
-                                triggerProps={{
-                                  variant: "ghost",
-                                  size: "normal",
-                                  style: control(),
-                                  class: "min-w-0 max-w-[320px] text-13-regular text-text-base group",
-                                  "data-action": "prompt-model",
-                                }}
+                                trigger={(triggerProps) => (
+                                  <Button
+                                    {...triggerProps}
+                                    variant="ghost"
+                                    size="normal"
+                                    style={control()}
+                                    class="min-w-0 max-w-[320px] text-13-regular text-text-base group"
+                                    data-action="prompt-model"
+                                  >
+                                    <Show when={props.controls.model.selection.current()?.provider?.id}>
+                                      <ProviderIcon
+                                        id={props.controls.model.selection.current()?.provider?.id ?? ""}
+                                        class="size-4 shrink-0 opacity-40 group-hover:opacity-100 transition-opacity duration-150"
+                                        style={{ "will-change": "opacity", transform: "translateZ(0)" }}
+                                      />
+                                    </Show>
+                                    <span class="truncate">
+                                      {props.controls.model.selection.current()?.name ??
+                                        language.t("dialog.model.select.title")}
+                                    </span>
+                                    <Icon name="chevron-down" size="small" class="shrink-0" />
+                                  </Button>
+                                )}
                                 onClose={restoreFocus}
-                              >
-                                <Show when={props.controls.model.selection.current()?.provider?.id}>
-                                  <ProviderIcon
-                                    id={props.controls.model.selection.current()?.provider?.id ?? ""}
-                                    class="size-4 shrink-0 opacity-40 group-hover:opacity-100 transition-opacity duration-150"
-                                    style={{ "will-change": "opacity", transform: "translateZ(0)" }}
-                                  />
-                                </Show>
-                                <span class="truncate">
-                                  {props.controls.model.selection.current()?.name ??
-                                    language.t("dialog.model.select.title")}
-                                </span>
-                                <Icon name="chevron-down" size="small" class="shrink-0" />
-                              </ModelSelectorPopover>
+                              />
                             </TooltipKeybind>
                           </Show>
                         </div>
@@ -2271,37 +2295,40 @@ function ComposerModelControl(props: { state: ComposerModelControlState }) {
             fallback={
               <ModelSelectorPopover
                 model={props.state.model}
-                triggerAs={Button}
-                triggerProps={{
-                  variant: "ghost",
-                  size: "normal",
-                  style: props.state.style,
-                  class:
-                    "min-w-0 max-w-[220px] justify-start text-[13px] font-[440] leading-5 text-v2-text-text-faint group",
-                  classList: { "animate-in fade-in": props.state.shouldAnimate },
-                  "data-action": "prompt-model",
-                }}
+                trigger={(triggerProps) => (
+                  <Button
+                    {...triggerProps}
+                    variant="ghost"
+                    size="normal"
+                    style={props.state.style}
+                    class="min-w-0 max-w-[220px] justify-start text-[13px] font-[440] leading-5 text-v2-text-text-faint group"
+                    classList={{ "animate-in fade-in": props.state.shouldAnimate }}
+                    data-action="prompt-model"
+                  >
+                    <ModelControlContent state={props.state} />
+                  </Button>
+                )}
                 onClose={props.state.onClose}
-              >
-                <ModelControlContent state={props.state} />
-              </ModelSelectorPopover>
+              />
             }
           >
             <ModelSelectorPopoverV2
               model={props.state.model}
-              triggerAs={ButtonV2}
-              triggerProps={{
-                variant: "ghost-muted",
-                size: "normal",
-                style: props.state.style,
-                class: "min-w-0 max-w-[220px] justify-start ![font-weight:440] group",
-                classList: { "animate-in fade-in": props.state.shouldAnimate },
-                "data-action": "prompt-model",
-              }}
+              trigger={(triggerProps) => (
+                <ButtonV2
+                  {...triggerProps}
+                  variant="ghost-muted"
+                  size="normal"
+                  style={props.state.style}
+                  class="min-w-0 max-w-[220px] justify-start ![font-weight:440] group"
+                  classList={{ "animate-in fade-in": props.state.shouldAnimate }}
+                  data-action="prompt-model"
+                >
+                  <ModelControlContent state={props.state} v2 />
+                </ButtonV2>
+              )}
               onClose={props.state.onClose}
-            >
-              <ModelControlContent state={props.state} v2 />
-            </ModelSelectorPopoverV2>
+            />
           </Show>
         </TooltipV2>
       </Show>

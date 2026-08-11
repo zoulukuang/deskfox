@@ -328,7 +328,7 @@ const FileTreeNode = (
       // FORK: data-tree-path — 让外部(session-side-panel)能 scrollIntoView 到指定节点 2026-05-05
       data-tree-path={local.node.path}
       classList={{
-        "w-full min-w-0 h-6 flex items-center justify-start gap-x-1.5 rounded-md px-1.5 py-0 text-left hover:bg-surface-raised-base-hover active:bg-surface-base-active transition-colors cursor-pointer": true,
+        "w-full min-w-0 h-6 flex items-center justify-start gap-x-1.5 rounded-md px-1.5 py-0 text-start hover:bg-surface-raised-base-hover active:bg-surface-base-active transition-colors cursor-pointer": true,
         // FORK: REQ-062 — 多选选中态复用文件 active 同款 filled 底色(并入此行,classList 对象不可重复 key),
         // 去掉原文件夹专属 ring 圆角线框 2026-06-17
         "bg-surface-base-active": local.node.path === local.active || !!local.contextOpen || !!local.selected,
@@ -343,7 +343,7 @@ const FileTreeNode = (
         [local.class ?? ""]: !!local.class,
         [local.nodeClass ?? ""]: !!local.nodeClass,
       }}
-      style={`padding-left: ${Math.max(0, 8 + local.level * 12 - (local.node.type === "file" ? 24 : 4))}px`}
+      style={`padding-inline-start: ${Math.max(0, 8 + local.level * 12 - (local.node.type === "file" ? 24 : 4))}px`}
       draggable={local.draggable}
       onDragStart={(event: DragEvent) => {
         if (!local.draggable) return

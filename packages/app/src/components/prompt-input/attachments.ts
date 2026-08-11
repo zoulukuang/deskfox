@@ -7,29 +7,14 @@ import { useSDK } from "@/context/sdk"
 // FORK: REQ-026 粘贴/拖图前查当前模型 image 能力 [feat: model-capability-ui] 2026-08-02
 import { useLocal } from "@/context/local"
 import { modelSupportsImage } from "../model-capability"
+import { usePlatform } from "@/context/platform"
 import { uuid } from "@/utils/uuid"
 import { getCursorPosition } from "./editor-dom"
+import { createBlobReference, type DraftStore } from "@/utils/draft-store"
 import { attachmentMime } from "./files"
 // FORK: 多选拖动 abs→rel 转换 helper(无 context 依赖,可单测) 2026-05-15
 import { parseMultiPathDropPaths } from "./multi-path-drop"
 import { normalizePaste, pasteMode } from "./paste"
-
-function dataUrl(file: File, mime: string) {
-  return new Promise<string>((resolve) => {
-    const reader = new FileReader()
-    reader.addEventListener("error", () => resolve(""))
-    reader.addEventListener("load", () => {
-      const value = typeof reader.result === "string" ? reader.result : ""
-      const idx = value.indexOf(",")
-      if (idx === -1) {
-        resolve(value)
-        return
-      }
-      resolve(`data:${mime};base64,${value.slice(idx + 1)}`)
-    })
-    reader.readAsDataURL(file)
-  })
-}
 
 type PromptTarget = Pick<ReturnType<ReturnType<typeof usePrompt>["capture"]>, "current" | "cursor" | "set">
 type AttachmentTarget = { prompt: PromptTarget; cursor: number | undefined }
@@ -45,6 +30,7 @@ type PromptAttachmentsCoreInput = {
   warnImageUnsupported?: () => void
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
+  draftStore?: DraftStore
 }
 
 export type PromptAttachmentsInput = {
@@ -79,16 +65,13 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
       return false
     }
 
-    const url = await dataUrl(file, mime)
-    if (!url) return false
-
     const attachment: ImageAttachmentPart = {
       type: "image",
       id: uuid(),
       filename: file.name,
       sourcePath: input.getPathForFile?.(file) || undefined,
       mime,
-      dataUrl: url,
+      blob: input.draftStore ? await input.draftStore.putBlob(file) : await createBlobReference(file),
     }
     target.prompt.set([...target.prompt.current(), attachment], target.cursor)
     return true
@@ -188,8 +171,10 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
   const local = useLocal()
   // FORK: 多选拖动 abs→rel 需要项目根 [feat: file-tree-multi-drag-to-chat] 2026-05-15
   const sdk = useSDK()
+  const platform = usePlatform()
   const attachments = createPromptAttachmentsCore({
     ...input,
+    draftStore: platform.draftStore,
     capture: input.prompt.capture,
     warn: () => {
       showToast({

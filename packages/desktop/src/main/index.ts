@@ -7,7 +7,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 import type { Event } from "electron"
-import { app } from "electron"
+import { app, BrowserWindow } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
 // FORK: native-menu-i18n — contextMenu 收口到 deskfox/context-menu(按语言重挂)[feat: native-menu-i18n]
@@ -31,7 +31,6 @@ import { applyDeskfoxDataNamespace } from "./deskfox/data-namespace"
 import { restorePreventSleep } from "./deskfox/prevent-sleep"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
-import { parseMarkdown } from "./markdown"
 import { createMenu } from "./menu"
 import {
   finishFirstLaunchOnboarding,
@@ -75,6 +74,8 @@ import {
 } from "./deskfox/onboarding"
 import { getStore } from "./store"
 import { cleanupStoreFiles } from "./store-cleanup"
+import { startBackgroundCli } from "./background-cli"
+import { setNativeTranslations } from "./native-translations"
 
 // FORK-BEGIN: DeskFox 应用身份 — 继承 Tauri 版三档 identifier(ai.deskfox.app,治理规则 R3/应用身份-命名规则)
 //   userData 与旧 Tauri 版同目录(Roaming/<id>):前端偏好迁移同目录原地完成,Win 任务栏固定/通知
@@ -91,6 +92,7 @@ const APP_IDS: Record<string, string> = {
 }
 // FORK-END
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
+const SIDECAR_VERSION = process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 // FORK: REQ-083 编译后 main 目录(定位介绍文档资源,dev/packaged 分支)[feat: first-launch-onboarding]
 const MAIN_DIR = dirname(fileURLToPath(import.meta.url))
@@ -214,7 +216,7 @@ const main = Effect.gen(function* () {
     setAppQuitting()
     void stopSidecars().finally(() => {
       app.relaunch()
-      app.exit(0)
+      app.quit()
     })
   }
 
@@ -242,7 +244,7 @@ const main = Effect.gen(function* () {
     return
   }
 
-  preferAppEnv(app.getPath("userData"))
+  const shellEnv = preferAppEnv(app.getPath("userData"))
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
     const urls = argv.filter((arg: string) => arg.startsWith("opencode://"))
@@ -309,7 +311,7 @@ const main = Effect.gen(function* () {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
       setAppQuitting()
-      void stopSidecars().finally(() => app.exit(0))
+      void stopSidecars().finally(() => app.quit())
     })
   }
 
@@ -343,6 +345,15 @@ const main = Effect.gen(function* () {
   registerRendererProtocol()
   setDockIcon()
   const updater = setupAutoUpdater(stopSidecars)
+  const menuDeps = {
+    trigger: (id: string) => {
+      const win = getLastFocusedWindow()
+      if (win) sendMenuCommand(win, id)
+    },
+    checkForUpdates: () => void showUpdaterDialog(updater, true),
+    relaunch,
+  }
+
   // FORK: DeskFox 原生 IPC(文件操作等) [feat: electron-replatform]
   registerDeskfoxIpc()
   // FORK: 防休眠 — 启动恢复上次开关状态(开着则立即重新生效 + 同步托盘勾选)[feat: electron-replatform-macos]
@@ -371,7 +382,6 @@ const main = Effect.gen(function* () {
     isOldLayoutEligible,
     getDisplayBackend: async () => null,
     setDisplayBackend: async () => undefined,
-    parseMarkdown: async (markdown) => parseMarkdown(markdown),
     checkAppExists: (appName) => checkAppExists(appName),
     resolveAppPath: async (appName) => resolveAppPath(appName),
     // FORK: REQ-068 启动前探测默认项目目录是否存在/可达 [feat: stale-path-hardening]
@@ -383,6 +393,9 @@ const main = Effect.gen(function* () {
     setBackgroundColor: (color) => setBackgroundColor(color),
     exportDebugLogs: () => exportDebugLogs(),
     recordFatalRendererError: (error) => writeLog("renderer", "fatal renderer error", { ...error }, "error"),
+    setNativeTranslations: (bundle) => {
+      if (setNativeTranslations(bundle)) createMenu(menuDeps)
+    },
   })
   registerWslIpcHandlers(wslServers)
   void updater.start()
@@ -397,38 +410,55 @@ const main = Effect.gen(function* () {
     ),
   )
 
-  const port = yield* Effect.gen(function* () {
-    const fromEnv = process.env.OPENCODE_PORT
-    if (fromEnv) {
-      const parsed = Number.parseInt(fromEnv, 10)
-      if (!Number.isNaN(parsed)) return parsed
-    }
-
-    const res = yield* Deferred.make<number, unknown>()
-    const server = createServer()
-    server.on("error", (e) => Deferred.failSync(res, () => e))
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address()
-      if (typeof address !== "object" || !address) {
-        server.close()
-        Deferred.failSync(res, () => new Error("Failed to get port"))
-        return
-      }
-      const port = address.port
-      server.close(() => Effect.runSync(Deferred.succeed(res, port)))
-    })
-
-    return yield* Deferred.await(res)
-  })
-  const hostname = "127.0.0.1"
-  const url = `http://${hostname}:${port}`
-  const password = randomUUID()
-
   const loadingTask = yield* Effect.gen(function* () {
-    logger.log("sidecar connection started", { url })
+    logger.log("sidecar connection started", { version: SIDECAR_VERSION })
 
     ensureLoopbackNoProxy()
     useEnvProxy()
+
+    if (SIDECAR_VERSION === "v2") {
+      logger.log("spawning v2 sidecar")
+      const sidecar = yield* Effect.promise(() => startBackgroundCli(logger, shellEnv?.XDG_STATE_HOME))
+      yield* Deferred.succeed(serverReady, {
+        url: sidecar.url,
+        username: sidecar.username,
+        password: sidecar.password,
+      })
+
+      if (process.platform === "win32") {
+        void wslServers.initialize().catch((error) => logger.error("wsl server initialization failed", error))
+      }
+
+      logger.log("loading task finished")
+      return
+    }
+
+    const port = yield* Effect.gen(function* () {
+      const fromEnv = process.env.OPENCODE_PORT
+      if (fromEnv) {
+        const parsed = Number.parseInt(fromEnv, 10)
+        if (!Number.isNaN(parsed)) return parsed
+      }
+
+      const res = yield* Deferred.make<number, unknown>()
+      const socket = createServer()
+      socket.on("error", (e) => Deferred.failSync(res, () => e))
+      socket.listen(0, "127.0.0.1", () => {
+        const address = socket.address()
+        if (typeof address !== "object" || !address) {
+          socket.close()
+          Deferred.failSync(res, () => new Error("Failed to get port"))
+          return
+        }
+        const port = address.port
+        socket.close(() => Effect.runSync(Deferred.succeed(res, port)))
+      })
+
+      return yield* Deferred.await(res)
+    })
+    const hostname = "127.0.0.1"
+    const url = `http://${hostname}:${port}`
+    const password = randomUUID()
 
     logger.log("spawning sidecar", { url })
     // FORK-BEGIN: REQ-049 首次 spawn 与 respawn 共用 options(补 onMemoryPressure 转发 renderer)
@@ -501,26 +531,22 @@ const main = Effect.gen(function* () {
 
   yield* Fiber.await(loadingTask)
 
+  app.on("window-all-closed", () => {
+    if (process.platform === "darwin") return
+    app.quit()
+  })
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length > 0) return
+    restoreMainWindows()
+  })
+
   const windows = restoreMainWindows()
   // FORK: 系统托盘 + 关闭到托盘(关 GUI ≠ 退主进程,飞书/边车常驻)。多窗口化后托盘全局一份,
   //   close-to-tray 逐窗挂接;mainWindow 兼容指针取首窗(onboarding/updater 等旧调用点用)2026-08-11
   mainWindow = windows[0] ?? null
   createTray()
   for (const win of windows) attachCloseToTray(win)
-  if (windows.length) {
-    createMenu({
-      trigger: (id) => {
-        const win = getLastFocusedWindow()
-        if (win) sendMenuCommand(win, id)
-      },
-      checkForUpdates: () => {
-        void showUpdaterDialog(updater, true)
-      },
-      relaunch: () => {
-        relaunch()
-      },
-    })
-  }
+  if (windows.length) createMenu(menuDeps)
 
   // FORK: REQ-083 首启新手引导 — 首启建 Documents/New DeskFox/ + 介绍文档,发 deep link
   //   让 renderer 自动打开为工作区 + 介绍文档作首个 tab。写失败降级不阻塞。

@@ -438,7 +438,7 @@ export function NewHome() {
                   (ctx.sync.session.data.message[record.session.id] ?? []).flatMap((message) =>
                     (ctx.sync.session.data.part[message.id] ?? []).flatMap((part) => {
                       if (part.type !== "text" || !part.text) return []
-                      return preloadMarkdown(part.text, part.id, marked)
+                      return preloadMarkdown(part.text, part.id)
                     }),
                   ),
                 )
@@ -637,7 +637,12 @@ export function NewHome() {
     await archiveHomeSession({
       server: ServerConnection.key(conn),
       session,
-      update: (value) => ctx.sdk.client.session.update(value),
+      archive: (sessionID) =>
+        ctx.sdk.client.session.update({
+          sessionID,
+          directory: session.directory,
+          time: { archived: Date.now() },
+        }),
       remove: () =>
         setStore(
           produce((draft) => {
@@ -710,7 +715,7 @@ export function NewHome() {
             unseenCount={unseenCount}
             openSettings={openSettings}
             // FORK: DeskFox 社区页(替上游 opencode.ai feedback)[feat: electron-replatform]
-          openHelp={() => platform.openLink("https://deskfox.ai/#community")}
+          openHelp={() => platform.openExternal("https://deskfox.ai/#community")}
             language={language}
             onWheel={(event) => {
               if (sessionViewport) containHomeWheel(event, sessionViewport)
@@ -817,7 +822,7 @@ export function NewHome() {
           <HomeUtilityNav
             class="flex lg:hidden"
             openSettings={openSettings}
-            openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+            openHelp={() => platform.openExternal("https://deskfox.ai/#community")}
             language={language}
           />
         </div>

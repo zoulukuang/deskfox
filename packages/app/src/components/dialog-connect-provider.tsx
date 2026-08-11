@@ -1,4 +1,4 @@
-import type { ProviderAuthAuthorization, ProviderAuthMethod } from "@opencode-ai/sdk/v2/client"
+import type { IntegrationMethod, IntegrationOauthConnectOutput } from "@opencode-ai/client/promise"
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
@@ -28,7 +28,8 @@ import {
   Switch,
 } from "solid-js"
 import { createStore, produce } from "solid-js/store"
-import { Link } from "@/components/link"
+import { useParams } from "@solidjs/router"
+import { ExternalLink } from "@/components/external-link"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
@@ -46,8 +47,10 @@ import {
   GetbotInvalidKeyError,
   GetbotTimeoutError,
 } from "@/utils/getbot"
+import { decode64 } from "@/utils/base64"
 
 const CUSTOM_ID = "_custom"
+type ConnectMethod = Extract<IntegrationMethod, { type: "key" | "oauth" }>
 
 export function useProviderConnectController(options: { onBack?: () => void } = {}) {
   const [store, setStore] = createStore({ selected: undefined as string | undefined })
@@ -165,7 +168,7 @@ function ProviderPicker(props: {
   const settings = useSettings()
   if (settings.general.newLayoutDesigns())
     return <ProviderPickerV2 directory={props.directory} onSelect={props.onSelect} onPrepare={props.onPrepare} />
-  const providers = useProviders(props.directory)
+  const providers = useProviders(() => props.directory?.())
   const language = useLanguage()
   const popularGroup = () => language.t("dialog.provider.group.popular")
   const otherGroup = () => language.t("dialog.provider.group.other")
@@ -254,10 +257,8 @@ function ProviderPickerV2(props: {
   onSelect: (provider: string) => void
   onPrepare?: () => void
 }) {
-  const providers = useProviders(props.directory)
+  const providers = useProviders(() => props.directory?.())
   const language = useLanguage()
-  const serverSync = useServerSync()
-  const serverSDK = useServerSDK()
   const [store, setStore] = createStore({
     filter: "",
     active: undefined as string | undefined,
@@ -300,19 +301,7 @@ function ProviderPickerV2(props: {
 
   const connect = (provider: string) => {
     props.onPrepare?.()
-    if (provider === CUSTOM_ID || serverSync().data.provider_auth[provider]) {
-      props.onSelect(provider)
-      return
-    }
-    if (store.connecting) return
-    setStore("connecting", provider)
-    void serverSDK()
-      .client.provider.auth()
-      .then((response) => {
-        serverSync().set("provider_auth", response.data ?? {})
-        props.onSelect(provider)
-      })
-      .catch(() => props.onSelect(provider))
+    props.onSelect(provider)
   }
 
   const move = (event: KeyboardEvent, direction: number) => {
@@ -429,12 +418,18 @@ function ProviderConnection(props: {
   const dialog = useDialog()
   const serverSync = useServerSync()
   const serverSDK = useServerSDK()
+  const params = useParams()
   const language = useLanguage()
   const settings = useSettings()
   const newLayout = settings.general.newLayoutDesigns
   // FORK: getbot 拉模型列表用 platform.fetch [feat: getbot-接入]
   const platform = usePlatform()
-  const providers = useProviders(props.directory)
+  const providers = useProviders(() => props.directory?.())
+  const directory = () => props.directory?.() ?? decode64(params.dir)
+  const location = () => {
+    const value = directory()
+    return value ? { directory: value } : undefined
+  }
 
   const alive = { value: true }
   const timer = { current: undefined as ReturnType<typeof setTimeout> | undefined }
@@ -455,38 +450,34 @@ function ProviderConnection(props: {
     if (props.provider === GETBOT_PROVIDER_ID) return GETBOT_SYNTHETIC as unknown as NonNullable<typeof found>
     return found!
   })
-  const fallback = createMemo<ProviderAuthMethod[]>(() => [
+  const fallback = createMemo<ConnectMethod[]>(() => [
     {
-      type: "api" as const,
+      type: "key" as const,
       label: language.t("provider.connect.method.apiKey"),
     },
   ])
-  const [auth] = createResource(
-    () => props.provider,
-    async () => {
-      const cached = serverSync().data.provider_auth[props.provider]
-      if (cached) return cached
-      const res = await serverSDK().client.provider.auth()
-      if (!alive.value) return fallback()
-      serverSync().set("provider_auth", res.data ?? {})
-      return res.data?.[props.provider] ?? fallback()
-    },
+  const [integration] = createResource(
+    () => ({ provider: props.provider, directory: directory() }),
+    (input) =>
+      serverSDK()
+        .api.integration.get({
+          integrationID: input.provider,
+          location: input.directory ? { directory: input.directory } : undefined,
+        })
+        .then((result) => result.data),
   )
-  const loading = createMemo(() => auth.loading && !serverSync().data.provider_auth[props.provider])
-  const methods = createMemo(() => auth.latest ?? serverSync().data.provider_auth[props.provider] ?? fallback())
-  const cachedMethods = serverSync().data.provider_auth[props.provider]
-  const directMethod =
-    cachedMethods?.length === 1 && cachedMethods[0].type === "api" && !cachedMethods[0].prompts?.length ? 0 : undefined
+  const loading = createMemo(() => integration.loading)
+  const methods = createMemo<ConnectMethod[]>(() => {
+    const values = integration.latest?.methods.filter(
+      (method): method is ConnectMethod => method.type === "key" || method.type === "oauth",
+    )
+    return values?.length ? values : fallback()
+  })
   const [store, setStore] = createStore({
-    methodIndex: directMethod as undefined | number,
-    authorization: undefined as undefined | ProviderAuthAuthorization,
+    methodIndex: undefined as undefined | number,
+    authorization: undefined as undefined | IntegrationOauthConnectOutput["data"],
     promptInputs: undefined as undefined | Record<string, string>,
-    state: (directMethod === undefined ? "pending" : undefined) as
-      | undefined
-      | "pending"
-      | "complete"
-      | "error"
-      | "prompt",
+    state: "pending" as undefined | "pending" | "complete" | "error" | "prompt",
     error: undefined as string | undefined,
   })
 
@@ -496,7 +487,7 @@ function ProviderConnection(props: {
     | { type: "auth.prompt" }
     | { type: "auth.inputs"; inputs: Record<string, string> }
     | { type: "auth.pending" }
-    | { type: "auth.complete"; authorization: ProviderAuthAuthorization }
+    | { type: "auth.complete"; authorization: IntegrationOauthConnectOutput["data"] }
     | { type: "auth.error"; error: string }
 
   function dispatch(action: Action) {
@@ -550,7 +541,7 @@ function ProviderConnection(props: {
 
   const methodLabel = (value?: { type?: string; label?: string }) => {
     if (!value) return ""
-    if (value.type === "api") return language.t("provider.connect.method.apiKey")
+    if (value.type === "key") return language.t("provider.connect.method.apiKey")
     return value.label ?? ""
   }
 
@@ -560,7 +551,12 @@ function ProviderConnection(props: {
     const hint = suffix?.[1]
     return {
       label: suffix ? label.slice(0, -suffix[0].length) : label,
-      hint: hint ? hint[0].toUpperCase() + hint.slice(1) : value?.type === "api" ? "Browser" : undefined,
+      hint:
+        hint?.toLowerCase() === "headless"
+          ? language.t("provider.connect.method.headless")
+          : hint?.toLowerCase() === "browser" || (!hint && value?.type === "key")
+            ? language.t("provider.connect.method.browser")
+            : undefined,
     }
   }
 
@@ -591,46 +587,22 @@ function ProviderConnection(props: {
     const method = methods()[index]
     dispatch({ type: "method.select", index })
 
-    if (method.type === "api" && method.prompts?.length) {
-      if (!inputs) {
-        dispatch({ type: "auth.prompt" })
-        return
-      }
-      dispatch({ type: "auth.inputs", inputs })
-      return
-    }
-
     if (method.type === "oauth") {
       if (method.prompts?.length && !inputs) {
         dispatch({ type: "auth.prompt" })
         return
       }
       dispatch({ type: "auth.pending" })
-      const start = Date.now()
       await serverSDK()
-        .client.provider.oauth.authorize(
-          {
-            providerID: props.provider,
-            method: index,
-            inputs,
-          },
-          { throwOnError: true },
-        )
+        .api.integration.oauth.connect({
+          integrationID: props.provider,
+          methodID: method.id,
+          inputs: inputs ?? {},
+          location: location(),
+        })
         .then((x) => {
           if (!alive.value) return
-          const elapsed = Date.now() - start
-          const delay = 1000 - elapsed
-
-          if (delay > 0) {
-            if (timer.current !== undefined) clearTimeout(timer.current)
-            timer.current = setTimeout(() => {
-              timer.current = undefined
-              if (!alive.value) return
-              dispatch({ type: "auth.complete", authorization: x.data! })
-            }, delay)
-            return
-          }
-          dispatch({ type: "auth.complete", authorization: x.data! })
+          dispatch({ type: "auth.complete", authorization: x.data })
         })
         .catch((e) => {
           if (!alive.value) return
@@ -645,9 +617,9 @@ function ProviderConnection(props: {
       index: 0,
     })
 
-    const prompts = createMemo<NonNullable<ProviderAuthMethod["prompts"]>>(() => {
+    const prompts = createMemo(() => {
       const value = method()
-      return value?.prompts ?? []
+      return value?.type === "oauth" ? (value.prompts ?? []) : []
     })
     const matches = (prompt: NonNullable<ReturnType<typeof prompts>[number]>, value: Record<string, string>) => {
       if (!prompt.when) return true
@@ -676,10 +648,6 @@ function ProviderConnection(props: {
       const next = prompts().findIndex((prompt, i) => i > index && matches(prompt, value))
       if (next !== -1) {
         setFormStore("index", next)
-        return
-      }
-      if (method()?.type === "api") {
-        dispatch({ type: "auth.inputs", inputs: value })
         return
       }
       await selectMethod(store.methodIndex, value)
@@ -783,9 +751,15 @@ function ProviderConnection(props: {
   })
 
   async function complete() {
-    await serverSDK().client.global.dispose()
-    // FORK: REQ-052 — 连接收尾强制失效 providers query,使列表和模型选择器立即刷新 2026-06-18
-    serverSync().refreshProviders()
+    // FORK: 2026-08-11 sync v1.18.16 — 上游把 dispose 收进 connect.key 兼容层;fork 保留的
+    //   legacy auth.set 路径需自己补 instance.dispose(否则 provider 连接态不刷新),
+    //   REQ-052 的 refreshProviders 收尾语义不变
+    await serverSDK()
+      .client.instance.dispose()
+      .catch(() => undefined)
+    await serverSync()
+      .refreshProviders()
+      .catch(() => undefined)
     dialog.close()
     showToast({
       variant: "success",
@@ -849,7 +823,7 @@ function ProviderConnection(props: {
               listRef = ref
             }}
             items={methods}
-            key={(m) => m?.label}
+            key={(m) => m?.label ?? m?.type}
             onSelect={async (selected, index) => {
               if (!selected) return
               void selectMethod(index)
@@ -1001,12 +975,12 @@ function ProviderConnection(props: {
               <div>{language.t("provider.connect.opencodeZen.line2")}</div>
               <div>
                 {language.t("provider.connect.opencodeZen.visit.prefix")}
-                <Link
+                <ExternalLink
                   href="https://opencode.ai/zen"
                   class="text-v2-text-text-base focus-visible:rounded-xs focus-visible:outline-2 focus-visible:outline-v2-border-border-focus"
                 >
                   {language.t("provider.connect.opencodeZen.visit.link")}
-                </Link>
+                </ExternalLink>
                 {language.t("provider.connect.opencodeZen.visit.suffix")}
               </div>
             </div>
@@ -1018,6 +992,7 @@ function ProviderConnection(props: {
                 ref={apiKey}
                 class="!w-full"
                 name="apiKey"
+                data-input="provider-api-key"
                 placeholder={language.t("provider.connect.apiKey.placeholder")}
                 value={formStore.value}
                 invalid={formStore.error !== undefined}
@@ -1034,7 +1009,7 @@ function ProviderConnection(props: {
                 </div>
               )}
             </Show>
-            <ButtonV2 type="submit" variant="contrast">
+            <ButtonV2 type="submit" variant="contrast" data-action="provider-connect-submit">
               {language.t("common.continue")}
             </ButtonV2>
           </form>
@@ -1050,9 +1025,9 @@ function ProviderConnection(props: {
               <div class="text-14-regular text-text-base">{language.t("provider.connect.opencodeZen.line2")}</div>
               <div class="text-14-regular text-text-base">
                 {language.t("provider.connect.opencodeZen.visit.prefix")}
-                <Link href="https://opencode.ai/zen" tabIndex={-1}>
+                <ExternalLink href="https://opencode.ai/zen" tabIndex={-1}>
                   {language.t("provider.connect.opencodeZen.visit.link")}
-                </Link>
+                </ExternalLink>
                 {language.t("provider.connect.opencodeZen.visit.suffix")}
               </div>
             </div>
@@ -1064,9 +1039,9 @@ function ProviderConnection(props: {
               <div class="text-14-regular text-text-base">{language.t("provider.connect.getbot.line2")}</div>
               <div class="text-14-regular text-text-base">
                 {language.t("provider.connect.getbot.visit.prefix")}
-                <Link href={GETBOT_SITE_URL} tabIndex={-1}>
+                <ExternalLink href={GETBOT_SITE_URL}>
                   {language.t("provider.connect.getbot.visit.link")}
-                </Link>
+                </ExternalLink>
                 {language.t("provider.connect.getbot.visit.suffix")}
               </div>
             </div>
@@ -1134,12 +1109,13 @@ function ProviderConnection(props: {
 
       setFormStore("error", undefined)
       const result = await serverSDK()
-        .client.provider.oauth.callback({
-          providerID: props.provider,
-          method: store.methodIndex,
+        .api.integration.oauth.complete({
+          integrationID: props.provider,
+          attemptID: store.authorization!.attemptID,
+          location: location(),
           code,
         })
-        .then((value) => (value.error ? { ok: false as const, error: value.error } : { ok: true as const }))
+        .then(() => ({ ok: true as const }))
         .catch((error) => ({ ok: false as const, error }))
       if (result.ok) {
         await complete()
@@ -1153,9 +1129,9 @@ function ProviderConnection(props: {
         <div class="flex flex-col gap-5 px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
           <div>
             {language.t("provider.connect.oauth.code.visit.prefix")}
-            <Link href={store.authorization!.url} class="text-v2-text-text-base">
+            <ExternalLink href={store.authorization!.url} class="text-v2-text-text-base">
               {language.t("provider.connect.oauth.code.visit.link")}
-            </Link>
+            </ExternalLink>
             {language.t("provider.connect.oauth.code.visit.suffix", { provider: provider().name })}
           </div>
           <form onSubmit={handleSubmit} class="flex flex-col items-start gap-5 self-stretch">
@@ -1192,7 +1168,9 @@ function ProviderConnection(props: {
       <div class="flex flex-col gap-6">
         <div class="text-14-regular text-text-base">
           {language.t("provider.connect.oauth.code.visit.prefix")}
-          <Link href={store.authorization!.url}>{language.t("provider.connect.oauth.code.visit.link")}</Link>
+          <ExternalLink href={store.authorization!.url}>
+            {language.t("provider.connect.oauth.code.visit.link")}
+          </ExternalLink>
           {language.t("provider.connect.oauth.code.visit.suffix", { provider: provider().name })}
         </div>
         <form onSubmit={handleSubmit} class="flex flex-col items-start gap-4">
@@ -1226,32 +1204,46 @@ function ProviderConnection(props: {
     })
 
     onMount(() => {
-      void (async () => {
+      const poll = async () => {
+        const authorization = store.authorization
+        if (!authorization || !alive.value) return
         const result = await serverSDK()
-          .client.provider.oauth.callback({
-            providerID: props.provider,
-            method: store.methodIndex,
+          .api.integration.oauth.status({
+            integrationID: props.provider,
+            attemptID: authorization.attemptID,
+            location: location(),
           })
-          .then((value) => (value.error ? { ok: false as const, error: value.error } : { ok: true as const }))
+          .then((value) => ({ ok: true as const, status: value.data }))
           .catch((error) => ({ ok: false as const, error }))
-
         if (!alive.value) return
-
         if (!result.ok) {
-          const message = formatError(result.error, language.t("common.requestFailed"))
-          dispatch({ type: "auth.error", error: message })
+          dispatch({ type: "auth.error", error: formatError(result.error, language.t("common.requestFailed")) })
           return
         }
-
-        await complete()
-      })()
+        if (result.status.status === "complete") {
+          await complete()
+          return
+        }
+        if (result.status.status === "failed") {
+          dispatch({ type: "auth.error", error: result.status.message })
+          return
+        }
+        if (result.status.status === "expired") {
+          dispatch({ type: "auth.error", error: language.t("common.requestFailed") })
+          return
+        }
+        timer.current = setTimeout(poll, 1_000)
+      }
+      void poll()
     })
 
     return (
       <div class="flex flex-col gap-6">
         <div class="text-14-regular text-text-base">
           {language.t("provider.connect.oauth.auto.visit.prefix")}
-          <Link href={store.authorization!.url}>{language.t("provider.connect.oauth.auto.visit.link")}</Link>
+          <ExternalLink href={store.authorization!.url}>
+            {language.t("provider.connect.oauth.auto.visit.link")}
+          </ExternalLink>
           {language.t("provider.connect.oauth.auto.visit.suffix", { provider: provider().name })}
         </div>
         <TextField
@@ -1328,15 +1320,15 @@ function ProviderConnection(props: {
                 </div>
               </div>
             </Match>
-            <Match when={method()?.type === "api"}>
+            <Match when={method()?.type === "key"}>
               <ApiAuthView />
             </Match>
             <Match when={method()?.type === "oauth"}>
               <Switch>
-                <Match when={store.authorization?.method === "code"}>
+                <Match when={store.authorization?.mode === "code"}>
                   <OAuthCodeView />
                 </Match>
-                <Match when={store.authorization?.method === "auto"}>
+                <Match when={store.authorization?.mode === "auto"}>
                   <OAuthAutoView />
                 </Match>
               </Switch>

@@ -8,6 +8,7 @@ import { useServerSDK } from "./server-sdk"
 import { RECENTLY_CLOSED_DISPLAY_LIMIT, ServerConnection, useServer } from "./server"
 import { usePlatform } from "./platform"
 import { Project } from "@opencode-ai/sdk/v2"
+import { normalizeProjectInfo } from "./global-sync/utils"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 // FORK: REQ-041/042 — 文件 tab 项目级 key + 会话级伪标签合成 [feat: iconbar-left-decouple] 2026-06-02
 import { projectTabKey, synthTabs, type SessionPseudoTab } from "./session-key"
@@ -135,7 +136,7 @@ const normalizeStoredSessionTabs = (key: string, tabs: SessionTabs) => {
   }
 }
 
-const currentRoute = (pathname: string, search: string): LayoutRoute => {
+export const currentRoute = (pathname: string, search: string): LayoutRoute => {
   const parts = pathname.split("/").filter(Boolean)
   if (parts.length === 0) return { type: "home" }
 
@@ -547,14 +548,42 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       }
     })
 
+    // FORK: 2026-08-11 — 项目对象引用稳定化。enrich 每次都 `{...metadata, ...project}` 造新对象,
+    //   任何一次 project 查询重取(SSE 重连即触发)都会让 list 元素引用全变 → 侧栏 rail 的
+    //   `<For each={projects()}>` 按引用 diff 判定全变 → 整块 DOM 重建:打开着的会话行右键菜单被掀掉
+    //   (e2e "element was detached from the DOM" 实锤,探针测得 ~1.5s 一次整块重建)。
+    //   这里按 worktree 记住上一次结果,浅比较等值就复用旧引用,For 便不再重建。
+    let stable = new Map<string, LocalProject>()
+    // 深比较到值(Project 含 time 等嵌套对象,且 normalizeProjectInfo 每次都造新的 → 浅比较必失效)
+    const sameProject = (a: LocalProject | undefined, b: LocalProject) => {
+      if (!a) return false
+      if (a === b) return true
+      const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+      for (const key of keys) {
+        const av = (a as Record<string, unknown>)[key]
+        const bv = (b as Record<string, unknown>)[key]
+        if (av === bv) continue
+        if (typeof av !== "object" || typeof bv !== "object" || av === null || bv === null) return false
+        if (JSON.stringify(av) !== JSON.stringify(bv)) return false
+      }
+      return true
+    }
     const list = createMemo(() => {
       const projects = enriched()
-      return projects.map((project) => {
+      const next = new Map<string, LocalProject>()
+      const result = projects.map((project) => {
         const color = project.icon?.color ?? colors[project.worktree]
-        if (!color) return project
-        const icon = project.icon ? { ...project.icon, color } : { color }
-        return { ...project, icon }
+        const shaped =
+          color === undefined
+            ? project
+            : ({ ...project, icon: project.icon ? { ...project.icon, color } : { color } } as LocalProject)
+        const previous = stable.get(shaped.worktree)
+        const value = sameProject(previous, shaped) ? previous! : shaped
+        next.set(value.worktree, value)
+        return value
       })
+      stable = next
+      return result
     })
 
     createEffect(() => {
@@ -603,11 +632,22 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           continue
         }
 
-        void serverSdk()
-          .client.project.update({ projectID: project.id, directory: worktree, icon: { color } })
-          .catch(() => {
-            if (colorRequested.get(worktree) === color) colorRequested.delete(worktree)
-          })
+        const projectID = project.id
+        void (async () => {
+          const sdk = serverSdk()
+          if ((await sdk.protocol) !== "v1") return
+          return sdk.client.project
+            .update({ projectID, directory: worktree, icon: { color } })
+            .then((response) => response.data)
+            .then((result) => {
+              if (!result) return
+              serverSync().set("project", (items) =>
+                items.map((item) => (item.id === result.id ? normalizeProjectInfo(result) : item)),
+              )
+            })
+        })().catch(() => {
+          if (colorRequested.get(worktree) === color) colorRequested.delete(worktree)
+        })
       }
     })
 

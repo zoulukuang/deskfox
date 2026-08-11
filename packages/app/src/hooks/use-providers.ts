@@ -4,7 +4,7 @@ import { decode64 } from "@/utils/base64"
 import { GETBOT_PROVIDER_ID, GETBOT_PROVIDER_NAME } from "@/utils/getbot"
 import { useParams } from "@solidjs/router"
 import { Iterable, pipe } from "effect"
-import type { Accessor } from "solid-js"
+import { createEffect, createMemo, type Accessor } from "solid-js"
 import { selectProviderCatalog } from "./provider-catalog"
 
 export const popularProviders = [
@@ -45,7 +45,7 @@ export function useProviders(directory?: Accessor<string | undefined>) {
   const providers = () => {
     const value = dir()
     const projectStore = value ? serverSync().child(value)[0] : undefined
-    if (directory)
+    if (value)
       return selectProviderCatalog({
         explicit: true,
         directory: value,
@@ -58,10 +58,12 @@ export function useProviders(directory?: Accessor<string | undefined>) {
       global: serverSync().data.provider,
     })
   }
+
   return {
     // FORK: all() 保持上游 Map(消费者用 .get/.values/.size);getbot 合成项只注入 popular() + provider 弹窗自身 [feat: electron-replatform]
     all: () => providers().all,
     default: () => providers().default,
+    defaultModel: () => providers().defaultModel,
     // FORK: 上游 providers().all 现为 Map → 先转数组再 withGetbot 注入合成项,过滤热门(popularProviderSet 已含 getbot)[feat: electron-replatform]
     popular: () =>
       withGetbot(pipe(providers().all, Iterable.map(([, p]) => p), (v) => Array.from(v))).filter((p) =>
@@ -78,7 +80,7 @@ export function useProviders(directory?: Accessor<string | undefined>) {
     },
     paid: () => {
       const connected = new Set(providers().connected)
-      return [
+      const paid = [
         ...Iterable.filter(
           providers().all,
           ([id]) =>
@@ -86,6 +88,7 @@ export function useProviders(directory?: Accessor<string | undefined>) {
             (id !== "opencode" || Object.values(providers().all.get(id)?.models ?? {}).some((m) => m.cost?.input)),
         ),
       ]
+      return paid
     },
   }
 }

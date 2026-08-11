@@ -355,7 +355,7 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
               type="button"
               class="flex items-center text-text-interactive-base gap-1"
               // FORK: 错误页反馈指向 DeskFox 自有 GitHub Issues 2026-06-02
-              onClick={() => platform.openLink("https://github.com/zoulukuang/deskfox/issues/new")}
+              onClick={() => platform.openExternal("https://github.com/zoulukuang/deskfox/issues/new")}
             >
               <div>{language.t("error.page.report.discord")}</div>
               {/* FORK: 反馈渠道改 GitHub Issues,图标随之 discord → github 2026-06-02 */}

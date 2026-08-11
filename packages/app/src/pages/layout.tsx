@@ -35,9 +35,9 @@ import { createStore, produce, reconcile } from "solid-js/store"
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"
 import { useProviders } from "@/hooks/use-providers"
-import { toaster } from "@opencode-ai/ui/toast"
-import { setV2Toast, showToast, ToastRegion } from "@/utils/toast"
+import { dismissToast, setV2Toast, showToast, ToastRegion } from "@/utils/toast"
 import { useServerSDK } from "@/context/server-sdk"
+import { normalizeProjectInfo } from "@/context/global-sync/utils"
 import { clearWorkspaceTerminals } from "@/context/terminal"
 import { pickSessionCacheEvictions } from "@/context/global-sync/session-cache"
 import { useNotification } from "@/context/notification"
@@ -46,10 +46,10 @@ import { Binary } from "@opencode-ai/core/util/binary"
 import { retry } from "@opencode-ai/core/util/retry"
 import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
-import { setNavigate } from "@/utils/notification-click"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff, setPendingOpenFile } from "@/pages/session/handoff"
 import { SessionRouteKey, SessionStateKey } from "@/utils/server-scope"
+import { listAllSessions } from "@/utils/session"
 
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
@@ -123,8 +123,7 @@ export default function LegacyLayout(props: ParentProps) {
   const notification = useNotification()
   const permission = usePermission()
   const navigate = useNavigate()
-  setNavigate(navigate)
-  const providers = useProviders()
+  const providers = useProviders(() => undefined)
   const dialog = useDialog()
   const command = useCommand()
   const theme = useTheme()
@@ -194,16 +193,12 @@ export default function LegacyLayout(props: ParentProps) {
   }
   const isBusy = (directory: string) => !!state.busyWorkspaces[pathKey(directory)]
   const navLeave = { current: undefined as number | undefined }
+  // FORK: 2026-08-11 sync v1.18.16 — 会话排序随上游改为时间无关(compareSessionTime,三个 helper
+  //   的 now 参数已全部弃用)→ 原「每分钟 setState('sortNow') 触发重排」变成纯粹的周期性整列重渲染,
+  //   会把打开着的行右键菜单节点掀掉(REQ-096 菜单挂在行内;e2e 实测 "element was detached from
+  //   the DOM" 随 tick 落点随机复现)。停掉 tick,sortNow 退化为常量占位(prop 链路保留不动)。
   const sortNow = () => state.sortNow
   let sizet: number | undefined
-  let sortNowInterval: ReturnType<typeof setInterval> | undefined
-  const sortNowTimeout = setTimeout(
-    () => {
-      setState("sortNow", Date.now())
-      sortNowInterval = setInterval(() => setState("sortNow", Date.now()), 60_000)
-    },
-    60_000 - (Date.now() % 60_000),
-  )
 
   const aim = createAim({
     enabled: () => !layout.sidebar.opened(),
@@ -219,8 +214,6 @@ export default function LegacyLayout(props: ParentProps) {
     dialogDead = true
     dialogRun += 1
     if (navLeave.current !== undefined) clearTimeout(navLeave.current)
-    clearTimeout(sortNowTimeout)
-    if (sortNowInterval) clearInterval(sortNowInterval)
     if (sizet !== undefined) clearTimeout(sizet)
     if (peekt !== undefined) clearTimeout(peekt)
     aim.reset()
@@ -389,7 +382,7 @@ export default function LegacyLayout(props: ParentProps) {
       const dismissSessionAlert = (sessionKey: string) => {
         const toastId = toastBySession.get(sessionKey)
         if (toastId === undefined) return
-        toaster.dismiss(toastId)
+        dismissToast(toastId)
         toastBySession.delete(sessionKey)
         alertedAtBySession.delete(sessionKey)
       }
@@ -454,13 +447,13 @@ export default function LegacyLayout(props: ParentProps) {
             void playSoundById(settings.sounds.permissions())
           }
           if (settings.notifications.permissions()) {
-            void platform.notify(title, description, href)
+            void platform.notify(title, description, () => navigate(href))
           }
         }
 
         if (e.details.type === "question.asked") {
           if (settings.notifications.agent()) {
-            void platform.notify(title, description, href)
+            void platform.notify(title, description, () => navigate(href))
           }
         }
 
@@ -920,14 +913,15 @@ export default function LegacyLayout(props: ParentProps) {
   }
 
   async function archiveSession(session: Session) {
+    if ((await serverSDK().protocol) !== "v1") return
     const [store, setStore] = serverSync().child(session.directory)
     const sessions = store.session ?? []
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
 
     await serverSDK().client.session.update({
-      directory: session.directory,
       sessionID: session.id,
+      directory: session.directory,
       time: { archived: Date.now() },
     })
     setStore(
@@ -1291,9 +1285,12 @@ export default function LegacyLayout(props: ParentProps) {
     }
     const refreshDirs = async (target?: string) => {
       if (!target || target === root || canOpen(target)) return canOpen(target)
-      const listed = await serverSDK()
-        .client.worktree.list({ directory: root })
-        .then((x) => x.data ?? [])
+      const listed = await Promise.resolve(
+        project?.id ?? serverSDK().api.project.current({ location: { directory: root } }),
+      )
+        .then((value) => (typeof value === "string" ? value : value.id))
+        .then((projectID) => serverSDK().api.project.directories({ projectID, location: { directory: root } }))
+        .then((items) => items.map((item) => item.directory).filter((item) => pathKey(item) !== pathKey(root)))
         .catch(() => [] as string[])
       dirs = effectiveWorkspaceOrder(root, [root, ...listed], store.workspaceOrder[root])
       return canOpen(target)
@@ -1337,10 +1334,11 @@ export default function LegacyLayout(props: ParentProps) {
       await Promise.all(
         dirs.map(async (item) => ({
           path: { directory: item },
-          session: await serverSDK()
-            .client.session.list({ directory: item })
-            .then((x) => x.data ?? [])
-            .catch(() => []),
+          session: await listAllSessions(serverSDK().api.session, {
+            directory: item,
+            parentID: null,
+            order: "desc",
+          }).catch(() => []),
         })),
       ),
       Date.now(),
@@ -1415,7 +1413,16 @@ export default function LegacyLayout(props: ParentProps) {
     const name = next === getFilename(project.worktree) ? "" : next
 
     if (project.id && project.id !== "global") {
-      await serverSDK().client.project.update({ projectID: project.id, directory: project.worktree, name })
+      const sdk = serverSDK()
+      if ((await sdk.protocol) !== "v1") return
+      const result = await sdk.client.project
+        .update({ projectID: project.id, directory: project.worktree, name })
+        .then((response) => response.data)
+      if (!result) return
+      // const result = await serverSDK().api.project.update({ projectID: project.id, name })
+      serverSync().set("project", (items) =>
+        items.map((item) => (item.id === result.id ? normalizeProjectInfo(result) : item)),
+      )
       return
     }
 
@@ -1564,12 +1571,9 @@ export default function LegacyLayout(props: ParentProps) {
       title: language.t("workspace.resetting.title"),
       description: language.t("workspace.resetting.description"),
     })
-    const dismiss = () => toaster.dismiss(progress)
+    const dismiss = () => dismissToast(progress)
 
-    const sessions: Session[] = await serverSDK()
-      .client.session.list({ directory })
-      .then((x) => x.data ?? [])
-      .catch(() => [])
+    const sessions = await listAllSessions(serverSDK().api.session, { directory, order: "desc" }).catch(() => [])
 
     clearWorkspaceTerminals(
       directory,
@@ -1598,20 +1602,20 @@ export default function LegacyLayout(props: ParentProps) {
       return
     }
 
-    const archivedAt = Date.now()
-    await Promise.all(
-      sessions
-        .filter((session) => session.time.archived === undefined)
-        .map((session) =>
-          serverSDK()
-            .client.session.update({
-              sessionID: session.id,
-              directory: session.directory,
-              time: { archived: archivedAt },
-            })
-            .catch(() => undefined),
-        ),
-    )
+    if ((await serverSDK().protocol) === "v1")
+      await Promise.all(
+        sessions
+          .filter((session) => session.time.archived === undefined)
+          .map((session) =>
+            serverSDK()
+              .client.session.update({
+                sessionID: session.id,
+                directory: session.directory,
+                time: { archived: Date.now() },
+              })
+              .catch(() => undefined),
+          ),
+      )
 
     setBusy(directory, false)
     dismiss()
@@ -1645,9 +1649,9 @@ export default function LegacyLayout(props: ParentProps) {
 
     onMount(() => {
       serverSDK()
-        .client.vcs.status({ directory: props.directory })
-        .then((x) => {
-          const files = x.data ?? []
+        .api.vcs.status({ location: { directory: props.directory } })
+        .then((result) => {
+          const files = result.data
           const dirty = files.length > 0
           setData({ status: "ready", dirty })
         })
@@ -1703,19 +1707,19 @@ export default function LegacyLayout(props: ParentProps) {
     })
 
     const refresh = async () => {
-      const sessions = await serverSDK()
-        .client.session.list({ directory: props.directory })
-        .then((x) => x.data ?? [])
-        .catch(() => [])
+      const sessions = await listAllSessions(serverSDK().api.session, {
+        directory: props.directory,
+        order: "desc",
+      }).catch(() => [])
       const active = sessions.filter((session) => session.time.archived === undefined)
       setState({ sessions: active })
     }
 
     onMount(() => {
       serverSDK()
-        .client.vcs.status({ directory: props.directory })
-        .then((x) => {
-          const files = x.data ?? []
+        .api.vcs.status({ location: { directory: props.directory } })
+        .then((result) => {
+          const files = result.data
           const dirty = files.length > 0
           setState({ status: "ready", dirty })
           void refresh()
@@ -2367,7 +2371,7 @@ export default function LegacyLayout(props: ParentProps) {
       onOpenSettings={openSettings}
       helpLabel={() => language.t("sidebar.help")}
       // FORK: DeskFox 社区页(替上游 opencode.ai feedback)[feat: electron-replatform]
-      onOpenHelp={() => platform.openLink("https://deskfox.ai/#community")}
+      onOpenHelp={() => platform.openExternal("https://deskfox.ai/#community")}
       renderPanel={() =>
         railOnly ? null : mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
       }
@@ -2592,7 +2596,7 @@ function UpdateAvailableToast(props: {
 
   onCleanup(() => {
     if (toastId === undefined) return
-    toaster.dismiss(toastId)
+    dismissToast(toastId)
   })
 
   return null

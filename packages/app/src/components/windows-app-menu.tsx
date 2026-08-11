@@ -7,15 +7,8 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 
 import { useCommand } from "@/context/command"
 import { DESKTOP_MENU, desktopMenuVisible, type DesktopMenuAction, type DesktopMenuEntry } from "@/desktop-menu"
-// FORK: 菜单标签按当前语言本地化(user 要求菜单跟随语言设置)[feat: titlebar-icons-rearrange] 2026-06-13
-import { translateMenuLabel } from "@/desktop-menu-i18n"
-import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-// FORK: 菜单顶部品牌标题 + aria-label 走品牌替换单一源(rebrand.ts),"OpenCode"→"DeskFox";
-// 不新增硬编码品牌串,品牌改一处即跟随。[feat: electron-brand-cleanup]
-import { rebrandValue } from "@/i18n/rebrand"
-
-const BRAND = rebrandValue("OpenCode")
+import { useLanguage } from "@/context/language"
 
 export function WindowsAppMenu(props: {
   command: ReturnType<typeof useCommand>
@@ -23,7 +16,6 @@ export function WindowsAppMenu(props: {
   variant?: "legacy" | "v2"
 }) {
   let lastFocused: HTMLElement | undefined
-  // FORK: 取当前 locale 用于菜单标签本地化 [feat: titlebar-icons-rearrange] 2026-06-13
   const language = useLanguage()
 
   const rememberFocus = () => {
@@ -53,7 +45,7 @@ export function WindowsAppMenu(props: {
       runAction(entry.action)
       return
     }
-    if (entry.href) props.platform.openLink(entry.href)
+    if (entry.href) props.platform.openExternal(entry.href)
   }
 
   return (
@@ -68,7 +60,7 @@ export function WindowsAppMenu(props: {
             variant="ghost-muted"
             size="large"
             icon={<IconV2 name="menu" />}
-            aria-label={`${BRAND} menu`}
+            aria-label={language.t("desktop.menu.ariaLabel")}
             onPointerDown={rememberFocus}
             onKeyDown={rememberFocus}
           />
@@ -79,7 +71,7 @@ export function WindowsAppMenu(props: {
           icon="menu"
           variant="ghost"
           class="titlebar-icon rounded-md shrink-0"
-          aria-label={`${BRAND} menu`}
+          aria-label={language.t("desktop.menu.ariaLabel")}
           onPointerDown={rememberFocus}
           onKeyDown={rememberFocus}
         />
@@ -87,9 +79,9 @@ export function WindowsAppMenu(props: {
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="desktop-app-menu">
           <DropdownMenu.Group>
-            <DropdownMenu.GroupLabel class="desktop-app-menu-heading">{BRAND}</DropdownMenu.GroupLabel>
+            <DropdownMenu.GroupLabel class="desktop-app-menu-heading">{language.t("desktop.menu.app")}</DropdownMenu.GroupLabel>
             {DESKTOP_MENU.filter((menu) => desktopMenuVisible(menu, "windows")).map((menu) => (
-              <DesktopMenuSubmenu label={translateMenuLabel(menu.label, language.locale())}>
+              <DesktopMenuSubmenu label={language.t(menu.labelKey)}>
                 {menu.items
                   ?.filter((entry) => desktopMenuVisible(entry, "windows"))
                   .map((entry) =>
@@ -97,7 +89,7 @@ export function WindowsAppMenu(props: {
                       <DropdownMenu.Separator />
                     ) : (
                       <DesktopMenuItem
-                        label={translateMenuLabel(entry.label ?? "", language.locale())}
+                        label={entry.labelKey ? language.t(entry.labelKey) : ""}
                         keybind={entry.command ? props.command.keybind(entry.command) : entry.accelerator?.windows}
                         disabled={entry.command ? commandDisabled(entry.command) : false}
                         onSelect={() => runEntry(entry)}

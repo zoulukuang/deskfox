@@ -7,9 +7,12 @@ import katex from "katex"
 import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
 // FORK: REQ-098 收紧 del 定界符(只认 ~~)[feat: chat-tilde-del-fix] 2026-08-07
+//   (2026-08-11 sync v1.18.16 复核:marked 18 仅修复部分样例(%区间),纯数字区间 4.80~5.05 /
+//    PE 12~15 仍误判 → 保留本扩展,D5「上游已修」判定不成立)
 import { strictDelExtension } from "./marked-del-strict"
 import { markedCodeSpanBoundary } from "./marked-code-span"
-import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
+import { getSharedHighlighter, ThemeRegistrationResolved } from "@pierre/diffs"
+import { registerOpenCodeTheme } from "./marked-theme-register"
 
 // FORK: 2026-05-08 — GFM 风 heading slug:小写 + 去标点 + 空格转连字符 + 保留中文
 // 与 GitHub 的 anchor 生成规则尽量对齐,让 markdown-test.md 的目录链接 [...](#1-标题层级) 能跳转
@@ -436,7 +439,10 @@ export const OpenCodeTheme = {
   },
 } as unknown as ThemeRegistrationResolved
 
-registerCustomTheme("OpenCode", () => Promise.resolve(OpenCodeTheme))
+// FORK: 2026-08-11 sync v1.18.16 — 上游抽出 marked-theme-register(带幂等守卫);本模块与
+//   worker 侧(pierre/worker)都可能加载,直接 registerCustomTheme 会重复注册刷 console.error,
+//   改走共享守卫入口(主题内容与上游抽出版一致)
+registerOpenCodeTheme()
 
 function renderMathInText(text: string): string {
   let result = text
@@ -608,9 +614,7 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
         },
       },
       katexExtension,
-      // FORK: REQ-098 单波浪号误判删除线 —— 内置 GFM del 定界符是 `~~?`(一或两个 ~),
-      // 同行两个「数字~数字」区间会被闭合成 <del>(4.80~5.05 … 5.20~5.35)。收紧成只认 `~~`。
-      // 实现与陷阱(非匹配必须返 undefined)见 ./marked-del-strict.ts 2026-08-07
+      // FORK: REQ-098 单波浪号误判删除线 — 收紧 del 只认 `~~`(marked 18 未全修,见 import 注)
       strictDelExtension,
       // FORK: GitHub 风 callout — > [!NOTE] / > [!TIP] / > [!IMPORTANT] / > [!WARNING] / > [!CAUTION] 2026-05-05
       markedAlert(),

@@ -91,7 +91,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
 
     setStore("responding", perm.id)
     sdk()
-      .client.permission.respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
+      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         // FORK: 飞书桥接权限跨-instance 优雅降级 2026-07-06

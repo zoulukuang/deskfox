@@ -9,18 +9,10 @@ type SessionStore = {
   path: { directory: string }
 }
 
-function sortSessions(now: number) {
-  const oneMinuteAgo = now - 60 * 1000
-  return (a: Session, b: Session) => {
-    const aUpdated = a.time.updated ?? a.time.created
-    const bUpdated = b.time.updated ?? b.time.created
-    const aRecent = aUpdated > oneMinuteAgo
-    const bRecent = bUpdated > oneMinuteAgo
-    if (aRecent && bRecent) return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-    if (aRecent && !bRecent) return -1
-    if (!aRecent && bRecent) return 1
-    return bUpdated - aUpdated
-  }
+export function compareSessionTime(a: Session, b: Session) {
+  const updated = (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created)
+  if (updated !== 0) return updated
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
 
 const isRootVisibleSession = (session: Session, directory: string) =>
@@ -29,22 +21,23 @@ const isRootVisibleSession = (session: Session, directory: string) =>
 export const roots = (store: SessionStore) =>
   (store.session ?? []).filter((session) => isRootVisibleSession(session, store.path.directory))
 
-export const sortedRootSessions = (store: SessionStore, now: number) => roots(store).sort(sortSessions(now))
+export const sortedRootSessions = (store: SessionStore, _now: number) => roots(store).sort(compareSessionTime)
 
 // FORK-BEGIN: REQ-072 复制项目独立展示 — 无人认领的项目会话归主分节 2026-07-05
 // scope=project 后每个目录 store 都持有全项目会话,分节靠 directory 认领去重;副本目录打开时,
 // 共享会话的 directory 指向原目录(不在任何可见分节)→ 全部被滤掉 = "打开副本看不到会话"。
 // 把可见分节都认领不了的根会话归入主分节,副本/原本双向都能看到共享会话,多工作区分节不重复。
-export const orphanRootSessions = (store: SessionStore, claimedDirs: string[], now: number) => {
+// (2026-08-11 sync v1.18.16:排序随上游 sortSessions→compareSessionTime 时序化)
+export const orphanRootSessions = (store: SessionStore, claimedDirs: string[], _now: number) => {
   const claimed = new Set(claimedDirs.map(pathKey))
   return (store.session ?? [])
     .filter((session) => !session.parentID && !session.time?.archived && !claimed.has(pathKey(session.directory)))
-    .sort(sortSessions(now))
+    .sort(compareSessionTime)
 }
 // FORK-END
 
-export const latestRootSession = (stores: SessionStore[], now: number) =>
-  stores.flatMap(roots).sort(sortSessions(now))[0]
+export const latestRootSession = (stores: SessionStore[], _now: number) =>
+  stores.flatMap(roots).sort(compareSessionTime)[0]
 
 export function hasProjectPermissions<T>(
   request: Record<string, T[] | undefined> | undefined,

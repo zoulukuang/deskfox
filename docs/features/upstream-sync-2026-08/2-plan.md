@@ -95,3 +95,49 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   - **段3 收口数字**:typecheck 33/33;app 单测 854/856(server-session 1 条 = Win 基线纯上游同红;
     observe-element-offset 1 条 = CPU 满载时序 flaky,空载 3/3 绿);session-ui 78 / media-gen 140 /
     feishu 792 全绿;**e2e 117/117 全绿**。
+- 2026-08-11 段4 进行中(merge 550d1ffd24 = v1.18.16),关键决策:
+  - **D5 落槌:REQ-098 strictDel 保留** — 一度依据单测 REPRO 判定 marked 17→18 已修而撤销,
+    e2e 立即打回:18 只修了 %区间样例(0.5%~1.2%),纯数字区间(4.80~5.05 / PE 12~15)仍误判
+    → 恢复 ui/web 扩展全套,REPRO 样例随 18 行为更新,e2e chat-tilde 守卫继续有效。
+    教训:D5 复核必须以 e2e 真渲染为准,单测样例集不充分。
+  - **D3 落地:zh 术语随上游** — 令牌→词元随 i18n 合并自动生效,fork zh/zht 文案无令牌残留,零手工改。
+  - **菜单 i18n 双体系上游化**:上游 nativeT(renderer 语言包经 onNativeTranslations 推主进程)取代
+    fork translateMenuLabel/setMenuLocale 全链路(desktop-menu-i18n.ts/测试/preload/ipc 五处删除);
+    fork 的 rebrandDict 层保证 nativeT 文案品牌自动替换;右键菜单 set_context_menu_language 独立保留。
+  - **导航守卫上游化**:上游 wireNavigationPolicy 与 fork REQ-075 navigation-guard 语义等价
+    (will-navigate 转外链 + window.open deny),取上游、删 fork 版(含测试)。
+  - **abort→interrupt API 更名**随上游,fork 停止失败提示(REQ-049/stuck-status)语义保留重挂。
+  - **附件 blob 化**(dataUrl→BlobReference):composer 两处预览 + REQ-087 历史剥离测试对齐;
+    media-gen 图生图参考图在 submitCreation 异步解 blob 回 base64(buildCreationInput 保持纯函数)。
+  - **ModelSelectorPopover trigger render-prop 化**:fork 保留版 composer 三个调用点手工迁移。
+  - **fork 重资产保留(与段3 同口径)**:home.tsx 单体(上游拆 home/ 模块群未接线)、
+    chat markdown 走 fork 富管线(上游新 markdown.worker 管线文件落地未启用)、
+    prompt-input/file-tabs/layout(五栏)保 fork;session-load 上游 v1/v2 拆分 + REQ-072 scope 注入 V1 路径。
+  - **native markdown parser 随上游撤除**(上游 18.16 删自家 main 端 marked;ui/marked JS 兜底仍在)。
+  - **conditions 决策:保 fork --conditions=browser**(REQ-104 三重守卫)。上游 18.16 切
+    --conditions=solid 实为 server build(createEffect 全 no-op),我们的 effect 类 fork 单测
+    (project-restore)依赖真 effect;代价:server-session 3 条在 browser 条件下红 — 纯上游
+    v1.18.16 同条件同样 3 红(REQ-105 基线,已实测),非合并回归。
+  - **i18n 归一化脚本化**:上游新增 ~40 语言 + parity 严格化(missing=[] + extra 精确等于
+    复数 family×TAG 类目);normalize-i18n.ts 幂等收敛(en 兜底回填 + 越界键删除),parity 5/5 绿。
+  - **Fox Blue 随 OC-2 token 更新重同步**(克隆完整性测试红→绿)。
+  - **Win/browser 基线(纯上游同红)**:server-session 3 条 + desktop draft-store(node:sqlite
+    bun 无内建)1 条。
+  - **e2e 稳定性真 bug(非 flaky 掩盖)**:session-list-ux 两条在并发负载下随机挂
+    ("element was detached from the DOM")。根因:layout.tsx 的 `sortNow` 每分钟 tick 触发侧栏整列
+    重渲染,把打开着的行右键菜单(REQ-096,菜单挂行内)节点掀掉;段4 起上游排序改为时间无关
+    (compareSessionTime,三个 helper 的 now 参数全部弃用)→ 该 tick 已是纯粹无用重渲染源,停掉。
+    产品可感收益:用户真机右键菜单不会再在整分钟边界自己消失。
+  - **MarkedProvider 回挂**:上游 app.tsx 撤了它(其 chat 已 worker 化),fork 富管线 markdown
+    仍 useMarked → 全屏 ErrorBoundary(55 条 e2e 同因)。补回 provider;并把 marked.tsx 的
+    registerCustomTheme 改走上游抽出的幂等入口 registerOpenCodeTheme(消 console 重复注册报错)。
+  - **canReusePendingBlock 回植**(上游删除,fork markdown.tsx 仍用);legacy auth.set 路径补
+    instance.dispose(上游把 dispose 收进 connect.key 兼容层);上游 toast-v2 改类名标识
+    (.toast-v2-region)+ 惰性挂载 → U4 守卫改「触发后恰 1 region + 恰 1 条」,并给 utils/toast
+    加 DEV-only `__deskfoxShowToast` 稳定触发口(v2 下 mod+shift+t 已被上游改绑 reopenClosedTab)。
+  - **侧栏周期性整块重挂(第二个真 bug,e2e 逼出来)**:探针实测侧栏每 ~1.5s 被整块重建一次,
+    打开着的行右键菜单随之被掀掉。根因:`layout.projects.list` 的 enrich 每次都 `{...metadata,...project}`
+    造新对象,任一次 project 查询重取(SSE 重连即触发)都让 `<For each={projects()}>` 判定元素全变。
+    修法:list 按 worktree 记住上次结果、深比较等值即复用旧引用(嵌套 time/icon 用 JSON 值比较,
+    浅比较会被 normalizeProjectInfo 的新对象骗过)。修后 8s 内重建 1 次(原 5 次+)。
+    产品可感收益:右键菜单不再自己消失;侧栏不再周期性无谓重排。
