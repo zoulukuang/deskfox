@@ -1,5 +1,5 @@
 feat-id: upstream-sync-2026-08
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实施计划 + 决策轨迹
@@ -12,8 +12,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 |---|---|---|---|---|
 | 1 | v1.17.8 `8716c4309a`(06-17) | ✅ done | `ea3ea31315` | 时间线重写段,25 冲突,e2e 37/37 |
 | 2 | v1.17.13 `1e73b76ea6`(07-01) | ✅ done | `3faa8a76f4` | markdown→session-ui 搬家,42 冲突,e2e 48/48 |
-| 3 | v1.18.4 `d36a2d8981`(07-20) | pending | - | v2 tokens + provider 对话框段 |
-| 4 | v1.18.16 `550d1ffd24`(08-10) | pending | - | 收尾 + i18n 段 |
+| 3 | v1.18.4 `d36a2d8981`(07-20) | ✅ done | `76c1340c11` | v2 tokens + provider 对话框段,e2e 117/117 |
+| 4 | v1.18.16 `550d1ffd24`(08-10) | ✅ done | `c1909dbb92` | 收尾 + i18n 段,e2e 123/123 |
+| — | **整体验收 + v2 缺口修复** | ✅ done | 见 3-changelog | local 打包 / 冷启动 2×CLEAN / 🔴 两项定制回植 |
 
 ## 决策轨迹(实时追加)
 
@@ -141,3 +142,29 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
     修法:list 按 worktree 记住上次结果、深比较等值即复用旧引用(嵌套 time/icon 用 JSON 值比较,
     浅比较会被 normalizeProjectInfo 的新对象骗过)。修后 8s 内重建 1 次(原 5 次+)。
     产品可感收益:右键菜单不再自己消失;侧栏不再周期性无谓重排。
+- 2026-08-11 **整体验收(spec §六 第二块)+ v2 缺口修复**,关键发现与决策:
+  - **最大发现:v2 默认翻转后,多项 fork 定制在用户实际路径上失效**。根因单一 —— 上游 v2 不是"换皮",
+    是**整套新组件**(`settings-v2/` / `new-session/new-session-view` / `prompt-input-v2`),
+    我们的定制还挂在 legacy 组件上,于是"代码还在、用户点不到"。
+    **为什么段3/段4 e2e 123/123 全绿没抓到**:那些用例绝大多数来自上游、断言的是上游语义;
+    fork 定制的用例又多在 legacy 布局下跑 —— 两边都不覆盖"v2 路径下 fork 定制还在不在"。
+  - **验收手法**:local 档打包 → 真机 CDP 逐项点(不是 mock)。冒烟第一轮 12 项 10 项 SKIP 时
+    **没有当成"通过"**,而是判定探针失效并回头查 v2 DOM —— 这一步是发现整批缺口的起点。
+  - **user 拍板(2026-08-11)**:🔴 两项(创作模式入口 / 飞书设置页)本分支修掉再提 merge;
+    其余 5 项立 REQ-106 独立跟进;「高级」分组沿用原决策**继续隐藏**。
+  - **创作模式回植走"零改上游"**:上游 v2 composer 只暴露 `modelControl` 一个插槽 → 把
+    `MediaCreationControls`(创作档)/ 上游 model 控件(非创作档)+ 常驻 `MediaModeMenu` 一起塞该插槽;
+    agent 控件让位靠 fork 侧 controller 的 `view.agent` 在创作档返回 undefined;
+    send 拦截靠 fork 侧 `view.submit.onSubmit`。**R1 第 1 级达成,0 行上游改动、0 R4 override**。
+  - **提交编排抽成共享 helper**(`prompt-input/creation-submit.ts`,Logic 清单 9 单测):
+    legacy 与 v2 两个 composer 调同一份,杜绝"修了一边漏另一边"再次发生。
+  - **飞书设置页**:v2 对话框加 tab + Content,面板组件直接复用 legacy `SettingsFeishu`
+    (内容与布局无关,不必造 v2 副本);给它加 `data-component="settings-feishu"` 稳定锚点。
+  - **新增守卫 spec** `e2e/regression/v2-fork-customizations.spec.ts`(3 条,专测 v2 路径):
+    飞书 tab 可开 / 创作模式入口可见 / 设置 tab ≥6。**做过反证**:撤掉 `<MediaModeMenu/>` → T2 立即红。
+  - **冷启动脚本同源问题一并修**(OPENCODE-PLAN `c2f8956`):toast 迁 solid-sonner、项目入口改
+    `project-avatar-v2`;修前 `clicked project: False`(不触发 file.list = 抓不到启动期 500 race),
+    修后两次冷启动均 CLEAN 且真点开项目。
+  - **打包踩坑(与既有 memory 互补)**:`bun run build` 的 prebuild 要联网拉 `models.dev/api.json`,
+    **不能清代理**;清代理只适用于 electron-builder 那一步(走 npmmirror)。两步的代理策略相反。
+    另 PS5.1 wrapper 仍会把 native stderr 误判成 `NativeCommandError` 中断 → 改 Bash 直调。

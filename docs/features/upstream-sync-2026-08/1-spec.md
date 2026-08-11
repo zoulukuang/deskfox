@@ -1,5 +1,5 @@
 feat-id: upstream-sync-2026-08
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 上游同步 2026-08 — be227503af (v1.17.4) → 550d1ffd24 (v1.18.16)
