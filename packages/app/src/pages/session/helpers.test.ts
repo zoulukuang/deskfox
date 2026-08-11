@@ -170,7 +170,7 @@ describe("createSessionTabs", () => {
     createRoot((dispose) => {
       const [state] = createStore({
         active: undefined as string | undefined,
-        all: ["file://src/a.ts", "file://<chat selection>", "<chat selection>"],
+        all: ["file://src/a.ts", "file://<chat selection>", "<chat selection>", "file://%3Cchat%20selection%3E"],
       })
       const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
       const result = createSessionTabs({

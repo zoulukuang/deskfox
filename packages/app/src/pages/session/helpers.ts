@@ -25,6 +25,17 @@ type TabsInput = {
 
 export const getSessionKey = (dir: string | undefined, id: string | undefined) => `${dir ?? ""}${id ? `/${id}` : ""}`
 
+/** FORK: 判断一个 tab 是不是聊天引用的伪路径(tab 里可能是 URL 编码形式)。
+ *  [feat: 聊天选区-卡片化-换行] 2026-08-12 */
+export const isChatSelectionTab = (tab: string) => {
+  if (tab.includes(CHAT_SELECTION_PATH)) return true
+  try {
+    return decodeURIComponent(tab).includes(CHAT_SELECTION_PATH)
+  } catch {
+    return false
+  }
+}
+
 export function shouldShowFileTree(input: { visible: boolean; opened: boolean }) {
   return input.opened && input.visible
 }
@@ -50,8 +61,10 @@ export const createSessionTabs = (input: TabsInput) => {
           if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
           // FORK: 聊天引用的伪路径不是真实文件,任何情况下都不该成为预览 tab(否则是一张空白页)。
           //   入口已在 openComment 拦住,这里再兜一道 —— 让**已经存进项目 tab 的存量**也自动消失。
+          //   ⚠️ tab 里存的是 URL 编码形式(file://%3Cchat%20selection%3E),必须解码后再比,
+          //      直接 includes 原文匹配不上(2026-08-12 真机实测)。
           //   [feat: 聊天选区-卡片化-换行] 2026-08-12
-          if (tab.includes(CHAT_SELECTION_PATH)) return []
+          if (isChatSelectionTab(tab)) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
           if (seen.has(value)) return []
           seen.add(value)
