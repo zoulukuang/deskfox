@@ -17,29 +17,42 @@
 
 **主题**:与 Win 2026.9.1 同批次的小成本确定性收口批(REQ-098/019/099)—— 聊天单波浪号误删除线修复 + OAuth 回调端口只绑本机 + 托盘健康状态。补丁版(2026.9.0 → 2026.9.1)。
 
-**⚠️ 本次为分批发布:先发 arm64,x64 后补。**
+**本次为分批发布(arm64 先发,x64 次日 05:19 补齐),现双 arch 已全部上线。**
 
-- **arm64**:全套完成 —— 深签 + `.app` 公证 staple + `.dmg` 公证 staple,门禁三项(stapler validate / spctl accepted / source=Notarized Developer ID)全过。
-- **x64**:已 build 完成、深签完成、**`.app` 公证已 Accepted 并 staple**;**卡在外层 `.dmg` 公证** —— 两笔提交(17:42 / 19:59)在 Apple 侧滞留 `In Progress` 超 4 小时(Apple 状态页显示 Notary Service 正常,属队列异常滞留)。产物暂存 `packages/desktop/dist-deskfox/_pending-x64/`,拿到票后 `stapler staple` 即可补挂,**无需重新 build 或重签**。
+- **arm64**:全套完成 —— 深签 + `.app` 公证 staple + `.dmg` 公证 staple,门禁三项(stapler validate / spctl accepted / source=Notarized Developer ID)全过。08-11 23:00 前完成全渠道。
+- **x64**:同样全套完成,但 `.dmg` 公证撞上 **Apple 队列异常滞留**,08-12 05:19 才补齐。
 
-**发布范围(本批)**:
-- GitHub Release `ship-mac-prod-2026.9.1`(`--latest`,arm64 dmg 一个 asset)
-- 阿里云 CDN:`https://dl.clawtray.com/DeskFox-2026.9.1-mac-arm64.dmg`
-- Gitee Release(元数据 + CDN 链接)
-
-**刻意推迟到 x64 就绪时一起做的两步**(避免半截状态伤 Intel 用户):
-- **updater manifest(A 链路)**:若此刻发 arm64-only 的 `latest-mac.yml`,Intel 机器在 `MacUpdater.filterFilesForArch` 里会把所有含 `arm64` 的条目过滤成空数组 → `findFile` 返回 null → 抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`(已读 electron-updater 6.8.9 源码确认)。**不会误装 arm64 包到 Intel 机(无破坏性)**,但会让 Intel 用户反复撞更新失败。
-- **官网 deskfox.ai**:首页 Mac 是「Apple 芯片 / Intel 芯片」两个并列按钮,现都指向 2026.9.0(一致可用)。半更新会让 Intel 按钮 404。
+**⚠️ x64 公证滞留事件 + 处置(可复用)**:
+- 走**代理**提交的两笔(08-11 17:42 / 19:59)在 Apple 侧**永久卡在 `In Progress`**(截至 08-12 05:20 分别已 11.6h / 9.3h,至今未终结),`notarytool log` 取不到(未走完不产日志),Apple 系统状态页全程显示 Notary Service 正常,账号无协议类报错 —— **无任何可诊断的失败原因,纯滞留**。
+- 08-12 05:14 **摘掉代理直连**重新提交第三笔 → **5 分钟即 Accepted**。
+- **结论/SOP 改进**:① 公证提交前 `env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY ...` 直连(代理下同一文件上传 7 分钟拿不到提交 ID,直连秒回 `Successfully uploaded`);② 提交超过约 1 小时仍 `In Progress` 即可判定滞留,**直接重新提交**比继续等有效(公证票按内容哈希绑定,任意一笔 Accepted 都能 `stapler staple`,重复提交无副作用);③ **不要给 `notarytool` 的输出套 grep 过滤** —— 本次 arm64 dmg 那笔因加了过滤导致 `--wait` 提前退出、staple 无票可贴(误判成公证失败)。
 
 **产物**:
 - arm64 dmg `DeskFox-2026.9.1-mac-arm64.dmg` — 325,433,580 bytes
-  sha256 `7fb53b3efd6cc9a356612f9674517c678328aff69ebd6bbebb217730471eeab2`(staple 后实算)
+  sha256 `7fb53b3efd6cc9a356612f9674517c678328aff69ebd6bbebb217730471eeab2`
+- x64 dmg `DeskFox-2026.9.1-mac-x64.dmg` — 341,520,944 bytes
+  sha256 `6a8fba5f299562c8d210b08c6cd5280da4e214503e32c2fd3463927204f418a9`
+(均为 staple 后实算)
+
+**发布范围(最终,双 arch 齐)**:
+- GitHub Release `ship-mac-prod-2026.9.1`(`--latest`,arm64 + x64 两个 dmg asset)
+- 阿里云 CDN:`dl.clawtray.com/DeskFox-2026.9.1-mac-{arm64,x64}.dmg`
+- Gitee Release id 788743(元数据 + 双 arch 下载链接)
+- updater A 链路:`latest-mac.yml` 单本双 arch(4 条 `files[]`),线上 version=2026.9.1 硬校验通过,4 条资产 URL 实测 206
+- 官网 deskfox.ai:6 条下载链接(Win/Mac-arm64/Mac-x64 × GitHub/国内)全部 2026.9.1 且实测可下载
+
+**分批期间的取舍(已随 x64 补齐而解除)**:
+- arm64 发布后先只发了 **arm64-only manifest**。原本计划连 manifest 一起压住,但实测发现 **`allowDowngrade = true`**(`packages/desktop/src/main/updater.ts:24`)会让装好的 2026.9.1 被线上旧 manifest **静默降级回 2026.9.0**(真机复现:装好启动 ~15s 后自动换回旧 bundle,`~/Library/Caches/deskfox-updater/pending/` 留有旧包)—— 即「不发 manifest」不是中性动作,会导致新版根本留不住、无法真机验证。故改为先发 arm64-only。
+- 该窗口内 Intel 用户检查更新会撞 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`(`MacUpdater.filterFilesForArch` 把含 `arm64` 的条目过滤成空数组 → `findFile` 返 null;已读 electron-updater 6.8.9 源码确认)。**不会误装 arm64 包到 Intel 机,无破坏性**,x64 补齐后即消失。
+- 官网则全程压到双 arch 齐才更新,Intel 按钮未出现过 404。
 
 **发版前 code-review**(4 finder,守 ≤5 预算):**无崩溃级**。逐行/删除行为/跨文件/清理四合一各一;marked 覆盖经 1200 个 md 对拍(零多划)+ 6 万条 fuzz;OAuth 改动经实测确认 localhost 双栈回落 IPv4,登录链路不回归。
 
 **本次踩到并已定位的问题**:
 - **`build-deskfox-electron.sh:63-64` arch→产物目录映射与 electron-builder 实际行为相反**(脚本:arm64→`mac`/x64→`mac-x64`;实际:arm64→`mac-arm64`/x64→`mac`)。后果:x64 因 `ls` 失败被 `set -euo pipefail` 中断 → `EXIT=1`,post-build 的 LibreOffice 完整性守卫一行没跑;arm64 则是**假绿** —— 去 `mac/` 找到的是上次 x64 构建的残留包,验的不是本次产物。本次已**手工补验双 arch**(soffice 可执行 + presets 非空 + 架构匹配,全过)。**修复待发版后单开 fix 分支处理**。
 - **CDN 证书**:`dl.clawtray.com` 证书原已于 2026-07-14 过期,**本日 16:54 已完成续期**(新证书有效期至 2026-11-09),国内链路恢复走 CDN,不再需要 `DESKFOX_ASSET_BASE` 切 OSS 直链绕行。
+- **官网 `publish.sh` 只 patch GitHub 侧链接,国内链接静默不更新**:本次实测,`publish.sh` 跑完日志只报 `patched Win/GitHub` / `Mac/GitHub` / `MacX64/GitHub`,**三条国内链接一条没打上**,线上 Mac 国内下载仍指向 2026.9.0(国内用户会下到旧版,且无任何报错)。根因:2026.9.0 证书过期时把国内链接改成了 OSS 直链形态(`downloadbot.oss-...`),而脚本替换规则匹配的是 `dl.clawtray.com/...`,对不上即静默跳过。本次手工改 `index.html` 两行 + `publish.sh --force` 重部署修正(site commit `9c75eb9`)。**待办**:修 `publish.sh` 的国内链接匹配规则,使其对两种主机形态都生效,否则每次发版都要人工兜底。
+- **`publish.sh` 版本幂等会吞掉链接修正**:版本号已是最新时脚本直接 `nothing to do` 退出、**跳过部署**,导致手工改的 index.html 传不上去。修链接需带 `--force`。
 
 ---
 ## [Windows] 2026.9.1 - 2026-08-10 23:16
