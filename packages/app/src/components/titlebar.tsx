@@ -519,10 +519,13 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                         </Button>
                       </TooltipKeybind>
                     </Show>
-                    <ChannelIndicator />
+                    {/* FORK: 徽标跟终端图标同组、紧挨左侧工具组 portal(fork 位置);
+                        debugTools 从上游那处并过来 —— 段3 merge 时上游在外层又加了一个
+                        ChannelIndicator,与本行重复 → 经典布局左上出现两个 LOCAL/DEV 徽标。
+                        [bug-repro: 标题栏双徽标] [feat: keep-legacy-layout] 2026-08-11 */}
+                    <ChannelIndicator debugTools={props.debugTools} />
                   </div>
                 </div>
-                <ChannelIndicator debugTools={props.debugTools} />
               </div>
             </div>
 

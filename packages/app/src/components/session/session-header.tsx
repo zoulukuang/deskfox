@@ -290,9 +290,11 @@ export function SessionHeader() {
   //   · v2 → 仍挂右:上游 v2 自 v1.17.19 起 isV2 分支恒真,挂左会让上游 review/subagent 族 e2e
   //     在 #opencode-titlebar-right 找不到 Toggle review(段3 撤销本定制的原因)。
   //   两侧各自成立,不再二选一。
+  //   · 左 portal 只在桌面标题栏里存在(web 端标题栏没有它)→ 取不到时回落 right,
+  //     否则浏览器/web 端工具组会整组消失。
   const rightMount = useTitlebarRightMount()
   const leftMount = useTitlebarLeftMount()
-  const toolsMount = () => (isV2() ? rightMount() : leftMount())
+  const toolsMount = () => (isV2() ? rightMount() : (leftMount() ?? rightMount()))
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
   })
