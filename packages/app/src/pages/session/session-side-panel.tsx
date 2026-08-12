@@ -392,6 +392,13 @@ export function SessionSidePanel(props: {
                 classList={{
                   "bg-v2-background-bg-base": settings.general.newLayoutDesigns(),
                   "bg-background-base": !settings.general.newLayoutDesigns(),
+                  // FORK: 预览区最小宽度兜底 [feat: narrow-window-auto-collapse] 2026-08-12
+                  //   [bug-repro: 窄窗口下预览区被挤到约 80px,文字竖排成一列完全不可读]
+                  //   主方案是窄窗口自动收起右侧项目侧栏(见 session.tsx);这里再兜一道 ——
+                  //   万一还有别的组合把空间挤没,宁可让预览区溢出被裁掉右侧一点,
+                  //   也不能压到不可读(user 明确:宽度不够该省略右侧)。
+                  //   v2 维持上游原样。
+                  "min-w-[320px]": !settings.general.newLayoutDesigns(),
                 }}
               >
                 <div

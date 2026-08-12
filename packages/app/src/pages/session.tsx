@@ -81,6 +81,8 @@ import {
 } from "@/pages/session/helpers"
 // FORK: REQ-075 聊天 md 内链拦截 [feat: batch-port-edit-mdlink] 2026-07-07
 import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
+// FORK: 窄窗口自动收起右侧项目侧栏 [feat: narrow-window-auto-collapse] 2026-08-12
+import { decideSidebarAutoCollapse } from "@/pages/session/auto-collapse-sidebar"
 import { invoke } from "@/utils/native"
 import { MessageTimeline } from "@/pages/session/timeline/message-timeline"
 import { createTimelineModel } from "@/pages/session/timeline/model"
@@ -490,6 +492,44 @@ export default function Page() {
     () => panelRow,
     ({ width }) => setPanelRowWidth(width),
   )
+  // FORK-BEGIN: 窄窗口自动收起右侧项目侧栏 [feat: narrow-window-auto-collapse] 2026-08-12
+  //   [bug-repro: 1280 宽窗口下五栏容器溢出 40px;再打开文件预览时预览区被挤到约 80px、
+  //    文字竖排成一列完全不可读。user 2026-08-12 真机截图反馈]
+  //   经典布局的两个子项(聊天区 / 侧面板)都是固定宽度,空间不足时必然溢出。收右侧「项目/会话导航」
+  //   侧栏能一次性释放数百 px(实测 445px)把溢出消掉,且它是三者中优先级最低的;
+  //   不动聊天区宽度策略 —— 那是用户可拖拽且有记忆的,改伸缩规则会破坏手感。
+  //   判定(含防抖动迟滞)在 ./session/auto-collapse-sidebar.ts,已单测。
+  const [sidebarAutoCollapsed, setSidebarAutoCollapsed] = createSignal(false)
+  createEffect(() => {
+    panelRowWidth() // 依赖宽度变化重算(ResizeObserver 更新时 DOM 已就绪,scrollWidth 可信)
+    const sidebarOpen = layout.sidebar.opened()
+    if (settings.general.newLayoutDesigns()) return // v2 维持上游行为,不介入
+    if (!isDesktop()) return
+    const el = panelRow
+    if (!el) return
+
+    // 用户在窄窗口下手动把侧栏开了回来 → 交还控制权,不再跟他抢
+    if (sidebarOpen && sidebarAutoCollapsed()) {
+      setSidebarAutoCollapsed(false)
+      return
+    }
+
+    const action = decideSidebarAutoCollapse({
+      overflowPx: el.scrollWidth - el.clientWidth,
+      sidebarOpen,
+      sidebarWidth: layout.sidebar.width(),
+      autoCollapsed: sidebarAutoCollapsed(),
+    })
+    if (action === "collapse") {
+      layout.sidebar.close()
+      setSidebarAutoCollapsed(true)
+    } else if (action === "restore") {
+      layout.sidebar.open()
+      setSidebarAutoCollapsed(false)
+    }
+  })
+  // FORK-END
+
   const splitReview = createMemo(
     () => (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) && layout.review.diffStyle() === "split",
   )
