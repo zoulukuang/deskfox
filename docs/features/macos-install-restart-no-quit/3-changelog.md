@@ -35,9 +35,37 @@ Windows 的 NSIS 升级器是独立进程接管替换 + 强退,不经这套 clos
 - 新增 `updater-backend.test.ts` 2 pass(顺序断言 + 透传断言)
 - 既有 `updater-controller.test.ts` 6 pass、desktop `src/main/` 全量 71 pass、`@opencode-ai/desktop` typecheck 通过 —— 无连带破坏
 
-## 待验证(真机)
+## 真机验证 ✅(2026-08-11,mac prod 2026.9.1 发版期间达成)
 
-单测覆盖纯逻辑顺序;**Squirrel.Mac 实际替换 bundle + 重启**无法 CDP 自测,需真机端到端:装一个低版本 + 升级源指向更高版本,点「安装并重启」确认软件真退出并升级重启。建议下次发 2026.8.2 时验。
+原计划:装一个低版本 + 升级源指向更高版本,点「安装并重启」确认软件真退出并升级重启。
+**2026-08-11 自然达成并通过** —— 本机 2026.9.0 经应用内升级到 2026.9.1,Squirrel.Mac 完成换包与重启。
+
+**证据**(`~/Library/Caches/ai.deskfox.app.ShipIt/ShipIt_stderr.log`,系统会清理故此处摘录留档):
+
+```
+22:53      下载 DeskFox-2026.9.1-mac-arm64.zip(337,410,153 bytes)→ deskfox-updater/pending/
+22:54:07   ShipIt 换 bundle(targetBundleURL=/Applications/DeskFox.app)
+22:54:08   Installation completed successfully
+22:54:12   Successfully launched application at file:///Applications/DeskFox.app/
+22:54:12   ShipIt status 0
+```
+
+`ShipItState.plist` 记录 `launchAfterInstallation = true` / `bundleIdentifier = ai.deskfox.app`。
+
+**为什么这能证明本修复有效**:本 bug 的形态是「app 不真退出 → Squirrel 拿不到替换 bundle 的机会 → 升级静默失败」。
+日志出现 `Installation completed successfully` + `status 0` + 成功重启,说明**进程确实真退出了**,`withQuitIntent`
+在 `quitAndInstall()` 前标记退出意图、绕开「关闭到托盘」拦截的路径按预期工作。
+
+**附带确认(同样重要)**:升级后 `xcrun stapler validate /Applications/DeskFox.app` 仍 `The validate action worked!`
+—— Squirrel 换包**没有破坏公证票**,用户升级后不会撞 Gatekeeper。
+
+**日志噪音辨识**(免得后人误判):该日志累计 32 行命中 error/fail 关键词,属于本次升级的只有 2 行且均非故障 ——
+① `Couldn't remove owned bundle ... The file doesn't exist`(清理临时目录时它已不存在,发生在"安装成功"前 0.5 秒的收尾阶段)
+② `ERROR: Unrecognized attribute string flag '?' ... for property debugDescription`(Objective-C runtime 固有噪音,与升级无关)。
+其余 30 行分布在 2026-07-04 ~ 2026-08-07 的历史记录中。
+
+⚠️ 仍未覆盖的路径:本次是**应用内「检查更新 → 下载 → 安装并重启」**全流程;`autoInstallOnAppQuit` 路径(退出时静默安装)
+当前配置为 `false`,未涉及。
 
 ## 回退方法
 
