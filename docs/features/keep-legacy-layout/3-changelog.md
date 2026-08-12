@@ -126,3 +126,32 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 - REQ-106(v2 路径下 5 项定制回植)优先级下降 —— v2 不再是默认,不阻断可用性,继续留 backlog;
 - 1-spec 为**事后追认**(见该文档顶部说明),规范要求的 Large 改前审签本次未走。
+
+### 7.1 flaky 测试(2026-08-12 转 Mac 接力时发现,R5 计时起点)
+
+`packages/app/src/pages/session/timeline/observe-element-offset.test.ts` 的
+`reports a divergent native offset once and ignores equal offsets and unrelated mutations`
+—— **低频时序 flaky**,取证:
+
+| 跑法 | 结果 |
+|---|---|
+| 单文件单独跑 ×5 | 7 pass / 0 fail(全绿) |
+| 全量 `bun run test` ×2 | 959 pass / 3 fail,该条**未复现** |
+| pre-push 闸内全量(typecheck 刚跑完 + fs.watcher 在刷日志) | 复现 1 次,`expect(calls).toEqual([[0,false]])` 收到 `[]` |
+
+推断:该用例依赖 `await frames(3)` 等 rAF/timer 时序,高 CPU 争抢下回调未在预期帧内落地。
+**按 R5 需 48 小时内修或移除**(计时自 2026-08-12);未修前它会随机把 `pre-push` 闸染红。
+
+### 7.2 pre-push 闸的文档漂移(待单独修正)
+
+`CLAUDE.md` 验证约定段写「`pre-push` 在 push 含 main 时跑 fork 包单元测试」,
+但 `.husky/pre-push` 实际逻辑是**无条件跑**(typecheck + app / media-gen / adapter-feishu-lark 三包单测),
+不区分目标分支。本次推 `sync/` 分支即被拦。规则文本与机器实现不一致,建议单独一笔对齐
+(改文档向实现看齐,或给 hook 补分支判断 —— 需 user 定方向,本次不动)。
+
+### 7.3 本次 Win → Mac 交接时的 push 记录
+
+本分支两笔 docs/chore commit 推 origin 时,`pre-push` 被上述 3 条**已知 Win 基线红**
+(`src/context/server-session.test.ts`,sync 阶段即存在并记录在案)拦下。
+经 user 明确批准以 `--no-verify` 跳闸推送 —— 理由:三条红非本次引入、本次两笔只动
+`docs/` 与 `.gitignore`(零代码改动),闸要防的代码回归风险不存在。**属一次性授权,不构成惯例。**
