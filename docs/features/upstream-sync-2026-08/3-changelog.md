@@ -189,3 +189,72 @@ Mac 端 128/128 用 **1.8 分钟**,同样 4 workers 一次全绿、无 flake 重
   Win 端已逐项 CDP 实测通过;Mac 端(尤其托盘 / Dock / 菜单 native 层)按「真桌面 QA ≠ CDP 自测」仍需单独验。
 - `bun.lock` 在本机 `bun install` 后会被写入 npmmirror 镜像 URL(3416 行噪音差异),**已还原、未入 commit**;
   双端协作时注意别把它带进去。
+
+### 7.5 模块级一致性比对(user 2026-08-12 要求)
+
+> **问题意识**:e2e 全绿 ≠ 功能一致。本 changelog §三 已记过这个教训 ——「e2e 123/123 全绿没抓到,
+> 因为用例多来自上游、断言上游语义」。故按 D-4 的三层机器比对思路**以当前 HEAD 重跑一遍**,
+> 基准仍取合上游之前的 DeskFox(`e77443750e`)。
+
+#### 第 1 层 — FORK marker 文件级 diff
+
+先排除噪音:`FORK-i18n-backfill`(段4 上游 i18n 全球化时 fork 补的 en 兜底)在 17 种语言文件里
+命中上万次,与功能无关。按真 marker 格式(`FORK:` / `FORK-BEGIN:` / `FORK-END`)统计:
+基准 **1230 处 / 261 文件** → HEAD **1283 处 / 272 文件**。
+
+其中 **18 个文件丢掉了全部 marker**,逐个判定(11 个是文件被上游删除,7 个是文件仍在但 marker 没了):
+
+| 文件 | 判定 | 依据 |
+|---|---|---|
+| `desktop/src/main/menu.ts`(基准 8 处) | **非缺口** | 段4 菜单上游化,应用菜单 i18n 由上游 `DESKTOP_NATIVE_*` 方案接管;fork 另起 `native-menu-i18n` 桥补上上游没覆盖的**右键菜单**那半 |
+| `app/src/components/windows-app-menu.tsx`(3 处) | **非缺口** | 品牌从 `BRAND = rebrandValue("OpenCode")` 常量改走 i18n key + `rebrandDict` 出口替换,**覆盖面反而更广**(见下方实证) |
+| `core/src/v1/session.ts`(1 处) | **非缺口** | 上游拆 schema 包,定制随之迁到 `packages/schema/src/v1/session.ts:246`,marker 与注释都跟着搬了;`core/test/v1-session-legacy-data.test.ts` 老数据测试 2/2 绿 |
+| `app/src/components/help-button.tsx`(1 处) | **有意跟随上游** | 原 fork 因上游内容是 Lorem ipsum 占位而隐藏;v1.18.4 上游已填真实内容(Tabs 介绍视频/图文),故撤隐藏 |
+| `app/src/context/prompt.tsx`(2 处) | **非缺口** | `commentOrigin: "review"\|"file"\|"quote"` 与 `kind: "chat"\|"file"` 类型定义搬到 `prompt-input*.tsx` / `comment-note.ts` / `dom-provider.ts`,功能完整 |
+| `app/src/components/dialog-edit-project.tsx`(2 处) | **非缺口** | 逻辑重构进 model,`iconOverride` 仍在 |
+| `app/src/context/file/path.ts`(1 处) | **非缺口(且 Win 专属)** | 上游自己做了 backslash 归一;该定制原本只解 Windows 路径问题,对 Mac 无影响 |
+| 其余 11 个(`ui/src/components/markdown*` / `message-part*` / `file-media.tsx` / `tabs-dedup.ts` / `message-timeline.tsx` / `dialog-select-provider.tsx` 等) | **文件被上游删除** | 段2 markdown→session-ui 搬家、段3 组件重构;D-5 已逐条核实为有意撤销/重构合并 |
+
+**品牌链路实证**(没有只读代码下结论,直接跑 `rebrandDict` 打印实际输出):
+`DESKTOP_NATIVE_ENGLISH` 里 9 条带 "OpenCode" 的值,经 rebrand 后 —— 6 条正确变成 DeskFox
+(`desktop.menu.app` = "DeskFox"、`desktop.menu.ariaLabel` = "DeskFox menu"、
+`desktop.recovery.loadFailed` = "DeskFox failed to load" 等),3 条 `desktop.wsl.*` 保留 "OpenCode",
+符合 `rebrand.ts` 的明确豁免(WSL 场景里 OpenCode 指真实 `opencode` CLI 二进制名)。
+接线确认在 `language.tsx:49/55` 的 dict flatten 出口,`en.ts` 通过 `...DESKTOP_NATIVE_ENGLISH`
+spread 覆盖全部 90 个 native key,故原生菜单 bundle 的 `?? DESKTOP_NATIVE_ENGLISH[key]` 兜底分支
+不会被触发、不存在未替换品牌串外泄路径。
+
+> ⚠️ 排查中的一次**自查纠错**:初版脚本按字面 key 统计,报 `en.ts` 覆盖 0/90、疑似品牌大面积泄漏。
+> 复核发现 `en.ts` 是 spread 引入而非字面 key,是脚本误报。**结论改为无泄漏,并改用实跑取证代替静态读码。**
+
+#### 第 2 层 — 用户可触达入口 diff(零丢失)
+
+| 维度 | 基准 | HEAD | 丢失 | 说明 |
+|---|---|---|---|---|
+| 快捷键绑定 | 34 | 37 | **0** | `mod+t` → `mod+t,mod+n`(加别名非丢失);新增 3 个为上游新功能 |
+| 命令面板条目(`command.*` i18n key) | 82 | 86 | **0** | 新增 4 个:导出日志 / 导出会话 / 重开已关闭 tab |
+| 菜单与右键菜单文案 key | 30 | 31 | **0** | 新增 1 个:`context.export.session` |
+| tab 右键菜单动作 handler | 3 | 3 | **0** | D-4 修复后保持 |
+
+#### 第 3 层 — macOS 专属定制清单(静态全在)
+
+Mac 平台层是 Win 端**验不了**的部分,逐条确认 FORK marker 仍在:
+
+| # | 定制 | 落点 |
+|---|---|---|
+| 1 | HTML 预览右键加聊天(contextmenu 桥接注入) | `main/deskfox/local-asset.ts:141` |
+| 2 | 托盘 template image(随系统菜单栏明暗反色) | `main/deskfox/tray.ts:87` |
+| 3 | 外置/网络盘挂载根探测(REQ-070) | `main/fs-probe.ts:59` + 测试 |
+| 4 | Dock 图标点击重现主窗口 | `main/index.ts:262` |
+| 5 | 关闭到托盘 backstop | `main/index.ts:284` |
+| 6 | 防休眠开关持久化 + 启动恢复 | `main/index.ts:359` + `store-keys.ts:7` |
+| 7 | 「安装并重启」绕开托盘拦截 | `main/updater.ts:5/46` |
+
+丢失的 `desktop-menu-i18n.ts` 及其测试 = 上表第 1 行 `menu.ts` 那套 fork 菜单 i18n 的实现本体,
+已确认被上游方案取代(有意撤销)。
+
+#### 结论
+
+**代码层:零缺口。** 三层比对未发现任何"定制被上游 merge 静默冲掉"的情况;
+所有 marker 消失点都能归到「随上游重构迁移」「有意撤销跟随上游」「Win 专属不影响 Mac」三类之一,
+且逐条有实证或在案决策(D-5)支撑。
