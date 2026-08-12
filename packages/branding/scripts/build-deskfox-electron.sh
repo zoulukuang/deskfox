@@ -58,10 +58,19 @@ if [[ "$ENV" != "dev" && "$ENV" != "beta" && "$ENV" != "prod" && "$ENV" != "loca
 fi
 
 # arch 归一化 + 派生 LO bundle 目录 / electron-builder 产物目录(REQ-081):
-#   arm64 → LO macos/、产物 dist-deskfox/mac/;x64 → LO macos-x64/、产物 dist-deskfox/mac-x64/。
+#   arm64 → LO macos/、产物 dist-deskfox/mac-arm64/;x64 → LO macos-x64/、产物 dist-deskfox/mac/。
+#
+# 🔴 产物目录名不是我们定的,是 electron-builder 的规则,别凭直觉写(2026-08-12 修:原先两者写反了):
+#   platformPackager.js:  appOutDir = "mac" + getArchSuffix(arch, defaultArch)
+#   builder-util/arch.js: getArchSuffix = (arch === defaultArchFromString(defaultArch)) ? "" : "-" + Arch[arch]
+#                         defaultArchFromString(undefined) === Arch.x64
+#   我们的 electron-builder.deskfox.config.ts 没设 defaultArch → 默认 x64 →
+#     x64   得空后缀 → dist-deskfox/mac
+#     arm64 得 -arm64 → dist-deskfox/mac-arm64
+#   若将来在 config 里显式设了 mac.defaultArch,这里要跟着改(或改用下面 5.5 的按架构探测)。
 case "$ARCH" in
-    arm64|aarch64) ARCH="arm64"; LO_SUBDIR="macos"; MAC_APP_DIR="mac" ;;
-    x64|x86_64)    ARCH="x64";   LO_SUBDIR="macos-x64"; MAC_APP_DIR="mac-x64" ;;
+    arm64|aarch64) ARCH="arm64"; LO_SUBDIR="macos";     MAC_APP_DIR="mac-arm64" ;;
+    x64|x86_64)    ARCH="x64";   LO_SUBDIR="macos-x64"; MAC_APP_DIR="mac" ;;
     *) echo "[deskfox] ❌ --arch 须 arm64|x64(得 $ARCH)" >&2; exit 1 ;;
 esac
 echo "[deskfox] target arch=$ARCH  (LO bundle: libreoffice-bundle/$LO_SUBDIR)"
@@ -276,8 +285,42 @@ echo "[deskfox] electron-builder ${EB_ARGS[*]}…"
 # [feat: electron-replatform-macos] 对齐 main §2.4。LO 源健康但仍可能因 config/打包意外没注入 .app。
 # 注:此处 soffice 尚未 Developer ID 签名 —— 嵌套 bundle 签名是阶段2(当前 config identity=null 出未签名包),
 #     故只做结构性存在检查;冷启动健康由 prepare-lo-bundle 的 smoke 闸已保证。
+#
+# 🔴 定位 + 架构断言(2026-08-12 重写,起因见下)。原实现只 `ls $MAC_APP_DIR/*.app`,而 MAC_APP_DIR
+#   当时写反了,后果是双向的:
+#     x64  → mac-x64/ 不存在 → ls 失败 → set -euo pipefail 静默终止整个脚本(EXIT=1,且本段一行不打印)
+#     arm64→ 落到 mac/,恰好是上一次 x64 构建的残留包 → **验的不是本次产物,却报绿**(假绿更危险)
+#   现在:仍只认规范目录 $MAC_APP_DIR(不做模糊扫描 —— dist-deskfox 下会有 mac-arm64-restored/ 这类
+#   人工残留目录,且 glob 排序里 '-'(0x2D) < '/'(0x2F) 会让 mac-arm64-restored/ 排在 mac-arm64/ 前面,
+#   扫描反而更容易撞上陈旧包),但**强制断言主可执行架构 == 本次目标架构**,把"验错对象"变成硬失败。
+#   ⚠️ lipo 的架构名与 electron-builder 不同:x64 → x86_64;arm64 → arm64。别直接拿 $ARCH 比。
 if [[ -d "$LO_BUNDLE_APP" ]]; then
-    APP_PATH="$(ls -d "$DESKTOP/dist-deskfox/$MAC_APP_DIR"/*.app 2>/dev/null | head -1)"
+    case "$ARCH" in
+        x64)   LIPO_ARCH="x86_64" ;;
+        arm64) LIPO_ARCH="arm64" ;;
+    esac
+    APP_DIR_ABS="$DESKTOP/dist-deskfox/$MAC_APP_DIR"
+    APP_PATH="$(ls -d "$APP_DIR_ABS"/*.app 2>/dev/null | head -1 || true)"
+    if [[ -z "$APP_PATH" ]]; then
+        echo "[deskfox] ❌ post-build verify: 规范产物目录下没有 .app: $APP_DIR_ABS" >&2
+        echo "[deskfox]   若 electron-builder 改了产物目录命名规则,同步更新本脚本顶部的 MAC_APP_DIR 映射。" >&2
+        exit 1
+    fi
+    APP_EXE="$APP_PATH/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist" 2>/dev/null)"
+    APP_ARCHS="$(lipo -archs "$APP_EXE" 2>/dev/null || echo '')"
+    if ! echo "$APP_ARCHS" | tr ' ' '\n' | grep -qx "$LIPO_ARCH"; then
+        echo "[deskfox] ❌ post-build verify: 产物架构与目标不符 — 很可能验到了上次构建的残留包" >&2
+        echo "[deskfox]   目录=$APP_DIR_ABS  期望=$LIPO_ARCH  实得=${APP_ARCHS:-(读不到)}" >&2
+        exit 1
+    fi
+    echo "[deskfox] post-build verify: 目标 .app = $APP_PATH (主可执行 $LIPO_ARCH ✓)"
+    # LO 架构必须与主程序一致 —— x64 包里塞 arm64 的 soffice 会让 Intel 用户 office 转换直接失败。
+    VERIFY_LO_EXE="$APP_PATH/Contents/Resources/libreoffice/Contents/MacOS/soffice"
+    if [[ -x "$VERIFY_LO_EXE" ]] && ! lipo -archs "$VERIFY_LO_EXE" 2>/dev/null | tr ' ' '\n' | grep -qx "$LIPO_ARCH"; then
+        echo "[deskfox] ❌ post-build verify: 内置 LibreOffice 架构与目标不符" >&2
+        echo "[deskfox]   期望 $LIPO_ARCH,实得 $(lipo -archs "$VERIFY_LO_EXE" 2>/dev/null)。LO bundle 源目录(macos / macos-x64)可能选错。" >&2
+        exit 1
+    fi
     if [[ -n "$APP_PATH" ]]; then
         LO_DST="$APP_PATH/Contents/Resources/libreoffice"
         VERIFY_SOFFICE="$LO_DST/Contents/MacOS/soffice"
@@ -294,7 +337,7 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
             echo "[deskfox]   presets 是 office 转换硬依赖,源健康但没进最终包 → office 功能在用户机静默失效。" >&2
             exit 1
         fi
-        echo "[deskfox] post-build verify: 最终 .app 含可执行 soffice + 非空 presets ✓"
+        echo "[deskfox] post-build verify: 最终 .app 含可执行 soffice($ARCH)+ 非空 presets ✓"
     fi
 fi
 
