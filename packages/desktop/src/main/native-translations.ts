@@ -22,3 +22,10 @@ export function setNativeTranslations(next: DesktopNativeBundle) {
 export function nativeT(key: DesktopNativeKey, params?: Record<string, string | number>) {
   return formatDesktopNativeMessage(bundle.messages[key], params)
 }
+
+// FORK: 暴露当前 bundle 的 locale —— 纯系统 role 菜单项(about/hide/quit…)在 DESKTOP_MENU 里
+// 没有 labelKey,走不了 nativeT,需按 locale 单独给译名(见 menu.ts roleLabel)。
+// [feat: native-role-menu-i18n] 2026-08-12
+export function nativeLocale() {
+  return bundle.locale
+}

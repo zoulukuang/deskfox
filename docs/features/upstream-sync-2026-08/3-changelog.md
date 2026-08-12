@@ -190,6 +190,23 @@ Mac 端 128/128 用 **1.8 分钟**,同样 4 workers 一次全绿、无 flake 重
 - `bun.lock` 在本机 `bun install` 后会被写入 npmmirror 镜像 URL(3416 行噪音差异),**已还原、未入 commit**;
   双端协作时注意别把它带进去。
 
+#### Mac 端 local 打包的两个环境坑(2026-08-12 实撞,下次直接照做)
+
+Mac wrapper(`.sh`)未集成 local 档,按规范 §5.3 走裸命令时连撞两个,**都不是代码缺口**:
+
+| # | 症状 | 根因 | 解法 |
+|---|---|---|---|
+| 1 | `prebuild` 报 `No version matching "0.0.0-next-16350" found for @opencode-ai/cli-darwin-arm64 (but package exists)` | sidecar 版本(上游 `scripts/utils.ts` 的 `CLI_VERSION`,来自上游 commit `9e432a6785`)在 **npmmirror 尚未同步**;`npm view` 走官方源查得到、`bun` 走 `bunfig.toml` 镜像查不到 | `BUN_CONFIG_REGISTRY=https://registry.npmjs.org` 跑 build |
+| 2 | `electron-builder` 在 `downloaded label=electron progress=100%` 之后挂死,10 分钟后 `⨯ Timeout awaiting 'request' for 600000ms` | 本机 Clash 代理(`HTTP(S)_PROXY` / `ALL_PROXY`)拖死 electron 本体之后的后续请求;electron zip 其实已在 `~/Library/Caches/electron/` | `env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy` 后再跑 |
+
+> 坑 2 与 [公证卡 In Progress 摘代理直连] 是**同一个根因家族**:这台机器上凡是长连接 / 大文件的
+> 外网请求,套代理都容易永久挂起。Mac 端跑任何 electron-builder / notarytool 类命令,默认先摘代理。
+
+**另记一条判读纪律**:`dist-deskfox/mac-arm64/` 下躺着 8月11 的旧 `DeskFox.app`(以及
+`mac/` 和 `mac-arm64-restored/` 两个更旧的残留目录)。验证时**一律用 `find -newermt <本次构建起始时刻>`
+卡时间戳**,只认本次产物 —— 这正是 `fix(branding)` 那笔(`758e6e27c6`)记录的「验到上次构建的残留包
+却报绿」陷阱,本轮排查中差点复现(先看到 `DeskFox.app` 一度误判为渠道注入失败,查时间戳才发现是残留)。
+
 ### 7.5 模块级一致性比对(user 2026-08-12 要求)
 
 > **问题意识**:e2e 全绿 ≠ 功能一致。本 changelog §三 已记过这个教训 ——「e2e 123/123 全绿没抓到,
@@ -250,11 +267,76 @@ Mac 平台层是 Win 端**验不了**的部分,逐条确认 FORK marker 仍在:
 | 6 | 防休眠开关持久化 + 启动恢复 | `main/index.ts:359` + `store-keys.ts:7` |
 | 7 | 「安装并重启」绕开托盘拦截 | `main/updater.ts:5/46` |
 
-丢失的 `desktop-menu-i18n.ts` 及其测试 = 上表第 1 行 `menu.ts` 那套 fork 菜单 i18n 的实现本体,
-已确认被上游方案取代(有意撤销)。
+丢失的 `desktop-menu-i18n.ts` 及其测试 = `menu.ts` 那套 fork 菜单 i18n 的实现本体。
+静态判定为「被上游方案取代」—— **但真机 A/B 推翻了这个判定的一半,见 §7.6**。
 
-#### 结论
+#### 结论(代码层)
 
-**代码层:零缺口。** 三层比对未发现任何"定制被上游 merge 静默冲掉"的情况;
-所有 marker 消失点都能归到「随上游重构迁移」「有意撤销跟随上游」「Win 专属不影响 Mac」三类之一,
-且逐条有实证或在案决策(D-5)支撑。
+三层机器比对未发现任何"定制被上游 merge 静默冲掉"的情况;所有 marker 消失点都能归到
+「随上游重构迁移」「有意撤销跟随上游」「Win 专属不影响 Mac」三类之一,逐条有实证或在案决策(D-5)支撑。
+
+> ⚠️ **但代码层零缺口 ≠ 用户体验零变化。** 静态比对能证明「代码还在」,证明不了「行为一样」——
+> `menu.ts` 就是活例:静态看是"上游方案接管、非缺口",真机一读菜单栏才发现上游方案**只翻译带
+> `labelKey` 的项**,纯系统 role 项(About/Hide/Quit…)静默退回英文。详见 §7.6。
+
+### 7.6 真机验收(Mac,local 档 2026.9.1 arm64)
+
+产物 `dist-deskfox/mac-arm64/DeskFox 本地版.app`,启动前先过身份闸(`CFBundleIdentifier`
+必须是 `ai.deskfox.app.local`,否则拒绝启动 —— 防抢正式版 DB / 单例锁)。
+**全程 user 的正式版进程未受影响。**
+
+#### CDP 只读断言(对齐 Win 端 keep-legacy-layout §四 那张表)
+
+| 项 | Win 端结果 | Mac 端本次 | |
+|---|---|---|---|
+| 经典布局默认 | 无 `data-new-layout` | `body`/`html` 均 null | ✅ |
+| 渠道徽标 | 1 个 LOCAL | 1 个 LOCAL | ✅ |
+| 标题栏工具组锚左 | 左 portal x=40 / 3 按钮,右 0 | 左 x=84 / 3 按钮(状态·切换文件树·切换审查),右 0 | ✅ |
+| 文件树开关 | x=92 居三图标之中 | 「切换文件树」x=136 | ✅ |
+| 文件树 tab 顺序 | 「所有文件」在左 /「N 更改」在右 | 所有文件 x=37 / 0 更改 x=149 | ✅ |
+| 镜像布局 | 树在左、聊天在右 | 树 x=0 / composer x=277 | ✅ |
+| 伪 tab 残留 | 0 | false | ✅ |
+| 界面语言 | — | `html[lang=zh-Hans]` | ✅ |
+| 渲染崩溃 | 无 | 无 | ✅ |
+
+#### macOS 原生菜单(Win 端**无法验**的部分)
+
+用 AppleScript 直接读系统菜单栏,并与 user 正在运行的**正式版做 A/B 对照**:
+
+```
+本分支 local 包  TOP: Apple | DeskFox 本地版 | 文件 编辑 视图 转到 窗口 帮助
+正式版(对照)     TOP: Apple | DeskFox        | 文件 编辑 视图 前往 窗口 帮助
+```
+
+顶层菜单中文渲染正常 ⇒ **IPC 把 bundle 送达主进程这条链路是通的**(离线只能证明 bundle 内容对,
+送达与否只有真机能证)。但应用菜单内部出现分叉:
+
+| 菜单项 | 正式版 | 本分支(修复前) | 性质 |
+|---|---|---|---|
+| 关于 | 关于 DeskFox | `About DeskFox 本地版` | **回归** |
+| 隐藏 | 隐藏 DeskFox | `Hide DeskFox 本地版` | **回归** |
+| 隐藏其他 | 隐藏其他 | `Hide Others` | **回归** |
+| 全部显示 | 全部显示 | `Show All` | **回归** |
+| 退出 | 退出 DeskFox | `Quit DeskFox 本地版` | **回归** |
+| 顶层「前往」 | 前往 | 转到 | 上游译法差异(不改) |
+| 重新加载 | 重新加载页面 | 重新加载 Webview | 上游译法差异(不改) |
+
+**根因**:About / Hide / Hide Others / Show All / Quit 在 `DESKTOP_MENU` 里**没有 `labelKey`**
+(靠 Electron 的 role 自带标签),走不到上游的 `nativeT`;而 Electron 的 role 默认标签跟随
+**app bundle 本地化**而非系统语言 —— 实测这台机器系统菜单(Apple 菜单「关于本机 / 系统设置…」)
+是中文,DeskFox 的 role 项却是英文,于是「应用菜单一半中文一半英文」。
+
+fork 原本有 `roleLabel()` 专治这个(基准 `menu.ts` 的 FORK 块,注释原文:「纯系统 role 在
+DESKTOP_MENU 里无英文 label,无法走 translateMenuLabel — 这里按 role 直接给带应用名译名」),
+段4「菜单上游化」时随 `desktop-menu-i18n.ts` 一并撤除,**撤过头了**。
+
+**修复**(本轮):
+- 新增 `packages/desktop/src/main/menu-role-label.ts`(fork-only)—— 按原语义回植 zh / zht 两档;
+  未覆盖语言返回 `undefined` → 保持纯 role、退回系统默认(不回归)。
+- `native-translations.ts` 加 `nativeLocale()` getter(1 处 FORK);`menu.ts` 在 `labelKey` 缺省时
+  用 `roleLabel(role, nativeLocale(), app.getName())` 兜底(1 处 FORK)。
+- **独立成文件而非留在 `menu.ts`**:后者顶层 `import electron`,bun 单测环境加载即报
+  `Export named 'nativeTheme' not found`;抽出纯函数才进得了 Logic 清单。
+- 测试 `menu-role-label.test.ts` 5 条(zh / zht / 带渠道后缀的应用名 / 未覆盖语言回落 / 未覆盖 role 回落)。
+
+#### 真机暴露的第二个问题 — 存量 DB 迁移失败(**高危,见 §7.7**)

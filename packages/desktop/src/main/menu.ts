@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu } from "electron"
+import { app, BrowserWindow, Menu } from "electron"
 import type { MenuItemConstructorOptions } from "electron"
 import {
   DESKTOP_MENU,
@@ -10,7 +10,9 @@ import {
 import { UPDATER_ENABLED } from "./constants"
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { openExternalURL } from "./windows"
-import { nativeT } from "./native-translations"
+import { nativeT, nativeLocale } from "./native-translations"
+// FORK: 纯 role 菜单项译名回植(抽独立文件以便单测)[feat: native-role-menu-i18n] 2026-08-12
+import { roleLabel } from "./menu-role-label"
 
 type Deps = {
   trigger: (id: string) => void
@@ -36,7 +38,13 @@ export function createMenu(deps: Deps) {
 
 function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOptions {
   if (entry.type === "separator") return { type: "separator" }
-  if (entry.role) return { role: nativeRole(entry.role), label: entry.labelKey ? nativeT(entry.labelKey) : undefined }
+  if (entry.role)
+    return {
+      role: nativeRole(entry.role),
+      // FORK: labelKey 缺省时(纯系统 role)按 locale 补中文译名,未覆盖语言仍回落 undefined
+      // [feat: native-role-menu-i18n] 2026-08-12
+      label: entry.labelKey ? nativeT(entry.labelKey) : roleLabel(entry.role, nativeLocale(), app.getName()),
+    }
 
   const item: MenuItemConstructorOptions = {
     label: entry.labelKey ? nativeT(entry.labelKey) : undefined,
@@ -67,3 +75,4 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOpt
 function nativeRole(role: DesktopMenuRole) {
   return role as NonNullable<MenuItemConstructorOptions["role"]>
 }
+
