@@ -390,7 +390,16 @@ export function SessionSidePanel(props: {
               //   左边正是 activity rail 的地盘 → 文件树左缘内容被盖掉。
               //   [feat: mirror-layout-overflow] [bug-repro: 审查面板与文件树同开时,「所有文件」tab
               //    x 跌到 32(rail 右缘 48)被盖住,文件名开头字符被吃 —— user 2026-08-12 二次截图反馈]
-              "border-r border-border-weaker-base": !settings.general.newLayoutDesigns(),
+              //
+              // FORK: 分隔线由 border-weaker-base(#E8E8E8)提到 border-base(#c1c0c0)
+              //   [feat: main-divider-visibility] 2026-08-12
+              //   [bug-repro: user 反馈「文件目录树和聊天区域中间没有分隔的竖线」]
+              //   线其实一直画着(实测 1px solid rgb(232,232,232)),但它夹在文件树底色 #FCFCFC 与
+              //   聊天区白色之间,232 vs 252/255 对比度过低,屏幕上基本不可见。
+              //   这条是**主区域分隔**(文件树 ↔ 聊天),比面板内部细分隔重要,故单独提一档到标准边框色;
+              //   面板内部那条(文件树 ↔ 审查区)维持 weaker,保持层级感。
+              //   注:基准 e77443750e 用的也是 weaker —— 非本次 sync 引入,是长期偏淡。
+              "border-r border-border-base": !settings.general.newLayoutDesigns(),
             }}
           >
             <Show when={reviewOpen()}>
