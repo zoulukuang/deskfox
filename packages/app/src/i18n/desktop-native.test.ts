@@ -128,6 +128,18 @@ describe("desktop native locale detection", () => {
     expect(detectDesktopNativeLocale(["uz-Latn"])).toBe("uz")
   })
 
+  // FORK-BEGIN: Aran(Nastaliq)script 归一化回归钉 2026-08-12
+  test("treats the Aran script variant as Arab across ICU data versions", () => {
+    // 新版 CLDR 把 pa-PK 的 likely script 从 Arab 改成 Aran(Arab 的 Nastaliq 书写变体),
+    // 旧版仍给 Arab。两种 ICU 数据下都必须落到 pa,否则同一份代码在 Win / macOS 上行为分叉。
+    expect(detectDesktopNativeLocale(["pa-Arab-PK"])).toBe("pa")
+    expect(detectDesktopNativeLocale(["pa-Aran-PK"])).toBe("pa")
+    // 归一化只针对 Arab 系变体,不得把别的文字系统也拉平:
+    // pa-IN 是 Guru 文字,仍应跳过 pa 候选(pa-Arab-PK)去匹配下一个偏好。
+    expect(detectDesktopNativeLocale(["pa-Guru-IN", "fr"])).toBe("fr")
+  })
+  // FORK-END
+
   test("recognizes Norwegian language tags", () => {
     expect(detectDesktopNativeLocale(["no"])).toBe("no")
     expect(detectDesktopNativeLocale(["nb-NO"])).toBe("no")

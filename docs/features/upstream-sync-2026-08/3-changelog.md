@@ -117,3 +117,72 @@ toast 迁 solid-sonner、项目入口改 `project-avatar-v2`;修前 `clicked pro
 - 单段回退:`git revert -m 1 <该段 merge commit>`(四段各自独立)。
 - 整体回退:分支未合 main 前对 main 零影响;已合则回到 tag `pre-merge-upstream-2026-08-10`。
 - 本轮两项回植可单独 revert(纯 fork 文件 + 一处 fork-only 新文件,不牵动上游代码)。
+
+## 七、Mac 端接力收口(2026-08-12)
+
+Win 端把分支推到 `origin` 后转 Mac 接力。本段是 Mac 侧做的两件事,均在本分支内完成。
+
+### 7.1 合入 main(commit `1b67d53bdf`)
+
+分支自 2026-08-10 `e77443750e` 分叉后,main 侧推进了 **11 笔** Mac 发版相关 commit。合入后分支基线与 main 对齐。
+**零冲突** —— 合入面全在 Mac build / 版本 / 文档层,与本分支的 app 层改动无重叠:
+
+| 文件 | 内容 |
+|---|---|
+| `packages/branding/scripts/build-deskfox-electron.sh` | arch→产物目录映射修正 + 架构断言(`lipo -archs`) |
+| `packages/branding/__tests__/build-electron-arch-outdir.test.ts` | 新增 9 用例守卫该映射 |
+| `.husky/pre-push` | 补 branding 单测 backstop(此前发布脚本守卫写了从不跑) |
+| `packages/branding/installer-versions.json` | `macos` prod `2026.9.0` → `2026.9.1`(已发版) |
+| docs | electron-replatform-macos / macos-install-restart-no-quit / ship 台账 / installer-versions |
+
+### 7.2 修 locale 检测的跨 ICU 版本行为分叉
+
+**症状**:合入后 Mac 端 app 单测比 Win 端在案基线**多红 1 条** ——
+`desktop native locale detection > uses Unicode likely subtags for script-sensitive bundles`,
+`detectDesktopNativeLocale(["pa-PK"])` 期望 `pa`、实到 `en`。
+
+**根因**(实测,非推断):
+
+| 输入 | 本机(macOS / Bun 1.3.14,新 CLDR) | Win 端(旧 ICU 数据) |
+|---|---|---|
+| `pa-PK` maximize | `pa-**Aran**-PK` | `pa-**Arab**-PK` |
+| 候选 `pa` 的标签 `pa-Arab-PK` maximize | `pa-Arab-PK` | `pa-Arab-PK` |
+
+`detectDesktopNativeLocale` 按 `script` **全等**比对 → 新 ICU 下 `Aran ≠ Arab`,匹配不到候选,静默回落 `en`。
+Aran 是 Arab 的 **Nastaliq 书写变体**(UTS #35),不是独立文字系统 —— 全等比对本身是上游的健壮性缺陷,
+只是旧 ICU 数据把它盖住了。**这不是本次 merge 引入的回归**,是同一份上游代码在两端 ICU 数据版本下的行为分叉。
+
+**修法**(`packages/app/src/i18n/desktop-native.ts`,FORK-BEGIN/END 一块 + 比对处一行 FORK):
+加 `SCRIPT_ALIASES` 归一化(`Aran → Arab`),比对走 `script()` helper。
+只拉平 Arab 系变体,`Guru` / `Cyrl` / `Latn` 等真正不同的文字系统不受影响
+(测试显式钉住:`pa-Guru-IN` 仍跳过 `pa` 候选)。
+
+**测试**(R5,fix 与测试同 commit):新增 `treats the Aran script variant as Arab across ICU data versions`
+—— `pa-Arab-PK` / `pa-Aran-PK` 两种形态都须落 `pa`,并反向钉住 Guru 不被误拉平。改前实测 2 红,改后 9/9 绿。
+
+> ⚠️ 沉淀:**"Win 绿 ≠ Mac 绿"的一类新成因 —— 运行时 ICU/CLDR 数据版本差异**。
+> 这类红不会在同一端复现,双端接力时容易被误判成"对方引入的回归"。判读要点:先看文件有没有 FORK marker
+> (纯上游文件 + 只在单端红 ⇒ 优先怀疑运行时数据差异),再用 `bun -e` 直接打印 `Intl.Locale(x).maximize()` 取证。
+
+### 7.3 Mac 端完整验收结果
+
+| 项 | 结果 |
+|---|---|
+| `bun turbo typecheck --filter='!./packages/console/*'` | ✅ **29/29** |
+| app `test:unit` | **960 pass / 3 fail** —— 3 条 = 在案 REQ-105 基线红(`server-session.test.ts`),与 Win 端同名同条件;修 locale 前是 960/4 |
+| app `test:browser` | ✅ 41/41 |
+| branding(main 新带入的 arch 守卫) | ✅ 61/61 |
+| media-gen | ✅ 140/140 |
+| adapter-feishu-lark | ✅ 792/792 |
+| session-ui | ✅ 86/86 |
+| e2e | ⏸ 本轮未跑(Mac 端 e2e 基础设施未验证,见 §7.4) |
+
+### 7.4 Mac 端遗留
+
+- **e2e 未在 Mac 端跑过**:Win 端记录的 126/126 是 Win 环境结果;Mac 端 Playwright 是否需要同样的
+  `PLAYWRIGHT_WORKERS=4` 降并发、以及 `classic-layout-default` / `v2-fork-customizations` 两条守卫 spec
+  在 Mac 上是否绿,**尚未验证**。
+- **真机 CDP 验收未在 Mac 端做**:`keep-legacy-layout` 的 8 处 fork 交互 + 经典布局默认,
+  Win 端已逐项 CDP 实测通过;Mac 端(尤其托盘 / Dock / 菜单 native 层)按「真桌面 QA ≠ CDP 自测」仍需单独验。
+- `bun.lock` 在本机 `bun install` 后会被写入 npmmirror 镜像 URL(3416 行噪音差异),**已还原、未入 commit**;
+  双端协作时注意别把它带进去。

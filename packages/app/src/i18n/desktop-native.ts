@@ -202,7 +202,8 @@ export function detectDesktopNativeLocale(languages: readonly string[]): Desktop
     if (["no", "nb", "nn"].includes(source.language)) return "no"
     const match = DESKTOP_NATIVE_LOCALES.find((candidate) => {
       const target = locale(DESKTOP_NATIVE_LOCALE_TAGS[candidate])
-      return target?.language === source.language && target.script === source.script
+      // FORK: script 比对走归一化,容忍两端 ICU 数据版本差异 2026-08-12
+      return target?.language === source.language && script(target) === script(source)
     })
     if (match) return match
   }
@@ -220,6 +221,21 @@ function locale(value: string) {
     return undefined
   }
 }
+
+// FORK-BEGIN: script 归一化 —— 抹平 ICU 数据版本差异 2026-08-12
+// Aran 是 Arab 的 Nastaliq 书写变体(UTS #35),不是独立文字系统。新版 CLDR 把 pa-PK 的
+// likely subtag 从 pa-Arab-PK 改成 pa-Aran-PK,旧版仍给 Arab —— 按 script 全等比对时,
+// 新 ICU 下 pa-PK 匹配不到候选 pa(标签写死 pa-Arab-PK),静默回落 en。同一份代码因此在
+// macOS(新 ICU,给 Aran)与 Windows(旧 ICU,给 Arab)上行为分叉,Mac 端单测确定性变红。
+// 归一化后两端一致;只拉平 Arab 系变体,不影响 Guru / Cyrl / Latn 等真正不同的文字系统。
+const SCRIPT_ALIASES: Record<string, string> = { Aran: "Arab" }
+
+function script(value: Intl.Locale | undefined) {
+  const raw = value?.script
+  if (!raw) return raw
+  return SCRIPT_ALIASES[raw] ?? raw
+}
+// FORK-END
 
 export const DESKTOP_NATIVE_ENGLISH = {
   "desktop.menu.app": "OpenCode",
