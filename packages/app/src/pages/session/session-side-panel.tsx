@@ -383,7 +383,14 @@ export function SessionSidePanel(props: {
               //   2026-08 上游 merge 冲掉后按 user 2026-08-11 反馈恢复)。
               //   侧面板整体在聊天左侧,故与聊天的分隔线走右缘(border-r)。
               //   v2 维持上游原样。[feat: mirror-layout] 2026-08-11
-              "flex-row-reverse border-r border-border-weaker-base": !settings.general.newLayoutDesigns(),
+              //
+              // FORK: 2026-08-12 由 flex-row-reverse 改为 order —— 与外层五栏容器同一原因:
+              //   本容器子项里【文件树是固定宽度】(w-[240px] 级),审查/预览区 flex-1;
+              //   两者总宽超出侧面板宽度时必然溢出,而 row-reverse 会把溢出方向从「右」翻成「左」,
+              //   左边正是 activity rail 的地盘 → 文件树左缘内容被盖掉。
+              //   [feat: mirror-layout-overflow] [bug-repro: 审查面板与文件树同开时,「所有文件」tab
+              //    x 跌到 32(rail 右缘 48)被盖住,文件名开头字符被吃 —— user 2026-08-12 二次截图反馈]
+              "border-r border-border-weaker-base": !settings.general.newLayoutDesigns(),
             }}
           >
             <Show when={reviewOpen()}>
@@ -846,6 +853,11 @@ export function SessionSidePanel(props: {
                 classList={{
                   "transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
                     !props.size.active(),
+                  // FORK: 经典布局镜像 —— 文件树排到审查/预览区左边。原先靠父容器 flex-row-reverse,
+                  //   但那会把「空间不足」时的溢出方向翻到左侧、压进 activity rail。改用 order:
+                  //   视觉顺序与 DOM 顺序都不变,溢出方向恢复向右。
+                  //   [feat: mirror-layout-overflow] 2026-08-12
+                  "order-first": !settings.general.newLayoutDesigns(),
                 }}
                 style={{ width: treeWidth() }}
               >
@@ -871,10 +883,22 @@ export function SessionSidePanel(props: {
                         //   (REQ-041 的文件树 tab 顺序对调,2026-08 上游 merge 冲掉后按 user 反馈恢复)。
                         //   只翻视觉不改 DOM 顺序 —— 上游若增删 tab 仍能正常 merge。
                         //   v2 维持上游原样。[feat: iconbar-left-decouple] 2026-08-11
-                        "flex-row-reverse": !settings.general.newLayoutDesigns(),
+                        //
+                        // FORK: 2026-08-12 由 flex-row-reverse 改为给子项 order —— 同一类缺陷:
+                        //   tab 文字放不下时 row-reverse 会把溢出翻到左侧,「所有文件」开头的字被切掉
+                        //   (user 二次截图里显示成「有文件」)。改 order 后溢出恢复向右。
+                        //   [feat: mirror-layout-overflow]
                       }}
                     >
-                      <Tabs.Trigger value="changes" class="flex-1" classes={{ button: "w-full" }}>
+                      <Tabs.Trigger
+                        value="changes"
+                        class="flex-1"
+                        classes={{ button: "w-full" }}
+                        classList={{
+                          // FORK: 经典布局下 [N 更改] 排到右 [feat: mirror-layout-overflow] 2026-08-12
+                          "order-last": !settings.general.newLayoutDesigns(),
+                        }}
+                      >
                         <Show
                           when={settings.general.newLayoutDesigns()}
                           fallback={

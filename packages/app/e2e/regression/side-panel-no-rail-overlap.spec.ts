@@ -40,10 +40,16 @@ test.describe("regression: 经典布局侧面板不压 rail (mirror-layout-overf
     await page.goto("/")
     await expect(page.locator("header").first()).toBeVisible({ timeout: 20_000 })
 
-    // 经典布局(无 data-new-layout)下,不该再有 md:flex-row-reverse 这个镜像实现
+    // 经典布局(无 data-new-layout)下,不该再有任何 row-reverse 镜像实现
     await expect.poll(() => page.locator("body[data-new-layout]").count(), { timeout: 10_000 }).toBe(0)
-    const reverseCount = await page.locator(".md\\:flex-row-reverse").count()
-    expect(reverseCount, "镜像应改用 order 实现,容器不应再是 row-reverse").toBe(0)
+    // 注:2026-08-12 复发教训 —— 原断言只盯 `.md\:flex-row-reverse`(带 md 前缀那一处),
+    //   而 session-side-panel.tsx 里还有两处**无前缀**的 `flex-row-reverse` 逃过了检查。
+    //   这里两种都断言;但真正兜底的是源码级静态守卫
+    //   src/pages/session/no-row-reverse.test.ts —— e2e 跑 web 端时 SessionSidePanel
+    //   整棵子树不渲染(Show when={isDesktop()}),DOM 里根本不存在那些 class,e2e 断言必然空过。
+    const mdReverse = await page.locator(".md\\:flex-row-reverse").count()
+    const plainReverse = await page.locator(".flex-row-reverse").count()
+    expect(mdReverse + plainReverse, "镜像应改用 order 实现,容器不应再是 row-reverse").toBe(0)
   })
 
   // 注:「镜像仍生效(侧面板在聊天区左侧)」这一半 **web e2e 验不了** ——
