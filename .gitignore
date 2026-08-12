@@ -37,3 +37,22 @@ tsconfig.tsbuildinfo
 # 故意不入仓避免双端互相覆盖,且防止被 git add -A 误扫进 commit 后切分支被删。
 # 可共享的发布知识在 docs/features/macos-ship-命令/;命令本体恢复源见 ~/.deskfox-signing/ship.md.bak
 .claude/commands/
+
+# 本机私有的 Claude Code 权限/设置(名字即含 local,双端各自不同)
+.claude/settings.local.json
+
+# Playwright 运行残留(仓根与各 package 下的同名目录都算)
+test-results/
+
+# Obsidian 编辑器个人配置(双端各自的窗口布局/主题,不是项目资产)
+.obsidian/
+
+# Tauri 时代的本地残留:上游已换 Electron 基座、src-tauri 已从仓中删除,
+# 但旧机器磁盘上仍留着 gen 生成物与几十 MB 的 sidecar 二进制,绝不能入仓。
+packages/desktop/src-tauri/gen/
+packages/desktop/src-tauri/sidecars/
+
+# models.dev 快照为构建期生成物 —— 上游 8ffadde85c(chore: rm git ignored files)
+# 已将其从仓中移除;本地留存的是旧副本,当前源码无任何引用。
+packages/opencode/src/provider/models-snapshot.js
+packages/opencode/src/provider/models-snapshot.d.ts
