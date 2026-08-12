@@ -175,13 +175,16 @@ Aran 是 Arab 的 **Nastaliq 书写变体**(UTS #35),不是独立文字系统 �
 | media-gen | ✅ 140/140 |
 | adapter-feishu-lark | ✅ 792/792 |
 | session-ui | ✅ 86/86 |
-| e2e | ⏸ 本轮未跑(Mac 端 e2e 基础设施未验证,见 §7.4) |
+| 两条 fork 守卫 spec(`PLAYWRIGHT_WORKERS=1`) | ✅ **5/5**(`classic-layout-default` 2 + `v2-fork-customizations` 3) |
+| e2e 全量(`PLAYWRIGHT_WORKERS=4`) | ✅ **128/128**,1.8 分钟 |
+
+**e2e 双端对照**:Win 端 126/126 用 3.4 分钟(16 核,需从默认 8 workers 降到 4 才稳);
+Mac 端 128/128 用 **1.8 分钟**,同样 4 workers 一次全绿、无 flake 重跑。用例数 126→128 的增量
+即 `keep-legacy-layout` 新增的守卫。Playwright 浏览器装在 `PLAYWRIGHT_BROWSERS_PATH=/Volumes/ExtSSD/devcache/ms-playwright`
+(遵「软件装 ExtSSD」约束),webServer 由 playwright 自动起 `:4319`,不碰 user 常驻的正式版实例。
 
 ### 7.4 Mac 端遗留
 
-- **e2e 未在 Mac 端跑过**:Win 端记录的 126/126 是 Win 环境结果;Mac 端 Playwright 是否需要同样的
-  `PLAYWRIGHT_WORKERS=4` 降并发、以及 `classic-layout-default` / `v2-fork-customizations` 两条守卫 spec
-  在 Mac 上是否绿,**尚未验证**。
 - **真机 CDP 验收未在 Mac 端做**:`keep-legacy-layout` 的 8 处 fork 交互 + 经典布局默认,
   Win 端已逐项 CDP 实测通过;Mac 端(尤其托盘 / Dock / 菜单 native 层)按「真桌面 QA ≠ CDP 自测」仍需单独验。
 - `bun.lock` 在本机 `bun install` 后会被写入 npmmirror 镜像 URL(3416 行噪音差异),**已还原、未入 commit**;
