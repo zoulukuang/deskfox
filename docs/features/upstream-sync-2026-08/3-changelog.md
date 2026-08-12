@@ -340,3 +340,85 @@ DESKTOP_MENU 里无英文 label,无法走 translateMenuLabel — 这里按 role 
 - 测试 `menu-role-label.test.ts` 5 条(zh / zht / 带渠道后缀的应用名 / 未覆盖语言回落 / 未覆盖 role 回落)。
 
 #### 真机暴露的第二个问题 — 存量 DB 迁移失败(**高危,见 §7.7**)
+
+### 7.7 界面层全面测试(user 2026-08-12 要求,local 档 arm64)
+
+工具:仓内 `packages/branding/smoke/smoke.py` 全量冒烟引擎 + CDP `Page.captureScreenshot` 截图
++ AppleScript 读原生层。**截图用 CDP 而非 `screencapture`** —— 本机是多屏,窗口 logical x 为
+**负值(-1475,在副屏)**,`screencapture` 只截主屏会得到全白图;CDP 直接从渲染器取,不受屏幕坐标影响。
+
+#### 冒烟引擎:22 项通过 / 0 警告 / 0 崩溃
+
+| 组 | 覆盖 |
+|---|---|
+| boot | reload + 启动期健康(无 error toast / JS 异常) |
+| providers ×10 | 逐个点开连接弹窗:**GetBot(排首位 + 推荐标,fork 定制)** / OpenCode Zen / OpenCode Go / Anthropic / GitHub Copilot / OpenAI / Google / OpenRouter / Vercel AI Gateway / 自定义提供商 |
+| panels ×5 | 切换侧边栏 / 切换文件树 / 切换审查 / 状态 / 新建会话 |
+| settings ×6 | 通用 / 快捷键 / 服务器 / 提供商 / 模型 / **飞书桥接(fork 自有页)** |
+
+#### 逐项界面验证(截图 + 实测值)
+
+| 项 | 结果 |
+|---|---|
+| 命令面板 ⌘K | ✅ 打开,全中文,快捷键按 macOS 符号渲染(⇧⌘S / ⌥↑ / ⌃\` / ⇧⌘R) |
+| Markdown 预览 | ✅ 标题层级 / 引用块 / 有序列表 / 粗体 / 中文排版全部正确 |
+| 终端 | ✅ ghostty canvas 渲染,shell prompt 正常出(`openclaw@… my-life %`) |
+| Fox Blue 主题 | ✅ 实测 token:`--surface-base-active` 由 OC-2 的 `#e2e2e2` → `#7295c452`(logo 蓝 rgb(114,149,196) α=0.32),与 `theme.css` 定义一致。注:需 `data-theme` + `data-color-scheme` **两个属性**同时命中才生效 |
+| 左下角品牌 | ✅ 「DeskFox for macOS v2026.9.1」 |
+| 内置 LibreOffice | ✅ 用**包内那份** soffice 成功转出 docx / pdf / xlsx —— 剥皮后的 bundle 是健康的 |
+
+#### 本轮界面测试抓到的第 3 个 bug(已修,见下)
+
+user 看截图直接指出:「所有文件」一栏把标题前面挡住了,宽度不够应该省略右侧而不是切左边。
+实测确认并修复,详见 `fix(layout)` 一笔与下方 §7.8。
+
+#### 未能覆盖的部分(如实记录)
+
+- **Office / PDF 文档预览端到端 UI 未验**:DeskFox 的文件预览是**项目内文件树驱动**的,
+  `open -a <目录>` 与 `open -a <文件>` 都不会把外部路径变成预览 tab。改走原生菜单
+  「文件 → 打开项目…」时 NSOpenPanel 确实弹出,但 `Cmd+Shift+G` 路径跳转的键盘注入未生效
+  (原生对话框焦点/时序,与 memory 既有记录一致),已 Esc 关闭。
+  **已验证的是**:内置 LO 本体可用(成功转换三种格式)、Win 端验证过预览代码链路
+  (`session.tsx → SessionSidePanel → FileTabContent → document-viewer`);
+  缺的是 Mac 端把这条链路真点一遍。**建议由 user 手工点一次 .docx / .pdf 收口。**
+- 右键菜单未逐项点验(smoke 引擎不覆盖)。
+
+#### 测试期间对 user 环境的影响与恢复
+
+local 档启动时 `plugin-install.ts` 会做 **exclusive takeover**,把共享
+`~/.config/opencode/opencode.jsonc` 的 plugin 路径从 `ai.deskfox.app` 改成 `ai.deskfox.app.local`。
+本轮多次启停,每次均已改回;收尾时 `diff` 校验与测试前备份**完全一致**。
+备份留在 `~/.config/opencode/opencode.jsonc.bak-before-local-fix-*`。
+**这说明 local 档的「数据隔离」不覆盖共享 config** —— 与「local 与正式版共存互不打扰」的设计目标
+有出入,是一个**独立待办**(本轮未处理)。
+
+### 7.8 经典布局镜像溢出方向缺陷(user 真机指出,已修)
+
+**现象**:1280 宽窗口下,文件树面板左缘跑到 x=24、压在 activity rail(右缘 48)底下,
+「所有文件」tab 与 `.deskfox` 开头的字符被盖掉。
+
+**取证**(CDP 命中测试,不靠肉眼):在该 tab 自己的矩形内 `elementFromPoint(x, y)` 命中的是
+**rail 的项目图标**而非 tab —— 铁证。
+
+**根因**:REQ-041 五栏镜像用 `md:flex-row-reverse`(`session.tsx`)。该容器两个子项
+(聊天区 / 侧面板)都是 style 固定宽度,总宽超出可用宽度时必然溢出;而 `row-reverse` 会把
+**溢出方向从「右」翻成「左」**,左边正是 rail 的地盘。实测:可用 770,聊天区 570 + 侧面板 240 = 810,
+超 40px,面板 x 由应有的 64 变成 24。
+
+> **该缺陷不是本次上游同步引入的** —— `md:flex-row-reverse` 在基准 `e77443750e`(2026-06-12 REQ-041)
+> 即存在;`--main-right`(右侧项目面板)基准也已有。属 fork 长期布局缺陷,只在窗口宽度不足时暴露,
+> user 平时窗口开得大所以一直没撞上。
+
+**修法**:改用 `order` 实现镜像 —— 视觉顺序与 DOM 顺序都不变(上游增删子项仍可正常 merge),
+溢出方向恢复向右,即 user 要求的「宽度不够该省略右侧」。
+容器 `md:flex-row-reverse` → `md:flex-row`;侧面板加 `md:order-first`;`mobileTabs` 加 `md:order-last`。
+
+**真机复验**:面板 x **24 → 64**(rail 右缘 48,不再重叠),tab x 37 → 77,
+命中测试由 rail 图标变为 tab 自身,截图确认 `.deskfox` 开头的点已回来。
+
+**遗留(未在本笔处理)**:总宽 810 > 可用 770 这个**根问题仍在**,现表现为聊天区右缘 875 超出
+容器 835、被右侧面板遮 40px(方向已符合要求)。窄窗口下还有一个更明显的后果:
+**打开文件预览后预览区被压到 ~80px 宽,文字竖排成一列不可读**;窗口拉到 1475 宽即完全正常
+(侧面板 515 = 文件树 240 + 预览 275,聊天区自适应 450,`scrollWidth == clientWidth` 无溢出)。
+彻底消除需让聊天区宽度自适应(现为 `md:flex-none` + style 固定宽,且该宽度用户可拖拽),
+或给预览区设 min-width —— 属产品设计决策,**留待 user 拍板**。
