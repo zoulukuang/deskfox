@@ -171,11 +171,35 @@ export function setDockIcon() {
   if (!icon.isEmpty()) app.dock?.setIcon(icon)
 }
 
+// FORK: 首启默认窗口尺寸 1280×800 → 1440×900 [feat: default-window-size] 2026-08-12
+//   [bug-repro: 上游默认 1280 宽**放不下 DeskFox 自己的五栏布局** —— 实测空间需求:
+//    rail 64 + 文件树 240 + 预览区最低 320 + 聊天区 450 + 右侧会话栏 320 ≈ 1394,
+//    比 1280 多出 114px。这解释了为什么一开预览就把预览区挤到 ~80px 竖排不可读。]
+//   1440×900:满足五栏全开、16:10 与 Mac 屏比例一致、MacBook Air 13"(逻辑 1470×956)也放得下。
+//   只影响**首次启动**;electron-window-state 会记住用户调整后的尺寸,之后一律按用户的来。
+//   另按屏幕工作区 clamp,防止小屏/老显示器上一开就超出屏幕(上游无此兜底)。
+const DEFAULT_WINDOW_SIZE = { width: 1440, height: 900 }
+
+function defaultWindowSize() {
+  try {
+    // 延迟 require:screen 模块必须在 app ready 之后才能用
+    const { screen } = require("electron") as typeof import("electron")
+    const area = screen.getPrimaryDisplay().workAreaSize
+    return {
+      width: Math.min(DEFAULT_WINDOW_SIZE.width, area.width),
+      height: Math.min(DEFAULT_WINDOW_SIZE.height, area.height),
+    }
+  } catch {
+    return DEFAULT_WINDOW_SIZE
+  }
+}
+
 export function createMainWindow(id: string = randomUUID()) {
+  const fallback = defaultWindowSize()
   const state = windowState({
     file: windowStateFile(id),
-    defaultWidth: 1280,
-    defaultHeight: 800,
+    defaultWidth: fallback.width,
+    defaultHeight: fallback.height,
   })
 
   const mode = tone()

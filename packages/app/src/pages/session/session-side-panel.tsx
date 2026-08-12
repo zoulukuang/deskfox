@@ -391,15 +391,23 @@ export function SessionSidePanel(props: {
               //   [feat: mirror-layout-overflow] [bug-repro: 审查面板与文件树同开时,「所有文件」tab
               //    x 跌到 32(rail 右缘 48)被盖住,文件名开头字符被吃 —— user 2026-08-12 二次截图反馈]
               //
-              // FORK: 分隔线由 border-weaker-base(#E8E8E8)提到 border-base(#c1c0c0)
+              // FORK: 主区域分隔线(文件树 ↔ 聊天区)改用绝对定位伪元素绘制
               //   [feat: main-divider-visibility] 2026-08-12
-              //   [bug-repro: user 反馈「文件目录树和聊天区域中间没有分隔的竖线」]
-              //   线其实一直画着(实测 1px solid rgb(232,232,232)),但它夹在文件树底色 #FCFCFC 与
-              //   聊天区白色之间,232 vs 252/255 对比度过低,屏幕上基本不可见。
-              //   这条是**主区域分隔**(文件树 ↔ 聊天),比面板内部细分隔重要,故单独提一档到标准边框色;
-              //   面板内部那条(文件树 ↔ 审查区)维持 weaker,保持层级感。
-              //   注:基准 e77443750e 用的也是 weaker —— 非本次 sync 引入,是长期偏淡。
-              "border-r border-border-base": !settings.general.newLayoutDesigns(),
+              //   [bug-repro: user 两次反馈「文件目录树和聊天区域中间没有分隔的竖线」]
+              //
+              //   **根因(第二次排查才找到)**:线一直画着,但一直被子元素盖住 ——
+              //   本容器是 border-box、宽 240px **含** 1px border,故 content 只有 239px;
+              //   而 #file-tree-panel 的宽度是 style 硬值 240px,比父容器 content 宽 1px,
+              //   在 overflow:visible 下溢出并**正好覆盖 border 所在的那 1px**。
+              //   命中测试实证:elementFromPoint(304, y) 命中的是子元素而非 border。
+              //   第一次排查我只看了 computed style(确实是 1px solid),没做像素级确认,
+              //   于是误判成「颜色太淡」,把 token 提了一档 —— 治标没治本,user 因此第二次反馈。
+              //
+              //   改用 after 伪元素:绝对定位、不占布局宽度、不参与 flex 计算,
+              //   因此既不会被子元素挤掉,也不会被覆盖。v2 维持上游原样。
+              "after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border-base after:z-10":
+                !settings.general.newLayoutDesigns(),
+              relative: !settings.general.newLayoutDesigns(),
             }}
           >
             <Show when={reviewOpen()}>
