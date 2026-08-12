@@ -136,7 +136,49 @@ powerSaveBlocker/BrowserWindow、store→default.app)。bun:test 同进程跑全
 - 验证:tool-write 7/7、tool-edit 10/10;core 全量 8→6 fail(剩 5 fff-bun + 1 watcher flaky,均环境/上游)。
 - 回退:`git revert` 本 commit 即恢复上游原状(代价是 lock 测试复红)。
 
+## follow-up(2026-08-12):arch → 产物目录映射写反,致 LO 完整性守卫长期失效
+
+**起因**:mac prod 2026.9.1 发版时 x64 build `EXIT=1`,但产物(dmg/zip/公证)全部正常。
+
+**根因**:`build-deskfox-electron.sh` 顶部 arch 归一化那段,把 electron-builder 的产物目录名写反了 ——
+写的是 `arm64→mac` / `x64→mac-x64`,实际规则是:
+
+```
+platformPackager.js:  appOutDir = "mac" + getArchSuffix(arch, defaultArch)
+builder-util/arch.js: getArchSuffix = arch === defaultArchFromString(defaultArch) ? "" : "-" + Arch[arch]
+                      defaultArchFromString(undefined) === Arch.x64
+```
+
+我们的 `electron-builder.deskfox.config.ts` 未设 `defaultArch` → 默认 x64 →
+**x64 得空后缀 `mac/`、arm64 得 `mac-arm64/`**,与脚本假设正好相反。
+
+**后果是双向的,且 arm64 那侧更危险**:
+- **x64**:`ls dist-deskfox/mac-x64/*.app` 找不到 → 命令替换失败 → `set -euo pipefail` **静默终止整个脚本**(EXIT=1,§5.5 一行都没打印,日志里看不出任何错误)→ post-build 的 LibreOffice 完整性守卫**一次都没跑过**。
+- **arm64**:落到 `mac/`,那里恰好是**上一次 x64 构建的残留包** → 守卫验的不是本次产物**却报绿**。也就是说 arm64 侧不是"没跑",是"跑了但验错对象",**假绿比不跑更危险**。
+
+这个守卫的职责是「绝不发布不含 LibreOffice 的包」(见上文 LO 剥皮陷阱),失效后没有任何自动闸拦得住"LO 没进包"这类事故。2026.9.1 发版时是靠人工逐项补验双 arch(soffice 可执行 / presets 非空 / 架构匹配)才敢发。
+
+**修法**(`packages/branding/scripts/build-deskfox-electron.sh`):
+1. 映射改正为 `arm64→mac-arm64` / `x64→mac`,并把 electron-builder 的推导规则写进注释(注明若将来在 config 里显式设 `mac.defaultArch` 需同步改)。
+2. §5.5 post-build 验证**新增架构断言**:读 `Info.plist` 的 `CFBundleExecutable` → `lipo -archs` → 必须包含本次目标架构,否则硬失败并提示"很可能验到了上次构建的残留包"。把"验错对象"从静默假绿变成硬失败。
+3. **内置 LibreOffice 也断言架构**一致(x64 包里塞 arm64 的 soffice 会让 Intel 用户 office 转换直接失败,而结构性检查看不出来)。
+4. 找不到 .app 时给明确报错,不再靠 `set -e` 静默死。
+
+⚠️ **实现中踩到两个坑**(都已在代码注释里固化):
+- **`lipo` 的架构名和 electron-builder 不同**:Intel 是 `x86_64` 不是 `x64`。直接拿 `$ARCH` 比会永远不匹配 → x64 构建每次误报架构不符。故加 `LIPO_ARCH` 映射层。
+- **一度想改成"扫 `dist-deskfox/mac*/` 按架构探测"以彻底摆脱映射表,实测更糟**:`dist-deskfox` 下存在 `mac-arm64-restored/` 这类人工残留目录,且 glob 排序里 `-`(0x2D) < `/`(0x2F),`mac-arm64-restored/` 会排在 `mac-arm64/` **前面** → 模糊扫描反而优先撞上 8 月 7 日的陈旧包,正是要修的那类问题。故保留"只认规范目录 + 强制架构断言"的严格方案。
+
+**测试**(R5,新增 `packages/branding/__tests__/build-electron-arch-outdir.test.ts`,9 用例):
+- 断言映射不得再写反(bug 的精确形态)、`LIPO_ARCH` 映射存在、架构断言块存在且是 `exit 1` 硬失败、LO 架构断言存在。
+- **另有一条"与上游真实规则对表"**:本机能解析到 `builder-util` 时,直接用它的 `getArchSuffix` 反推期望值与脚本比对 —— electron-builder 哪天改了命名规则这条会红,提示同步更新。
+- 已验证测试**真能抓住原 bug**:临时把映射改回旧值 → 9 用例中 4 条变红(含对表那条);还原后 9/9 绿。
+
+**同时修复"守卫写了从不跑"**(`.husky/pre-push`):
+`packages/branding` 的测试**既不在 turbo test 任务、也不在 pre-push**,`lo-bundle-strip.test.ts` 头部注释声称的"CI 接入 turbo.json"注册**实际并不存在**。也就是说 LO 剥皮守卫、托盘图标守卫一直是装饰品。本次把 `(cd packages/branding && bun test)` 加入 pre-push backstop —— 发布脚本一旦回归就是"发出去才知道",必须护住。branding 全量 61 pass / 0 fail。
+
+**回退**:`git revert` 本 commit,脚本回到映射写反的状态(x64 继续 EXIT=1、arm64 继续假绿),不影响产物本身。
+
 ## 后续(阶段 2/3,见 1-spec.md)
 
-- 阶段 2:签名 + 公证(mac 段接 Developer ID + `@electron/notarize`)
-- 阶段 3:`latest-mac.yml` 部署 + 老 Tauri→Electron 升级桥 mac 侧
+- 阶段 2:签名 + 公证(mac 段接 Developer ID + `@electron/notarize`)—— 已完成
+- 阶段 3:`latest-mac.yml` 部署 + 老 Tauri→Electron 升级桥 mac 侧 —— A 链路已完成;**B 链路(迁移桥)2026-08-11 经 user 拍板永久退役**(用户量小,不背历史负担;且该链路事实上早已因 CDN 证书过期而中断)

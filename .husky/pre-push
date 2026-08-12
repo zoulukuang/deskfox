@@ -33,4 +33,9 @@ echo "[pre-push] fork 包单测 backstop…"
 (cd packages/app && bun run test)
 (cd packages/media-gen && bun test)
 (cd packages/adapter-feishu-lark && bun test)
+# branding:发布脚本的守卫测试(LO 剥皮清单 / 托盘图标 / build 脚本 arch→产物目录映射)。
+#   2026-08-12 补入 —— 这些测试此前不在 turbo test 任务、也不在本闸内,写了从不自动跑,
+#   等于没有防回归(mac 2026.9.1 发版实证:arch 映射写反了几个版本无人发现,LO 完整性守卫
+#   因此对 arm64 长期假绿、对 x64 直接中断)。发布脚本一旦回归就是"发出去才知道",必须护住。
+(cd packages/branding && bun test)
 # FORK-END

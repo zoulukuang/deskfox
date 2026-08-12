@@ -114,3 +114,30 @@ Medium(skill SOP ~120 行 + 三文档)。纯编排层,0 改上游,0 R4。
 **B/D 批盘点结论(2026-06-21,`chore/electron-governance-doc-sweep` 分支)**:对 governance 文档 + 旧 Tauri 脚本做了系统盘点,**结论是大部分无需动**,只修 1 处真死链。留痕防下次重盘:
 - **B(4 个 governance 文档)已合规,只修 B4 一处死链**:`跨平台协作.md`(L8)/`改动规则.md`(L126)/`自动化测试规范.md`(L250)**均已有醒目「⚠️ 换基座对齐(2026-06)」标注**,Tauri 内容按 fork 规则「历史快照加标注、不回填逐行改写」处理,合规;`UPSTREAM-MERGE-GUIDE.md` 全文 `src-tauri` 0 命中、主体已是 Electron。**唯一真 bug**:`自动化测试规范.md` L253 指向 `packages/app/e2e-tauri/README.md`(目录已随换基座删除)= 死链 → 改为「内容见 git 历史 + 指向现行验证」。
 - **D(删旧 Tauri 脚本)不在本分支做,需单独立 feat**:`build-deskfox.{sh,ps1}`/`pack-installer.{sh,ps1}`/`pack-preview-dev.sh` 虽被 `build-deskfox-electron.*` 注释标为「取代」(不 source/不调用,非活依赖),但 **`__tests__/lo-bundle-strip.test.ts` 硬 `readFileSync` 旧脚本断言其 LO 校验/NSIS 哨兵逻辑**,且 `electron-builder.deskfox.config.ts` 注释提「换基座漏迁 build-deskfox.ps1 的版本注入逻辑」。删脚本=带 R5 测试迁移 + 确认新脚本职责完整的代码任务,非文档清理,另起 feat(如 `chore/retire-tauri-build-scripts`)处理。
+
+## follow-up(2026-08-12,mac prod 2026.9.1 发版沉淀)
+
+本机 `/ship` 命令(`.claude/commands/ship.md`,gitignored 不入仓)已按下列变更更新;此处记录**知识正本**,便于 Win 端与后来者对齐。
+
+**① 升级源从两条收敛为一条(A 链路)**
+- **B 链路(Tauri→Electron 迁移桥)2026-08-11 经 user 拍板永久退役**:用户量小,不值得为存量老 Tauri 用户背历史负担;且该链路事实上早已中断 —— 实测线上桥停在 `2026.8.6`(落后两个版本),资产 URL 指向 `dl.clawtray.com`,而该域名证书 2026-07-14 过期至今(发版当日 16:54 才续期),老用户下载本就 TLS 失败。
+- `bridge-electron-updater.sh` **保留在仓里但不再跑**;步骤 7.5 的「两条源硬校验」收缩为只校验 A。
+- 连带:`TAURI_SIGNING_PRIVATE_KEY` / minisign 桥签名密钥失去用途。
+
+**② 公证:一律摘代理直连,超 1 小时即重提**
+2026.9.1 发版实测:走 Clash 代理提交的两笔 x64 dmg 公证**永久卡在 `In Progress`**(分别 11.6h / 9.3h 至今未终结),`notarytool log` 取不到(未走完不产日志)、Apple 状态页显示 Notary Service 正常、账号无协议类报错 —— **无任何可诊断的失败原因**。同一文件**摘代理直连重提,5 分钟即 Accepted**。代理下 341MB 上传 7 分钟连提交 ID 都拿不到,直连秒回 `Successfully uploaded`。
+- 提交前统一 `env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy`。
+- 公证票**按内容哈希绑定、不绑提交 ID**,任意一笔 Accepted 后 `stapler staple` 即可取票,**重复提交无副作用**;轮询用 `stapler staple` 当探针比盯单笔 `notarytool info` 更稳。
+- 🔴 **绝不给 `notarytool` 输出套 `grep`**:会打断 `--wait` 的交互输出使其提前退出,后续 staple 报 `Could not find base64 encoded ticket`,极易误判成公证失败(实际苹果侧那笔是好的)。要脱敏用长 base64 正则 `sed` 替换,或重定向到文件再读。
+
+**③ 绝不发单 arch 的 updater manifest**
+electron-updater 6.8.9 `MacUpdater.filterFilesForArch`:Intel 机会把所有含 `arm64` 的条目过滤成空数组 → `findFile` 返 null → 抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`。**不会误装 arm64 包到 Intel 机(无破坏性)**,但 Intel 用户每次检查更新都报错。双 arch 都过公证门禁后再发;必须分批时宁可推迟 manifest。
+- ⚠️ 但「推迟 manifest」不是中性动作:`allowDowngrade = true`(**上游行为**,`upstream/dev` 至今保留,给的是服务端回滚能力)会让**已装新版的机器被静默降级回 manifest 那一版**(2026-08-11 真机复现:装好 2026.9.1 启动约 15 秒后自动换回 2026.9.0)。要用 prod 包验证新版必须先发 manifest;只想本地测则打 `local` 渠道(`UPDATER_ENABLED = app.isPackaged && CHANNEL !== "dev" && CHANNEL !== "local"`,不启用 updater + 数据隔离)。
+
+**④ 官网:收尾必须 curl 线上逐条核对,改 index.html 要 `--force`**
+`publish.sh` 当时只 patch 了 GitHub 侧三条链接,**国内三条静默跳过**(正则只认 `dl.clawtray.com`,而链接在证书故障期被 `DESKFOX_ASSET_BASE` 改成了 OSS 直链 `downloadbot.*.aliyuncs.com`)→ 官网国内下载停在 2026.9.0 好几天,脚本却一路显示成功。
+- 已修(deskfox-site commit `9509bf6`):主机白名单认两种形态 + 「no match」从 WARN 改**硬失败** + 新增与正则无关的「版本残留」兜底断言 + `test/test-publish-patch.py` 4 场景 15 断言。
+- 但**收尾核对仍要做**:curl 线上首页应有 **6 条**下载链接(Win/Mac-arm64/Mac-x64 × GitHub/国内)且全部本次版本号,再逐条验可下载。
+- 版本号已最新时 `publish.sh` 会 `nothing to do` 直接退出、**跳过部署**,手工改了 index.html 必须 `--force` 才传得上去。
+
+**⑤ 产物目录**:arm64 落 `dist-deskfox/mac-arm64/`、x64 落 `dist-deskfox/mac/`(electron-builder 规则:`appOutDir = "mac" + getArchSuffix`,未设 `defaultArch` 时默认 x64 故 x64 无后缀)。build 脚本此前把两者写反,已修,详见 `docs/features/electron-replatform-macos/3-changelog.md` 的 2026-08-12 follow-up 段。
