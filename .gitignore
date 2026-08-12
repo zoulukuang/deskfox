@@ -56,3 +56,6 @@ packages/desktop/src-tauri/sidecars/
 # 已将其从仓中移除;本地留存的是旧副本,当前源码无任何引用。
 packages/opencode/src/provider/models-snapshot.js
 packages/opencode/src/provider/models-snapshot.d.ts
+
+# 打包产物(Inno Setup / installer 输出),严禁入库 —— 曾因 183MB exe 被 GitHub 整包拒收
+packages/branding/installer/Output/
