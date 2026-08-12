@@ -2125,8 +2125,12 @@ export default function Page() {
 
   useUsageExceededDialogs()
 
+  // FORK: md:order-last —— 经典布局镜像由 row-reverse 改为 order 后(见下方五栏容器注释),
+  //   row-reverse 原本把本组 tab 推到视觉最右;order 方案下需显式声明,否则会插到聊天区前面。
+  //   仅影响 web 端非桌面 + md 以上宽度这一组合(桌面 app isDesktop() 恒真、不渲染本组)。
+  //   [feat: mirror-layout-overflow] 2026-08-12
   const mobileTabs = (compact = false, bottom = false) => (
-    <Tabs value={store.mobileTab} class="h-auto">
+    <Tabs value={store.mobileTab} class="h-auto md:order-last">
       <Tabs.List
         classList={{
           "!h-9": compact,
@@ -2382,10 +2386,18 @@ export default function Page() {
         ref={panelRow}
         // FORK: REQ-041 五栏 — 经典布局下文件树/审查面板锚左(rail 右侧)、聊天居中,对齐 DeskFox Image#2;
         //   上游新 v2 维持 flex-row [feat: electron-replatform] 2026-06-12
+        //
+        // FORK: 镜像由 `md:flex-row-reverse` 改为 `md:flex-row` + 子项 order [feat: mirror-layout-overflow] 2026-08-12
+        //   [bug-repro: 窄窗口下文件树面板左侧被 activity rail 盖住,user 2026-08-12 真机反馈]
+        //   两个子项(聊天区 / 侧面板)都是 style 固定宽度,总宽超出可用宽度时必然溢出;
+        //   row-reverse 会把溢出方向从「右」翻成「左」,而左边是 rail 的地盘 → 压在 rail 底下。
+        //   实测 1280 宽:可用 771,聊天区 570 + 侧面板 240 = 810,超 39px,面板 x 由 64 变 25。
+        //   改用 order 后视觉顺序不变(侧面板仍在左)、DOM 顺序不变(上游增删子项仍可正常 merge),
+        //   但溢出方向恢复向右 —— 即 user 要求的「宽度不够该省略右侧,而不是切左边」。
         class="flex-1 min-h-0 flex flex-col "
         classList={{
           "md:flex-row gap-2 p-2": settings.general.newLayoutDesigns(),
-          "md:flex-row-reverse": !settings.general.newLayoutDesigns(),
+          "md:flex-row": !settings.general.newLayoutDesigns(),
         }}
       >
         <Show when={!isDesktop() && !!params.id && !settings.general.newLayoutDesigns()}>{mobileTabs()}</Show>

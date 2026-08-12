@@ -366,6 +366,12 @@ export function SessionSidePanel(props: {
             !props.size.active() && !props.reviewSnap,
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
           "flex-1": reviewOpen(),
+          // FORK: 经典布局镜像 —— 本面板排到聊天区左侧。原先靠父容器 `md:flex-row-reverse` 实现,
+          //   但两个子项都是固定宽度,总宽超出可用宽度时 row-reverse 会把溢出方向翻到**左侧**,
+          //   压进 activity rail 底下把面板左缘内容盖掉(user 2026-08-12 真机反馈)。
+          //   改用 order:视觉顺序与 DOM 顺序都不变,溢出方向恢复向右。
+          //   [feat: mirror-layout-overflow] 2026-08-12
+          "md:order-first": !settings.general.newLayoutDesigns(),
         }}
         style={{ width: panelWidth() }}
       >
