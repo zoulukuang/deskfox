@@ -28,6 +28,8 @@ import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 // FORK: 运行期数据/配置命名空间隔离(与上游 opencode 分家,防共用 opencode.db schema 冲突)
 //   [feat: deskfox-data-namespace-isolation] 2026-07-12
 import { applyDeskfoxDataNamespace } from "./deskfox/data-namespace"
+// FORK: 存量库孤儿行清理(上游迁移 20260612174303 撞外键导致 sidecar 起不来)[feat: db-orphan-prune] 2026-08-12
+import { pruneOrphanProjectDirectories } from "./deskfox/db-orphan-prune"
 import { restorePreventSleep } from "./deskfox/prevent-sleep"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
@@ -327,6 +329,13 @@ const main = Effect.gen(function* () {
   const namespaceResult = TEST_ONBOARDING
     ? undefined
     : yield* Effect.promise(() => applyDeskfoxDataNamespace())
+
+  // FORK: 存量库孤儿行清理 —— 必须在 data-namespace 之后(才知道库在哪)、sidecar 之前(迁移由它跑)。
+  //   上游迁移 20260612174303_project_dir_strategy 会因孤儿 project_directory 行撞外键而失败,
+  //   导致 sidecar exit 1、应用停在「启动本地服务器时发生错误」完全打不开(2026-08-12 真机实证)。
+  //   无孤儿的库走 no-op 零写入。本调用不抛异常,失败只记日志放行。
+  //   [feat: db-orphan-prune] 2026-08-12
+  if (!TEST_ONBOARDING) pruneOrphanProjectDirectories(app.isPackaged)
 
   yield* Effect.promise(() => cleanupStoreFiles(app.getPath("userData"))).pipe(
     Effect.tap((result) =>
