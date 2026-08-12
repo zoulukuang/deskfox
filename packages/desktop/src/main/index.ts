@@ -30,6 +30,8 @@ import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 import { applyDeskfoxDataNamespace } from "./deskfox/data-namespace"
 // FORK: 存量库孤儿行清理(上游迁移 20260612174303 撞外键导致 sidecar 起不来)[feat: db-orphan-prune] 2026-08-12
 import { pruneOrphanProjectDirectories } from "./deskfox/db-orphan-prune"
+// FORK: local 档配置隔离首启 seed [feat: local-config-isolation] 2026-08-12
+import { seedLocalConfigIfMissing } from "./deskfox/config-dir-resolve"
 import { restorePreventSleep } from "./deskfox/prevent-sleep"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
@@ -336,6 +338,12 @@ const main = Effect.gen(function* () {
   //   无孤儿的库走 no-op 零写入。本调用不抛异常,失败只记日志放行。
   //   [feat: db-orphan-prune] 2026-08-12
   if (!TEST_ONBOARDING) pruneOrphanProjectDirectories(app.isPackaged)
+
+  // FORK: local 档配置隔离 —— 首启从发布渠道 seed 一份配置作为起点(之后各写各的)。
+  //   必须在 data-namespace 之后(才知道 XDG_CONFIG_HOME)、plugin 注入与 sidecar 之前
+  //   (它们都要读写这个目录)。发布渠道是 no-op。
+  //   [feat: local-config-isolation] 2026-08-12
+  if (!TEST_ONBOARDING) seedLocalConfigIfMissing(app.isPackaged)
 
   yield* Effect.promise(() => cleanupStoreFiles(app.getPath("userData"))).pipe(
     Effect.tap((result) =>
