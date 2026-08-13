@@ -33,3 +33,12 @@ test("未覆盖语言返回 undefined —— 保持纯 role,退回系统默认(�
 test("未覆盖的 role 也返回 undefined", () => {
   expect(roleLabel("undo", "zh", "DeskFox")).toBeUndefined()
 })
+
+test("[窗口] 菜单补项 zoom / front 有中文译名", () => {
+  // [bug-repro: 自定义 windowMenu submenu 会整体覆盖 Electron 默认项,实测丢了
+  //  「缩放」与「前置全部窗口」两个常用功能;补回时必须带中文 label,否则又变回英文]
+  expect(roleLabel("zoom", "zh", "DeskFox")).toBe("缩放")
+  expect(roleLabel("front", "zh", "DeskFox")).toBe("前置全部窗口")
+  expect(roleLabel("zoom", "zht", "DeskFox")).toBe("縮放")
+  expect(roleLabel("front", "en", "DeskFox")).toBeUndefined()
+})

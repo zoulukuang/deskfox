@@ -13,15 +13,21 @@
 // "Export named 'nativeTheme' not found"),抽出纯函数才能进 Logic 清单被测试覆盖。
 //
 // 未覆盖的语言返回 undefined → 保持纯 role,退回 Electron/系统默认标签(不回归)。
-import type { DesktopMenuRole } from "@opencode-ai/app/desktop-menu"
+// FORK: 本表的 key 不限于上游 DesktopMenuRole —— zoom / front 是 Electron windowMenu
+//   默认项的 role,上游那个联合类型里没有,故用宽松的 string key。
+//   [feat: mac-window-menu-i18n] 2026-08-13
+export type MenuRoleName = string
 
-const ROLE_LABELS: Record<string, Partial<Record<DesktopMenuRole, (name: string) => string>>> = {
+const ROLE_LABELS: Record<string, Record<string, (name: string) => string>> = {
   zh: {
     about: (n) => `关于 ${n}`,
     hide: (n) => `隐藏 ${n}`,
     hideOthers: () => "隐藏其他",
     unhide: () => "全部显示",
     quit: (n) => `退出 ${n}`,
+    // FORK: [窗口] 菜单补项 [feat: mac-window-menu-i18n] 2026-08-13
+    zoom: () => "缩放",
+    front: () => "前置全部窗口",
   },
   zht: {
     about: (n) => `關於 ${n}`,
@@ -29,9 +35,11 @@ const ROLE_LABELS: Record<string, Partial<Record<DesktopMenuRole, (name: string)
     hideOthers: () => "隱藏其他",
     unhide: () => "全部顯示",
     quit: (n) => `結束 ${n}`,
+    zoom: () => "縮放",
+    front: () => "前置全部視窗",
   },
 }
 
-export function roleLabel(role: DesktopMenuRole, locale: string, appName: string): string | undefined {
+export function roleLabel(role: MenuRoleName, locale: string, appName: string): string | undefined {
   return ROLE_LABELS[locale]?.[role]?.(appName)
 }
