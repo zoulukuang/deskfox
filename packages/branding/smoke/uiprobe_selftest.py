@@ -21,7 +21,38 @@ def check(name: str, ok: bool, detail: str = ""):
     print("  [%s] %s %s" % (PASS if ok else FAIL, name, ("— " + detail) if detail else ""))
 
 
+def check_target_selection():
+    """第 0 节:多窗口时必须挑中前台可见的那个(离线,不依赖真开两个窗口)。
+
+    2026-08-13 二次实撞的回归保护:原实现按 title 猜前台,而两个窗口 title 都是 "OpenCode",
+    等于没排序,稳定取到被节流的隐藏窗口 —— 表现为「CDP 超时」,上个 session 为此绕了十几轮。
+    """
+    print("== 0. 多窗口 target 选取(离线)==")
+    pages = [{"id": "hidden00", "webSocketDebuggerUrl": "ws://h"},
+             {"id": "visible0", "webSocketDebuggerUrl": "ws://v"}]
+    states = {"ws://h": "hidden", "ws://v": "visible"}
+
+    picked = UI.pick_visible_page(pages, lambda u: states[u])
+    check("隐藏窗口排在前时仍挑中可见窗口(正向)", picked["id"] == "visible0", "挑中 %s" % picked["id"])
+
+    single = UI.pick_visible_page([pages[0]], lambda u: (_ for _ in ()).throw(AssertionError("不该探测")))
+    check("只有一个 target 时直接返回、不做多余探测", single["id"] == "hidden00")
+
+    try:
+        UI.pick_visible_page(pages, lambda u: "hidden")
+        check("全部 hidden 时必须中止(反向)", False, "竟然没抛错 —— 会拿被节流的窗口出结论")
+    except ProbeError as e:
+        check("全部 hidden 时必须中止(反向)", True, str(e)[:46])
+
+    try:
+        UI.pick_visible_page([], lambda u: "visible")
+        check("没有 page target 时必须中止(反向)", False, "竟然没抛错")
+    except ProbeError:
+        check("没有 page target 时必须中止(反向)", True)
+
+
 def main():
+    check_target_selection()
     ui = UI()
     try:
         print("== 1. 窗口/屏幕几何 ==")

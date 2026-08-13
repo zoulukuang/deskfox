@@ -76,19 +76,64 @@ class UI:
         **不能盲取第一个** —— 2026-08-13 实撞:测多窗口时留下第二个窗口,列表里就有两个 page,
         取到的那个是**后台窗口**,渲染器被浏览器节流,`Runtime.evaluate` 迟迟不返回,
         表现为「CDP 连接超时」,极易被误判成工具坏了或应用挂了(当时排查了很久)。
-        这里优先选**前台可见**窗口:用 CDP 的 attached/visible 线索排序,并在多 target 时打印提示。
+        这里**实测**每个 target 的 `document.visibilityState`,只挑 visible 的那个。
+
+        2026-08-13 二次实撞:原实现按 title 里有没有 "background" 排序 —— 但两个窗口 title 都是
+        "OpenCode",`attached` 也都是 None,排序等于没排,照样取到列表第一个(恰是隐藏窗口)。
+        **靠命名约定猜前台是不可靠的,必须实测。** 猜 → 测,是这次工具修正的核心。
         """
         targets = json.load(urllib.request.urlopen("http://%s/json" % self.host, timeout=5))
         pages = [t for t in targets if t.get("type") == "page"]
+        return self.pick_visible_page(pages, self._probe_visibility)["webSocketDebuggerUrl"]
+
+    @staticmethod
+    def pick_visible_page(pages: list, probe) -> dict:
+        """从 page target 列表里挑出前台可见的那个。
+
+        抽成不碰网络的纯函数,`probe(ws_url) -> str | None` 由调用方注入 ——
+        这样选取逻辑本身能离线回归(见 `uiprobe_selftest.py` 第 0 节),
+        不必真开两个窗口才能验。
+        """
         if not pages:
             raise ProbeError("CDP 没有 page target —— 应用没起来,或没开 --remote-debugging-port")
-        if len(pages) > 1:
-            print("[uiprobe] 检测到 %d 个 page target(多窗口)。后台窗口的渲染器会被节流、"
-                  "evaluate 可能超时 —— 已优先选择前台窗口;若结果异常请只留一个窗口重试。"
-                  % len(pages), file=sys.stderr)
-        # 前台窗口通常不带 "(background)" 标记且 attached;这里做一次稳妥排序
-        pages.sort(key=lambda t: (0 if t.get("attached") else 1, 0 if "background" not in (t.get("title") or "").lower() else 1))
-        return pages[0]["webSocketDebuggerUrl"]
+        if len(pages) == 1:
+            return pages[0]
+
+        visible = []
+        for p in pages:
+            state = probe(p["webSocketDebuggerUrl"])
+            print("[uiprobe] target %s… visibilityState=%s" % (p.get("id", "?")[:8], state), file=sys.stderr)
+            if state == "visible":
+                visible.append(p)
+        if not visible:
+            raise ProbeError(
+                "%d 个 page target 全部处于 hidden —— 窗口可能被最小化或全被遮挡。"
+                "后台渲染器会被节流、evaluate 可能超时,此时任何结论都不可信。" % len(pages))
+        if len(visible) > 1:
+            print("[uiprobe] %d 个窗口同时可见,取第一个;若结果异常请只留一个窗口重试。"
+                  % len(visible), file=sys.stderr)
+        print("[uiprobe] 共 %d 个 page target,已选中可见窗口 %s…"
+              % (len(pages), visible[0].get("id", "?")[:8]), file=sys.stderr)
+        return visible[0]
+
+    def _probe_visibility(self, ws_url: str) -> str | None:
+        """单独连一次,只问一句 visibilityState。超时即视为不可用(被节流的后台窗口)。"""
+        try:
+            ws = websocket.create_connection(ws_url, timeout=5, suppress_origin=True)
+        except Exception:
+            return None
+        try:
+            ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
+                                "params": {"expression": "document.visibilityState",
+                                           "returnByValue": True}}))
+            while True:
+                msg = json.loads(ws.recv())
+                if msg.get("id") == 1:
+                    return msg.get("result", {}).get("result", {}).get("value")
+        except Exception:
+            return None
+        finally:
+            ws.close()
 
     def send(self, method: str, params: dict | None = None) -> dict:
         self._id += 1
@@ -140,6 +185,21 @@ class UI:
             "screen": {"availW": vp["screenW"], "availH": vp["screenH"]},
         }
         out["window"] = self._window_bounds_via_applescript()
+        # 多窗口时 AppleScript 的「window 1」未必是 CDP 连着的那个 —— 2026-08-13 实撞:
+        # CDP 视口 1600x950,AppleScript 报 1500x900,两者说的根本不是同一个窗口。
+        # 拿它去判「窗口尺寸记忆」必然得出错误结论,故显式标注不可信。
+        out["window_count"] = self._window_count_via_applescript()
+        if out["window_count"] and out["window_count"] > 1:
+            w = out["window"] or {}
+            mismatch = abs((w.get("w") or 0) - vp["w"]) > 40 or abs((w.get("h") or 0) - vp["h"]) > 60
+            out["window_untrusted"] = (
+                "存在 %d 个窗口,AppleScript 的 window 1 未必是 CDP 连着的那个%s —— "
+                "窗口位置/尺寸类判定请先关到只剩一个窗口" % (
+                    out["window_count"],
+                    "(实测已不一致:AS %sx%s vs 视口 %sx%s)" % (w.get("w"), w.get("h"), vp["w"], vp["h"])
+                    if mismatch else "")
+            )
+            print("[uiprobe] 警告:%s" % out["window_untrusted"], file=sys.stderr)
         out["displays"] = self._displays_via_applescript()
         out["on_display"] = self._which_display(out["window"], out["displays"])
         out["offscreen"] = self._is_offscreen(out["window"], out["displays"])
@@ -165,6 +225,15 @@ class UI:
         except ValueError:
             return None
         return {"x": x, "y": y, "w": w, "h": h, "right": x + w, "bottom": y + h}
+
+    def _window_count_via_applescript(self) -> int | None:
+        raw = self._osascript(
+            'tell application "System Events" to tell process "%s" to return count of windows'
+            % self.process_name)
+        try:
+            return int(raw)
+        except ValueError:
+            return None
 
     def _displays_via_applescript(self) -> list:
         raw = self._osascript(
