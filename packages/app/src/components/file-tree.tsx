@@ -300,6 +300,17 @@ const FileTreeNode = (
 
   // FORK: 多选行 click 拦截器 — 修饰键时阻止默认行为(展开/打开),仅做选择;否则透传给原 onClick 2026-04-27
   const handleClick = (event: MouseEvent) => {
+    // FORK: 点击时把 DOM 焦点显式落到本行 [feat: filetree-shortcut-focus-scope] 2026-08-13
+    //   [bug-repro: 点击文件树项后 document.activeElement 实测是 **body** —— 行本身是
+    //    <button tabIndex=0> 且确实在 filetree 容器内,但点击后焦点没留住。
+    //    这正是原实现需要「B 路径」(焦点在中性区也接管键盘)来兜底的根因:
+    //    A 路径 activeInFileTree() 永远为 false,不兜底就完全没有键盘操作。]
+    //   user 2026-08-13 定的规则是「键盘生效与否取决于焦点在不在文件树目录区」,
+    //   所以正解是**让焦点真的落在文件树内**,而不是绕过焦点判定去兜底。
+    //   焦点落位后:点文件树 → A 路径成立、键盘可用;点别处 → 焦点转移、键盘自动失效。
+    const row = event.currentTarget
+    if (row instanceof HTMLElement) row.focus({ preventScroll: true })
+
     const handled = local.onSelectMaybe?.(event) ?? false
     if (handled) {
       event.preventDefault()
