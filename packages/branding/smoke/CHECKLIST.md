@@ -65,6 +65,18 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
     git checkout <新的基线 commit>
     bun install && cd packages/desktop && OPENCODE_CHANNEL=local bun run build
     # 打包命令见 UIPROBE.md,注意必带 ELECTRON_MIRROR 与摘代理
+### 专用测试项目(勿在 user 真实项目里跑)
+
+    python3 packages/branding/smoke/make_fixtures.py     # 生成 /Volumes/ExtSSD/deskfox-uitest
+    python3 packages/branding/smoke/open_project.py /Volumes/ExtSSD/deskfox-uitest
+
+第 3 组含**归档 / 删除 / 分享**这类破坏性或对外的动作,在 user 真实项目(如 `/Volumes/ExtSSD/Finance`)
+里跑等于拿真实数据练手,「分享」还会把内容发到站外。所以一律先切到自建项目。
+
+生成的样本**内容带可判定特征**(`BOLDMARK` / `QUOTEMARK` / `PNGMARK` 等),
+预览对不对能直接断言,而不是「看着像渲染出来了」;并且是 git 仓且**故意留有未提交改动**,
+因为 #15 的「N 更改」tab 没有真 diff 就不渲染。各格式(md/docx/xlsx/pdf/png/代码/超大文件)一次备齐。
+
 - **判定格式**:`动作 → 基准版表现 / 当前版表现 / 是否一致`。
 - **图例**:`[ ]` 未验 / `[x]` 一致 / `[!]` 有差异待处理 / `[-]` 不适用
 
@@ -99,9 +111,9 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
 | 16 | **面板开关矩阵**(树/审查/预览/终端 各组合) | 任一组合下都不遮挡、无溢出、分隔线在 | `is_occluded` + `overflow_of` |
 | 17 | 拖拽调整各面板宽度 | 松手后保持;侧面板占位 == 聊天区让位 | `overflow_of('main')` |
 | 18 | rail 项目图标切换 | 切换项目 | `click_element` |
-| 19 | 打开项目(`project.open`) | 目录选择 → 加载 | 手工(NSOpenPanel) |
+| 19 | 打开项目(`project.open`) | 目录选择 → 加载 | `open_project.py <路径>`(已自动化,原「手工」) |
 | 20 | 前进/返回导航 | 历史正确 | `click_element` |
-| 21 | 通知面板(alt+T) | 打开/关闭 | `uiprobe.key` |
+| 21 | toast 通知区就位 | 容器在视口右下待命;**无 toast 时 height=0 属正常** | `run_group2.py` |
 | 22 | 切换终端 / 新建终端 | canvas 出现;shell prompt 正常 | `find_element('canvas')` |
 
 ### 第 3 组 会话与聊天
@@ -169,6 +181,19 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
 | 61 | **权限自动接受开关**(安全相关) | 开关生效 | 手工 |
 | 62 | MCP 开关 | 生效 | 手工 |
 | 63 | server 切换 / workspace 切换 | 生效 | 手工 |
+
+## 三之二、条目本身也会错(2026-08-13 立)
+
+枚举法能保证「不漏」,但**保证不了「不多」** —— 机器列出来的入口里混着不属于产品的东西。
+
+实例:#21 原写作「通知面板(alt+T)→ 打开/关闭」,来源是 §1.2 枚举 DOM `aria-label` 时收到的
+`Notifications (alt+T)`。追到 `node_modules` 才确认那是第三方库 **`solid-sonner`** 的 Toaster
+容器标签,alt+T 是它把焦点移到 toast 列表的**无障碍热键**,压根没有「面板」这回事;
+零条 toast 时 `height=0` 是正常状态。按原条目测,只会得到「入口在但打不开」的假缺陷。
+
+**规矩**:验一条时若反复得到「元素在、但行为对不上」,先怀疑**条目写错了**,
+去源码 / 依赖里确认这个入口到底属于谁、本该做什么,再决定是改代码还是改清单。
+改清单要在条目旁写明**为什么改**,否则下次又会照着错的重列一遍。
 
 ## 四、维护规则
 
