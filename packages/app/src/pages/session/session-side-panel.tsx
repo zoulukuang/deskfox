@@ -1,4 +1,6 @@
 import { For, Match, Show, Switch, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js"
+// FORK: 文件树宽度唯一事实源 [feat: file-tree-width-single-source] 2026-08-13
+import { FILE_TREE_WIDTH_MIN, resolvedFileTreeWidth } from "./file-tree-width"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { DragDropProvider as DndKitProvider, PointerSensor } from "@dnd-kit/solid"
@@ -63,7 +65,9 @@ import { SessionFileBrowserTab, type SessionFileBrowserState } from "@/pages/ses
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
 type RenderDiff = FileDiffInfo | (SnapshotFileDiff & { file: string }) | VcsFileDiff
-const FILE_TREE_WIDTH_MIN = 240
+// FORK: 文件树宽度改由唯一事实源提供 —— 侧面板与聊天区必须同取一个值,否则溢出
+//   [feat: file-tree-width-single-source] 2026-08-13
+// (原地定义已移到 ./file-tree-width.ts,此处保留同名 re-export 以免大面积改动)
 
 function renderDiff(value: ReviewDiff): value is RenderDiff {
   return typeof value.file === "string"
@@ -109,7 +113,7 @@ export function SessionSidePanel(props: {
       }),
   )
   const open = createMemo(() => reviewOpen() || fileOpen())
-  const fileTreeWidth = createMemo(() => Math.max(FILE_TREE_WIDTH_MIN, layout.fileTree.width()))
+  const fileTreeWidth = createMemo(() => resolvedFileTreeWidth(layout.fileTree.width()))
   const reviewTab = createMemo(() => isDesktop())
   const panelWidth = createMemo(() => {
     if (!open()) return "0px"

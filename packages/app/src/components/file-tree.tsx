@@ -852,7 +852,6 @@ export default function FileTree(props: {
       onEnter: onEnterAction,
       onRename: onRenameAction,
       onDelete: onDeleteAction,
-      hasSelection: () => selection.paths().length > 0,
     })
 
     // (外部 OS 文件 drop 走 dropHandlers 的 HTML5 路径 — Tauri webview 在 Windows 上 File 对象的非标准 path 字段可用,见 file-tree-dnd.ts parseExternalFilePaths)

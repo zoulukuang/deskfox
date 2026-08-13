@@ -81,6 +81,8 @@ import {
 } from "@/pages/session/helpers"
 // FORK: REQ-075 聊天 md 内链拦截 [feat: batch-port-edit-mdlink] 2026-07-07
 import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
+// FORK: 文件树宽度唯一事实源 [feat: file-tree-width-single-source] 2026-08-13
+import { resolvedFileTreeWidth } from "@/pages/session/file-tree-width"
 import { invoke } from "@/utils/native"
 import { MessageTimeline } from "@/pages/session/timeline/message-timeline"
 import { createTimelineModel } from "@/pages/session/timeline/model"
@@ -518,7 +520,11 @@ export default function Page() {
   const sessionPanelWidth = createMemo(() => {
     if (!desktopSidePanelOpen()) return "100%"
     if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
-    return `calc(100% - ${layout.fileTree.width()}px)`
+    // FORK: 让位宽度必须与侧面板**实际占位**一致 —— 上游给侧面板加了 max(240, 存储值) 的 clamp
+    //   却没同步这里,存储 200 时侧面板占 240、这里只让 200,聊天区恒定溢出 40px 被右侧面板盖住,
+    //   导致查找框「关闭」按钮与会话「更多」按钮点不到(user 2026-08-13 反馈)。
+    //   [feat: file-tree-width-single-source] 2026-08-13
+    return `calc(100% - ${resolvedFileTreeWidth(layout.fileTree.width())}px)`
   })
   const centered = createMemo(() => isDesktop() && (newSessionDesign() || !desktopReviewOpen()))
   const desktopV2PanelLayout = createMemo(() =>

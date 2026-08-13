@@ -1488,8 +1488,17 @@ export function FileTabContent(props: {
           contents: source,
           cacheKey: cacheKey(),
         }}
-        enableLineSelection
-        enableGutterUtility
+        // FORK: 关闭代码视图的「选中即弹行内评论」[feat: unify-selection-to-chat] 2026-08-13
+        //   [bug-repro: user 反馈「TXT 文件选中文字后直接出来了评论框,应该跟其他文件格式看齐 ——
+        //    选中文字后点右键加入聊天窗口,统一交互方式」]
+        //   分野的来源:走 CodeMirror 的格式(.txt/.json/.toml/.py 及各类代码文件)带行号,
+        //   选中行会触发上游的行内评论;而走 DocumentViewer 的格式(.md/.docx/.pdf/图片)
+        //   走的是 fork 的「选中 → 右键 → 加入聊天」(handleSelectionContextMenu)。
+        //   user 2026-08-13 拍板「后者彻底统一」:代码类文件去掉行内评论,只保留加入聊天。
+        //   去掉 enableLineSelection / enableGutterUtility 后,选中不再弹评论框,
+        //   右键菜单仍由 handleSelectionContextMenu 接管(非编辑态),两类格式交互一致。
+        //   注:审查(review)面板的行评论走 session.tsx 的 onLineComment(origin: "review"),
+        //   与本处(origin: "file")是两条路径,不受影响。
         selectedLines={activeSelection()}
         commentedLines={commentedLines()}
         onRendered={() => {
