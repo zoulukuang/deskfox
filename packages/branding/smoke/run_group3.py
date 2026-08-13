@@ -690,6 +690,18 @@ def check_30_undo_redo(ui):
     esc(ui)
     count = lambda: ui.ev("(() => [...new Set([...document.querySelectorAll('[data-message-id]')]"
                           ".map(e=>e.getAttribute('data-message-id')))].length)()")
+    # 撤销要有东西可撤。会话状态随前面的条目漂移,不保证「刚好有一条可撤销的消息」——
+    # 实撞多次 13→13→13,不是撤销坏了,是**没有可撤销的东西**。
+    # 所以先用 shell 造一条(不花额度),把前提坐实再验。
+    before_seed = count()
+    if set_shell_mode(ui, True):
+        type_into_composer(ui, "echo UNDO_PROBE")
+        ui.key("Enter", "Enter", vk=13)
+        for _ in range(20):
+            time.sleep(1.0)
+            if count() > before_seed:
+                break
+        set_shell_mode(ui, False)
     c0 = count()
     items, picked = palette(ui, "撤销", pick_text="撤销")
     if not picked:
@@ -1009,6 +1021,166 @@ def menu_item(ui, pattern):
     """ % pattern)
 
 
+def open_readme(ui):
+    """打开测试项目的 README.md 预览,并把前提一并补齐。
+
+    三个前提都踩过:① 文件树面板可能是关的(上一条测试关掉了);
+    ② 文件树可能停在「更改」tab,树里只有改动文件;
+    ③ **对已打开的文件再点一次是收起预览**。
+    前提不补就直接返回 False,等于把「状态不对」记成「功能不可用」。
+    """
+    # ① 文件树面板开着
+    if not ui.ev("(() => [...document.querySelectorAll('[data-component=\"filetree\"]')]"
+                 ".some(e => e.getBoundingClientRect().width>40))()"):
+        btn = ui.find_element(label="切换文件树")
+        if btn:
+            ui.click_element(btn, "切换文件树")
+            time.sleep(1.5)
+    # ② 切到「所有文件」tab
+    allf = box_of(ui, "[...document.querySelectorAll('[role=tab],button')]"
+                      ".find(e=>(e.textContent||'').trim()==='所有文件')")
+    if allf:
+        ui.click_element(allf, "所有文件 tab")
+        time.sleep(1.2)
+    # ③ 已经是激活 tab 就什么都不做;否则**点文件树节点**打开。
+    #
+    #    为什么不点 tab:标签条会横向溢出,打开的文件一多,目标 tab 就被挤出可见区。
+    #    此时它**仍能报出几何坐标**(x=771),但那个位置已经在中栏之外 ——
+    #    2026-08-13 实撞:照着几何点过去,落在了会话标题上、**误触发了内联重命名**。
+    #    坐标能取到 ≠ 那个位置真属于它。文件树节点没有这个问题,故一律走树。
+    active = ui.ev("""
+    (() => { const e=[...document.querySelectorAll('[role=tab]')]
+        .find(x => x.getBoundingClientRect().height>0 && /README\\.md/.test(x.textContent||''));
+      return e ? e.getAttribute('aria-selected') === 'true' : false; })()
+    """)
+    if not active:
+        node = box_of(ui, "document.querySelector('[data-tree-path=\"README.md\"]')")
+        if not node:
+            return False
+        # 树在左栏,点击点必须落在树的横向范围内,否则就是点到别处了
+        tree_x = ui.ev("""
+        (() => { const t=document.querySelector('[data-component="filetree"]');
+          if(!t) return null; const r=t.getBoundingClientRect();
+          return { left:Math.round(r.x), right:Math.round(r.right) }; })()
+        """)
+        if tree_x and not (tree_x["left"] <= node["cx"] <= tree_x["right"]):
+            return False
+        ui.click_element(node, "打开 README.md")
+        time.sleep(2.5)
+    return bool(ui.deep_find_text("BOLDMARK"))
+
+
+def check_26_quote(ui):
+    """#26 聊天引用(选中 → 加入聊天)。
+
+    两层判据,缺一不可:
+      ① 引用卡片**真的进了输入区**(不是只弹了个菜单项);
+      ② **点这张卡片不会打开空白预览页** —— 这是清单点名的历史问题。
+    """
+    esc(ui)
+    if not open_readme(ui):
+        record(26, "聊天引用", "skip", "打不开 README.md 预览,拿不到可引用的文本")
+        return
+    box = ui.deep_find_text("BOLDMARK")
+    y = box["y"] + box["h"] // 2
+    ui.drag(box["x"] + 3, y, box["x"] + max(60, box["w"] // 2), y)
+    time.sleep(0.8)
+    if not ui.selection_text():
+        record(26, "聊天引用", "skip", "没能选中文本")
+        return
+    ui.click(box["x"] + max(60, box["w"] // 2), y, button="right")
+    time.sleep(1.4)
+    item = box_of(ui, "[...document.querySelectorAll('button,[role=menuitem]')]"
+                      ".find(e=>/添加到聊天|加入聊天/.test((e.textContent||'').trim()))")
+    if not item:
+        record(26, "聊天引用", "fail", "右键菜单里没有「添加到聊天窗口」")
+        return
+    ui.click_element(item, "添加到聊天窗口")
+    time.sleep(2.0)
+
+    # 「添加到聊天窗口」**只是第一步**:它先弹一个内联提问浮层(输入框 +「取消 / 加入聊天」),
+    # 要再点「加入聊天」才真正入聊天。第一版停在第一步就去找卡片,自然找不到,
+    # 被记成「引用功能没生效」—— 又一次把「流程还没走完」当成「功能坏了」。
+    confirm = box_of(ui, "[...document.querySelectorAll('button')]"
+                         ".find(e=>/^加入聊天$/.test((e.textContent||'').trim()))")
+    if not confirm:
+        record(26, "聊天引用", "fail", "点了「添加到聊天窗口」但没弹出确认浮层")
+        return
+    ui.click_element(confirm, "加入聊天")
+    time.sleep(2.5)
+
+    # ① 卡片进没进输入区 —— 看 dock 里是否多出引用块
+    card = box_of(ui, """
+      (() => { const d=document.querySelector('[data-component="session-prompt-dock"]');
+        if(!d) return null;
+        return [...d.querySelectorAll('*')].find(e => {
+          const r=e.getBoundingClientRect();
+          return r.height>18 && r.width>60 && /README\\.md|BOLDMARK|加粗特征词/.test(e.textContent||''); }); })()
+    """)
+    # ② 点卡片不许开空白预览页
+    tabs_before = ui.ev("(() => [...document.querySelectorAll('[role=tab]')]"
+                        ".filter(e=>e.getBoundingClientRect().height>0)"
+                        ".map(e=>(e.textContent||'').trim()))()") or []
+    blank = None
+    if card:
+        ui.click_element(card, "引用卡片")
+        time.sleep(2.0)
+        tabs_after = ui.ev("(() => [...document.querySelectorAll('[role=tab]')]"
+                           ".filter(e=>e.getBoundingClientRect().height>0)"
+                           ".map(e=>(e.textContent||'').trim()))()") or []
+        # 空白预览页 = 多出一个没名字的 tab
+        blank = any(not t.strip() for t in tabs_after) or len(tabs_after) > len(tabs_before) + 1
+    # 收尾:清掉输入区的引用,别留给后续条目
+    ce = composer(ui)
+    if ce:
+        ui.click_element(ce, "输入框")
+        ui.clear_input()
+    esc(ui)
+    ok = bool(card) and blank is False
+    record(26, "聊天引用(卡片入输入区 + 点击不开空白页)", "ok" if ok else "fail",
+           "卡片=%s;点击后开出空白预览页=%s" % (bool(card), blank))
+
+
+def check_27_mdlink(ui):
+    """#27 md 内链点击拦截 —— 站内跳转,**不外开浏览器**。
+
+    判据两条:内链点下去在应用内打开了目标文档;且**没有多出原生窗口**
+    (外开浏览器会新增系统窗口 / 唤起别的 app)。
+    """
+    esc(ui)
+    if not open_readme(ui):
+        record(27, "md 内链拦截", "skip", "打不开 README.md 预览")
+        return
+    link = ui.deep_find_text("跳到子文档")
+    if not link:
+        record(27, "md 内链拦截", "skip", "README 里找不到内链「跳到子文档」")
+        return
+    # 判据不用「前台应用是谁」—— 太脆:探针自己的 osascript 调用就会打乱前台
+    # (实撞一次拿到 'Finder',而内链其实工作正常)。
+    # 改看**有没有浏览器进程被拉起来**:外开浏览器必然新增/唤起一个浏览器 app。
+    browsers_before = running_browsers()
+    ui.click_element(link, "内链「跳到子文档」")
+    time.sleep(3.0)
+    jumped = bool(ui.deep_find_text("SUBDOC"))
+    browsers_after = running_browsers()
+    launched = sorted(browsers_after - browsers_before)
+    esc(ui)
+    ok = jumped and not launched
+    record(27, "md 内链点击拦截(站内跳转不外开浏览器)", "ok" if ok else "fail",
+           "跳到子文档=%s;新拉起的浏览器=%s" % (jumped, launched or "无"))
+
+
+BROWSERS = ("Safari", "Google Chrome", "Firefox", "Microsoft Edge", "Arc", "Brave Browser")
+
+
+def running_browsers():
+    import subprocess
+    out = subprocess.run(["osascript", "-e",
+                          'tell application "System Events" to return name of every process'],
+                         capture_output=True, text=True, timeout=20).stdout
+    return {b for b in BROWSERS if b in out}
+
+
 def check_28_agent(ui):
     """#28 agent 切换(composer 的 Build 下拉)。"""
     esc(ui)
@@ -1078,7 +1250,8 @@ def main():
         print("项目: %s ✓" % cur)
         print("语料: %s\n" % seed_session(ui))
 
-        for fn in (check_24_find, check_25_global_search, check_28_agent, check_29_shell_mode,
+        for fn in (check_24_find, check_25_global_search, check_26_quote, check_27_mdlink,
+                   check_28_agent, check_29_shell_mode,
                    check_30_undo_redo, check_31_compact_fork, check_32_session_nav,
                    check_33_message_nav, check_34_copy, check_35_context_usage,
                    check_36_jump_latest, check_37_step_toggle, check_38_export,

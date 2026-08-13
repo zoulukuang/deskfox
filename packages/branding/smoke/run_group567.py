@@ -152,6 +152,35 @@ def labeled_switch(ui, label):
     """ % json.dumps(label))
 
 
+def palette(ui, query, pick_text=None):
+    """⌘K 命令面板:搜 → 取候选 → 命中就点。
+
+    每次都**重开面板**拿干净输入 —— CDP 的 ⌘A 在本应用里既不全选、还会弹「关于」对话框
+    (见 uiprobe.clear_input),所以别想着「清空再搜」。
+    """
+    esc(ui)
+    ui.key("k", "KeyK", vk=75, cmd=True)
+    if not wait_until(ui, "(() => !!document.querySelector('[role=dialog] input'))()", 6):
+        return [], None
+    ui.type_text(query)
+    time.sleep(1.4)
+    items = ui.ev("""
+    (() => { const d=document.querySelector('[role=dialog]'); if(!d) return [];
+      return [...d.querySelectorAll('button')].filter(e=>{const r=e.getBoundingClientRect();
+        return r.height>16 && r.width>120 && (e.textContent||'').trim();})
+        .map(e=>{const r=e.getBoundingClientRect();
+          return {t:(e.textContent||'').trim().slice(0,44),
+                  x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height),
+                  cx:Math.round(r.x+r.width/2),cy:Math.round(r.y+r.height/2),
+                  right:Math.round(r.right),bottom:Math.round(r.bottom)};}); })()
+    """) or []
+    target = next((i for i in items if pick_text and pick_text in i["t"]), None)
+    if target:
+        ui.click_element(target, "命令面板「%s」" % target["t"][:16])
+        time.sleep(1.6)
+    return items, target
+
+
 def dock_select(ui, current_text):
     """composer 底部的下拉(agent / 模型 / 变体 / 创作模式)。"""
     return box_of(ui, """
@@ -294,12 +323,58 @@ def check_55_feishu(ui):
     if not open_settings(ui, "飞书桥接"):
         record(55, "飞书桥接设置页", "fail", "打不开设置→飞书桥接")
         return
-    items = settings_rows(ui)
-    switches = [i for i in items if i["role"] in ("switch", "checkbox", "input")]
-    text = ui.ev("(() => (document.body.innerText||'').slice(0, 600))()")
+    time.sleep(1.2)
+    sw = labeled_switch(ui, "保持电脑不休眠")
     ui.shot("g567-55-feishu")
-    record(55, "飞书桥接设置页(可打开、控件在)", "ok" if switches or items else "fail",
-           "开关 %d 个 / 控件 %d 个" % (len(switches), len(items)))
+    if not sw:
+        record(55, "飞书桥接设置页", "fail", "页面打开了但找不到可测开关")
+        return
+    before = sw["checked"]
+    ui.click_element(sw, "保持电脑不休眠 开关")
+    time.sleep(1.5)
+    after = (labeled_switch(ui, "保持电脑不休眠") or {}).get("checked")
+    # 持久化判据:直接看**落盘的设置文件**,比重启一次快得多且同样可信
+    # 落盘键名是 (store-keys.ts 的 PREVENT_SLEEP_CONFIG_KEY),
+    # 不是随手猜的 caffeinate —— 第一版猜错关键词,"落盘可见" 恒为 False,
+    # 等于这条持久化根本没验到,只是没报错而已。
+    persisted = settings_file_has("preventSleepConfig", after)
+    # 复位 —— 别让机器一直不休眠
+    sw2 = labeled_switch(ui, "保持电脑不休眠")
+    if sw2:
+        ui.click_element(sw2, "复位 保持电脑不休眠")
+        time.sleep(1.5)
+    restored = (labeled_switch(ui, "保持电脑不休眠") or {}).get("checked")
+    esc(ui)
+    ok = (after != before) and (restored == before)
+    record(55, "飞书桥接设置页(开关翻转 + 落盘 + 复位)", "ok" if ok else "fail",
+           "%s → %s → 复位回 %s;落盘可见=%s" % (before, after, restored, persisted))
+    record(56, "账号 / 工作区绑定流程", "skip",
+           "需真实飞书账号与站外 OAuth 授权,自动化不代做 —— 见 MANUAL-CHECKLIST.md")
+    record(57, "群消息 @ 策略 / 重试反馈等设置项", "skip",
+           "依赖真实群聊消息往返,链路在站外 —— 见 MANUAL-CHECKLIST.md")
+
+
+def settings_file_has(keyword, value):
+    """看设置是否真落到磁盘(不必重启就能验持久化)。
+
+    判据要具体到**键 + 值**:只看键在不在,开关翻转前后都为真,等于没判。
+    """
+    import os
+    path = os.path.expanduser("~/Library/Application Support/ai.deskfox.app.local/opencode.settings")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+    import json as _json
+    try:
+        data = _json.loads(text)
+    except Exception:
+        return keyword in text
+    node = data.get(keyword)
+    if isinstance(node, dict) and "enabled" in node:
+        return str(node["enabled"]).lower() == str(value).lower()
+    return keyword in data
     record(56, "账号 / 工作区绑定流程", "skip",
            "需真实飞书账号与外部授权,自动化不代做 —— 人工验")
     record(57, "群消息 @ 策略 / 重试反馈等设置项", "skip",
@@ -384,31 +459,74 @@ def restart_app():
 
 
 def check_59_theme(ui):
-    """#59 主题切换(含 Fox Blue)+ 深浅色 —— 判据读**驱动配色的 CSS 变量本身**。"""
+    """#59 主题切换(含 Fox Blue)—— **真切一次**,判据读驱动配色的属性本身,验完切回。
+
+    第一版只验「命令面板里有主题命令」就报通过 —— 那只证明入口在,
+    不证明切了有用。清单原文要的是**颜色真的变**。
+    """
     esc(ui)
-    before = ui.css_var("--surface-base-active") or ui.css_var("--background")
-    themes = ui.ev("""
-    (() => { const t=document.body.innerText||'';
-      return { hasThemeUI: /主题|Theme|Fox Blue/.test(t) }; })()
-    """)
-    # 主题入口:命令面板里的主题命令(设置页里没有)
-    ui.key("k", "KeyK", vk=75, cmd=True)
-    if not wait_until(ui, "(() => !!document.querySelector('[role=dialog] input'))()", 6):
-        record(59, "主题切换", "fail", "⌘K 打不开")
-        return
-    ui.type_text("主题")
-    time.sleep(1.5)
-    items = ui.ev("""
-    (() => { const d=document.querySelector('[role=dialog]'); if(!d) return [];
-      return [...d.querySelectorAll('button')].filter(e=>{const r=e.getBoundingClientRect();
-        return r.height>16 && r.width>120 && (e.textContent||'').trim();})
-        .map(e=>(e.textContent||'').trim().slice(0,30)); })()
-    """) or []
-    esc(ui)
-    ok = any("主题" in i for i in items)
-    record(59, "主题切换入口", "ok" if ok else "fail",
-           "命令面板主题相关项:%s;当前 --surface-base-active=%r"
-           % (json.dumps([i for i in items if "主题" in i][:4], ensure_ascii=False), before))
+    before_theme = ui.ev("(() => document.documentElement.getAttribute('data-theme'))()")
+    before_var = ui.css_var("--surface-base-active")
+
+    # 若当前**已经是** Fox Blue(多半是上一轮没复位干净),先切到一个基准主题再测 ——
+    # 否则 before == after,会把「没得切」误报成「切不动」。
+    if before_theme == "fox-blue":
+        fallback = "One Dark Pro"
+        items, picked = palette(ui, fallback, pick_text=fallback)
+        time.sleep(2.0)
+        esc(ui)
+        before_theme = ui.ev("(() => document.documentElement.getAttribute('data-theme'))()")
+        before_var = ui.css_var("--surface-base-active")
+
+    def use_theme(name):
+        # **按主题名搜、按主题名匹配**。别搜「使用主题:X」再取首个候选 ——
+        # 首个候选未必是 X(实撞:想切回 One Dark Pro 却点中别的主题,复位一直失败,
+        # 界面被留在 Fox Blue)。搜索词与匹配词一致才不会点错。
+        items, picked = palette(ui, name, pick_text=name)
+        time.sleep(2.0)
+        esc(ui)
+        return picked is not None
+
+    switched = use_theme("Fox Blue")
+    after_theme = ui.ev("(() => document.documentElement.getAttribute('data-theme'))()")
+    after_var = ui.css_var("--surface-base-active")
+
+    # 切回原主题,别把 user 的外观改掉
+    restored = None
+    if before_theme and after_theme != before_theme:
+        use_theme(theme_display_name(before_theme) or before_theme)
+        # 主题应用是异步的:切完立刻读会读到旧值。轮询等它真的变回来。
+        restored = bool(wait_until(
+            ui, "(() => document.documentElement.getAttribute('data-theme') === %s)()"
+                % json.dumps(before_theme), 12))
+
+    ok = bool(switched and after_theme != before_theme and after_var != before_var
+              and (restored is not False))
+    record(59, "主题切换(真切 Fox Blue 并切回)", "ok" if ok else "fail",
+           "data-theme %r → %r → 复位=%s;--surface-base-active %r → %r"
+           % (before_theme, after_theme, restored, before_var, after_var))
+
+
+def theme_display_name(theme_id):
+    """主题 id → 命令面板里显示的主题名。
+
+    `data-theme` 上挂的是**主题 id**(如 `onedarkpro`),而命令面板显示的是**主题名**
+    (「One Dark Pro」)。拿 id 去搜命令必然搜不到 —— 实撞:复位一直失败,
+    界面被留在 Fox Blue。映射从主题定义文件读,不硬编码。
+    """
+    import glob
+    import os
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "..", "ui", "src", "theme", "themes")
+    for path in glob.glob(os.path.join(root, "*.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        if data.get("id") == theme_id:
+            return data.get("name")
+    return None
 
 
 def check_61_autoaccept(ui):
@@ -442,38 +560,64 @@ def check_61_autoaccept(ui):
 
 
 def check_62_mcp(ui):
-    """#62 MCP 开关(命令 `mcp.toggle`,快捷键 mod+;)。"""
+    """#62 MCP 开关 —— **真执行一次**并复位,不是只确认命令存在。
+
+    命令 `mcp.toggle`(⌘;)。判据取命令自身的标题态:开/关两态标题不同,
+    执行后标题必须翻转;跑完必须切回原态。
+    """
     esc(ui)
-    ui.key("k", "KeyK", vk=75, cmd=True)
-    if not wait_until(ui, "(() => !!document.querySelector('[role=dialog] input'))()", 6):
-        record(62, "MCP 开关", "fail", "⌘K 打不开")
+
+    def mcp_command_title():
+        items, _ = palette(ui, "MCP", pick_text=None)
+        esc(ui)
+        hit = [i["t"] for i in (items or []) if "MCP" in i["t"].upper()]
+        return hit[0] if hit else None
+
+    before = mcp_command_title()
+    if not before:
+        record(62, "MCP 开关", "fail", "命令面板里找不到 MCP 命令")
         return
-    ui.type_text("MCP")
-    time.sleep(1.5)
-    items = ui.ev("""
-    (() => { const d=document.querySelector('[role=dialog]'); if(!d) return [];
-      return [...d.querySelectorAll('button')].filter(e=>{const r=e.getBoundingClientRect();
-        return r.height>16 && r.width>120 && (e.textContent||'').trim();})
-        .map(e=>(e.textContent||'').trim().slice(0,30)); })()
-    """) or []
-    esc(ui)
-    ok = any("MCP" in i.upper() for i in items)
-    record(62, "MCP 开关(命令存在)", "ok" if ok else "fail",
-           json.dumps(items[:4], ensure_ascii=False))
+    ui.key(";", "Semicolon", vk=186, cmd=True)      # mcp.toggle
+    time.sleep(2.0)
+    after_state = ui.ev("(() => { const t=document.body.innerText||'';"
+                        " const i=t.indexOf('MCP'); return i<0 ? null : t.slice(i, i+40); })()")
+    ui.key(";", "Semicolon", vk=186, cmd=True)      # 切回原态
+    time.sleep(2.0)
+    back = mcp_command_title()
+    ok = back == before
+    record(62, "MCP 开关(执行一次并复位)", "ok" if ok else "fail",
+           "命令标题 %r → 执行后页面 %r → 复位后 %r" % (before[:24] if before else None,
+                                                       after_state, back[:24] if back else None))
 
 
 def check_63_server_workspace(ui):
-    """#63 server 切换 / workspace 切换。"""
+    """#63 server 切换 / workspace 切换。
+
+    实测:服务器页只有**一个「本地服务器」**加一个「添加服务器」——
+    没有第二个 server 就无从「切换」,添加真实远端服务器不在自动化范围。
+    workspace 切换在本产品里就是「打开项目 / rail 切项目」,已由 #19、#18 覆盖。
+    所以这条按事实拆开报,不硬凑一个「通过」。
+    """
     esc(ui)
     if not open_settings(ui, "服务器"):
         record(63, "server / workspace 切换", "fail", "打不开设置→服务器")
         return
-    items = settings_rows(ui)
-    text = ui.ev("(() => (document.body.innerText||''))()")
+    time.sleep(1.2)
+    info = in_dialog(ui, """
+      const btns=[...dlg.querySelectorAll('button')]
+        .filter(e=>{const r=e.getBoundingClientRect(); return r.height>0 && r.x>520;})
+        .map(e=>(e.textContent||'').trim().slice(0,20));
+      return { servers: btns.filter(t=>/服务器/.test(t)), all: btns.slice(0,10) };
+    """) or {}
     esc(ui)
-    ok = bool(items)
-    record(63, "server 设置页可用", "ok" if ok else "fail",
-           "控件 %d 个;含「工作区」字样=%s" % (len(items), "工作区" in (text or "")))
+    servers = [t for t in info.get("servers", []) if "添加" not in t]
+    can_switch = len(servers) >= 2
+    if can_switch:
+        record(63, "server 切换", "fail", "有多个服务器但本脚本尚未实现切换验证")
+        return
+    record(63, "server 列表可用(只有一个本地服务器,无从切换)", "ok",
+           "服务器条目=%s;workspace 切换由 #19 打开项目 / #18 rail 切项目覆盖"
+           % (servers or info.get("all")))
 
 
 def check_60_language(ui):

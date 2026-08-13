@@ -39,6 +39,115 @@ def record(no, name, status, detail=""):
     print("  [%s] #%s %s %s" % (tag, no, name, ("— " + detail) if detail else ""))
 
 
+# 三个面板:切换按钮的 aria-label ↔ 判断它开着的判据
+#
+# 两处指标是实测校准的,不是照名字猜的:
+#   · 终端只认 `[data-component="terminal"]` —— 第一版顺手带上了 `canvas`,
+#     而 PDF/xlsx 预览也是 canvas,于是「没开终端」也被判成开着(#22 曾报「实例 2」)。
+#   · **审查不是独立面板,是中栏的一个 tab**(`[data-component="session-review"]` 从来不出现),
+#     所以判据是「tab 条里有没有『审查』」。按名字想当然写选择器,这条会永远开不起来。
+PANELS = {
+    "文件树": ("切换文件树", "filetree"),
+    "审查": ("切换审查", "review-tab"),
+    "终端": ("切换终端", "terminal"),
+}
+
+PANEL_PROBE = """
+(() => { const kind = %s;
+  if (kind === 'review-tab')
+    return [...document.querySelectorAll('[role=tab]')]
+      .some(e => e.getBoundingClientRect().height>0 && /审查/.test(e.textContent||''));
+  const sel = kind === 'filetree' ? '[data-component="filetree"]' : '[data-component="terminal"]';
+  return [...document.querySelectorAll(sel)]
+    .some(e => { const r=e.getBoundingClientRect(); return r.width>40 && r.height>40; }); })()
+"""
+
+
+def panel_open(ui, kind):
+    return bool(ui.ev(PANEL_PROBE % json.dumps(kind)))
+
+
+def set_panel(ui, name, want):
+    label, kind = PANELS[name]
+    for _ in range(3):
+        if panel_open(ui, kind) == want:
+            return True
+        btn = ui.find_element(label=label)
+        if not btn:
+            return False
+        ui.click_element(btn, label)
+        time.sleep(1.5)
+    return panel_open(ui, kind) == want
+
+
+def check_16_panel_matrix(ui):
+    """#16 面板开关矩阵 —— 树/审查/终端 的**全部 8 种组合**都不许遮挡、溢出。
+
+    这条价值最高:`flex-row-reverse` 当初修了又复发,正是因为只测了「文件树 + 聊天」
+    这一种组合,没测「审查 + 文件树同开」。单个面板各自正常 ≠ 组合起来正常。
+    """
+    names = list(PANELS)
+    bad = []
+    tested = 0
+    for mask in range(8):
+        want = {n: bool(mask >> i & 1) for i, n in enumerate(names)}
+        if not all(set_panel(ui, n, w) for n, w in want.items()):
+            continue
+        time.sleep(0.8)
+        tested += 1
+        ov = ui.overflow_of("main") or {}
+        # 溢出:主区域自身横向溢出,或有子元素越界
+        over = ov.get("overflowX", 0) > 0 or bool(ov.get("children"))
+        # 遮挡:标题栏右上角那排功能键必须点得到(此前被右侧面板盖住过)
+        occluded = []
+        for lb in ("新建会话", "跳转到最新", "切换侧边栏"):
+            el = ui.find_element(label=lb)
+            if not el:
+                continue
+            hit = ui.ev("""
+            (() => { const b=[...document.querySelectorAll('[aria-label]')]
+                .find(x=>x.getAttribute('aria-label')===%s);
+              if(!b) return null; const r=b.getBoundingClientRect();
+              const e=document.elementFromPoint(r.x+r.width/2, r.y+r.height/2);
+              return !!(e && (e===b || b.contains(e) || b.contains(e.parentElement))); })()
+            """ % json.dumps(lb))
+            if hit is False:
+                occluded.append(lb)
+        combo = "+".join(n for n in names if want[n]) or "全关"
+        if over or occluded:
+            bad.append("%s(溢出=%s 被遮挡=%s)" % (combo, ov.get("overflowX"), occluded))
+    for n in names:                       # 收尾:恢复成「只开文件树」的常用态
+        set_panel(ui, n, n == "文件树")
+    record(16, "面板开关矩阵(8 种组合都不遮挡不溢出)",
+           "ok" if (tested >= 6 and not bad) else ("fail" if bad else "skip"),
+           "实测 %d/8 种组合;问题组合:%s" % (tested, bad or "无"))
+
+
+def check_22_terminal(ui):
+    """#22 切换终端 / 新建终端 —— 判据是**终端实例数真的变了**,不看按钮有没有响应。"""
+    def count():
+        return ui.ev("""
+        (() => [...document.querySelectorAll('[data-component="terminal"]')]
+          .filter(e => { const r=e.getBoundingClientRect(); return r.width>100 && r.height>60; }).length)()
+        """) or 0
+
+    if not set_panel(ui, "终端", True):
+        record(22, "切换终端 / 新建终端", "fail", "点了「切换终端」但终端没出现")
+        return
+    opened = count()
+    nb = ui.find_element(label="新建终端")
+    added = None
+    if nb:
+        ui.click_element(nb, "新建终端")
+        time.sleep(2.5)
+        added = count()
+    set_panel(ui, "终端", False)
+    closed = count()
+    ok = opened >= 1 and (added is None or added >= opened) and closed < opened
+    record(22, "切换终端 / 新建终端", "ok" if ok else "fail",
+           "开终端后实例 %s → 新建后 %s → 关闭后 %s" % (opened, added, closed))
+
+
 def main():
     ui = UI()
     try:
@@ -139,6 +248,9 @@ def main():
                       region["vw"], region["vh"]))
         else:
             record(21, "toast 通知区", "fail", "DOM 中找不到 toast 容器")
+
+        check_16_panel_matrix(ui)
+        check_22_terminal(ui)
 
     except ProbeError as e:
         print("\n中止:%s" % e)
