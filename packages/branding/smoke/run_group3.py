@@ -509,14 +509,36 @@ def check_37_step_toggle(ui):
     # 先锁定「第几个」触发器,之后一直操作**同一个**。
     # 实撞:每次都取「当前第一个可见的」,展开后布局变了,第二次点到的是另一个,
     # 于是收起没发生 → 高度 32→199→199,被判成「收不起来」。
-    idx = ui.ev("""
+    visible_idx = """
     (() => { const all=[...document.querySelectorAll('[data-component="tool-trigger"]')];
       return all.findIndex(e => { const r=e.getBoundingClientRect();
         return r.height>0 && r.y>=0 && r.bottom<=window.innerHeight; }); })()
-    """)
+    """
+    idx = ui.ev(visible_idx)
     if idx is None or idx < 0:
-        record(37, "步骤展开/收起", "skip",
-               "当前视口内没有工具步骤(全被虚拟列表回收了)—— 需先滚到有步骤的位置")
+        # 会话变长后步骤被虚拟列表回收,视口里一个都没有 —— 这是**前提没准备好**,
+        # 不是「没有步骤」。先跳到最新把最近的步骤带回可视区再试,
+        # 直接记 SKIP 等于每次会话一长这条就永远验不到。
+        jump = ui.find_element(label="跳转到最新")
+        if jump:
+            ui.click_element(jump, "跳转到最新")
+            time.sleep(2.0)
+            idx = ui.ev(visible_idx)
+    if idx is None or idx < 0:
+        # 还是没有,就**现造一个**:跑一条极短的 shell 命令,末尾必然出现一个工具步骤。
+        # 「会话末尾恰好没有工具调用」是环境偶然,不该让这条永远验不到。
+        if set_shell_mode(ui, True):
+            type_into_composer(ui, "echo STEP_PROBE")
+            ui.key("Enter", "Enter", vk=13)
+            wait_until(ui, "(() => !!document.querySelector('[data-component=\"tool-trigger\"]'))()", 30)
+            set_shell_mode(ui, False)
+            jump = ui.find_element(label="跳转到最新")
+            if jump:
+                ui.click_element(jump, "跳转到最新")
+                time.sleep(2.0)
+            idx = ui.ev(visible_idx)
+    if idx is None or idx < 0:
+        record(37, "步骤展开/收起", "skip", "造了 shell 步骤后视口内仍找不到触发器")
         return
     TRIG = ("(() => document.querySelectorAll('[data-component=\"tool-trigger\"]')[%d] || null)()" % idx)
     # 高度要量**被点击的那个步骤所属的容器**,不能量 DOM 里第一个 tool-part-wrapper：
@@ -599,6 +621,20 @@ def check_34_copy(ui):
     if not item:
         record(34, "复制消息 / 复制回复", "skip", "当前视图没有暴露复制入口(需悬停消息才出现)")
         return
+    # 复制走 `clipboard.writeText`,**依赖 document 有焦点**,焦点被抢时会静默失败 ——
+    # 表现为偶发的「点了复制但剪贴板没变」。所以失败后重试一次,并且每次都先把页面提到前台。
+    for attempt in range(2):
+        got = _try_copy_once(ui, COPY_JS)
+        if got and got != "__UITEST_SENTINEL__" and len(got) > 3:
+            break
+    esc(ui)
+    ok = bool(got) and got != "__UITEST_SENTINEL__" and len(got) > 3
+    record(34, "复制消息 / 复制回复(系统剪贴板回读)", "ok" if ok else "fail",
+           "剪贴板 %d 字,前 30 字 %r" % (len(got or ""), (got or "")[:30]))
+    return
+
+
+def _try_copy_once(ui, copy_js):
     set_clipboard("__UITEST_SENTINEL__")
     # `navigator.clipboard.writeText` 要求 **document 有焦点**,否则静默拒绝。
     # 用 CDP 的 Page.bringToFront 让页面拿回焦点 —— 比 osascript 抢前台可靠,
@@ -609,13 +645,9 @@ def check_34_copy(ui):
     # 而 `navigator.clipboard.writeText` **在页面失焦时会被拒绝且不报错**,
     # 表现为「点了复制但剪贴板没变」。所以先把应用抢回前台再点。
     focus_app()
-    click_scrolled(ui, COPY_JS, "复制")
+    click_scrolled(ui, copy_js, "复制")
     time.sleep(1.5)
-    got = get_clipboard()
-    esc(ui)
-    ok = bool(got) and got != "__UITEST_SENTINEL__" and len(got) > 3
-    record(34, "复制消息 / 复制回复(系统剪贴板回读)", "ok" if ok else "fail",
-           "剪贴板 %d 字,前 30 字 %r" % (len(got or ""), (got or "")[:30]))
+    return get_clipboard()
 
 
 def share_url_live(url, marker=NEEDLE):
@@ -664,7 +696,11 @@ def check_30_undo_redo(ui):
         record(30, "会话撤销/重做", "fail", "命令面板里找不到「撤销」(候选:%s)"
                % [i["t"][:14] for i in (items or [])][:4])
         return
-    time.sleep(2.0)
+    # 撤销是异步的:等消息数真的变,而不是睡 2 秒就读(读早了必然误判)
+    for _ in range(15):
+        time.sleep(1.0)
+        if count() != c0:
+            break
     c1 = count()
     items2, picked2 = palette(ui, "重做", pick_text="重做")
     # 等消息数真的回到原值,而不是固定 sleep 后直接读 —— 重做是异步的,读早了必然判错
