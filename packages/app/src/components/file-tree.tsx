@@ -4,6 +4,8 @@ import { encodeFilePath } from "@/context/file/path"
 import { DialogFileTreeConfirm, DialogFileTreeConflict, type ConflictAction } from "@/components/dialog-file-tree"
 // FORK: 纯逻辑 helper 抽出(test-isolation;原定义见 file-tree-helpers.ts)[feat: test-isolation-file-tree] 2026-06-14
 import { shouldListRoot, dirsToExpand } from "@/components/file-tree-helpers"
+// FORK: 行重挂后补焦点 [feat: filetree-shortcut-focus-scope] 2026-08-13
+import { restoreRowFocus } from "@/components/file-tree-focus"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -310,6 +312,17 @@ const FileTreeNode = (
     //   焦点落位后:点文件树 → A 路径成立、键盘可用;点别处 → 焦点转移、键盘自动失效。
     const row = event.currentTarget
     if (row instanceof HTMLElement) row.focus({ preventScroll: true })
+
+    // FORK: 行重挂后把焦点补回来 [feat: filetree-shortcut-focus-scope] 2026-08-13
+    //   [bug-repro: 上面这句 focus() 对**目录**行有效,对**文件**行无效 —— 点文件后
+    //    activeElement 又是 body。根因不是没设焦点,而是设完之后行被重挂:文件被打开 →
+    //    该行成为 active 且预览区已开 → 命中下面 Tooltip 的 `inactive={...}` 包裹分支,
+    //    DOM 节点销毁重建(实测「旧节点还在文档里 = false」),焦点随之掉回 body。
+    //    目录行永远不会成为 active,所以不触发 —— 这就是当初「只修好一半」的由来。]
+    //   故补焦点必须排到重挂之后;`restoreRowFocus` 只在焦点确实掉回 body 时才补,
+    //   用户主动点别处不会被抢回来(边界见 file-tree-focus.test.ts 的反向用例)。
+    const path = local.node.path
+    requestAnimationFrame(() => restoreRowFocus(path))
 
     const handled = local.onSelectMaybe?.(event) ?? false
     if (handled) {
