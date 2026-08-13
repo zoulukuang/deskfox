@@ -111,13 +111,13 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
 | 13 | 标题栏三按钮(状态/文件树/审查)开→关→再开 | 每次状态都翻转 | `uiprobe.click_element` |
 | 14 | ⌘B 切换会话侧栏(点击 + 快捷键各 3 次) | `--main-right` 在 0 / >0 间翻转 | `uiprobe.css_var('--main-right')` |
 | 15 | 文件树 tab「所有文件 / N 更改」互切 | 内容切换,tab 顺序:所有文件在左 | `find_element` + 几何 |
-| 16 | **面板开关矩阵**(树/审查/预览/终端 各组合) | 任一组合下都不遮挡、无溢出、分隔线在 | `is_occluded` + `overflow_of` |
+| 16 | **面板开关矩阵**(树/审查/终端 **8 种组合**) | 每种组合都不遮挡、无溢出 | `run_group2.py` |
 | 17 | 拖拽调整各面板宽度 | 松手后保持;侧面板占位 == 聊天区让位 | `overflow_of('main')` |
 | 18 | rail 项目图标切换 | 切换项目 | `click_element` |
 | 19 | 打开项目(`project.open`) | 目录选择 → 加载 | `open_project.py <路径>`(已自动化,原「手工」) |
 | 20 | 前进/返回导航 | 历史正确 | `click_element` |
 | 21 | toast 通知区就位 | 容器在视口右下待命;**无 toast 时 height=0 属正常** | `run_group2.py` |
-| 22 | 切换终端 / 新建终端 | canvas 出现;shell prompt 正常 | `find_element('canvas')` |
+| 22 | 切换终端 / 新建终端 | 终端**实例数**真的变(判据不能带 `canvas` —— PDF/xlsx 预览也是 canvas) | `run_group2.py` |
 
 ### 第 3 组 会话与聊天
 
@@ -126,8 +126,8 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
 | 23 | 会话列表:新建/切换/重命名/归档+撤销/删除确认/分享/取消分享 | 各动作生效,归档有撤销 toast | `click_element` |
 | 24 | 会话内查找 ⌘F | 计数正确、回车循环、Esc 关闭;**关闭按钮必须在可点区内** | `overflow_of` + `is_occluded` |
 | 25 | 全局搜索 ⌘K | 文件/命令/会话内容三类结果 | `key(cmd=True)` |
-| 26 | 聊天引用(选中加聊天) | 出卡片;点击**不开空白预览页** | `drag` + `find_element` |
-| 27 | md 内链点击拦截 | 站内跳转不外开浏览器 | `click_element` |
+| 26 | 聊天引用(选中加聊天) | **两步**:菜单项 → 浮层「加入聊天」;卡片入输入区且点击不开空白预览页 | `run_group3.py` |
+| 27 | md 内链点击拦截 | 站内跳转;判据看**有无浏览器被拉起**(别用「前台应用是谁」,太脆) | `run_group3.py` |
 | 28 | **agent 切换**(composer 的 Build 下拉) | 列出 Build/Imbot/Plan 并可切 | `click_element` + 截图 |
 | 29 | **Shell 模式切换** | composer 进入 shell 模式 | `click_element` |
 | 30 | 会话撤销/重做 +「撤销此消息」 | 消息回滚 | `click_element` |
@@ -170,7 +170,7 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
 
 | # | 动作 | 预期 | 工具 |
 |---|---|---|---|
-| 55 | 设置 → 飞书桥接页各项开关 | 开关持久化 | `smoke.py --only settings` |
+| 55 | 设置 → 飞书桥接页各项开关 | 开关翻转 + **落盘复核**(键 `preventSleepConfig`)+ 复位 | `run_group567.py` |
 | 56 | 账号 / 工作区绑定流程 | 绑定成功 | 手工 |
 | 57 | 群消息 @ 策略、重试反馈等设置项 | 生效 | 手工 |
 
@@ -179,11 +179,11 @@ user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回
 | # | 动作 | 预期 | 工具 |
 |---|---|---|---|
 | 58 | 六个设置页逐页开、改一项、重启后保持 | 持久化 | `smoke.py --only settings` |
-| 59 | 主题切换(含 Fox Blue)+ 深浅色 | `--surface-base-active` 变为 `#7295c452`(Fox Blue light) | `css_var` |
+| 59 | 主题切换(含 Fox Blue) | `data-theme` → `fox-blue` 且 `--surface-base-active` → `#7295c452`;**验完切回**(注意 data-theme 是 id,命令面板显示的是名) | `run_group567.py` |
 | 60 | 语言切换 | 界面 + **原生菜单**同步变 | AppleScript 读菜单 |
 | 61 | **权限自动接受开关**(安全相关) | 开关生效 | 手工 |
-| 62 | MCP 开关 | 生效 | 手工 |
-| 63 | server 切换 / workspace 切换 | 生效 | 手工 |
+| 62 | MCP 开关 | ⌘; 真执行一次并复位 | `run_group567.py` |
+| 63 | server / workspace 切换 | 实测只有一个本地服务器,**无从切换**;workspace 切换即 #19/#18 | `run_group567.py` |
 
 ## 三之二、条目本身也会错(2026-08-13 立)
 
