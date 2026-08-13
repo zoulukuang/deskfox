@@ -16,6 +16,8 @@
 | 前提不成立仍继续跑 | 空点击混成绿灯 | `require()` 断言,失败即中止 |
 | 多窗口时连到后台 page target | 渲染器被节流,evaluate 超时,误判成「工具坏了」 | `_ws_url()` 优先选前台窗口并告警 |
 | 元素存在但 height=0 等不可见 | 报「未找到」,被当成功能缺失 | `find_element` 未命中时二次查找并说明**为何不可见** |
+| 用 CDP 合成 `⌘A` 清空输入 | 它不全选、反而弹「关于」对话框(真实系统 ⌘A 正常)→ 搜索词拼成乱串,结论全错 | `clear_input()` 用退格逐字删 |
+| 目标滚出视口就放弃 | 断言正确地拦下点击,但问题其实只是「没滚过去」 | `scroll_into_view()` 先滚再重新量几何 |
 
 ## 三条硬规矩(工具替你守住)
 
@@ -373,6 +375,28 @@ class UI:
         self.assert_in_viewport(box, what)
         self.click(box["cx"], box["cy"], button=button)
 
+    def scroll_into_view(self, selector_js: str, refetch, what: str = "目标元素"):
+        """把滚出视口的元素滚进来,再返回**重新量过**的几何。
+
+        2026-08-13 加:长会话里「复制」「步骤触发器」按钮 y 会跑到 1076 或 -372,
+        `assert_in_viewport` 正确地拦下了点击(这是它该做的),但光拦下不解决问题 ——
+        元素只是被滚走了,不是不存在。缺的是「先滚过去」这一步。
+
+        `selector_js` 是一段返回元素的 JS;`refetch` 是滚动后重新取几何的可调用对象
+        (通常就是 `lambda: box_of(ui, selector_js)`)—— 必须重新量,
+        因为滚动之后原来那份坐标全部作废。
+        """
+        self.ev("""
+        (() => { const e = (() => %s)(); if (!e) return false;
+          e.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+          return true; })()
+        """ % selector_js)
+        time.sleep(0.6)
+        box = refetch()
+        if not box:
+            raise ProbeError("%s 滚动后反而找不到了" % what)
+        return box
+
     def key(self, key: str, code: str, vk: int = 0, cmd: bool = False, shift: bool = False,
             alt: bool = False, ctrl: bool = False):
         mods = (1 if alt else 0) | (2 if ctrl else 0) | (4 if cmd else 0) | (8 if shift else 0)
@@ -381,6 +405,131 @@ class UI:
                       {"type": t, "key": key, "code": code, "modifiers": mods,
                        "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk})
             time.sleep(0.06)
+
+    def type_text(self, text: str, per_char: float = 0.02):
+        """逐字符真实输入。
+
+        用 `Input.dispatchKeyEvent` 的 `char` 类型走浏览器真实输入通路,
+        而不是 JS 直接改 `textContent` / `value` —— 后者不触发 SolidJS 的 input handler,
+        输入框看着有字、状态里却是空的,发出去就是空消息(第三条硬规矩的同类陷阱)。
+        """
+        for ch in text:
+            self.send("Input.dispatchKeyEvent", {"type": "char", "text": ch})
+            time.sleep(per_char)
+
+    # AppleScript keystroke 的键名映射(只列本工具包用得到的)
+    _NATIVE_KEYCODES = {"Escape": 53, "Enter": 36, "Return": 36, "Tab": 48, "Backspace": 51,
+                        "ArrowUp": 126, "ArrowDown": 125, "ArrowLeft": 123, "ArrowRight": 124}
+
+    def key_native(self, key: str, cmd: bool = False, shift: bool = False,
+                   alt: bool = False, ctrl: bool = False, focus: bool = True):
+        """用**真实系统按键**发快捷键(AppleScript),而不是 CDP 合成事件。
+
+        2026-08-13 实撞,代价很大:CDP 的 cmd 组合键会**漏进 macOS 原生菜单层**,
+        打中本不该触发的菜单项 —— 已坐实两例:
+          · CDP `⌘A` → 弹出「关于 DeskFox」(3/3 复现),且**不执行全选**;
+          · 跑测试期间主窗口反复进出**全屏**(1600×950 ↔ 2560×1410,一轮记录到 68 次),
+            全屏时窗口进独立 Space,AppleScript 甚至枚举不到它(`count of windows` = 0),
+            排查时一度以为窗口被关掉了。user 直接反馈「窗口不停地放大缩小」。
+        同样的按键用**真实系统按键**发则一切正常(⌘A 不弹对话框)。
+
+        所以带 cmd 的快捷键一律走这里。这正是工具包第一条硬规矩「真实输入」——
+        之前只在鼠标那一层贯彻了,键盘这层留了缺口。
+
+        代价:真实按键发给**前台应用**,所以默认先把目标进程抢到前台。
+        """
+        if focus:
+            self._osascript('tell application "System Events" to set frontmost of process "%s" to true'
+                            % self.process_name)
+            time.sleep(0.35)
+        mods = []
+        if cmd:
+            mods.append("command down")
+        if shift:
+            mods.append("shift down")
+        if alt:
+            mods.append("option down")
+        if ctrl:
+            mods.append("control down")
+        using = (" using {%s}" % ", ".join(mods)) if mods else ""
+        code = self._NATIVE_KEYCODES.get(key)
+        if code is not None:
+            script = 'tell application "System Events" to key code %d%s' % (code, using)
+        else:
+            script = 'tell application "System Events" to keystroke "%s"%s' % (key, using)
+        self._osascript(script)
+        time.sleep(0.25)
+
+    def heal_window(self, want_w: int = 1600, want_h: int = 950) -> str | None:
+        """把窗口从「测试副作用」里拉回正常态,返回做了什么(没事就返回 None)。
+
+        2026-08-13 起因:跑测试时主窗口会**反复进出 macOS 全屏**
+        (1600×950 ↔ 屏幕满尺寸,一轮记录到 68 次),user 直接看到「窗口不停放大缩小」。
+        根因是 CDP 合成的 cmd 组合键会漏进原生菜单层(同一机制已坐实 `⌘A` → 弹「关于」);
+        改用真实系统按键则**按键根本送不进副屏上的窗口**,那条路不通。
+        既然消不掉源头,就让它**自愈**:每轮开跑前检查一次,发现异常就复位,
+        把「持续抖动」收敛成「最多一次复位」。
+
+        全屏时窗口进独立 Space,AppleScript 会枚举不到它(`count of windows` = 0)——
+        这一点也踩过:当时以为窗口被关掉了,其实只是进了全屏。
+        """
+        actions = []
+        count = self._window_count_via_applescript()
+        if count == 0:
+            # 枚举不到 = 多半在全屏的独立 Space 里,⌃⌘F 退出来
+            self._osascript('tell application "System Events" to set frontmost of process "%s" to true'
+                            % self.process_name)
+            time.sleep(0.4)
+            self._osascript('tell application "System Events" to keystroke "f" using {control down, command down}')
+            time.sleep(2.5)
+            actions.append("退出全屏")
+            count = self._window_count_via_applescript()
+
+        # 关掉测试误触弹出的「关于」对话框(它会让 window 1 指向错对象,污染几何判定)
+        about = self._osascript(
+            'tell application "System Events" to tell process "%s" to '
+            'return count of (every window whose subrole is "AXDialog")' % self.process_name)
+        try:
+            if int(about) > 0:
+                self._osascript(
+                    'tell application "System Events" to tell process "%s" to '
+                    'click button 1 of (first window whose subrole is "AXDialog")' % self.process_name)
+                time.sleep(0.8)
+                actions.append("关闭误触的对话框")
+        except ValueError:
+            pass
+
+        win = self._window_bounds_via_applescript()
+        if win and (abs(win["w"] - want_w) > 40 or abs(win["h"] - want_h) > 40):
+            self._osascript(
+                'tell application "System Events" to tell process "%s" to '
+                'set size of (first window whose subrole is "AXStandardWindow") to {%d, %d}'
+                % (self.process_name, want_w, want_h))
+            time.sleep(0.6)
+            actions.append("尺寸复位 %sx%s → %sx%s" % (win["w"], win["h"], want_w, want_h))
+        return ";".join(actions) if actions else None
+
+    def clear_input(self, times: int = 60):
+        """清空当前焦点输入框 —— **不要用 ⌘A**。
+
+        2026-08-13 实测(3/3 复现):CDP 的合成 `⌘A` 在本应用里
+          ① **不执行全选**(`getSelection()` 长度为 0),
+          ② 反而会弹出「关于 DeskFox」对话框。
+        而**真实系统 ⌘A 一切正常**(AppleScript 发同样按键,不弹对话框)——
+        所以这是 CDP 合成按键的假象,**不是产品缺陷**,别去改代码。
+
+        两个真实后果都踩过:命令面板里「清空再搜」只删掉一个字符,
+        导致后两轮搜的是拼接乱串(「文件/命令」双双 0 条,差点报成缺陷);
+        以及测试跑完后莫名多出一个窗口,让 `window_geometry` 变得不可信。
+        故本方法用退格逐字删。
+        """
+        for _ in range(times):
+            self.send("Input.dispatchKeyEvent",
+                      {"type": "keyDown", "key": "Backspace", "code": "Backspace",
+                       "windowsVirtualKeyCode": 8, "nativeVirtualKeyCode": 8})
+            self.send("Input.dispatchKeyEvent",
+                      {"type": "keyUp", "key": "Backspace", "code": "Backspace",
+                       "windowsVirtualKeyCode": 8, "nativeVirtualKeyCode": 8})
 
     def drag(self, x1: int, y1: int, x2: int, y2: int, steps: int = 8):
         """拖选文本 —— 选区类交互必须用真实拖拽,JS 设 Selection 不会触发业务 handler。"""
