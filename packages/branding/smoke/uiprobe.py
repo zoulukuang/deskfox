@@ -613,6 +613,60 @@ class UI:
         """ % json.dumps(container_selector)
         return self.ev(js)
 
+    def deep_find_text(self, marker: str) -> dict | None:
+        """按特征词查找元素,**穿透 shadow DOM**,返回几何。
+
+        2026-08-13 实撞:代码/文本预览渲染在 `<diffs-container>` 的 **shadow root** 里,
+        `document.body.innerText` 里根本没有文件内容 —— 于是「打开 plain.txt 后搜不到 TXTMARK」
+        被误读成「代码类文件没渲染」,还去翻了 iframe、canvas、闭合 shadow。
+        真相是内容一直都在,只是 `querySelectorAll` 不穿 shadow 边界。
+        判定「元素在不在」时,**普通选择器的『找不到』不等于『不存在』**,这是本工具第 8 类翻车。
+
+        返回值含 `inShadow`,提示调用方:该元素的选区/文本读取也要走 shadow 通道。
+        """
+        js = """
+        (() => {
+          const needle = %s;
+          const hits = [];
+          const walk = (root, inShadow) => {
+            for (const el of root.querySelectorAll('*')) {
+              if (el.shadowRoot) walk(el.shadowRoot, true);
+              if ((el.textContent || '').includes(needle)) hits.push({ el, inShadow });
+            }
+          };
+          walk(document, false);
+          if (!hits.length) return null;
+          const { el, inShadow } = hits[hits.length - 1];
+          const r = el.getBoundingClientRect();
+          if (r.height <= 0 || r.width <= 0) return null;
+          return { x:Math.round(r.x), y:Math.round(r.y), w:Math.round(r.width), h:Math.round(r.height),
+                   cx:Math.round(r.x+r.width/2), cy:Math.round(r.y+r.height/2),
+                   right:Math.round(r.right), bottom:Math.round(r.bottom),
+                   tag: el.tagName.toLowerCase(), inShadow,
+                   text: (el.textContent||'').trim().slice(0, 40) };
+        })()
+        """ % json.dumps(marker)
+        return self.ev(js)
+
+    def selection_text(self) -> str:
+        """读当前选区文本,**兼容 shadow DOM**。
+
+        `window.getSelection()` 在 shadow 边界内可能返回空;Chromium 提供
+        `shadowRoot.getSelection()`,这里两条都试。
+        """
+        return self.ev("""
+        (() => { const top = (window.getSelection()||'').toString();
+          if (top) return top;
+          for (const el of document.querySelectorAll('*')) {
+            const sr = el.shadowRoot;
+            if (sr && typeof sr.getSelection === 'function') {
+              const s = (sr.getSelection()||'').toString();
+              if (s) return s;
+            }
+          }
+          return ''; })()
+        """) or ""
+
     def css_var(self, name: str, selector: str | None = None):
         """读 CSS 变量 —— 比 innerText 判定可靠得多(如 --main-right 判侧栏开合)。"""
         js = """
