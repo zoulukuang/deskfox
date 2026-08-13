@@ -59,3 +59,6 @@ packages/opencode/src/provider/models-snapshot.d.ts
 
 # 打包产物(Inno Setup / installer 输出),严禁入库 —— 曾因 183MB exe 被 GitHub 整包拒收
 packages/branding/installer/Output/
+
+# uiprobe 现场诊断截图产物,不入仓 [feat: ui-probe-toolkit] 2026-08-13
+packages/branding/smoke/_shots/
