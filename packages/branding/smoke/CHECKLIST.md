@@ -49,6 +49,22 @@ python3 -c "from uiprobe import UI; ui=UI(); print(ui.ev('[...new Set([...docume
 
 - **基准对照**:与「上一个已知良好版本」比对。基准包用 `git worktree` 隔离构建,
   同 appId 有单例锁不能并存 → **交替运行**,当前版全量走一遍并记录,存疑项再回基准版跑同一条。
+
+### 常驻基准环境(勿删)
+
+    /Volumes/ExtSSD/deskfox-baseline          # git worktree,detached 于比对基线 commit
+    .../packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app   # 已构建好的基准包
+
+user 2026-08-13 决定**长期保留复用**。它的价值在于把「这是回归还是本来就有的问题」变成可判定 ——
+本次靠它坐实了两条 **sync 引入的回归**(侧面板宽度 clamp 只改一半、行内评论一直存在非本次引入),
+避免了「把长期问题当回归瞎修」和「把真回归当历史遗留放过」两类误判。
+
+**切换基准点**(上游同步告一段落后,把基线推进到新的已知良好 commit):
+
+    cd /Volumes/ExtSSD/deskfox-baseline
+    git checkout <新的基线 commit>
+    bun install && cd packages/desktop && OPENCODE_CHANNEL=local bun run build
+    # 打包命令见 UIPROBE.md,注意必带 ELECTRON_MIRROR 与摘代理
 - **判定格式**:`动作 → 基准版表现 / 当前版表现 / 是否一致`。
 - **图例**:`[ ]` 未验 / `[x]` 一致 / `[!]` 有差异待处理 / `[-]` 不适用
 

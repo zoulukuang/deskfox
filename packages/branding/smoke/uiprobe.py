@@ -14,6 +14,8 @@
 | 读 computed style 就宣布「样式挂上了」 | 实际被子元素覆盖,用户根本看不见 | `is_occluded` / `zoom_shot` 像素级验收 |
 | 选择器没命中就断定「功能坏了」 | 两次误报 | `find_element` 多策略回退 + 未命中自动截图 |
 | 前提不成立仍继续跑 | 空点击混成绿灯 | `require()` 断言,失败即中止 |
+| 多窗口时连到后台 page target | 渲染器被节流,evaluate 超时,误判成「工具坏了」 | `_ws_url()` 优先选前台窗口并告警 |
+| 元素存在但 height=0 等不可见 | 报「未找到」,被当成功能缺失 | `find_element` 未命中时二次查找并说明**为何不可见** |
 
 ## 三条硬规矩(工具替你守住)
 
@@ -69,11 +71,24 @@ class UI:
 
     # ── 基础 ────────────────────────────────────────────────
     def _ws_url(self) -> str:
+        """选取要连的 page target。
+
+        **不能盲取第一个** —— 2026-08-13 实撞:测多窗口时留下第二个窗口,列表里就有两个 page,
+        取到的那个是**后台窗口**,渲染器被浏览器节流,`Runtime.evaluate` 迟迟不返回,
+        表现为「CDP 连接超时」,极易被误判成工具坏了或应用挂了(当时排查了很久)。
+        这里优先选**前台可见**窗口:用 CDP 的 attached/visible 线索排序,并在多 target 时打印提示。
+        """
         targets = json.load(urllib.request.urlopen("http://%s/json" % self.host, timeout=5))
-        for t in targets:
-            if t.get("type") == "page":
-                return t["webSocketDebuggerUrl"]
-        raise ProbeError("CDP 没有 page target —— 应用没起来,或没开 --remote-debugging-port")
+        pages = [t for t in targets if t.get("type") == "page"]
+        if not pages:
+            raise ProbeError("CDP 没有 page target —— 应用没起来,或没开 --remote-debugging-port")
+        if len(pages) > 1:
+            print("[uiprobe] 检测到 %d 个 page target(多窗口)。后台窗口的渲染器会被节流、"
+                  "evaluate 可能超时 —— 已优先选择前台窗口;若结果异常请只留一个窗口重试。"
+                  % len(pages), file=sys.stderr)
+        # 前台窗口通常不带 "(background)" 标记且 attached;这里做一次稳妥排序
+        pages.sort(key=lambda t: (0 if t.get("attached") else 1, 0 if "background" not in (t.get("title") or "").lower() else 1))
+        return pages[0]["webSocketDebuggerUrl"]
 
     def send(self, method: str, params: dict | None = None) -> dict:
         self._id += 1
@@ -220,9 +235,50 @@ class UI:
                "true" if require_visible else "false")
         found = self.ev(js)
         if not found:
-            path = self.shot("find-miss-%s" % (label or text or selector or role or "unknown"))
-            print("[uiprobe] 未命中,已截图供人工确认:%s" % path, file=sys.stderr)
+            # 区分「压根不存在」与「存在但当前不可见」—— 2026-08-13 实撞:
+            # 通知面板入口 aria-label 明明在 DOM 里,却因 height=0(未展开)被可见性过滤掉,
+            # 报成「未找到」→ 差点被当成功能缺失。二者的处置完全不同:
+            #   不存在 = 可能真缺陷;不可见 = 需要先把它所在的区域打开(环境前提)。
+            hidden = self._find_ignoring_visibility(label=label, text=text, selector=selector, role=role)
+            key = label or text or selector or role or "unknown"
+            path = self.shot("find-miss-%s" % key)
+            if hidden:
+                print("[uiprobe] 「%s」存在于 DOM 但当前不可见(%s)—— 不是缺失,"
+                      "需先让它所在区域可见。截图:%s"
+                      % (key, hidden.get("why"), path), file=sys.stderr)
+            else:
+                print("[uiprobe] 「%s」在 DOM 中不存在。截图供人工确认:%s" % (key, path), file=sys.stderr)
         return found
+
+    def _find_ignoring_visibility(self, label=None, text=None, selector=None, role=None) -> dict | None:
+        """忽略可见性再找一次,用于分辨「不存在」与「存在但不可见」。"""
+        args = json.dumps({"label": label, "text": text, "selector": selector, "role": role}, ensure_ascii=False)
+        js = (
+            "(() => { const A = " + args + ";\n"
+            "  let el = null;\n"
+            "  if (A.selector) el = document.querySelector(A.selector);\n"
+            "  if (!el && A.label) el = [...document.querySelectorAll('[aria-label]')]\n"
+            "      .find(e => (e.getAttribute('aria-label')||'').includes(A.label));\n"
+            "  if (!el && A.text) el = [...document.querySelectorAll('button,a,[role=button],[role=tab]')]\n"
+            "      .find(e => (e.textContent||'').trim().includes(A.text));\n"
+            "  if (!el && A.role) el = document.querySelector('[role=\"'+A.role+'\"]');\n"
+            "  if (!el) return null;\n"
+            "  const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);\n"
+            "  const why = r.height === 0 ? 'height=0(未展开)'\n"
+            "    : r.width === 0 ? 'width=0'\n"
+            "    : cs.display === 'none' ? 'display:none'\n"
+            "    : cs.visibility === 'hidden' ? 'visibility:hidden'\n"
+            "    : (r.y > window.innerHeight || r.bottom < 0) ? '滚出视口'\n"
+            "    : (r.x > window.innerWidth || r.right < 0) ? '在视口左右之外'\n"
+            "    : '原因未知';\n"
+            "  return { why, x: Math.round(r.x), y: Math.round(r.y),\n"
+            "           w: Math.round(r.width), h: Math.round(r.height) };\n"
+            "})()"
+        )
+        try:
+            return self.ev(js)
+        except ProbeError:
+            return None
 
     # ── 3. 视口断言 + 真实输入 ─────────────────────────────────
     def assert_in_viewport(self, box: dict, what: str = "目标元素"):
