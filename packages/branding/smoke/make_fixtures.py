@@ -21,9 +21,45 @@ import os
 import subprocess
 import sys
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else "/Volumes/ExtSSD/deskfox-uitest"
-APP = ("/Volumes/ExtSSD/opencode-fork/packages/desktop/dist-deskfox/mac-arm64/"
-       "DeskFox 本地版.app/Contents/Resources/libreoffice/Contents/MacOS/soffice")
+# FORK 2026-08-14 [feat: upstream-sync-2026-08]:两处路径按平台解析,不再写死 mac。
+# 原实现把测试项目目录和 soffice 路径都硬编码成 macOS 的,在 Windows 上跑会
+# ① 把项目建到一个不存在的 /Volumes 路径下,② PDF 生成静默跳过 —— 而第 4 组预览用例
+# 恰恰要用那个 PDF,于是「没有样本」会一路顺延成「预览验不了」。
+HERE = os.path.dirname(os.path.abspath(__file__))
+IS_WIN = sys.platform == "win32"
+
+_DEFAULT_ROOT = "D:\\deskfox-uitest" if IS_WIN else "/Volumes/ExtSSD/deskfox-uitest"
+ROOT = sys.argv[1] if len(sys.argv) > 1 else _DEFAULT_ROOT
+
+
+def _find_soffice() -> str:
+    """找一个能用的 soffice。
+
+    优先用**打包产物内置的那份**(和用户实际用到的是同一份,能顺带验证 bundle 健康);
+    找不到再回落到系统安装的 LibreOffice。两者都没有时返回 ""(生成 PDF 那步会明说跳过原因)。
+    """
+    unpacked = os.path.abspath(os.path.join(HERE, "..", "..", "desktop", "dist-deskfox"))
+    candidates = []
+    if IS_WIN:
+        candidates += [
+            os.path.join(unpacked, "win-unpacked", "libreoffice", "program", "soffice.exe"),
+            os.path.abspath(os.path.join(HERE, "..", "libreoffice-bundle", "windows", "program", "soffice.exe")),
+            "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+            "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
+        ]
+    else:
+        candidates += [
+            os.path.join(unpacked, "mac-arm64", "DeskFox 本地版.app", "Contents", "Resources",
+                         "libreoffice", "Contents", "MacOS", "soffice"),
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return ""
+
+
+APP = _find_soffice()
 
 # 每个样本都带**可判定特征**,预览结果能断言而不是靠肉眼「看着对」
 MD_MAIN = """# 预览验收样本
@@ -161,9 +197,10 @@ def make_png():
 
 def make_pdf(docx_path):
     """用应用内置的 LibreOffice 转 PDF —— 与产品实际使用的是同一套引擎。"""
-    if not os.path.exists(APP):
-        print("  ! 找不到内置 LibreOffice,跳过 PDF 生成")
+    if not APP or not os.path.exists(APP):
+        print("  ! 找不到可用的 LibreOffice(打包产物内 / 系统安装均无),跳过 PDF 生成")
         return None
+    print("  · soffice:%s" % APP)
     out_dir = os.path.join(ROOT, "docs")
     r = subprocess.run([APP, "--headless", "--norestore", "--convert-to", "pdf",
                         "--outdir", out_dir, docx_path],
@@ -196,6 +233,13 @@ def main():
     made = [w("README.md", MD_MAIN), w("notes/sub.md", MD_SUB),
             w("code/sample.py", PY_SRC), w("code/data.json", JSON_SRC),
             w("code/config.toml", TOML_SRC), w("code/plain.txt", TXT_SRC)]
+    # FORK 2026-08-14 [feat: upstream-sync-2026-08]:中文名 + 名字带空格的样本。
+    # Windows 路径处理最容易翻车的就是这两类(编码 + 引号/转义),而原 fixture 全是纯 ASCII,
+    # 于是 `win_p0_paths.py` 的「中文名条目」「Ctrl+K 搜中文」两条只能记 SKIP ——
+    # 测试项目自己不带这类文件,就只能借 user 的真实项目来验,既不稳定也不该。
+    made.append(w("docs/中文文件名 带空格.md",
+                  "# 中文样本 CJKMARK\n\n用于验证 Windows 下中文 + 空格路径的文件树 / 预览 / 搜索。\n"))
+    made.append(w("docs/嵌套目录/更深一层.md", "# 更深一层 DEEPMARK\n\n验证多级中文目录的路径拼接。\n"))
     docx = make_docx(); made.append(docx)
     made.append(make_xlsx())
     made.append(make_png())
