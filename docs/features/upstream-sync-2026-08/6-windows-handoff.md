@@ -1,5 +1,5 @@
 feat-id: upstream-sync-2026-08
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md ./5-handoff.md ./7-windows-verification.md
 
 # Windows 端适配测试清单(拉到本分支先读这个)

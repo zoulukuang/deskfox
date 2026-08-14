@@ -1,5 +1,5 @@
 feat-id: upstream-sync-2026-08
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md ./6-windows-handoff.md ./7-windows-verification.md
 
 # 会话交接说明(新 session 接手必读)
