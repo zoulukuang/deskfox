@@ -54,6 +54,10 @@ except ImportError:  # pragma: no cover
     print("需要 websocket-client:pip install websocket-client", file=sys.stderr)
     raise
 
+# native 层(窗口几何 / 真实系统按键 / 原生对话框)按平台分派 —— 2026-08-14 Win 端接入。
+# CDP 部分本来就跨平台,一行没动;绑死 macOS 的只有下面这一层,收口到 uiprobe_native.py。
+from uiprobe_native import get_native
+
 CDP_HOST = "127.0.0.1:9222"
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_APP_PROCESS = "DeskFox 本地版"
@@ -68,6 +72,7 @@ class UI:
         self.host = host
         self.process_name = process_name
         self.shot_dir = shot_dir or os.path.join(HERE, "_shots")
+        self.native = get_native()
         self._id = 0
         self.ws = websocket.create_connection(self._ws_url(), timeout=30, suppress_origin=True)
 
@@ -186,69 +191,37 @@ class UI:
             "viewport": {"w": vp["w"], "h": vp["h"], "dpr": vp["dpr"]},
             "screen": {"availW": vp["screenW"], "availH": vp["screenH"]},
         }
-        out["window"] = self._window_bounds_via_applescript()
-        # 多窗口时 AppleScript 的「window 1」未必是 CDP 连着的那个 —— 2026-08-13 实撞:
+        out["platform"] = self.native.platform
+        out["window"] = self._window_bounds_native()
+        # 多窗口时 native 层的「第一个窗口」未必是 CDP 连着的那个 —— 2026-08-13 实撞:
         # CDP 视口 1600x950,AppleScript 报 1500x900,两者说的根本不是同一个窗口。
         # 拿它去判「窗口尺寸记忆」必然得出错误结论,故显式标注不可信。
-        out["window_count"] = self._window_count_via_applescript()
+        # (Win 侧同理:EnumWindows 按面积排序取最大的那个,多开时同样不保证是 CDP 目标窗口。)
+        out["window_count"] = self._window_count_native()
         if out["window_count"] and out["window_count"] > 1:
             w = out["window"] or {}
             mismatch = abs((w.get("w") or 0) - vp["w"]) > 40 or abs((w.get("h") or 0) - vp["h"]) > 60
             out["window_untrusted"] = (
-                "存在 %d 个窗口,AppleScript 的 window 1 未必是 CDP 连着的那个%s —— "
+                "存在 %d 个窗口,native 层的第一个窗口未必是 CDP 连着的那个%s —— "
                 "窗口位置/尺寸类判定请先关到只剩一个窗口" % (
                     out["window_count"],
-                    "(实测已不一致:AS %sx%s vs 视口 %sx%s)" % (w.get("w"), w.get("h"), vp["w"], vp["h"])
+                    "(实测已不一致:native %sx%s vs 视口 %sx%s)" % (w.get("w"), w.get("h"), vp["w"], vp["h"])
                     if mismatch else "")
             )
             print("[uiprobe] 警告:%s" % out["window_untrusted"], file=sys.stderr)
-        out["displays"] = self._displays_via_applescript()
+        out["displays"] = self._displays_native()
         out["on_display"] = self._which_display(out["window"], out["displays"])
         out["offscreen"] = self._is_offscreen(out["window"], out["displays"])
         return out
 
-    def _osascript(self, script: str) -> str:
-        try:
-            r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=10)
-            return (r.stdout or "").strip()
-        except Exception:
-            return ""
+    def _window_bounds_native(self) -> dict | None:
+        return self.native.window_bounds(self.process_name)
 
-    def _window_bounds_via_applescript(self) -> dict | None:
-        raw = self._osascript(
-            'tell application "System Events" to tell process "%s" to return '
-            "(position of window 1) & (size of window 1)" % self.process_name
-        )
-        parts = [p.strip() for p in raw.split(",") if p.strip()]
-        if len(parts) < 4:
-            return None
-        try:
-            x, y, w, h = (int(float(p)) for p in parts[:4])
-        except ValueError:
-            return None
-        return {"x": x, "y": y, "w": w, "h": h, "right": x + w, "bottom": y + h}
+    def _window_count_native(self) -> int | None:
+        return self.native.window_count(self.process_name)
 
-    def _window_count_via_applescript(self) -> int | None:
-        raw = self._osascript(
-            'tell application "System Events" to tell process "%s" to return count of windows'
-            % self.process_name)
-        try:
-            return int(raw)
-        except ValueError:
-            return None
-
-    def _displays_via_applescript(self) -> list:
-        raw = self._osascript(
-            'tell application "Finder" to return bounds of window of desktop'
-        )
-        parts = [p.strip() for p in raw.split(",") if p.strip()]
-        if len(parts) >= 4:
-            try:
-                l, t, r, b = (int(float(p)) for p in parts[:4])
-                return [{"x": l, "y": t, "right": r, "bottom": b, "w": r - l, "h": b - t, "primary": True}]
-            except ValueError:
-                pass
-        return []
+    def _displays_native(self) -> list:
+        return self.native.displays()
 
     @staticmethod
     def _which_display(win: dict | None, displays: list):
@@ -417,10 +390,6 @@ class UI:
             self.send("Input.dispatchKeyEvent", {"type": "char", "text": ch})
             time.sleep(per_char)
 
-    # AppleScript keystroke 的键名映射(只列本工具包用得到的)
-    _NATIVE_KEYCODES = {"Escape": 53, "Enter": 36, "Return": 36, "Tab": 48, "Backspace": 51,
-                        "ArrowUp": 126, "ArrowDown": 125, "ArrowLeft": 123, "ArrowRight": 124}
-
     def key_native(self, key: str, cmd: bool = False, shift: bool = False,
                    alt: bool = False, ctrl: bool = False, focus: bool = True):
         """用**真实系统按键**发快捷键(AppleScript),而不是 CDP 合成事件。
@@ -437,28 +406,16 @@ class UI:
         之前只在鼠标那一层贯彻了,键盘这层留了缺口。
 
         代价:真实按键发给**前台应用**,所以默认先把目标进程抢到前台。
+
+        **Windows 侧**(2026-08-14 接入):`cmd=True` 自动映射为 Ctrl —— fork 在 Win 的快捷键是
+        `Ctrl+`。所以两端共用的脚本照旧写 `cmd=True` 即可,不必到处 if platform。
+        另注:上面那两条 macOS 副作用(⌘A 弹「关于」、窗口反复进出全屏)是 **macOS 原生菜单层**
+        的特性,Windows 没有等价机制 —— 但 Win 上仍建议走这里,因为 Electron 的菜单加速键
+        由主进程窗口消息循环处理,**CDP 合成按键根本送不到那一层**,合成 Ctrl+ 组合会静默失效。
         """
         if focus:
-            self._osascript('tell application "System Events" to set frontmost of process "%s" to true'
-                            % self.process_name)
-            time.sleep(0.35)
-        mods = []
-        if cmd:
-            mods.append("command down")
-        if shift:
-            mods.append("shift down")
-        if alt:
-            mods.append("option down")
-        if ctrl:
-            mods.append("control down")
-        using = (" using {%s}" % ", ".join(mods)) if mods else ""
-        code = self._NATIVE_KEYCODES.get(key)
-        if code is not None:
-            script = 'tell application "System Events" to key code %d%s' % (code, using)
-        else:
-            script = 'tell application "System Events" to keystroke "%s"%s' % (key, using)
-        self._osascript(script)
-        time.sleep(0.25)
+            self.native.focus(self.process_name)
+        self.native.send_key(key, cmd=cmd, shift=shift, alt=alt, ctrl=ctrl)
 
     def heal_window(self, want_w: int = 1600, want_h: int = 950) -> str | None:
         """把窗口从「测试副作用」里拉回正常态,返回做了什么(没事就返回 None)。
@@ -472,41 +429,33 @@ class UI:
 
         全屏时窗口进独立 Space,AppleScript 会枚举不到它(`count of windows` = 0)——
         这一点也踩过:当时以为窗口被关掉了,其实只是进了全屏。
+
+        **Windows 侧**:全屏/最大化窗口照样能被 EnumWindows 枚举到,不会出现 Mac 那种
+        「count of windows = 0,以为窗口被关了」的假象;复位走 `ShowWindow(SW_RESTORE)`。
         """
         actions = []
-        count = self._window_count_via_applescript()
+        count = self._window_count_native()
         if count == 0:
-            # 枚举不到 = 多半在全屏的独立 Space 里,⌃⌘F 退出来
-            self._osascript('tell application "System Events" to set frontmost of process "%s" to true'
-                            % self.process_name)
-            time.sleep(0.4)
-            self._osascript('tell application "System Events" to keystroke "f" using {control down, command down}')
-            time.sleep(2.5)
-            actions.append("退出全屏")
-            count = self._window_count_via_applescript()
+            # macOS:枚举不到 = 多半在全屏的独立 Space 里,⌃⌘F 退出来
+            # Windows:枚举不到 = 窗口真的没了(最小化到托盘或已退出),下面的复位会自然跳过
+            if self.native.exit_fullscreen(self.process_name):
+                actions.append("退出全屏")
+            count = self._window_count_native()
+        elif self.native.platform == "win32" and getattr(self.native, "is_maximized", None):
+            # Win 上「窗口不停放大缩小」的等价物是被最大化,同样会让尺寸判定失真
+            if self.native.is_maximized(self.process_name) and self.native.exit_fullscreen(self.process_name):
+                actions.append("退出最大化")
 
-        # 关掉测试误触弹出的「关于」对话框(它会让 window 1 指向错对象,污染几何判定)
-        about = self._osascript(
-            'tell application "System Events" to tell process "%s" to '
-            'return count of (every window whose subrole is "AXDialog")' % self.process_name)
-        try:
-            if int(about) > 0:
-                self._osascript(
-                    'tell application "System Events" to tell process "%s" to '
-                    'click button 1 of (first window whose subrole is "AXDialog")' % self.process_name)
+        # 关掉测试误触弹出的对话框(它会让「第一个窗口」指向错对象,污染几何判定)
+        if self.native.dialogs(self.process_name):
+            if self.native.click_dialog_button(self.process_name, ""):
                 time.sleep(0.8)
                 actions.append("关闭误触的对话框")
-        except ValueError:
-            pass
 
-        win = self._window_bounds_via_applescript()
+        win = self._window_bounds_native()
         if win and (abs(win["w"] - want_w) > 40 or abs(win["h"] - want_h) > 40):
-            self._osascript(
-                'tell application "System Events" to tell process "%s" to '
-                'set size of (first window whose subrole is "AXStandardWindow") to {%d, %d}'
-                % (self.process_name, want_w, want_h))
-            time.sleep(0.6)
-            actions.append("尺寸复位 %sx%s → %sx%s" % (win["w"], win["h"], want_w, want_h))
+            if self.native.set_window_size(self.process_name, want_w, want_h):
+                actions.append("尺寸复位 %sx%s → %sx%s" % (win["w"], win["h"], want_w, want_h))
         return ";".join(actions) if actions else None
 
     def clear_input(self, times: int = 60):
@@ -681,7 +630,21 @@ class UI:
         return self.ev(js)
 
     # ── 5. 像素级验收 ──────────────────────────────────────────
+    @staticmethod
+    def _safe_name(name: str) -> str:
+        """把任意字符串洗成合法文件名。
+
+        2026-08-14 Win 端实撞:`find_element` 未命中时会用**选择器本身**当截图文件名,
+        而 Windows 文件名不允许 `\\ / : * ? " < > |`。于是 `[data-tree-path="docs\\x.md"]`
+        这种选择器一命中失败,`shot()` 就抛 `OSError: Invalid argument` ——
+        **工具在替你截图诊断的那一刻自己崩掉**,比原本的「未命中」更难排查。
+        macOS 上只有 `/` 违规,所以这条路径 Mac 端永远走不到。
+        """
+        out = "".join("_" if c in '\\/:*?"<>|' or ord(c) < 32 else c for c in name)
+        return out.strip(" .")[:120] or "shot"
+
     def shot(self, name: str) -> str:
+        name = self._safe_name(name)
         os.makedirs(self.shot_dir, exist_ok=True)
         data = self.send("Page.captureScreenshot", {"format": "png"}).get("result", {}).get("data")
         if not data:
@@ -691,12 +654,13 @@ class UI:
             f.write(base64.b64decode(data))
         return path
 
-    def zoom_shot(self, name: str, x: int, y: int, w: int, h: int, scale: float = 8.0) -> str:
+    def zoom_shot(self, name: str, x: int, y: int, w: int, h: int, scale: float = 8.0) -> str:  # noqa: D401
         """区域放大截图 —— 1px 分隔线这类细节,不放大根本看不出「画了但被盖住」。
 
         注意:必须用 CDP 截图而不是 screencapture。多屏环境下窗口可能在副屏(屏幕坐标为负),
         screencapture 只截主屏会得到全白图 —— 2026-08-13 踩过。
         """
+        name = self._safe_name(name)
         os.makedirs(self.shot_dir, exist_ok=True)
         data = self.send("Page.captureScreenshot", {
             "format": "png",
