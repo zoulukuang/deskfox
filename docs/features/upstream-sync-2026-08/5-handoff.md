@@ -1,8 +1,12 @@
 feat-id: upstream-sync-2026-08
 status: in-progress
-related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md
+related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md ./6-windows-handoff.md
 
 # 会话交接说明(新 session 接手必读)
+
+> 🪟 **Windows 端请直接看 [`6-windows-handoff.md`](./6-windows-handoff.md)** ——
+> Mac 侧已全量验完,那份只讲 Windows 特有的部分,并列明哪些脚本可直接跑、哪些要重写。
+> 本文件是 Mac 侧的历史交接,可略读。
 
 > 2026-08-13 立。上一个 session 过长,任务未完,此文用于让新会话在**不重复踩坑**的前提下接续。
 > 读完本文 + 下面点名的三份文件,就具备继续工作的全部上下文。

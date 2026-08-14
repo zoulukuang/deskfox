@@ -6,6 +6,10 @@
 > 与 [`UIPROBE.md`](./UIPROBE.md)(工具)、[`README.md`](./README.md)(广度冒烟)配套:
 > 本文件回答**测什么**,UIPROBE 回答**怎么测才算数**,smoke.py 回答**有没有炸**。
 >
+> 🪟 **Windows 端适配测试**见
+> [`docs/features/upstream-sync-2026-08/6-windows-handoff.md`](../../../docs/features/upstream-sync-2026-08/6-windows-handoff.md)
+> —— 含「哪些脚本可直接跑 / 哪些要重写」的逐脚本表(本目录脚本大量依赖 AppleScript)。
+>
 > **自动化跑不了的那些**收在 [`MANUAL-CHECKLIST.md`](./MANUAL-CHECKLIST.md)(人工验收单),
 > 每条都写明「机器为什么做不到」,并单列一节「本可自动化但尚未覆盖」的缺口 —— 别把它当成已验。
 

@@ -1,6 +1,6 @@
 feat-id: upstream-sync-2026-08
 status: done
-related: ./1-spec.md ./2-plan.md ./3-changelog.md
+related: ./1-spec.md ./2-plan.md ./3-changelog.md ./6-windows-handoff.md
 
 # 实施计划 + 决策轨迹
 

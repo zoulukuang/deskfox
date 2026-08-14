@@ -1,6 +1,6 @@
 feat-id: upstream-sync-2026-08
 status: in-progress
-related: ./1-spec.md ./2-plan.md ./3-changelog.md
+related: ./1-spec.md ./2-plan.md ./3-changelog.md ./6-windows-handoff.md
 
 # 全量比对验收清单(基准版 vs 当前分支)
 
