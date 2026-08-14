@@ -245,6 +245,43 @@ typecheck + media-gen / adapter-feishu-lark / branding 全绿,`pre-push` 闸不�
 > 那次撤回是错的。原因是我单跑文件时漏带 `--conditions=browser`,拿不同条件下的
 > 两次结果做了比较。最初的假设成立。
 
+### 2026-08-14 Mac 侧回验 Win 端 11 笔改动
+
+Win 端不只跑测试,还改了**跨平台**代码,故 Mac 侧逐项回验(不是走过场,下面每条都实跑):
+
+| 回验对象 | 为什么要验 | 结果 |
+|---|---|---|
+| `file-tree.tsx` / `file-tree-v2.tsx` / `multi-path-drop.ts` | 动的是产品代码,且属本 feat | ✅ 重打本地包后真机跑 `win_p0_drop_path.py`,Mac **4/4**:拖入插 `@docs/sample.docx`,与补全通道一致 |
+| `uiprobe.py` native 层按平台分派(-162/+? 行) | Mac 全部脚本都依赖它 | ✅ 自检 **18/18**(含窗口几何);第 4 组 **11/11**;第 1 组 native **3/3**(最吃 AppleScript 的一组) |
+| `no-row-reverse.test.ts` / `multi-path-drop.test.ts` | 跨平台测试改动 | ✅ Mac `bun run test` **1008 + 41 全绿** |
+| `installer-versions.json`(`dev-windows` 2026.7.0→7.1) | 号线台账 | ✅ Win 专属号线,Mac 不受影响;台账已在 `docs/installer-versions.md` 说明用途与「测完已卸载」 |
+
+**Win 端修掉一个我漏掉的缺口**:文件树**单选**拖入走 `text/plain` 直接塞 `node.path`,
+没归一化。Mac 上路径本来就是正斜杠,这条路**原理上暴露不出来** —— 属于真正的平台盲区,
+不是疏忽可比。抽 `toMentionSeparators` 作唯一事实源、v2 布局同类 pattern 一并修,改法正确。
+
+### 顺带查出:含反斜杠文件名时,「四通道写法一致」这个不变式在 POSIX 上反过来
+
+`\` 在 macOS/Linux 上是**合法文件名字符**。实测 `toMentionSeparators("docs/a\\b.md")`
+→ `"docs/a/b.md"`,即一个真名叫 `a\b.md` 的文件,@ 路径被写成一个**不存在的嵌套路径**。
+
+四条通道的实际行为(已逐条查源):
+
+| 通道 | 含 `\` 文件名时 |
+|---|---|
+| `@` 提及补全(搜索结果) | `docs/a\b.md` ✅ **唯一给对的** |
+| `@` 提及补全(recent/已开标签) | `docs/a/b.md` ❌(`encodeFilePath` 先替换再分段) |
+| 文件树拖入(单选 / 多选) | `docs/a/b.md` ❌ |
+| 外部拖入 | `docs/a/b.md` ❌ |
+
+**定性**:① **不是 Win 那笔改动引入的** —— 四条里三条早就如此,它只是把第 4 条纳入同一行为,
+就「消除写法分裂」这个目标而言改法本身没错;② **不是本次同步的回归**,基准版同样如此;
+③ 影响面很小(macOS 上文件名带 `\` 极罕见),但真触发时是**静默指向错文件**。
+
+**正解方向**:归一化应按平台开闸 —— Windows 上 `\` 不可能出现在文件名里,替换安全;
+POSIX 上 `\` 是普通字符,不该翻译。**本轮不改**:它与 sync 无关、且属既有行为,
+临近合 main 不宜扩面。已记入需求池待排期。
+
 ### 待办(只剩人工,约 15 分钟)
 
 - #8 深链(两条真实路由)/ #9a 拖文件进聊天框 / #9b 文件树内拖动(**9b 可自动化,待补**)
