@@ -14,9 +14,33 @@
 
 
 
-## [macOS] 2026.10.0 - 2026-08-14 20:44
+## [macOS] 2026.10.0 - 2026-08-14
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:上游同步 v1.17.4 → v1.18.16 首次进 prod(`upstream-sync-2026-08`,1365 commits / 2359 文件),按功能波次 minor 进位 2026.9.1 → 2026.10.0。双 arch 一次发齐。
+
+- **arm64**:深签 + `.app` 公证 staple + `.dmg` 公证 staple,门禁三项(stapler validate / spctl accepted / source=Notarized Developer ID)全过。
+- **x64**:同上全过。`.dmg` 签名一步撞 Apple 时间戳服务抖动,补签后完成(见下)。
+
+**⚠️ 本次两处环境坑 + 处置(可复用)**:
+
+1. **摘代理躲公证滞留 ↔ 构建期需要代理**(新坑,已有解)。按 2026.9.1 的教训全程 `env -u *_PROXY` 直连跑 build,结果 2 分钟即挂在 `prebuild`:`https://models.dev/api.json` 直连 ConnectionRefused。解法是 `generate.ts` 已有的逃生口 —— 带代理 `curl` 一份快照落盘,再用 `MODELS_DEV_API_JSON=<快照>` + 摘代理跑完整 build。两轮公证(arm64/x64 的 `.app`)均一次 Accepted,**未复现 2026.9.1 的永久滞留**,直连结论再次被验证。
+2. **x64 `.dmg` 签名撞时间戳服务抖动**:`codesign` 报 `A timestamp was expected but was not found`,electron-builder 以 `⨯ codesign process failed 1` 中止 —— 此时 `.app` 已签名+公证+staple、zip/dmg 都已生成,**只差 dmg 签名这一步**。不必重打:`hdiutil verify` 确认 dmg 校验和有效 → `codesign --sign <hash> --timestamp <dmg>` 补签 → 单独公证 + staple 即可。副作用仅缺 `dmg.blockmap`(部署脚本按 `[[ -f ]]` 条件上传,非硬依赖;mac 自更新走 zip,`zip.blockmap` 两 arch 均在)。
+   构建在守卫段之前中止,故 **post-build LO 守卫手工补跑**:两 arch 的 `soffice` 架构与主可执行一致(x86_64 / arm64)、`presets` 各 5 条,均通过。
+3. **大文件上传别放前台**:`gh release create`(773MB)与 `notarytool submit`(394MB)都会超出 10 分钟前台窗口被打断 —— `gh` 会留下半截 **draft** release(需删掉重建),`notarytool` 则是上传未完成。一律后台跑。
+
+**产物**:
+- arm64 dmg `DeskFox-2026.10.0-mac-arm64.dmg` — 397,106,896 bytes
+  sha256 `d597f8bf9050657067ace2a1f0a1772360138bed8685fb4233e5b1619504093e`
+- x64 dmg `DeskFox-2026.10.0-mac-x64.dmg` — 413,214,089 bytes
+  sha256 `907d2f2112d8718547785b16377b789c6de337f5c9e4434e0b51800e29d98292`
+(均为 staple 后实算)
+
+**发布范围(双 arch 齐)**:
+- GitHub Release `ship-mac-prod-2026.10.0`(`--latest`,arm64 + x64 两个 dmg asset)
+- 阿里云 CDN:`dl.clawtray.com/DeskFox-2026.10.0-mac-{arm64,x64}.dmg`
+- Gitee Release id 797518(元数据 + 双 arch 下载链接)
+- updater A 链路:`latest-mac.yml` 单本双 arch(4 条 `files[]`),线上 version=2026.10.0 硬校验通过,4 条资产 URL 实测 206 且 Content-Length 与 manifest 逐一吻合
+- 官网 deskfox.ai:6 条下载链接实测全 206,Mac 两条为 2026.10.0(Win 保持 2026.9.1,本次未发 Win)
 
 ---
 ## [Windows dev] 2026.7.1 - 2026-08-14 15:16
