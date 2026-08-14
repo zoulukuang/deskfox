@@ -1,8 +1,22 @@
 feat-id: upstream-sync-2026-08
 status: in-progress
-related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md ./5-handoff.md
+related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md ./5-handoff.md ./7-windows-verification.md
 
 # Windows 端适配测试清单(拉到本分支先读这个)
+
+> 🪟 **2026-08-14 Win 端回执:本清单已执行完毕,结果见
+> [`7-windows-verification.md`](./7-windows-verification.md)。**
+> 下面正文保留原样(它是 Mac 端当时的判断,有价值),但**三处前提经实测不成立**,
+> 照着做会走弯路,先看这里:
+>
+> | 位置 | 原文 | 实测 |
+> |---|---|---|
+> | §零② | Mac 脚本大部分要重写 | `uiprobe.py` 的 CDP 部分**一行没改**;绑死 macOS 的只有 native 一层,已抽成 `uiprobe_native.py` 按平台分派,两端同一份脚本 |
+> | §二 P1-1 | Win 是应用内菜单栏(`autoHideMenuBar`) | Win **没有原生菜单**(`createMenu()` 对非 darwin 直接 return);菜单是渲染层组件 `windows-app-menu.tsx`,**只能 CDP 验,UIA 验不到** |
+> | §二 P1-2 | Win 内置 LO bundle 记为待办 | **早已内置且可用**;docx/xlsx/pdf 预览实测全部渲染成功 |
+>
+> 另:§零① 说的 3 项单测红已由 `bd13f5dabc` 修掉,**不必再 `--no-verify`**;
+> 但 Windows 上另有一条 `no-row-reverse.test.ts` 因 `URL.pathname` 带盘符斜杠而恒红,见 `f05ce5494f`。
 
 > 2026-08-14 立,Mac 端写给 Win 端。**Mac 侧已全量验完**,本文件只讲 **Windows 特有的部分** ——
 > Mac 已验过的通用功能不必重跑,重跑也基本白花时间。
