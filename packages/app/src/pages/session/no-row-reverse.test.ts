@@ -29,8 +29,15 @@
 import { test, expect } from "bun:test"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 
-const ROOT = new URL("../../", import.meta.url).pathname // packages/app/src
+// FORK 2026-08-14 [feat: upstream-sync-2026-08]:必须用 `fileURLToPath`,不能用 `.pathname`。
+// [bug-repro: Windows 上 `new URL(...).pathname` 得到的是 `/D:/project/.../src/` ——
+//  盘符前多一个斜杠,`readdirSync` 直接 ENOENT。于是**这个守卫在 Windows 上从未真正跑过**:
+//  它每次都以异常收场,`bun run test` 整体红,而它本该检查的 `flex-row-reverse` 一次也没检查。
+//  守卫失效比没有守卫更危险 —— 前者让人以为已经防住了。macOS 上 pathname 恰好是合法 POSIX 路径,
+//  所以 Mac 端看不到这个问题。]
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)) // packages/app/src
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
