@@ -6,6 +6,8 @@ import { DialogFileTreeConfirm, DialogFileTreeConflict, type ConflictAction } fr
 import { shouldListRoot, dirsToExpand } from "@/components/file-tree-helpers"
 // FORK: 行重挂后补焦点 [feat: filetree-shortcut-focus-scope] 2026-08-13
 import { restoreRowFocus } from "@/components/file-tree-focus"
+// FORK: @-mention 路径分隔符归一化(Win 反斜杠 → 正斜杠)[feat: external-drop-path-ref] 2026-08-14
+import { toMentionSeparators } from "@/components/prompt-input/multi-path-drop"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -376,7 +378,11 @@ const FileTreeNode = (
         // 单源 → 走原 text/plain "file:<rel>" 协议(兼容 attachments.ts 的 @-mention)
         // 多源 → 写自定义 MIME,attachments 收不到 file: 前缀就退回外部文件 drop 路径
         if (sources.length === 1) {
-          event.dataTransfer?.setData("text/plain", `file:${local.node.path}`)
+          // FORK: 归一化分隔符 —— `node.path` 在 Windows 上是 `docs\x.md`(OS 原生写法,
+          // 供 fs 操作用),直接塞进 @-mention 会让同一个文件出现两种引用写法:
+          // 补全/多选拖入/外部拖入都给 `docs/x.md`,唯独单选拖入给 `docs\x.md`。
+          // [feat: external-drop-path-ref] 2026-08-14
+          event.dataTransfer?.setData("text/plain", `file:${toMentionSeparators(local.node.path)}`)
           event.dataTransfer?.setData("text/uri-list", pathToFileUrl(local.node.path))
         } else {
           event.dataTransfer?.setData("application/x-deskfox-paths", JSON.stringify(sources))

@@ -1,4 +1,6 @@
 import { useFile } from "@/context/file"
+// FORK: @-mention 路径分隔符归一化(Win 反斜杠 → 正斜杠)[feat: external-drop-path-ref] 2026-08-14
+import { toMentionSeparators } from "@/components/prompt-input/multi-path-drop"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import "@opencode-ai/ui/v2/file-tree-v2.css"
 import {
@@ -91,7 +93,10 @@ const FileTreeNodeV2 = (
       draggable={local.draggable}
       onDragStart={(event: DragEvent) => {
         if (!local.draggable) return
-        event.dataTransfer?.setData("text/plain", `file:${local.node.path}`)
+        // FORK: 同 file-tree.tsx —— @-mention 一律用正斜杠。v2 布局当前未启用,
+        // 但同一有害 pattern 两处都在,只改跑得到的那处等于留了个复发点。
+        // [feat: external-drop-path-ref] 2026-08-14
+        event.dataTransfer?.setData("text/plain", `file:${toMentionSeparators(local.node.path)}`)
         event.dataTransfer?.setData("text/uri-list", pathToFileUrl(local.node.path))
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
         withFileDragImage(event)
