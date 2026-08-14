@@ -13,7 +13,7 @@ import { getCursorPosition } from "./editor-dom"
 import { createBlobReference, type DraftStore } from "@/utils/draft-store"
 import { attachmentMime } from "./files"
 // FORK: 多选拖动 abs→rel 转换 helper(无 context 依赖,可单测) 2026-05-15
-import { parseMultiPathDropPaths } from "./multi-path-drop"
+import { parseMultiPathDropPaths, toMentionPath } from "./multi-path-drop"
 // FORK: 外部拖入路由(非图片走路径引用)[feat: external-drop-path-ref] 2026-08-14
 import { rejectionToastKind, routeExternalDrop, shouldBlockAsImage } from "./external-drop"
 import { normalizePaste, pasteMode } from "./paste"
@@ -282,8 +282,13 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
         path: input.getPathForFile?.(file),
       })
       if (route.kind === "path") {
+        // 必须与文件树拖入产出**同一种**路径写法:归一化 Win 反斜杠 + 项目根下转相对。
+        // 不做的话:Windows 上插进去的是 `@C:\Users\…` 反斜杠原样;
+        // 且拖一个本来就在项目里的文件时,访达给绝对路径、文件树给相对路径,
+        // 同一个文件两种引用。 [feat: external-drop-path-ref] 2026-08-14
+        const mention = toMentionPath(route.path, sdk().directory)
         input.focusEditor()
-        input.addPart({ type: "file", path: route.path, content: "@" + route.path, start: 0, end: 0 })
+        input.addPart({ type: "file", path: mention, content: "@" + mention, start: 0, end: 0 })
         referenced = true
         continue
       }

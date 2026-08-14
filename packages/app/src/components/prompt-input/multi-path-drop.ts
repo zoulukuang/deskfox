@@ -21,6 +21,17 @@ export function parseMultiPathDropPaths(json: string | null | undefined, root: s
   return out
 }
 
+/**
+ * 绝对路径 → @-mention 用的路径:**归一化 Win 反斜杠** + 在项目根下时转相对。
+ *
+ * FORK 2026-08-14:原为本文件私有,现导出给外部拖入复用
+ * ([feat: external-drop-path-ref])。两条拖入路径必须产出**同一种**路径写法,
+ * 否则同一个文件从文件树拖是相对路径、从访达拖是绝对路径,模型看到两种引用。
+ */
+export function toMentionPath(abs: string, root: string | undefined): string {
+  return absToRelPath(abs, root)
+}
+
 function absToRelPath(abs: string, root: string | undefined): string {
   const normAbs = abs.replace(/\\/g, "/")
   if (!root) return normAbs

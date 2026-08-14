@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { isImageDrop, rejectionToastKind, routeExternalDrop, shouldBlockAsImage } from "./external-drop"
+import { toMentionPath } from "./multi-path-drop"
 
 describe("外部拖入路由(routeExternalDrop)", () => {
   test("L1 图片有路径 → 仍走内联(图片不改道,视觉要字节)", () => {
@@ -111,5 +112,40 @@ describe("图片能力拦截的作用范围", () => {
 
   test("R3c 模型支持图片时,一律通用提示", () => {
     expect(rejectionToastKind([{ type: "image/png", name: "a.png" }], false)).toBe("unsupported")
+  })
+})
+
+// 外部拖入插进输入框的路径,必须与**文件树拖入**产出同一种写法。
+// [bug-repro: 第一版直接把 getPathForFile 的原始路径插进去 ——
+//   ① Windows 上是 `C:\\Users\\…` 反斜杠原样(既有 helper 明确把「路径含 Win 反斜杠」列为
+//      要容错的边界,说明 @-mention 不吃反斜杠);
+//   ② 拖一个**本来就在项目里**的文件时给绝对路径,而文件树拖同一文件给相对路径,
+//      同一个文件出现两种引用写法。
+//   两条都在 Mac 上就该测出来 —— 我只想着「能不能拖进来」,没想到「插进去的路径对不对」。]
+describe("拖入路径归一化(与文件树拖入保持同一种写法)", () => {
+  test("W1 Windows 绝对路径 → 反斜杠归一化为正斜杠", () => {
+    expect(toMentionPath("C:\\Users\\me\\Documents\\a.docx", undefined)).toBe(
+      "C:/Users/me/Documents/a.docx",
+    )
+  })
+
+  test("W2 Windows 路径在项目根下 → 转相对(且不带反斜杠)", () => {
+    expect(toMentionPath("C:\\proj\\src\\a.ts", "C:\\proj")).toBe("src/a.ts")
+  })
+
+  test("W3 posix 路径在项目根下 → 转相对(与文件树拖入一致)", () => {
+    expect(toMentionPath("/Volumes/ExtSSD/deskfox-uitest/code/a.py", "/Volumes/ExtSSD/deskfox-uitest")).toBe(
+      "code/a.py",
+    )
+  })
+
+  test("W4 项目外的路径 → 原样保留绝对路径(模型需要完整路径才读得到)", () => {
+    expect(toMentionPath("/Users/me/Downloads/x.docx", "/Volumes/ExtSSD/deskfox-uitest")).toBe(
+      "/Users/me/Downloads/x.docx",
+    )
+  })
+
+  test("W5 跨盘符(Windows 常见:项目在 D:,文件在 C:)→ 原样绝对路径", () => {
+    expect(toMentionPath("C:\\Users\\me\\x.docx", "D:\\proj")).toBe("C:/Users/me/x.docx")
   })
 })
