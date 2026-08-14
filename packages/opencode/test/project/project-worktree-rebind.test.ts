@@ -11,8 +11,10 @@ import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Effect, Layer } from "effect"
 import { testEffect } from "../lib/effect"
 
-const layer = Layer.mergeAll(Project.defaultLayer, Database.defaultLayer, CrossSpawnSpawner.defaultLayer)
-const it = testEffect(layer)
+// 2026-08-11 sync v1.17.13:上游 layer→node 体系
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([Project.node, Database.node, CrossSpawnSpawner.node])))
 
 async function gitRepoWithCommit(dir: string) {
   await $`mkdir -p ${dir}`.quiet()

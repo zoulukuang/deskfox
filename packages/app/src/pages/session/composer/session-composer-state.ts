@@ -21,9 +21,11 @@ export const todoState = (input: {
   return "close"
 }
 
+export const todoDockAtBoundary = (state: ReturnType<typeof todoState>) => state === "open"
+
 const idle = { type: "idle" as const }
 
-export function createSessionComposerState(options?: { closeMs?: number | (() => number) }) {
+export function createSessionComposerController(options?: { closeMs?: number | (() => number) }) {
   const params = useParams()
   const sdk = useSDK()
   const sync = useSync()
@@ -32,7 +34,7 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const permission = usePermission()
 
   const questionRequest = createMemo((): QuestionRequest | undefined => {
-    return sessionQuestionRequest(sync.data.session, sync.data.question, params.id)
+    return sessionQuestionRequest(sync().data.session, sync().data.question, params.id)
   })
 
   // FORK: 跨-instance 权限过滤(方案D)2026-07-06;REQ-078 改走 permission.canResolve 共享层 2026-08-02
@@ -42,9 +44,10 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   // 被陈旧快照 fail-closed 藏死(turn 挂死)。现由 context/permission 按「候选 id 集签名」refetch,
   // 无候选不发请求(e2e/离线 gate 语义保留),失败/加载中 fail-open。
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
-    return sessionPermissionRequest(sync.data.session, sync.data.permission, params.id, (item) => {
-      if (permission.autoResponds(item, sdk.directory)) return false
-      if (!permission.canResolve(item, sdk.directory)) return false
+    return sessionPermissionRequest(sync().data.session, sync().data.permission, params.id, (item) => {
+      if (permission.autoResponds(item, sdk().directory)) return false
+      // FORK: composer 卡片与侧栏徽标统一走 canResolve — 消灭「侧栏亮灯 composer 没卡」幻影
+      if (!permission.canResolve(item, sdk().directory)) return false
       return true
     })
   })
@@ -58,18 +61,19 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const todos = createMemo((): Todo[] => {
     const id = params.id
     if (!id) return []
-    return serverSync.data.session_todo[id] ?? []
+    return serverSync().session.data.todo[id] ?? []
   })
 
   const done = createMemo(
     () => todos().length > 0 && todos().every((todo) => todo.status === "completed" || todo.status === "cancelled"),
   )
 
-  const live = createMemo(() => sync.data.session_working(params.id ?? "") || blocked())
+  const live = createMemo(() => sync().data.session_working(params.id ?? "") || blocked())
 
   const [store, setStore] = createStore({
+    sessionID: params.id,
     responding: undefined as string | undefined,
-    dock: todos().length > 0 && live(),
+    dock: todos().length > 0 && !done() && live(),
     closing: false,
     opening: false,
   })
@@ -86,8 +90,8 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     if (store.responding === perm.id) return
 
     setStore("responding", perm.id)
-    sdk.client.permission
-      .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
+    sdk()
+      .api.permission.reply({ sessionID: perm.sessionID, requestID: perm.id, reply: response })
       .catch((err: unknown) => {
         const description = err instanceof Error ? err.message : String(err)
         // FORK: 飞书桥接权限跨-instance 优雅降级 2026-07-06
@@ -126,14 +130,13 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
   const clear = () => {
     const id = params.id
     if (!id) return
-    serverSync.todo.set(id, [])
-    sync.set("todo", id, [])
+    sync().set("todo", id, [])
   }
 
   createEffect(
     on(
-      () => [todos().length, done(), live()] as const,
-      ([count, complete, active]) => {
+      () => [params.id, todos().length, done(), live()] as const,
+      ([id, count, complete, active], previous) => {
         if (raf) cancelAnimationFrame(raf)
         raf = undefined
 
@@ -142,6 +145,14 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
           done: complete,
           live: active,
         })
+
+        if (!previous || previous[0] !== id) {
+          if (timer) window.clearTimeout(timer)
+          timer = undefined
+          setStore({ sessionID: id, dock: todoDockAtBoundary(next), closing: false, opening: false })
+          if (next === "clear") clear()
+          return
+        }
 
         if (next === "hide") {
           if (timer) window.clearTimeout(timer)
@@ -197,10 +208,13 @@ export function createSessionComposerState(options?: { closeMs?: number | (() =>
     permissionResponding,
     decide,
     todos,
-    dock: () => store.dock,
-    closing: () => store.closing,
-    opening: () => store.opening,
+    dock: () =>
+      store.sessionID === params.id
+        ? store.dock
+        : todoDockAtBoundary(todoState({ count: todos().length, done: done(), live: live() })),
+    closing: () => store.sessionID === params.id && store.closing,
+    opening: () => store.sessionID === params.id && store.opening,
   }
 }
 
-export type SessionComposerState = ReturnType<typeof createSessionComposerState>
+export type SessionComposerController = ReturnType<typeof createSessionComposerController>

@@ -1,8 +1,8 @@
-import { DataProvider } from "@opencode-ai/ui/context"
+import { DataProvider } from "@opencode-ai/session-ui/context"
 import { showToast } from "@/utils/toast"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
-import { createEffect, createMemo, createResource, type ParentProps, Show } from "solid-js"
+import { type Accessor, createEffect, createMemo, createResource, onCleanup, type ParentProps, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { LocalProvider } from "@/context/local"
 import { SDKProvider } from "@/context/sdk"
@@ -12,19 +12,35 @@ import { Schema } from "effect"
 // FORK: stale session fallback — startup 恢复 session 时,sidecar 401/404 时降级到主界面
 // 不让 ErrorBoundary 兜底渲染"出了点问题" [feat: frontend-stale-session-fallback]
 import { isStaleSessionError } from "@/utils/stale-session-error"
+import type { ServerConnection } from "@/context/server"
+import { sessionHref } from "@/utils/session-route"
+import { useServerSync } from "@/context/server-sync"
 
-export function DirectoryDataProvider(props: ParentProps<{ directory: string; draftID?: string }>) {
+export function DirectoryDataProvider(
+  props: ParentProps<{
+    directory: string | Accessor<string>
+    draftID?: string
+    server?: Accessor<ServerConnection.Key | undefined>
+  }>,
+) {
   const location = useLocation()
   const navigate = useNavigate()
   const params = useParams()
   const sync = useSync()
-  const slug = createMemo(() => base64Encode(props.directory))
+  const serverSync = useServerSync()
+  const directory = () => (typeof props.directory === "function" ? props.directory() : props.directory)
+  const slug = createMemo(() => base64Encode(directory()))
+  const href = (sessionID: string) => {
+    const server = props.server?.()
+    if (server) return sessionHref(server, sessionID)
+    return `/${slug()}/session/${sessionID}`
+  }
 
   createEffect(() => {
     // A draft lives at /new-session?draftId=… and has no directory segment to normalize.
-    if (props.draftID) return
-    const next = sync.data.path.directory
-    if (!next || next === props.directory) return
+    if (props.draftID || props.server?.()) return
+    const next = sync().data.path.directory
+    if (!next || next === directory()) return
     const path = location.pathname.slice(slug().length + 1)
     navigate(`/${base64Encode(next)}${path}${location.search}${location.hash}`, { replace: true })
   })
@@ -44,9 +60,10 @@ export function DirectoryDataProvider(props: ParentProps<{ directory: string; dr
   // session 时主动 sync)也可能拿到 stale error,但他们期望 surface 出来不是静默,各自决定 UX。
   createResource(
     () => params.id,
+    // FORK-BEGIN: stale session 自愈导航(其余错误跟随上游吞掉)[feat: session-heal] 2026-08-11 适配上游 sync() 访问器
     async (id) => {
       try {
-        return await sync.session.sync(id)
+        return await sync().session.sync(id)
       } catch (e) {
         if (isStaleSessionError(e)) {
           console.warn("[stale-session-fallback] navigate away from stale session", {
@@ -54,23 +71,35 @@ export function DirectoryDataProvider(props: ParentProps<{ directory: string; dr
             error: e instanceof Error ? e.message : e,
           })
           navigate(`/${slug()}`, { replace: true })
-          return
         }
-        throw e
+        // 上游行为:sync 失败静默(.catch(() => {})),不再向上抛
       }
     },
+    // FORK-END
   )
   // FORK-END
 
+  createEffect(() => {
+    const sessionID = params.id
+    if (!sessionID) return
+    serverSync().session.pin(sessionID)
+    onCleanup(() => serverSync().session.unpin(sessionID))
+  })
+
   return (
-    <DataProvider
-      data={sync.data}
-      directory={props.directory}
-      onNavigateToSession={(sessionID: string) => navigate(`/${slug()}/session/${sessionID}`)}
-      onSessionHref={(sessionID: string) => `/${slug()}/session/${sessionID}`}
-    >
-      <LocalProvider>{props.children}</LocalProvider>
-    </DataProvider>
+    <Show when={directory()} keyed>
+      {(directory) => (
+        <DataProvider
+          data={sync().data}
+          directory={directory}
+          sessionID={params.id}
+          onNavigateToSession={(sessionID: string) => navigate(href(sessionID))}
+          onSessionHref={href}
+        >
+          <LocalProvider>{props.children}</LocalProvider>
+        </DataProvider>
+      )}
+    </Show>
   )
 }
 

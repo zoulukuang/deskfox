@@ -38,6 +38,7 @@ export type CreationInput = {
 }
 
 export type BuildCreationInputArgs = {
+  imageDataUrl?: string
   parts: ContentPart[]
   capability: CreationCapability
   projectDir: string
@@ -78,8 +79,10 @@ export function buildCreationInput(args: BuildCreationInputArgs): CreationInput 
   if (capability === "image_edit" || capability === "video_i2v") {
     if (filePart?.path) {
       input.refFile = absolutePath(projectDir, filePart.path)
-    } else if (imagePart?.dataUrl) {
-      input.refFile = imagePart.dataUrl
+    } else if (args.imageDataUrl) {
+      // FORK: 2026-08-11 sync v1.18.16 — 上游 blob 化附件(ImageAttachmentPart.dataUrl → blob),
+      //   base64 由调用方(submitCreation)异步解出后经此参数传入,保持本函数纯同步可单测
+      input.refFile = args.imageDataUrl
     }
   } else if (capability === "asr") {
     if (filePart?.path) {

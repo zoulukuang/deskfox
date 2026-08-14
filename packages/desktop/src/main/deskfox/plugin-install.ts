@@ -22,6 +22,9 @@ import { write as writeLog } from "../logging"
 // imbot-agent.ts(纯逻辑可单测)。原「已有 agent.imbot 完全跳过」改为按 `_schemaVersion`
 // 升级:覆盖管理键(description/permission),保留用户自增键(model/prompt 等)。
 import { injectImbotAgent } from "./imbot-agent"
+// FORK: config 目录按渠道解析(修「写的文件 sidecar 不读」+ local 配置隔离)
+// [feat: local-config-isolation] 2026-08-12
+import { resolveDeskfoxConfigDir } from "./config-dir-resolve"
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -81,9 +84,19 @@ function ensureInstalled(name: string): string | null {
   }
 }
 
-/** user opencode 配置路径(~/.config/opencode/opencode.{jsonc,json};都没有则建 jsonc) */
+/**
+ * user opencode 配置路径(opencode.{jsonc,json};都没有则建 jsonc)。
+ *
+ * FORK: 目录由 config-dir 统一决定,不再硬编码 `~/.config/opencode`
+ *   [feat: local-config-isolation] 2026-08-12
+ *   [bug-repro: 原实现写死 ~/.config/opencode,而 sidecar 读的是 $XDG_CONFIG_HOME/opencode
+ *    (data-namespace 已把 XDG_CONFIG_HOME 指向 ~/.config/deskfox)—— 两者不是同一个文件,
+ *    2026-08-12 实测两份内容已经不同。本函数写的那份**没人读**,
+ *    「独占接管 + 自愈」机制因此长期失效,只是因为 deskfox 那份是首启迁移的快照、恰好正确才没爆发。]
+ *   顺带完成 local 档配置隔离:local 走 opencode-local 目录,与发布渠道分家。
+ */
 function userConfigPath(): string {
-  const dir = path.join(os.homedir(), ".config", "opencode")
+  const dir = resolveDeskfoxConfigDir(app.isPackaged)
   const jsonc = path.join(dir, "opencode.jsonc")
   if (fs.existsSync(jsonc)) return jsonc
   const json = path.join(dir, "opencode.json")

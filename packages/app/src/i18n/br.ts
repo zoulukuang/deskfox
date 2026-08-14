@@ -1,4 +1,104 @@
 export const dict = {
+  "desktop.menu.app": "OpenCode",
+  "desktop.menu.file": "Arquivo",
+  "desktop.menu.edit": "Editar",
+  "desktop.menu.view": "Visualizar",
+  "desktop.menu.go": "Ir",
+  "desktop.menu.window": "Janela",
+  "desktop.menu.help": "Ajuda",
+  "desktop.menu.checkForUpdates": "Verificar atualizações...",
+  "desktop.menu.settings": "Configurações",
+  "desktop.menu.reloadWebview": "Recarregar WebView",
+  "desktop.menu.restart": "Reiniciar",
+  "desktop.menu.exportLogs": "Exportar logs...",
+  "desktop.menu.newSession": "Nova sessão",
+  "desktop.menu.openProject": "Abrir projeto...",
+  "desktop.menu.newWindow": "Nova janela",
+  "desktop.menu.closeWindow": "Fechar janela",
+  "desktop.menu.undo": "Desfazer",
+  "desktop.menu.redo": "Refazer",
+  "desktop.menu.cut": "Recortar",
+  "desktop.menu.copy": "Copiar",
+  "desktop.menu.paste": "Colar",
+  "desktop.menu.delete": "Excluir",
+  "desktop.menu.selectAll": "Selecionar tudo",
+  "desktop.menu.toggleSidebar": "Alternar barra lateral",
+  "desktop.menu.toggleTerminal": "Alternar terminal",
+  "desktop.menu.toggleFileTree": "Alternar árvore de arquivos",
+  "desktop.menu.reload": "Recarregar",
+  "desktop.menu.toggleDeveloperTools": "Alternar ferramentas de desenvolvedor",
+  "desktop.menu.actualSize": "Tamanho real",
+  "desktop.menu.zoomIn": "Ampliar",
+  "desktop.menu.zoomOut": "Reduzir",
+  "desktop.menu.toggleFullScreen": "Alternar tela inteira",
+  "desktop.menu.back": "Voltar",
+  "desktop.menu.forward": "Avançar",
+  "desktop.menu.previousSession": "Sessão anterior",
+  "desktop.menu.nextSession": "Próxima sessão",
+  "desktop.menu.previousProject": "Projeto anterior",
+  "desktop.menu.nextProject": "Próximo projeto",
+  "desktop.menu.minimize": "Minimizar",
+  "desktop.menu.maximize": "Maximizar",
+  "desktop.menu.documentation": "Documentação do OpenCode",
+  "desktop.menu.supportForum": "Fórum de suporte",
+  "desktop.menu.shareFeedback": "Enviar comentários",
+  "desktop.menu.reportBug": "Relatar um bug",
+  "desktop.menu.ariaLabel": "Menu do OpenCode",
+
+  "desktop.updater.dialog.checkFailed.message": "Falha ao verificar atualizações.",
+  "desktop.updater.dialog.checkFailed.title": "Erro de atualização",
+  "desktop.updater.dialog.upToDate.message": "Você está em dia.",
+  "desktop.updater.dialog.upToDate.title": "Nenhuma atualização",
+  "desktop.updater.dialog.ready.message": "A atualização {{version}} foi baixada. Deseja reiniciar agora?",
+  "desktop.updater.dialog.ready.title": "Atualização pronta",
+  "desktop.updater.dialog.restart": "Reiniciar",
+  "desktop.updater.dialog.later": "Mais tarde",
+
+  "desktop.recovery.action.relaunch": "Reabrir",
+  "desktop.recovery.action.exportLogs": "Exportar logs",
+  "desktop.recovery.action.keepWaiting": "Continuar aguardando",
+  "desktop.recovery.action.quit": "Encerrar",
+  "desktop.recovery.loadFailed": "Falha ao carregar o OpenCode",
+  "desktop.recovery.terminated": "A janela do OpenCode foi encerrada inesperadamente",
+  "desktop.recovery.unresponsive": "O OpenCode não está respondendo",
+  "desktop.recovery.unresponsive.detail": "Você pode reabrir o aplicativo, abrir os logs ou continuar aguardando.",
+  "desktop.recovery.loadFailed.detail": "Janela: {{window}}\nURL: {{url}}\nErro: {{code}} {{description}}",
+  "desktop.recovery.terminated.detail": "Janela: {{window}}\nMotivo: {{reason}}\nCódigo: {{code}}",
+  "desktop.recovery.unknown": "<desconhecido>",
+
+  "desktop.dialog.chooseFolder": "Escolher uma pasta",
+  "desktop.dialog.chooseFile": "Escolher um arquivo",
+  "desktop.dialog.saveFile": "Salvar arquivo",
+  "desktop.dialog.files": "Arquivos",
+  "desktop.server.local": "Servidor local",
+
+  "desktop.wsl.error.windowsOnly": "O WSL está disponível somente no Windows",
+  "desktop.wsl.error.unavailable": "O WSL está indisponível",
+  "desktop.wsl.error.listInstalled": "Falha ao listar as distribuições WSL instaladas",
+  "desktop.wsl.error.listOnline": "Falha ao listar as distribuições WSL disponíveis online",
+  "desktop.wsl.error.executeDistro": "Não é possível executar comandos na distribuição",
+  "desktop.wsl.error.installWsl": "Falha na instalação do WSL",
+  "desktop.wsl.error.installDistro": "Falha ao instalar a distribuição: {{distro}}",
+  "desktop.wsl.error.installOpencode": "Falha na instalação do OpenCode",
+  "desktop.wsl.error.alreadyAdded": "{{distro}} já foi adicionada",
+  "desktop.wsl.error.opencodeMissing": "O opencode não está instalado nesta distribuição",
+  "desktop.wsl.error.opencodeCannotRun": "O opencode está instalado, mas não pôde ser executado",
+  "desktop.wsl.error.opencodeNotInstalled": "O OpenCode não está instalado em {{distro}}",
+  "desktop.wsl.error.updateVersion":
+    "A atualização do OpenCode foi concluída, mas {{distro}} ainda informa a versão {{installed}}; a versão esperada é {{expected}}",
+  "desktop.wsl.error.noVersion": "sem versão",
+  "desktop.wsl.error.serverExited":
+    "O servidor WSL foi encerrado após a inicialização (código={{code}} sinal={{signal}})",
+  "desktop.wsl.error.serverExitedBeforeHealthy":
+    "O servidor WSL foi encerrado antes de ficar íntegro (código={{code}} sinal={{signal}}){{output}}",
+  "desktop.wsl.error.healthTimeout":
+    "O tempo limite da verificação de integridade do sidecar de {{distro}} foi excedido após {{timeout}}ms",
+  "desktop.wsl.error.commandTimeout": "O tempo limite de {{command}} {{args}} foi excedido após {{timeout}}ms",
+  "desktop.wsl.error.failedPort": "Falha ao obter a porta",
+
+  "desktop.picker.error.notSelected": "O arquivo não foi selecionado pelo seletor",
+  "desktop.picker.error.sizeLimit": "Os anexos selecionados excedem o limite de {{limit}} MB",
+
   "command.category.suggested": "Sugerido",
   "command.category.view": "Visualizar",
   "command.category.project": "Projeto",
@@ -16,11 +116,15 @@ export const dict = {
   "command.category.permissions": "Permissões",
   "command.category.workspace": "Espaço de trabalho",
   "command.category.settings": "Configurações",
+  "command.logs.export": "Exportar logs",
   "theme.scheme.system": "Sistema",
   "theme.scheme.light": "Claro",
   "theme.scheme.dark": "Escuro",
   "command.sidebar.toggle": "Alternar barra lateral",
   "command.project.open": "Abrir projeto",
+  "command.project.previous": "Projeto anterior",
+  "command.project.next": "Próximo projeto",
+  "command.project.index": "Alternar para o projeto {{index}}",
   "command.provider.connect": "Conectar provedor",
   "command.server.switch": "Trocar servidor",
   "command.settings.open": "Abrir configurações",
@@ -39,6 +143,7 @@ export const dict = {
   "command.session.new": "Nova sessão",
   "command.file.open": "Abrir arquivo",
   "command.tab.close": "Fechar aba",
+  "command.tab.reopenClosed": "Reabrir aba fechada",
   "command.context.addSelection": "Adicionar seleção ao contexto",
   "command.context.addSelection.description": "Adicionar as linhas selecionadas do arquivo atual",
   "command.input.focus": "Focar entrada",
@@ -81,7 +186,11 @@ export const dict = {
   "command.session.share.description": "Compartilhar esta sessão e copiar a URL para a área de transferência",
   "command.session.unshare": "Parar de compartilhar sessão",
   "command.session.unshare.description": "Parar de compartilhar esta sessão",
+  "command.session.export": "Exportar sessão",
+  "command.session.export.description": "Exportar a transcrição completa da sessão como JSON",
+
   "palette.search.placeholder": "Buscar arquivos, comandos e sessões",
+  "palette.search.placeholder.home": "Buscar comandos e sessões",
   "palette.empty": "Nenhum resultado encontrado",
   "palette.group.commands": "Comandos",
   "palette.group.files": "Arquivos",
@@ -92,13 +201,14 @@ export const dict = {
   "dialog.provider.empty": "Nenhum provedor encontrado",
   "dialog.provider.group.popular": "Popular",
   "dialog.provider.group.other": "Outro",
+  "dialog.provider.custom.label": "Provedor personalizado compatível com OpenAI",
   "dialog.provider.tag.recommended": "Recomendado",
   "dialog.provider.opencode.note": "Modelos selecionados incluindo Claude, GPT, Gemini e mais",
   "dialog.provider.opencode.tagline": "Modelos otimizados e confiáveis",
   "dialog.provider.opencodeGo.tagline": "Assinatura de baixo custo para todos",
-  "dialog.provider.anthropic.note": "Conectar com Claude Pro/Max ou chave de API",
-  "dialog.provider.copilot.note": "Conectar com Copilot ou chave de API",
-  "dialog.provider.openai.note": "Conectar com ChatGPT Pro/Plus ou chave de API",
+  "dialog.provider.anthropic.note": "Acesso direto aos modelos Claude, incluindo Pro e Max",
+  "dialog.provider.copilot.note": "Modelos de IA para auxílio à programação pelo GitHub Copilot",
+  "dialog.provider.openai.note": "Modelos GPT rápidos e avançados para tarefas gerais de IA",
   "dialog.provider.google.note": "Modelos Gemini para respostas rápidas e estruturadas",
   "dialog.provider.openrouter.note": "Acesse todos os modelos suportados de um único provedor",
   "dialog.provider.vercel.note": "Acesso unificado a modelos de IA com roteamento inteligente",
@@ -110,11 +220,14 @@ export const dict = {
   "dialog.model.manage.provider.toggle": "Alternar todos os modelos {{provider}}",
   "dialog.model.unpaid.freeModels.title": "Modelos gratuitos fornecidos pelo OpenCode",
   "dialog.model.unpaid.addMore.title": "Adicionar mais modelos de provedores populares",
+  "dialog.model.unpaid.viewMoreProviders": "Ver mais de 70 provedores",
   "dialog.provider.viewAll": "Ver mais provedores",
   "provider.connect.title": "Conectar {{provider}}",
   "provider.connect.title.anthropicProMax": "Entrar com Claude Pro/Max",
   "provider.connect.selectMethod": "Selecionar método de login para {{provider}}.",
   "provider.connect.method.apiKey": "Chave de API",
+  "provider.connect.method.browser": "Navegador",
+  "provider.connect.method.headless": "Sem interface gráfica",
   "provider.connect.status.inProgress": "Autorização em andamento...",
   "provider.connect.status.waiting": "Aguardando autorização...",
   "provider.connect.status.failed": "Autorização falhou: {{error}}",
@@ -146,15 +259,16 @@ export const dict = {
   "provider.connect.toast.connected.title": "{{provider}} conectado",
   "provider.connect.toast.connected.description": "Modelos do {{provider}} agora estão disponíveis para uso.",
   "provider.custom.title": "Provedor personalizado",
+  "provider.custom.unavailable": "Provedores personalizados não estão disponíveis neste servidor",
   "provider.custom.description.prefix": "Configure um provedor compatível com OpenAI. Veja a ",
   "provider.custom.description.link": "documentação de configuração do provedor",
   "provider.custom.description.suffix": ".",
-  "provider.custom.field.providerID.label": "ID do Provedor",
+  "provider.custom.field.providerID.label": "ID do provedor",
   "provider.custom.field.providerID.placeholder": "meuprovedor",
   "provider.custom.field.providerID.description": "Letras minúsculas, números, hifens ou sublinhados",
   "provider.custom.field.name.label": "Nome de exibição",
-  "provider.custom.field.name.placeholder": "Meu Provedor de IA",
-  "provider.custom.field.baseURL.label": "URL Base",
+  "provider.custom.field.name.placeholder": "Meu provedor de IA",
+  "provider.custom.field.baseURL.label": "URL base",
   "provider.custom.field.baseURL.placeholder": "https://api.meuprovedor.com/v1",
   "provider.custom.field.apiKey.label": "Chave de API",
   "provider.custom.field.apiKey.placeholder": "Chave de API",
@@ -163,7 +277,7 @@ export const dict = {
   "provider.custom.models.id.label": "ID",
   "provider.custom.models.id.placeholder": "id-do-modelo",
   "provider.custom.models.name.label": "Nome",
-  "provider.custom.models.name.placeholder": "Nome de Exibição",
+  "provider.custom.models.name.placeholder": "Nome de exibição",
   "provider.custom.models.remove": "Remover modelo",
   "provider.custom.models.add": "Adicionar modelo",
   "provider.custom.headers.label": "Cabeçalhos (opcional)",
@@ -173,11 +287,11 @@ export const dict = {
   "provider.custom.headers.value.placeholder": "valor",
   "provider.custom.headers.remove": "Remover cabeçalho",
   "provider.custom.headers.add": "Adicionar cabeçalho",
-  "provider.custom.error.providerID.required": "ID do Provedor é obrigatório",
+  "provider.custom.error.providerID.required": "O ID do provedor é obrigatório",
   "provider.custom.error.providerID.format": "Use letras minúsculas, números, hifens ou sublinhados",
   "provider.custom.error.providerID.exists": "Esse ID de provedor já existe",
-  "provider.custom.error.name.required": "Nome de exibição é obrigatório",
-  "provider.custom.error.baseURL.required": "URL Base é obrigatória",
+  "provider.custom.error.name.required": "O nome de exibição é obrigatório",
+  "provider.custom.error.baseURL.required": "A URL base é obrigatória",
   "provider.custom.error.baseURL.format": "Deve começar com http:// ou https://",
   "provider.custom.error.required": "Obrigatório",
   "provider.custom.error.duplicate": "Duplicado",
@@ -196,6 +310,11 @@ export const dict = {
   "model.input.video": "vídeo",
   "model.input.pdf": "pdf",
   "model.tooltip.allows": "Permite: {{inputs}}",
+  "model.tooltip.context.label": "Contexto",
+  "model.tooltip.inputs": "Entradas",
+  "model.tooltip.model": "Modelo",
+  "model.tooltip.provider": "Provedor",
+  "model.tooltip.reasoning": "Raciocínio",
   "model.tooltip.reasoning.allowed": "Permite raciocínio",
   "model.tooltip.reasoning.none": "Sem raciocínio",
   "model.tooltip.context": "Limite de contexto {{limit}}",
@@ -205,9 +324,10 @@ export const dict = {
   "common.loading": "Carregando",
   "common.loading.ellipsis": "...",
   "common.cancel": "Cancelar",
+  "common.clear": "Limpar",
   "common.connect": "Conectar",
   "common.disconnect": "Desconectar",
-  "common.continue": "Enviar",
+  "common.continue": "Continuar",
   "common.submit": "Enviar",
   "common.save": "Salvar",
   "common.saving": "Salvando...",
@@ -221,6 +341,8 @@ export const dict = {
   "prompt.mode.shell": "Shell",
   "prompt.mode.normal": "Prompt",
   "prompt.mode.shell.exit": "esc para sair",
+  "session.child.promptDisabled": "Não é possível enviar prompts em sessões de subagentes.",
+  "session.child.backToParent": "Voltar à sessão principal.",
   "prompt.example.1": "Corrigir um TODO no código",
   "prompt.example.2": "Qual é a stack tecnológica deste projeto?",
   "prompt.example.3": "Corrigir testes quebrados",
@@ -257,11 +379,17 @@ export const dict = {
   "prompt.context.includeActiveFile": "Incluir arquivo ativo",
   "prompt.context.removeActiveFile": "Remover arquivo ativo do contexto",
   "prompt.context.removeFile": "Remover arquivo do contexto",
-  "prompt.action.attachFile": "Anexar arquivo",
+  "prompt.action.attachFile": "Adicionar arquivos",
+  "prompt.menu.addImagesAndFiles": "Adicionar arquivos e mais",
+  "prompt.menu.imagesAndFiles": "Imagens e arquivos",
+  "prompt.menu.commands": "Comandos",
+  "prompt.menu.context": "Contexto",
+  "prompt.menu.shellCommand": "Comando shell",
   "prompt.attachment.remove": "Remover anexo",
   "prompt.action.send": "Enviar",
   "prompt.action.stop": "Parar",
   "prompt.toast.pasteUnsupported.title": "Anexo não suportado",
+  "prompt.toast.attachmentDuplicate.title": "Este arquivo já foi enviado",
   "prompt.toast.pasteUnsupported.description": "Apenas imagens, PDFs ou arquivos de texto podem ser anexados aqui.",
   "prompt.toast.modelAgentRequired.title": "Selecione um agente e modelo",
   "prompt.toast.modelAgentRequired.description": "Escolha um agente e modelo antes de enviar um prompt.",
@@ -272,7 +400,7 @@ export const dict = {
   "prompt.toast.promptSendFailed.title": "Falha ao enviar prompt",
   "prompt.toast.promptSendFailed.description": "Não foi possível recuperar a sessão",
   "dialog.mcp.title": "MCPs",
-  "dialog.mcp.description": "{{enabled}} of {{total}} habilitados",
+  "dialog.mcp.description": "{{enabled}} de {{total}} ativados",
   "dialog.mcp.empty": "Nenhum MCP configurado",
   "dialog.lsp.empty": "LSPs detectados automaticamente pelos tipos de arquivo",
   "dialog.plugins.empty": "Plugins configurados em opencode.json",
@@ -284,16 +412,21 @@ export const dict = {
   "dialog.fork.empty": "Nenhuma mensagem para bifurcar",
   "dialog.directory.search.placeholder": "Buscar pastas",
   "dialog.directory.empty": "Nenhuma pasta encontrada",
+  "dialog.directory.action.selectFile": "Selecionar arquivo",
+  "dialog.directory.action.selectFolder": "Selecionar pasta",
+  "dialog.directory.root": "Raiz",
+  "dialog.directory.parent": "Pasta superior",
+  "dialog.directory.readError": "Não foi possível ler esta pasta",
   "dialog.server.title": "Servidores",
   "dialog.server.description": "Trocar para qual servidor OpenCode este aplicativo se conecta.",
   "dialog.server.search.placeholder": "Buscar servidores",
   "dialog.server.empty": "Nenhum servidor ainda",
   "dialog.server.add.title": "Adicionar um servidor",
-  "dialog.server.add.url": "URL do servidor",
+  "dialog.server.add.url": "Endereço do servidor",
   "dialog.server.add.placeholder": "http://localhost:4096",
   "dialog.server.add.error": "Não foi possível conectar ao servidor",
   "dialog.server.add.checking": "Verificando...",
-  "dialog.server.add.button": "Adicionar",
+  "dialog.server.add.button": "Adicionar servidor",
   "dialog.server.add.name": "Nome do servidor (opcional)",
   "dialog.server.add.namePlaceholder": "Localhost",
   "dialog.server.add.username": "Nome de usuário (opcional)",
@@ -301,7 +434,7 @@ export const dict = {
   "dialog.server.edit.title": "Editar servidor",
   "dialog.server.default.title": "Servidor padrão",
   "dialog.server.default.description":
-    "Conectar a este servidor na inicialização do aplicativo ao invés de iniciar um servidor local. Requer reinicialização.",
+    "Conectar a este servidor na inicialização do aplicativo em vez de iniciar um servidor local. Requer reinicialização.",
   "dialog.server.default.none": "Nenhum servidor selecionado",
   "dialog.server.default.set": "Definir servidor atual como padrão",
   "dialog.server.default.clear": "Limpar",
@@ -312,6 +445,90 @@ export const dict = {
   "dialog.server.menu.delete": "Excluir",
   "dialog.server.current": "Servidor atual",
   "dialog.server.status.default": "Padrão",
+  "wsl.server.add": "Adicionar servidor WSL",
+  "wsl.server.addShort": "Adicionar WSL",
+  "wsl.server.label": "WSL",
+  "wsl.server.menu.label": "Servidor WSL",
+  "wsl.server.retryStart": "Tentar iniciar novamente",
+  "wsl.server.updating": "Atualizando...",
+  "wsl.onboarding.step.distro": "Escolher distribuição",
+  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.checkingRuntime": "Verificando o WSL...",
+  "wsl.onboarding.restartRequired": "O Windows precisa ser reiniciado para concluir a instalação do WSL.",
+  "wsl.onboarding.ready": "O WSL está pronto.",
+  "wsl.onboarding.required": "O WSL é necessário para continuar.",
+  "wsl.onboarding.checkingDistros": "Verificando distribuições...",
+  "wsl.onboarding.installingDistro": "Instalando {{distro}}...",
+  "wsl.onboarding.checkingDistro": "Verificando {{distro}}...",
+  "wsl.onboarding.listingDistros": "Listando distribuições...",
+  "wsl.onboarding.distroReady": "{{distro}} está pronta.",
+  "wsl.onboarding.distroNotInstalled": "{{distro}} ainda não está instalada.",
+  "wsl.onboarding.openDistroOnce": "Abra {{distro}} uma vez para concluir a configuração.",
+  "wsl.onboarding.finishingDistro": "Concluindo a configuração de {{distro}}.",
+  "wsl.onboarding.pickDistro": "Escolha uma distribuição ou instale uma abaixo.",
+  "wsl.onboarding.checkingOpencode": "Verificando o OpenCode...",
+  "wsl.onboarding.checkingOpencodeIn": "Verificando o OpenCode em {{distro}}...",
+  "wsl.onboarding.updatingOpencode": "Atualizando o OpenCode...",
+  "wsl.onboarding.updatingOpencodeIn": "Atualizando o OpenCode em {{distro}}...",
+  "wsl.onboarding.updateOpencodeIn": "Atualize o OpenCode em {{distro}}.",
+  "wsl.onboarding.updateOpencode": "Atualizar o OpenCode",
+  "wsl.onboarding.opencodeReadyIn": "O OpenCode está pronto em {{distro}}.",
+  "wsl.onboarding.opencodeReady": "O OpenCode está pronto.",
+  "wsl.onboarding.installOpencodeIn": "Instale o OpenCode em {{distro}}.",
+  "wsl.onboarding.installOpencode": "Instalar o OpenCode",
+  "wsl.onboarding.chooseDistroFirst": "Escolha primeiro uma distribuição.",
+  "wsl.onboarding.loadFailed": "Falha ao carregar o estado do WSL.",
+  "wsl.onboarding.loading": "Carregando...",
+  "wsl.onboarding.installedDistros": "Distribuições instaladas",
+  "wsl.onboarding.checkAgain": "Verificar novamente",
+  "wsl.onboarding.distroStatus.ready": "Pronta",
+  "wsl.onboarding.distroStatus.checking": "Verificando...",
+  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode não instalado",
+  "wsl.onboarding.distroStatus.missingTools": "bash e curl ausentes",
+  "wsl.onboarding.distroStatus.unsupported": "Sem suporte · Use o WSL 2",
+  "wsl.onboarding.needAnotherDistro": "Precisa de outra distribuição?",
+  "wsl.onboarding.needAnotherDistroHint": "Instale uma distribuição Linux pelo catálogo do WSL",
+  "wsl.onboarding.wslNotInstalled.title": "WSL não instalado",
+  "wsl.onboarding.wslNotInstalled.description":
+    "O WSL (Windows Subsystem for Linux) é necessário para que o OpenCode possa adicionar um servidor WSL",
+  "wsl.onboarding.wslUnavailable.title": "WSL indisponível",
+  "wsl.onboarding.wslUnavailable.description": "O OpenCode não conseguiu verificar o WSL neste computador.",
+  "wsl.onboarding.installWsl": "Instalar o WSL",
+  "wsl.onboarding.windowsRestartRequired":
+    "Reinicie o Windows para concluir a instalação do WSL e abra o OpenCode novamente.",
+  "wsl.onboarding.next": "Próximo",
+  "wsl.onboarding.refresh": "Atualizar",
+  "wsl.onboarding.allDistrosAdded": "Todas as distribuições instaladas já foram adicionadas.",
+  "wsl.onboarding.noDistros": "Nenhuma distribuição detectada ainda.",
+  "wsl.onboarding.install": "Instalar",
+  "wsl.onboarding.installing": "Instalando...",
+  "wsl.onboarding.installDistro": "Instalar distribuição",
+  "wsl.onboarding.searchDistros": "Buscar distribuições",
+  "wsl.onboarding.wsl2Required": "O WSL 2 é necessário.",
+  "wsl.onboarding.toolsRequired": "Esta distribuição precisa do bash e do curl.",
+  "wsl.onboarding.openTerminal": "Abrir terminal",
+  "wsl.onboarding.path": "Caminho: {{path}}",
+  "wsl.onboarding.notFound": "não encontrado",
+  "wsl.onboarding.version": "Versão: {{version}}",
+  "wsl.onboarding.unknown": "desconhecido",
+  "wsl.onboarding.desktopVersion": "desktop {{version}}",
+  "wsl.onboarding.versionMismatch": "A versão instalada não corresponde à versão do aplicativo para desktop.",
+  "wsl.onboarding.adding": "Adicionando...",
+  "help.tabs.toast.ariaLabel": "Apresentamos as abas. Organize seu trabalho e suas sessões ativas com abas",
+  "help.tabs.toast.dismiss": "Dispensar informações sobre as abas",
+  "help.tabs.title": "Apresentamos as abas",
+  "help.tabs.description": "Organize seu trabalho e suas sessões ativas com abas",
+  "help.tabs.date": "14 de julho",
+  "help.tabs.introduction": "Agora, o OpenCode Desktop é organizado em abas.",
+  "help.tabs.sessions":
+    "Inicie uma nova sessão em uma aba ou abra uma sessão existente de qualquer um dos seus projetos. Abra uma nova aba quando começar algo novo e feche-a quando terminar.",
+  "help.tabs.organize":
+    "Manter algumas abas abertas facilita a organização das sessões ativas. Renomeie as abas com nomes fáceis de lembrar se pretende mantê-las abertas.",
+  "help.tabs.home":
+    "Você encontrará todas as suas sessões e projetos na nova tela Início. Ao selecionar uma sessão, ela será aberta em uma aba.",
+  "help.tabs.persistence": "Quando você reabrir o aplicativo, suas abas ainda estarão abertas.",
+  "help.tabs.worktrees":
+    "O novo design ainda não oferece suporte a Git Worktrees, mas esse recurso estará disponível em breve. Se preferir continuar usando o layout anterior, você poderá alternar entre os layouts nas Configurações. Lembre-se apenas de que o novo layout se tornará permanente em algumas semanas.",
   "dialog.project.edit.title": "Editar projeto",
   "dialog.project.edit.name": "Nome",
   "dialog.project.edit.icon": "Ícone",
@@ -322,33 +539,37 @@ export const dict = {
   "dialog.project.edit.color.select": "Selecionar cor {{color}}",
   "dialog.project.edit.worktree.startup": "Script de inicialização do espaço de trabalho",
   "dialog.project.edit.worktree.startup.description": "Executa após criar um novo espaço de trabalho (worktree).",
-  "dialog.project.edit.worktree.startup.placeholder": "ex: bun install",
-  "context.breakdown.title": "Detalhamento do Contexto",
+  "dialog.project.edit.worktree.startup.placeholder": "Ex.: bun install",
+  "dialog.usageExceeded.dontShowAgain": "Não mostrar novamente",
+
+  "context.breakdown.title": "Detalhamento do contexto",
   "context.breakdown.note":
-    'Detalhamento aproximado dos tokens de entrada. "Outros" inclui definições de ferramentas e overhead.',
+    'Detalhamento aproximado dos tokens de entrada. "Outros" inclui definições de ferramentas e sobrecarga.',
   "context.breakdown.system": "Sistema",
   "context.breakdown.user": "Usuário",
   "context.breakdown.assistant": "Assistente",
-  "context.breakdown.tool": "Chamadas de Ferramentas",
+  "context.breakdown.tool": "Chamadas de ferramentas",
   "context.breakdown.other": "Outros",
-  "context.systemPrompt.title": "Prompt do Sistema",
+  "context.systemPrompt.title": "Prompt do sistema",
   "context.rawMessages.title": "Mensagens brutas",
+  "context.export.session": "Exportar sessão",
+
   "context.stats.session": "Sessão",
   "context.stats.messages": "Mensagens",
   "context.stats.provider": "Provedor",
   "context.stats.model": "Modelo",
-  "context.stats.limit": "Limite de Contexto",
-  "context.stats.totalTokens": "Total de Tokens",
+  "context.stats.limit": "Limite de contexto",
+  "context.stats.totalTokens": "Total de tokens",
   "context.stats.usage": "Uso",
-  "context.stats.inputTokens": "Tokens de Entrada",
-  "context.stats.outputTokens": "Tokens de Saída",
-  "context.stats.reasoningTokens": "Tokens de Raciocínio",
-  "context.stats.cacheTokens": "Tokens de Cache (leitura/escrita)",
-  "context.stats.userMessages": "Mensagens de Usuário",
-  "context.stats.assistantMessages": "Mensagens do Assistente",
-  "context.stats.totalCost": "Custo Total",
-  "context.stats.sessionCreated": "Sessão Criada",
-  "context.stats.lastActivity": "Última Atividade",
+  "context.stats.inputTokens": "Tokens de entrada",
+  "context.stats.outputTokens": "Tokens de saída",
+  "context.stats.reasoningTokens": "Tokens de raciocínio",
+  "context.stats.cacheTokens": "Tokens de cache (leitura/escrita)",
+  "context.stats.userMessages": "Mensagens do usuário",
+  "context.stats.assistantMessages": "Mensagens do assistente",
+  "context.stats.totalCost": "Custo total",
+  "context.stats.sessionCreated": "Sessão criada",
+  "context.stats.lastActivity": "Última atividade",
   "context.usage.tokens": "Tokens",
   "context.usage.usage": "Uso",
   "context.usage.cost": "Custo",
@@ -369,6 +590,7 @@ export const dict = {
   "language.no": "Norsk",
   "language.br": "Português (Brasil)",
   "language.bs": "Bosanski",
+  "language.uk": "Українська",
   "language.th": "ไทย",
   "language.tr": "Türkçe",
   "toast.language.title": "Idioma",
@@ -398,6 +620,11 @@ export const dict = {
   "toast.session.unshare.success.description": "Sessão deixou de ser compartilhada com sucesso!",
   "toast.session.unshare.failed.title": "Falha ao parar de compartilhar sessão",
   "toast.session.unshare.failed.description": "Ocorreu um erro ao parar de compartilhar a sessão",
+  "toast.session.export.success.title": "Sessão exportada",
+  "toast.session.export.success.description": "Sessão salva em {{filename}}",
+  "toast.session.export.failed.title": "Falha ao exportar sessão",
+  "toast.session.export.failed.description": "Ocorreu um erro ao exportar a sessão",
+
   "toast.session.listFailed.title": "Falha ao carregar sessões para {{project}}",
   "toast.update.title": "Atualização disponível",
   "toast.update.description": "Uma nova versão do OpenCode ({{version}}) está disponível para instalação.",
@@ -405,10 +632,12 @@ export const dict = {
   "toast.update.action.notYet": "Agora não",
   "error.page.title": "Algo deu errado",
   "error.page.description": "Ocorreu um erro ao carregar a aplicação.",
-  "error.page.details.label": "Detalhes do Erro",
+  "error.page.description.localServerStartup": "Ocorreu um erro ao iniciar o servidor local.",
+  "error.page.details.label": "Detalhes do erro",
   "error.page.action.restart": "Reiniciar",
   "error.page.action.report": "Reportar erro",
   "error.page.action.reported": "Erro reportado",
+  "error.page.action.exportLogs": "Exportar logs",
   "error.page.action.checking": "Verificando...",
   "error.page.action.checkUpdates": "Verificar atualizações",
   "error.page.action.updateTo": "Atualizar para {{version}}",
@@ -452,11 +681,35 @@ export const dict = {
   "home.welcome.title": "Seu assistente de IA pessoal está pronto",
   "home.welcome.description": "Entregue sua pasta de projeto local ao Fox: ele entenderá profundamente a estrutura do seu projeto e ajudará você a qualquer momento",
   "home.welcome.open": "Abrir pasta",
+  "home.empty.title": "Nenhum projeto recente",
+  "home.empty.description": "Comece abrindo um projeto local",
+  "home.title": "Início",
+  "home.projects": "Projetos",
+  "home.project.add": "Adicionar projeto",
+  "home.recentlyClosed": "Projetos fechados recentemente",
+  "home.server.collapse": "Recolher projetos do servidor",
+  "home.server.expand": "Expandir projetos do servidor",
+  "home.sessions.search.placeholder": "Buscar sessões",
+  "home.sessions.search.placeholder.scoped": "Buscar sessões em {{scope}}",
+  "home.sessions.search.sessions": "Sessões",
+  "home.sessions.search.noResults": "Nenhuma sessão encontrada para {{query}}",
+  "home.sessions.empty": "Nada por aqui ainda",
+  "home.sessions.empty.description": "Crie uma sessão para começar",
+  "home.sessions.group.today": "Hoje",
+  "home.sessions.group.yesterday": "Ontem",
+  "home.sessions.group.older": "Mais antigas",
+  "home.providerTip":
+    "Conecte-se a mais de 75 provedores para usar outros modelos, incluindo Claude, GPT, Gemini e muito mais",
   "session.tab.session": "Sessão",
   "session.tab.review": "Revisão",
   "session.tab.context": "Contexto",
+  "session.tab.unknown": "Sessão desconhecida",
   "session.panel.reviewAndFiles": "Revisão e arquivos",
-  "session.review.filesChanged": "{{count}} Arquivos Alterados",
+  "session.error.notFound": "Esta sessão não foi encontrada",
+  "session.error.notFound.description": "Esta aba aponta para uma sessão que não existe mais neste servidor.",
+  "session.error.notFound.closeTab": "Fechar aba",
+  "session.error.serverConnection": "Não é possível conectar a este servidor",
+  "session.review.filesChanged": "{{count}} arquivos alterados",
   "session.review.change.one": "Alteração",
   "session.review.change.other": "Alterações",
   "session.review.loadingChanges": "Carregando alterações...",
@@ -465,6 +718,8 @@ export const dict = {
   "session.review.noSnapshot":
     "O rastreamento de snapshot está desabilitado na configuração, então as alterações da sessão estão indisponíveis",
   "session.review.noChanges": "Sem alterações",
+  "session.review.noUncommittedChanges": "Ainda não há alterações sem commit",
+  "session.review.noBranchChanges": "Ainda não há alterações na branch",
   "session.files.selectToOpen": "Selecione um arquivo para abrir",
   "session.files.all": "Todos os arquivos",
   "session.files.empty": "Nenhum arquivo",
@@ -478,21 +733,36 @@ export const dict = {
   "session.todo.title": "Tarefas",
   "session.todo.collapse": "Recolher",
   "session.todo.expand": "Expandir",
+  "session.question.minimize": "Minimizar pergunta",
+  "session.question.restore": "Restaurar pergunta",
+  "session.question.pending.one": "{{count}} pergunta pendente",
+  "session.question.pending.many": "{{count}} de perguntas pendentes",
+  "session.question.pending.other": "{{count}} perguntas pendentes",
   "session.followupDock.summary.one": "{{count}} mensagem na fila",
+  "session.followupDock.summary.many": "{{count}} de mensagens na fila",
   "session.followupDock.summary.other": "{{count}} mensagens na fila",
   "session.followupDock.sendNow": "Enviar agora",
   "session.followupDock.edit": "Editar",
   "session.followupDock.collapse": "Recolher mensagens na fila",
   "session.followupDock.expand": "Expandir mensagens na fila",
   "session.revertDock.summary.one": "{{count}} mensagem revertida",
+  "session.revertDock.summary.many": "{{count}} de mensagens revertidas",
   "session.revertDock.summary.other": "{{count}} mensagens revertidas",
   "session.revertDock.collapse": "Recolher mensagens revertidas",
   "session.revertDock.expand": "Expandir mensagens revertidas",
   "session.revertDock.restore": "Restaurar mensagem",
   "session.new.title": "Crie qualquer coisa",
+  "session.new.project.new": "Novo projeto",
+  "session.new.project.search": "Buscar projetos",
+  "session.new.project.add": "Adicionar projeto",
   "session.new.worktree.main": "Branch principal",
   "session.new.worktree.mainWithBranch": "Branch principal ({{branch}})",
   "session.new.worktree.create": "Criar novo worktree",
+  "session.new.workspace.runIn": "Executar sessão em",
+  "session.new.workspace.triggerLocal": "Local",
+  "session.new.workspace.local": "Repositório local",
+  "session.new.workspace.existing": "Espaço de trabalho…",
+  "session.new.git.none": "Sem Git",
   "session.new.lastModified": "Última modificação",
   "session.header.search.placeholder": "Buscar {{project}}",
   "session.header.searchFiles": "Buscar arquivos",
@@ -528,15 +798,23 @@ export const dict = {
   "terminal.title": "Terminal",
   "terminal.title.numbered": "Terminal {{number}}",
   "terminal.close": "Fechar terminal",
-  "terminal.connectionLost.title": "Conexão Perdida",
+  "terminal.connectionLost.title": "Conexão perdida",
   "terminal.connectionLost.description":
     "A conexão do terminal foi interrompida. Isso pode acontecer quando o servidor reinicia.",
+  "terminal.connectTicket.csrfError":
+    "O tíquete de conexão PTY foi rejeitado pelas verificações de origem ou CSRF. Verifique a configuração de CORS do servidor.",
+  "terminal.connectTicket.statusError": "O tíquete de conexão PTY falhou com o status {{status}}",
+
+  "titlebar.update": "Atualizar",
+  "titlebar.updateVersion": "Atualizar {{version}}",
+
   "common.closeTab": "Fechar aba",
   "common.dismiss": "Descartar",
   "common.requestFailed": "Requisição falhou",
   "common.moreOptions": "Mais opções",
   "common.learnMore": "Saiba mais",
   "common.rename": "Renomear",
+  "common.export": "Exportar",
   "common.reset": "Redefinir",
   "common.archive": "Arquivar",
   "common.undo": "Desfazer",
@@ -562,15 +840,18 @@ export const dict = {
   "sidebar.project.recentSessions": "Sessões recentes",
   "sidebar.project.viewAllSessions": "Ver todas as sessões",
   "sidebar.project.clearNotifications": "Limpar notificações",
+  "sidebar.empty.title": "Nenhum projeto aberto",
+  "sidebar.empty.description": "Abra um projeto para começar",
   "app.name.desktop": "OpenCode Desktop",
   "settings.section.desktop": "Desktop",
   "settings.section.server": "Servidor",
   "settings.tab.general": "Geral",
   "settings.tab.shortcuts": "Atalhos",
   "settings.desktop.section.wsl": "WSL",
-  "settings.desktop.wsl.title": "WSL integration",
+  "settings.desktop.wsl.title": "Integração com WSL",
   "settings.desktop.wsl.description": "Executar o servidor OpenCode dentro do WSL no Windows.",
   "settings.general.section.appearance": "Aparência",
+  "settings.general.section.advanced": "Avançado",
   "settings.general.section.notifications": "Notificações do sistema",
   "settings.general.section.updates": "Atualizações",
   "settings.general.section.sounds": "Efeitos sonoros",
@@ -578,6 +859,11 @@ export const dict = {
   "settings.general.section.display": "Tela",
   "settings.general.row.language.title": "Idioma",
   "settings.general.row.language.description": "Alterar o idioma de exibição do OpenCode",
+  "settings.general.row.shell.title": "Shell do terminal",
+  "settings.general.row.shell.description":
+    "Escolha o shell usado no terminal. Os shells compatíveis também são usados nas chamadas de ferramentas do agente.",
+  "settings.general.row.shell.autoDefault": "Automático (padrão)",
+  "settings.general.row.shell.terminalOnly": "somente no terminal",
   "settings.general.row.appearance.title": "Aparência",
   "settings.general.row.appearance.description": "Personalize como o OpenCode aparece no seu dispositivo",
   "settings.general.row.colorScheme.title": "Esquema de cores",
@@ -586,8 +872,8 @@ export const dict = {
   "settings.general.row.theme.description": "Personalize como o OpenCode é tematizado.",
   "settings.general.row.font.title": "Fonte de código",
   "settings.general.row.font.description": "Personalize a fonte usada em blocos de código",
-  "settings.general.row.terminalFont.title": "Terminal Font",
-  "settings.general.row.terminalFont.description": "Customise the font used in the terminal",
+  "settings.general.row.terminalFont.title": "Fonte do terminal",
+  "settings.general.row.terminalFont.description": "Personalize a fonte usada no terminal",
   "settings.general.row.uiFont.title": "Fonte da interface",
   "settings.general.row.uiFont.description": "Personalize a fonte usada em toda a interface",
   "settings.general.row.followup.title": "Comportamento de acompanhamento",
@@ -595,6 +881,23 @@ export const dict = {
     "Escolha se os prompts de acompanhamento orientam imediatamente ou esperam na fila",
   "settings.general.row.followup.option.queue": "Fila",
   "settings.general.row.followup.option.steer": "Orientar",
+  "settings.general.row.showFileTree.title": "Árvore de arquivos",
+  "settings.general.row.showFileTree.description": "Mostrar o painel da árvore de arquivos nas sessões",
+  "settings.general.row.showNavigation.title": "Controles de navegação",
+  "settings.general.row.showNavigation.description":
+    "Mostrar os botões de voltar e avançar na barra de título do desktop",
+  "settings.general.row.showSearch.title": "Paleta de comandos",
+  "settings.general.row.showSearch.description": "Mostrar o botão de busca e paleta de comandos na barra de título",
+  "settings.general.row.showTerminal.title": "Terminal",
+  "settings.general.row.showTerminal.description": "Mostrar o botão do terminal na barra de título do desktop",
+  "settings.general.row.showStatus.title": "Status do servidor",
+  "settings.general.row.showStatus.description": "Mostrar o botão de status do servidor na barra de título",
+  "settings.general.row.mobileTitlebarBottom.title": "Navegação inferior",
+  "settings.general.row.mobileTitlebarBottom.description":
+    "Posicionar a barra de título e as abas da sessão na parte inferior da tela em dispositivos móveis",
+  "settings.general.row.showCustomAgents.title": "Mostrar agente",
+  "settings.general.row.showCustomAgents.description":
+    "Alternar entre agentes na área de composição. Quando oculto, usa o agente Build como padrão.",
   "settings.general.row.reasoningSummaries.title": "Mostrar resumos de raciocínio",
   "settings.general.row.reasoningSummaries.description": "Exibir resumos de raciocínio do modelo na linha do tempo",
   "settings.general.row.shellToolPartsExpanded.title": "Expandir partes da ferramenta shell",
@@ -603,9 +906,16 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "Expandir partes da ferramenta de edição",
   "settings.general.row.editToolPartsExpanded.description":
     "Mostrar partes das ferramentas de edição, escrita e patch expandidas por padrão na linha do tempo",
-  "settings.general.row.showSessionProgressBar.title": "Mostrar barra de progresso da sessão",
-  "settings.general.row.showSessionProgressBar.description":
-    "Exibir a barra de progresso animada no topo da sessão quando o agente estiver trabalhando",
+  "settings.general.row.newInterface.title": "Novo layout",
+  "settings.general.row.newInterface.badge": "Novo",
+  "settings.general.row.newInterface.description":
+    "Use as novas abas e o layout da página inicial. Alterne entre os layouts por tempo limitado.",
+  "settings.general.row.newInterfaceNotice.title": "Agora você está usando o novo layout",
+  "settings.general.row.newInterfaceNotice.description": "O layout anterior não está mais disponível",
+  "settings.general.row.newInterfaceNotice.dismiss": "Descartar",
+  "settings.general.row.pinchZoom.title": "Zoom com gesto de pinça",
+  "settings.general.row.pinchZoom.description":
+    "Permitir gestos de pinça no trackpad e de Ctrl+rolagem para aplicar zoom",
   "settings.general.row.wayland.title": "Usar Wayland nativo",
   "settings.general.row.wayland.description": "Desabilitar fallback X11 no Wayland. Requer reinicialização.",
   "settings.general.row.wayland.tooltip":
@@ -618,6 +928,8 @@ export const dict = {
   "settings.updates.row.check.description": "Verificar atualizações manualmente e instalar se houver",
   "settings.updates.action.checkNow": "Verificar agora",
   "settings.updates.action.checking": "Verificando...",
+  "settings.updates.action.downloading": "Baixando...",
+  "settings.updates.action.installing": "Instalando...",
   "settings.updates.toast.latest.title": "Você está atualizado",
   "settings.updates.toast.latest.description": "Você está usando a versão mais recente do OpenCode.",
   "sound.option.none": "Nenhum",
@@ -668,14 +980,15 @@ export const dict = {
   "sound.option.yup06": "Sim 06",
   "settings.general.notifications.agent.title": "Agente",
   "settings.general.notifications.agent.description":
-    "Mostrar notificação do sistema quando o agente estiver completo ou precisar de atenção",
+    "Mostrar notificação do sistema quando o agente concluir o trabalho ou precisar de atenção",
   "settings.general.notifications.permissions.title": "Permissões",
   "settings.general.notifications.permissions.description":
     "Mostrar notificação do sistema quando uma permissão for necessária",
   "settings.general.notifications.errors.title": "Erros",
   "settings.general.notifications.errors.description": "Mostrar notificação do sistema quando ocorrer um erro",
   "settings.general.sounds.agent.title": "Agente",
-  "settings.general.sounds.agent.description": "Reproduzir som quando o agente estiver completo ou precisar de atenção",
+  "settings.general.sounds.agent.description":
+    "Reproduzir som quando o agente concluir o trabalho ou precisar de atenção",
   "settings.general.sounds.permissions.title": "Permissões",
   "settings.general.sounds.permissions.description": "Reproduzir som quando uma permissão for necessária",
   "settings.general.sounds.errors.title": "Erros",
@@ -723,8 +1036,7 @@ export const dict = {
   "settings.permissions.tool.read.title": "Ler",
   "settings.permissions.tool.read.description": "Ler um arquivo (corresponde ao caminho do arquivo)",
   "settings.permissions.tool.edit.title": "Editar",
-  "settings.permissions.tool.edit.description":
-    "Modificar arquivos, incluindo edições, escritas, patches e multi-edições",
+  "settings.permissions.tool.edit.description": "Modificar arquivos, incluindo edições, escritas e patches",
   "settings.permissions.tool.glob.title": "Glob",
   "settings.permissions.tool.glob.description": "Corresponder arquivos usando padrões glob",
   "settings.permissions.tool.grep.title": "Grep",
@@ -734,7 +1046,7 @@ export const dict = {
   "settings.permissions.tool.bash.title": "Bash",
   "settings.permissions.tool.bash.description": "Executar comandos shell",
   "settings.permissions.tool.task.title": "Tarefa",
-  "settings.permissions.tool.task.description": "Lançar sub-agentes",
+  "settings.permissions.tool.task.description": "Iniciar subagentes",
   "settings.permissions.tool.skill.title": "Habilidade",
   "settings.permissions.tool.skill.description": "Carregar uma habilidade por nome",
   "settings.permissions.tool.lsp.title": "LSP",
@@ -791,7 +1103,7 @@ export const dict = {
   "common.time.hoursAgo.short": "{{count}}h atrás",
   "common.time.daysAgo.short": "{{count}}d atrás",
   "settings.providers.connected.environmentDescription": "Conectado a partir de suas variáveis de ambiente",
-  "settings.providers.custom.description": "Adicionar um provedor compatível com a OpenAI através do URL base.",
+  "settings.providers.custom.description": "Adicionar um provedor compatível com OpenAI por meio da URL base.",
 
   "app.server.unreachable": "Não foi possível conectar a {{server}}",
   "app.server.retrying": "Tentando novamente automaticamente...",
@@ -807,6 +1119,9 @@ export const dict = {
   "session.question.progress": "{{current}} de {{total}} perguntas",
   "session.header.open.finder": "Finder",
   "session.header.open.fileExplorer": "Explorador de Arquivos",
+  "session.header.reveal.finder": "Revelar no Finder",
+  "session.header.reveal.fileExplorer": "Revelar no Explorador de Arquivos",
+  "session.header.reveal.containingFolder": "Abrir pasta que contém este item",
   "session.header.open.fileManager": "Gerenciador de Arquivos",
   "session.header.open.app.vscode": "VS Code",
   "session.header.open.app.cursor": "Cursor",
@@ -844,6 +1159,14 @@ export const dict = {
   "debugBar.mem.label": "MEM",
   "debugBar.mem.tipUnavailable": "Heap JS usado vs limite de heap. Apenas Chromium.",
   "debugBar.mem.tip": "Heap JS usado vs limite de heap. {{used}} de {{limit}}.",
+  "debugBar.focus.label": "FOCUS",
+  "debugBar.focus.tip": "Forçar estilos de foco em todos os elementos interativos",
+  "debugBar.focus.on": "LIGADO",
+  "debugBar.focus.off": "DESLIGADO",
+  "debugBar.direction.label": "DIR",
+  "debugBar.direction.tip": "Forçar a direção do layout de todo o aplicativo sem alterar o idioma selecionado",
+  "debugBar.direction.ltr": "LTR",
+  "debugBar.direction.rtl": "RTL",
   "common.key.ctrl": "Ctrl",
   "common.key.alt": "Alt",
   "common.key.shift": "Shift",
@@ -867,4 +1190,186 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Falha ao criar ícone de projeto persistente",
   "error.childStore.storeCreateFailed": "Falha ao criar armazenamento",
   "terminal.connectionLost.abnormalClose": "WebSocket fechado anormalmente: {{code}}",
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line1": "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.prefix": "Visit ", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.link": "getbot.me", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.suffix": " to collect your API key.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.fetchModels.failed": "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.timeout": "Request to api.getbot.me timed out (15s). Please check your network and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels": "Refresh models", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.title": "AI modified this file", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.", // FORK-i18n-backfill(en 兜底)
+  "common.closeOtherTabs": "Close Other Tabs", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.title": "Anonymous usage statistics", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.description": "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.locked": "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.rename": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.revealInFolder": "Reveal in folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyPath": "Copy path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.cut": "Cut", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toFolder": "Paste into this folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toRoot": "Paste to project root", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFile": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFolder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.refresh": "Refresh", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyRelativePath": "Copy Relative Path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.openInTerminal": "Open in Terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.expandAll": "Expand All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.collapseAll": "Collapse All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.collapsePreviewHint": "Click to collapse preview", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.title": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.label": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.placeholder": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.title": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.label": "Folder name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.placeholder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.fileTitle": "Rename file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.folderTitle": "Rename folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.label": "New name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.confirm": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.unchanged": "Name unchanged", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageSingle": "Are you sure you want to delete \"{{name}}\"?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.confirm": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.create": "Create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.empty": "Name cannot be empty", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.operationFailed": "Operation failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.openFailed": "Failed to open", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedSingle": "Delete failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.createFailed": "Failed to create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.renameFailed": "Failed to rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.single": "Deleted \"{{name}}\"", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.bulk": "Deleted {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.hint": "Recoverable from system trash", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.single": "Moved 1 item", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.bulk": "Moved {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undo": "Undo", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedSingle": "Move failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedSingle": "Copy failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedSingle": "Paste failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessSingle": "Path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessSingle": "Relative path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessBulk": "{{count}} relative paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.terminalFailed": "Failed to open terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.error": "Failed to load file tree", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.title": "Name conflict", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.replace": "Replace", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.keepBoth": "Keep both", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.skip": "Skip", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocx": "Export as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxFail": "Export failed", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.line": "Ln {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.col": "Col {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.addToChat": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.submit": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled", // FORK-i18n-backfill(en 兜底)
+  "settings.tab.feishu": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.title": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.title": "Keep computer awake", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.title": "No Lark account bound", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.add": "Add Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.title": "Bind Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.label": "Domain", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.feishu": "Feishu (China)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.lark": "Lark (Global)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusPending": "Waiting for authorization...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusSuccess": "Bound successfully", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusDenied": "Authorization denied by user", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusExpired": "QR code expired", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusError": "Error: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.done": "Done", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.qrLoading": "Generating QR code...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.edit": "Edit", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelLabel": "model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelDefault": "(use default)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.title": "Edit account settings", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelSectionTitle": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.advancedSectionTitle": "Advanced", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.groupCommand.info": "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.label": "Allow AI to read all group messages without @ mention", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.hint": "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.saving": "Saving...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerLabel": "Provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelLabel": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel.hint": "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerPlaceholder": "Select provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelPlaceholder": "Select model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.save": "Save", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.default": "Default (global home base)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.pick": "Choose folder", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.clear": "Reset to default", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.hintFollow": "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.security": "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.projectListWarning": "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceDefaulted": "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceFallback": "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)
 }

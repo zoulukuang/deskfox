@@ -60,7 +60,7 @@ function DialogDeleteSessionRow(props: { session: Session }) {
 
   const handleDelete = async () => {
     const session = props.session
-    const result = await serverSDK.client.session
+    const result = await serverSDK().client.session
       .delete({ directory: session.directory, sessionID: session.id })
       .then((x) => x.data)
       .catch(() => {
@@ -75,7 +75,7 @@ function DialogDeleteSessionRow(props: { session: Session }) {
       return
     }
 
-    const [store, setStore] = serverSync.child(session.directory)
+    const [store, setStore] = serverSync().child(session.directory)
     // 连带子会话一起从本地 store 清掉(服务端级联删除)
     const removed = new Set<string>([session.id])
     let grew = true
@@ -133,7 +133,7 @@ export function SessionRowMenu(props: {
   const dialog = useDialog()
   const serverSDK = useServerSDK()
   const serverSync = useServerSync()
-  const [store] = serverSync.child(props.session.directory, { bootstrap: false })
+  const [store] = serverSync().child(props.session.directory, { bootstrap: false })
   const shareEnabled = createMemo(() => store.config?.share !== "disabled")
 
   const share = async () => {
@@ -141,7 +141,7 @@ export function SessionRowMenu(props: {
     const existing = (store.session ?? []).find((s) => s.id === session.id)?.share?.url
     const url =
       existing ??
-      (await serverSDK.client.session
+      (await serverSDK().client.session
         .share({ directory: session.directory, sessionID: session.id })
         .then((res) => res.data?.share?.url)
         .catch(() => undefined))
@@ -154,7 +154,7 @@ export function SessionRowMenu(props: {
       return
     }
     // 同步共享状态回 store(share.url 供下次直接复制)
-    const [, setStore] = serverSync.child(session.directory)
+    const [, setStore] = serverSync().child(session.directory)
     setStore(
       produce((draft) => {
         const match = Binary.search(draft.session, session.id, (s) => s.id)

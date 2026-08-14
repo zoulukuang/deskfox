@@ -12,6 +12,10 @@ import type { SelectionProvider, SelectionResult } from "./provider"
  * 与 mdMenu(file-tabs.tsx,handles `data-html-preview` iframe / MD viewer 等)互不重叠 —
  * Host capture 阶段先收到,匹配则 preventDefault;不匹配则继续冒泡到 mdMenu light DOM 处理。
  */
+/** FORK: 聊天区选区的伪路径 —— 它不是真实文件,任何"按 path 打开文件"的路径都必须先排除它,
+ *  否则会在文件预览区开出一个空白 tab(user 2026-08-12 反馈)。[feat: 聊天选区-卡片化-换行] */
+export const CHAT_SELECTION_PATH = "<chat selection>"
+
 export const DOM_PROVIDER_SELECTORS = [
   '[data-slot="session-turn-list"]', // chat 对话区
   '[data-slot="pdf-viewer"]',         // PDF / office(走 PDF.js textLayer)
@@ -72,7 +76,7 @@ export class DomSelectionProvider implements SelectionProvider {
     // [feat: 聊天选区-卡片化-换行] 2026-05-25
     const inChatRegion = target.closest('[data-slot="session-turn-list"]') != null
     const sourceMeta = inChatRegion
-      ? ({ kind: "chat" as const, path: "<chat selection>" })
+      ? ({ kind: "chat" as const, path: CHAT_SELECTION_PATH })
       : undefined
 
     return { text: raw, rects, range, partial, sourceMeta }

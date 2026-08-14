@@ -21,8 +21,36 @@ export function parseMultiPathDropPaths(json: string | null | undefined, root: s
   return out
 }
 
+/**
+ * 绝对路径 → @-mention 用的路径:**归一化 Win 反斜杠** + 在项目根下时转相对。
+ *
+ * FORK 2026-08-14:原为本文件私有,现导出给外部拖入复用
+ * ([feat: external-drop-path-ref])。两条拖入路径必须产出**同一种**路径写法,
+ * 否则同一个文件从文件树拖是相对路径、从访达拖是绝对路径,模型看到两种引用。
+ */
+export function toMentionPath(abs: string, root: string | undefined): string {
+  return absToRelPath(abs, root)
+}
+
+/**
+ * 只做**分隔符归一化**(Win 反斜杠 → 正斜杠),不动相对/绝对。
+ *
+ * 给的是**已经相对于项目根**的路径时用这个 —— 走 `toMentionPath(p, root)` 也能得到同样结果
+ * (相对路径不以 root 开头,会原样返回归一化后的值),但那读起来像是在做相对化,
+ * 容易让下一个人以为需要传 root。分开命名,意图直白。
+ *
+ * FORK 2026-08-14 [feat: external-drop-path-ref]:
+ * [bug-repro: Windows 上文件树单选拖入聊天框插的是 `@docs\x.md`(反斜杠原样),
+ *  而 `@` 提及补全、文件树多选拖入、外部拖入三条通道给的都是 `@docs/x.md`(正斜杠)——
+ *  同一个文件出现两种引用写法,正是本 feat 要消除的那个不变式,在 Win 上并未成立。
+ *  Mac 上路径本来就是正斜杠,这条路径永远暴露不出来。]
+ */
+export function toMentionSeparators(path: string): string {
+  return path.replace(/\\/g, "/")
+}
+
 function absToRelPath(abs: string, root: string | undefined): string {
-  const normAbs = abs.replace(/\\/g, "/")
+  const normAbs = toMentionSeparators(abs)
   if (!root) return normAbs
   const normRoot = root.replace(/\\/g, "/").replace(/\/+$/, "")
   if (normAbs === normRoot) return ""

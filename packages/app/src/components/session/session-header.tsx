@@ -10,6 +10,7 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
+import { createMediaQuery } from "@solid-primitives/media"
 import { Portal } from "solid-js/web"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
@@ -23,10 +24,15 @@ import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
+import { fileManagerApp } from "@/utils/file-manager"
 import { Persist, persisted } from "@/utils/persist"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
+import { reviewTooltipKeybind } from "../command-tooltip-keybind"
+import { useTitlebarLeftMount, useTitlebarRightMount } from "../titlebar"
 
 const OPEN_APPS = [
   "vscode",
@@ -155,11 +161,12 @@ export function SessionHeader() {
   })
   const hotkey = createMemo(() => command.keybind("file.open"))
   const os = createMemo(() => detectOS(platform))
-  const isDesktopV2 = createMemo(() => platform.platform === "desktop" && settings.general.newLayoutDesigns())
-  const search = createMemo(() => (isDesktopV2() ? settings.general.showSearch() : true))
-  const tree = createMemo(() => (isDesktopV2() ? settings.general.showFileTree() : true))
-  const term = createMemo(() => (isDesktopV2() ? settings.general.showTerminal() : true))
-  const status = createMemo(() => (isDesktopV2() ? settings.general.showStatus() : true))
+  const isV2 = settings.general.newLayoutDesigns
+  const search = settings.visibility.search
+  const status = settings.visibility.status
+  // FORK: 文件树显隐开关(贴近左侧文件树模块;2026-08-11 上游重构丢定义后重挂,isDesktopV2→isV2)[feat: titlebar-icons-mirror]
+  const tree = createMemo(() => (isV2() ? settings.general.showFileTree() : true))
+  const isDesktop = createMediaQuery("(min-width: 768px)")
 
   const [exists, setExists] = createStore<Partial<Record<OpenApp, boolean>>>({
     finder: true,
@@ -171,11 +178,7 @@ export function SessionHeader() {
     return LINUX_APPS
   })
 
-  const fileManager = createMemo(() => {
-    if (os() === "macos") return { label: "session.header.open.finder", icon: "finder" as const }
-    if (os() === "windows") return { label: "session.header.open.fileExplorer", icon: "file-explorer" as const }
-    return { label: "session.header.open.fileManager", icon: "finder" as const }
-  })
+  const fileManager = createMemo(() => fileManagerApp(os()))
 
   createEffect(() => {
     if (platform.platform !== "desktop") return
@@ -231,17 +234,22 @@ export function SessionHeader() {
   )
   const opening = createMemo(() => openRequest.app !== undefined)
   const tint = createMemo(() =>
-    messageAgentColor(params.id ? sync.data.message[params.id] : undefined, sync.data.agent),
+    messageAgentColor(params.id ? sync().data.message[params.id] : undefined, sync().data.agent),
   )
   const v2ActionsState = createMemo<SessionHeaderV2ActionsState>(() => ({
     statusVisible: status(),
     statusLabel: language.t("status.popover.trigger"),
     reviewLabel: language.t("command.review.toggle"),
-    reviewKeybind: command.keybind("review.toggle"),
+    reviewKeybind: reviewTooltipKeybind(command),
+    reviewVisible: isDesktop(),
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
-    // FORK: 文件树显隐开关(贴近左侧文件树模块)[feat: titlebar-icons-mirror] 2026-06-13
-    fileTreeVisible: tree(),
+    // FORK: 标题栏文件树开关(左侧三图标 状态→文件树→审查 之一)
+    // [feat: titlebar-icons-rearrange] 2026-06-13,2026-08-12 随 keep-legacy-layout 恢复
+    //   段3 曾整组摘除,理由是 v2 的文件树开关已在 review 侧栏、标题栏再放一个会与上游 e2e 撞名。
+    //   该理由只在 v2 成立 → 改为按布局分支:经典布局显示(DeskFox 默认,user 截图里的那个图标),
+    //   v2 仍不显示。
+    fileTreeVisible: !isV2() && tree(),
     fileTreeLabel: language.t("command.fileTree.toggle"),
     fileTreeKeybind: command.keybind("fileTree.toggle"),
     fileTreeOpened: layout.fileTree.opened(),
@@ -286,19 +294,26 @@ export function SessionHeader() {
   }
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)
-  // FORK: 镜像布局下文件树/预览/状态面板在左,工具组图标也挂左 portal(贴近各自模块)
-  //   原挂 right portal 是非镜像残留,迁移时未跟随镜像翻转 [feat: titlebar-icons-mirror] 2026-06-13
-  const [toolbarMount, setToolbarMount] = createSignal<HTMLElement | null>(null)
+  // FORK: 工具组挂载侧按布局分支 [feat: titlebar-icons-mirror] 2026-08-11
+  //   · 经典布局(DeskFox 默认)→ 左上 portal:工具组(文件树/审查/终端…)贴近它们控制的左侧面板,
+  //     这是 REQ-041「图标锚左解耦」的 UI 微调,user 2026-08-11 明确要求恢复。
+  //   · v2 → 仍挂右:上游 v2 自 v1.17.19 起 isV2 分支恒真,挂左会让上游 review/subagent 族 e2e
+  //     在 #opencode-titlebar-right 找不到 Toggle review(段3 撤销本定制的原因)。
+  //   两侧各自成立,不再二选一。
+  //   · 左 portal 只在桌面标题栏里存在(web 端标题栏没有它)→ 取不到时回落 right,
+  //     否则浏览器/web 端工具组会整组消失。
+  const rightMount = useTitlebarRightMount()
+  const leftMount = useTitlebarLeftMount()
+  const toolsMount = () => (isV2() ? rightMount() : (leftMount() ?? rightMount()))
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
-    setToolbarMount(document.getElementById("opencode-titlebar-left"))
   })
 
   return (
     <>
-      <Show when={search() && centerMount()}>
+      <Show when={search() && centerMount()} keyed>
         {(mount) => (
-          <Portal mount={mount()}>
+          <Portal mount={mount}>
             <Button
               type="button"
               variant="ghost"
@@ -315,10 +330,10 @@ export function SessionHeader() {
                 </span>
               </div>
 
-              <Show when={hotkey()}>
+              <Show when={hotkey()} keyed>
                 {(keybind) => (
                   <Keybind class="shrink-0 !border-0 !bg-transparent !shadow-none px-0 text-text-weaker">
-                    {keybind()}
+                    {keybind}
                   </Keybind>
                 )}
               </Show>
@@ -326,11 +341,11 @@ export function SessionHeader() {
           </Portal>
         )}
       </Show>
-      <Show when={toolbarMount()}>
+      <Show when={toolsMount()} keyed>
         {(mount) => (
-          <Portal mount={mount()}>
+          <Portal mount={mount}>
             <Show
-              when={isDesktopV2}
+              when={isV2}
               fallback={
                 <div class="flex items-center gap-2">
                   {/* FORK: REQ-041 — 文件树开关移到工具组最左 [feat: iconbar-left-decouple] */}
@@ -481,23 +496,21 @@ export function SessionHeader() {
                         <StatusPopover />
                       </Tooltip>
                     </Show>
-                    <Show when={term()}>
-                      <TooltipKeybind
-                        title={language.t("command.terminal.toggle")}
-                        keybind={command.keybind("terminal.toggle")}
+                    <TooltipKeybind
+                      title={language.t("command.terminal.toggle")}
+                      keybind={command.keybind("terminal.toggle")}
+                    >
+                      <Button
+                        variant="ghost"
+                        class="group/terminal-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0"
+                        onClick={toggleTerminal}
+                        aria-label={language.t("command.terminal.toggle")}
+                        aria-expanded={view().terminal.opened()}
+                        aria-controls="terminal-panel"
                       >
-                        <Button
-                          variant="ghost"
-                          class="group/terminal-toggle titlebar-icon w-8 h-6 p-0 box-border shrink-0"
-                          onClick={toggleTerminal}
-                          aria-label={language.t("command.terminal.toggle")}
-                          aria-expanded={view().terminal.opened()}
-                          aria-controls="terminal-panel"
-                        >
-                          <Icon size="small" name={view().terminal.opened() ? "terminal-active" : "terminal"} />
-                        </Button>
-                      </TooltipKeybind>
-                    </Show>
+                        <Icon size="small" name={view().terminal.opened() ? "terminal-active" : "terminal"} />
+                      </Button>
+                    </TooltipKeybind>
 
                     <div class="hidden md:flex items-center gap-1 shrink-0">
                       <TooltipKeybind
@@ -516,32 +529,30 @@ export function SessionHeader() {
                         </Button>
                       </TooltipKeybind>
 
-                      <Show when={tree()}>
-                        <TooltipKeybind
-                          title={language.t("command.fileTree.toggle")}
-                          keybind={command.keybind("fileTree.toggle")}
+                      <TooltipKeybind
+                        title={language.t("command.fileTree.toggle")}
+                        keybind={command.keybind("fileTree.toggle")}
+                      >
+                        <Button
+                          variant="ghost"
+                          class="titlebar-icon w-8 h-6 p-0 box-border"
+                          onClick={() => layout.fileTree.toggle()}
+                          aria-label={language.t("command.fileTree.toggle")}
+                          aria-expanded={layout.fileTree.opened()}
+                          aria-controls="file-tree-panel"
                         >
-                          <Button
-                            variant="ghost"
-                            class="titlebar-icon w-8 h-6 p-0 box-border"
-                            onClick={() => layout.fileTree.toggle()}
-                            aria-label={language.t("command.fileTree.toggle")}
-                            aria-expanded={layout.fileTree.opened()}
-                            aria-controls="file-tree-panel"
-                          >
-                            <div class="relative flex items-center justify-center size-4">
-                              <Icon
-                                size="small"
-                                name={layout.fileTree.opened() ? "file-tree-active" : "file-tree"}
-                                classList={{
-                                  "text-icon-strong": layout.fileTree.opened(),
-                                  "text-icon-weak": !layout.fileTree.opened(),
-                                }}
-                              />
-                            </div>
-                          </Button>
-                        </TooltipKeybind>
-                      </Show>
+                          <div class="relative flex items-center justify-center size-4">
+                            <Icon
+                              size="small"
+                              name={layout.fileTree.opened() ? "file-tree-active" : "file-tree"}
+                              classList={{
+                                "text-icon-strong": layout.fileTree.opened(),
+                                "text-icon-weak": !layout.fileTree.opened(),
+                              }}
+                            />
+                          </div>
+                        </Button>
+                      </TooltipKeybind>
                     </div>
                   </div>
                 </div>
@@ -560,10 +571,11 @@ type SessionHeaderV2ActionsState = {
   statusVisible: boolean
   statusLabel: string
   reviewLabel: string
-  reviewKeybind: string
+  reviewKeybind: string[]
+  reviewVisible: boolean
   reviewOpened: boolean
   onReviewToggle: () => void
-  // FORK: 文件树显隐开关 [feat: titlebar-icons-mirror] 2026-06-13
+  // FORK: 文件树开关 [feat: titlebar-icons-rearrange] 2026-08-12
   fileTreeVisible: boolean
   fileTreeLabel: string
   fileTreeKeybind: string
@@ -572,44 +584,69 @@ type SessionHeaderV2ActionsState = {
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
+  const language = useLanguage()
+
   return (
     <div class="flex items-center gap-2">
-      {/* FORK: 顺序 状态→文件树→审查(user 指定 2,1,3)[feat: titlebar-icons-rearrange] 2026-06-13 */}
       <Show when={props.state.statusVisible}>
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
         </Tooltip>
       </Show>
+      {/* FORK: 左侧三图标顺序 状态→文件树→审查 [feat: titlebar-icons-rearrange] 2026-06-13
+          fileTreeVisible 在 v2 下为 false(上游 v2 的开关在 review 侧栏,标题栏再放一个会与
+          上游 e2e strict 撞名);经典布局(DeskFox 默认)为 true。2026-08-12 恢复 */}
+      {/* 图标用 v1 Icon:v2 图标集里没有 file-tree/file-tree-active(照原版实现) */}
       <Show when={props.state.fileTreeVisible}>
-        <TooltipKeybind title={props.state.fileTreeLabel} keybind={props.state.fileTreeKeybind}>
+        <Tooltip placement="bottom" value={props.state.fileTreeLabel}>
+          <Button
+            variant="ghost"
+            class="titlebar-icon w-8 h-6 p-0 box-border"
+            onClick={props.state.onFileTreeToggle}
+            aria-label={props.state.fileTreeLabel}
+            aria-expanded={props.state.fileTreeOpened}
+            aria-controls="file-tree-panel"
+          >
+            <div class="relative flex items-center justify-center size-4">
+              <Icon
+                size="small"
+                name={props.state.fileTreeOpened ? "file-tree-active" : "file-tree"}
+                classList={{
+                  "text-icon-strong": props.state.fileTreeOpened,
+                  "text-icon-weak": !props.state.fileTreeOpened,
+                }}
+              />
+            </div>
+          </Button>
+        </Tooltip>
+      </Show>
+      <Show when={props.state.reviewVisible}>
+        <TooltipV2
+          class="shrink-0"
+          placement="bottom"
+          value={
+            <>
+              {props.state.reviewLabel}
+              <Show when={props.state.reviewKeybind.length > 0}>
+                <KeybindV2 keys={props.state.reviewKeybind} variant="neutral" />
+              </Show>
+            </>
+          }
+        >
           <IconButtonV2
             type="button"
             variant="ghost-muted"
             size="large"
             class="!w-9 shrink-0"
-            state={props.state.fileTreeOpened ? "pressed" : undefined}
-            onClick={props.state.onFileTreeToggle}
-            aria-label={props.state.fileTreeLabel}
-            aria-expanded={props.state.fileTreeOpened}
-            aria-controls="file-tree-panel"
-            icon={<Icon size="small" name={props.state.fileTreeOpened ? "file-tree-active" : "file-tree"} />}
+            state={props.state.reviewOpened ? "pressed" : undefined}
+            onClick={props.state.onReviewToggle}
+            aria-label={props.state.reviewLabel}
+            aria-expanded={props.state.reviewOpened}
+            aria-controls="review-panel"
+            icon={<IconV2 name="sidebar-right" />}
           />
-        </TooltipKeybind>
+        </TooltipV2>
       </Show>
-      <TooltipKeybind title={props.state.reviewLabel} keybind={props.state.reviewKeybind}>
-        <IconButtonV2
-          type="button"
-          variant="ghost-muted"
-          size="large"
-          class="!w-9 shrink-0"
-          state={props.state.reviewOpened ? "pressed" : undefined}
-          onClick={props.state.onReviewToggle}
-          aria-label={props.state.reviewLabel}
-          aria-expanded={props.state.reviewOpened}
-          aria-controls="review-panel"
-          icon={<IconV2 name="sidebar-right" />}
-        />
-      </TooltipKeybind>
     </div>
   )
 }

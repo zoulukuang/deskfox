@@ -1,7 +1,7 @@
 {
   "name": "@opencode-ai/desktop",
   "private": true,
-  "version": "1.17.4",
+  "version": "1.18.16",
   "type": "module",
   "license": "MIT",
   "homepage": "https://opencode.ai",
@@ -32,7 +32,7 @@
     "electron-updater": "6.8.9",
     "electron-window-state": "^5.0.3",
     "jsonc-parser": "3.3.1",
-    "marked": "^15"
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@actions/artifact": "4.0.0",

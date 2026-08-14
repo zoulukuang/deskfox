@@ -2,6 +2,105 @@ import { dict as en } from "./en"
 type Keys = keyof typeof en
 
 export const dict = {
+  "desktop.menu.app": "OpenCode",
+  "desktop.menu.file": "Arkiv",
+  "desktop.menu.edit": "Rediger",
+  "desktop.menu.view": "Vis",
+  "desktop.menu.go": "Gå",
+  "desktop.menu.window": "Vindu",
+  "desktop.menu.help": "Hjelp",
+  "desktop.menu.checkForUpdates": "Søk etter oppdateringer...",
+  "desktop.menu.settings": "Innstillinger",
+  "desktop.menu.reloadWebview": "Last inn WebView på nytt",
+  "desktop.menu.restart": "Start på nytt",
+  "desktop.menu.exportLogs": "Eksporter logger...",
+  "desktop.menu.newSession": "Ny sesjon",
+  "desktop.menu.openProject": "Åpne prosjekt...",
+  "desktop.menu.newWindow": "Nytt vindu",
+  "desktop.menu.closeWindow": "Lukk vindu",
+  "desktop.menu.undo": "Angre",
+  "desktop.menu.redo": "Gjør om",
+  "desktop.menu.cut": "Klipp ut",
+  "desktop.menu.copy": "Kopier",
+  "desktop.menu.paste": "Lim inn",
+  "desktop.menu.delete": "Slett",
+  "desktop.menu.selectAll": "Merk alt",
+  "desktop.menu.toggleSidebar": "Vis eller skjul sidepanel",
+  "desktop.menu.toggleTerminal": "Vis eller skjul terminal",
+  "desktop.menu.toggleFileTree": "Vis eller skjul filtreet",
+  "desktop.menu.reload": "Last inn på nytt",
+  "desktop.menu.toggleDeveloperTools": "Vis eller skjul utviklerverktøy",
+  "desktop.menu.actualSize": "Faktisk størrelse",
+  "desktop.menu.zoomIn": "Zoom inn",
+  "desktop.menu.zoomOut": "Zoom ut",
+  "desktop.menu.toggleFullScreen": "Slå fullskjerm av eller på",
+  "desktop.menu.back": "Tilbake",
+  "desktop.menu.forward": "Frem",
+  "desktop.menu.previousSession": "Forrige sesjon",
+  "desktop.menu.nextSession": "Neste sesjon",
+  "desktop.menu.previousProject": "Forrige prosjekt",
+  "desktop.menu.nextProject": "Neste prosjekt",
+  "desktop.menu.minimize": "Minimer",
+  "desktop.menu.maximize": "Maksimer",
+  "desktop.menu.documentation": "OpenCode-dokumentasjon",
+  "desktop.menu.supportForum": "Brukerstøtteforum",
+  "desktop.menu.shareFeedback": "Del tilbakemelding",
+  "desktop.menu.reportBug": "Rapporter en feil",
+  "desktop.menu.ariaLabel": "OpenCode-meny",
+
+  "desktop.updater.dialog.checkFailed.message": "Søket etter oppdateringer mislyktes.",
+  "desktop.updater.dialog.checkFailed.title": "Oppdateringsfeil",
+  "desktop.updater.dialog.upToDate.message": "Du har den nyeste versjonen.",
+  "desktop.updater.dialog.upToDate.title": "Ingen oppdateringer",
+  "desktop.updater.dialog.ready.message": "Oppdateringen {{version}} er lastet ned. Vil du starte på nytt nå?",
+  "desktop.updater.dialog.ready.title": "Oppdateringen er klar",
+  "desktop.updater.dialog.restart": "Start på nytt",
+  "desktop.updater.dialog.later": "Senere",
+
+  "desktop.recovery.action.relaunch": "Start appen på nytt",
+  "desktop.recovery.action.exportLogs": "Eksporter logger",
+  "desktop.recovery.action.keepWaiting": "Fortsett å vente",
+  "desktop.recovery.action.quit": "Avslutt",
+  "desktop.recovery.loadFailed": "OpenCode kunne ikke lastes inn",
+  "desktop.recovery.terminated": "OpenCode-vinduet ble uventet avsluttet",
+  "desktop.recovery.unresponsive": "OpenCode svarer ikke",
+  "desktop.recovery.unresponsive.detail": "Du kan starte appen på nytt, åpne loggene eller fortsette å vente.",
+  "desktop.recovery.loadFailed.detail": "Vindu: {{window}}\nURL: {{url}}\nFeil: {{code}} {{description}}",
+  "desktop.recovery.terminated.detail": "Vindu: {{window}}\nÅrsak: {{reason}}\nKode: {{code}}",
+  "desktop.recovery.unknown": "<ukjent>",
+
+  "desktop.dialog.chooseFolder": "Velg en mappe",
+  "desktop.dialog.chooseFile": "Velg en fil",
+  "desktop.dialog.saveFile": "Lagre fil",
+  "desktop.dialog.files": "Filer",
+  "desktop.server.local": "Lokal server",
+
+  "desktop.wsl.error.windowsOnly": "WSL er bare tilgjengelig på Windows",
+  "desktop.wsl.error.unavailable": "WSL er utilgjengelig",
+  "desktop.wsl.error.listInstalled": "Kunne ikke vise installerte WSL-distribusjoner",
+  "desktop.wsl.error.listOnline": "Kunne ikke vise tilgjengelige WSL-distribusjoner",
+  "desktop.wsl.error.executeDistro": "Kan ikke kjøre kommandoer i distribusjonen",
+  "desktop.wsl.error.installWsl": "Installasjonen av WSL mislyktes",
+  "desktop.wsl.error.installDistro": "Kunne ikke installere distribusjonen: {{distro}}",
+  "desktop.wsl.error.installOpencode": "Installasjonen av OpenCode mislyktes",
+  "desktop.wsl.error.alreadyAdded": "{{distro}} er allerede lagt til",
+  "desktop.wsl.error.opencodeMissing": "opencode er ikke installert i denne distribusjonen",
+  "desktop.wsl.error.opencodeCannotRun": "opencode er installert, men kunne ikke kjøres",
+  "desktop.wsl.error.opencodeNotInstalled": "OpenCode er ikke installert i {{distro}}",
+  "desktop.wsl.error.updateVersion":
+    "Oppdateringen av OpenCode er fullført, men {{distro}} rapporterer fortsatt {{installed}}; forventet {{expected}}",
+  "desktop.wsl.error.noVersion": "ingen versjon",
+  "desktop.wsl.error.serverExited": "WSL-serveren ble avsluttet etter oppstart (code={{code}} signal={{signal}})",
+  "desktop.wsl.error.serverExitedBeforeHealthy":
+    "WSL-serveren ble avsluttet før den var klar (code={{code}} signal={{signal}}){{output}}",
+  "desktop.wsl.error.healthTimeout":
+    "Tidsavbrudd for tilstandskontrollen av sidecar for {{distro}} etter {{timeout}} ms",
+  "desktop.wsl.error.commandTimeout": "Tidsavbrudd for {{command}} {{args}} etter {{timeout}} ms",
+  "desktop.wsl.error.failedPort": "Kunne ikke hente port",
+
+  "desktop.picker.error.notSelected": "Ingen fil ble valgt i filvelgeren",
+  "desktop.picker.error.sizeLimit": "De valgte vedleggene overskrider grensen på {{limit}} MB",
+
   "command.category.suggested": "Foreslått",
   "command.category.view": "Visning",
   "command.category.project": "Prosjekt",
@@ -19,6 +118,7 @@ export const dict = {
   "command.category.permissions": "Tillatelser",
   "command.category.workspace": "Arbeidsområde",
   "command.category.settings": "Innstillinger",
+  "command.logs.export": "Eksporter logger",
 
   "theme.scheme.system": "System",
   "theme.scheme.light": "Lys",
@@ -31,8 +131,8 @@ export const dict = {
   "command.settings.open": "Åpne innstillinger",
   "command.session.previous": "Forrige sesjon",
   "command.session.next": "Neste sesjon",
-  "command.session.previous.unseen": "Forrige uleste økt",
-  "command.session.next.unseen": "Neste uleste økt",
+  "command.session.previous.unseen": "Forrige uleste sesjon",
+  "command.session.next.unseen": "Neste uleste sesjon",
   "command.session.archive": "Arkiver sesjon",
 
   "command.palette": "Kommandopalett",
@@ -77,7 +177,7 @@ export const dict = {
   "command.permissions.autoaccept.enable": "Aksepter tillatelser automatisk",
   "command.permissions.autoaccept.disable": "Stopp automatisk akseptering av tillatelser",
   "command.workspace.toggle": "Veksle arbeidsområder",
-  "command.workspace.toggle.description": "Enable or disable multiple workspaces in the sidebar",
+  "command.workspace.toggle.description": "Aktiver eller deaktiver flere arbeidsområder i sidefeltet",
   "command.session.undo": "Angre",
   "command.session.undo.description": "Angre siste melding",
   "command.session.redo": "Gjør om",
@@ -91,7 +191,11 @@ export const dict = {
   "command.session.unshare": "Slutt å dele sesjon",
   "command.session.unshare.description": "Slutt å dele denne sesjonen",
 
+  "command.session.export": "Eksporter sesjon",
+  "command.session.export.description": "Eksporter hele sesjonsutskriften som JSON",
+
   "palette.search.placeholder": "Søk i filer, kommandoer og sesjoner",
+  "palette.search.placeholder.home": "Søk i kommandoer og sesjoner",
   "palette.empty": "Ingen resultater funnet",
   "palette.group.commands": "Kommandoer",
   "palette.group.files": "Filer",
@@ -103,6 +207,7 @@ export const dict = {
   "dialog.provider.empty": "Ingen leverandører funnet",
   "dialog.provider.group.popular": "Populære",
   "dialog.provider.group.other": "Andre",
+  "dialog.provider.custom.label": "Egendefinert OpenAI-kompatibel leverandør",
   "dialog.provider.tag.recommended": "Anbefalt",
   "dialog.provider.opencode.note": "Utvalgte modeller inkludert Claude, GPT, Gemini og mer",
   "dialog.provider.opencode.tagline": "Pålitelige, optimaliserte modeller",
@@ -123,6 +228,7 @@ export const dict = {
 
   "dialog.model.unpaid.freeModels.title": "Gratis modeller levert av OpenCode",
   "dialog.model.unpaid.addMore.title": "Legg til flere modeller fra populære leverandører",
+  "dialog.model.unpaid.viewMoreProviders": "Se over 70 flere leverandører",
 
   "dialog.provider.viewAll": "Vis flere leverandører",
 
@@ -130,12 +236,14 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Logg inn med Claude Pro/Max",
   "provider.connect.selectMethod": "Velg innloggingsmetode for {{provider}}.",
   "provider.connect.method.apiKey": "API-nøkkel",
+  "provider.connect.method.browser": "Nettleser",
+  "provider.connect.method.headless": "Uten nettleser",
   "provider.connect.status.inProgress": "Autorisering pågår...",
   "provider.connect.status.waiting": "Venter på autorisering...",
   "provider.connect.status.failed": "Autorisering mislyktes: {{error}}",
   "provider.connect.apiKey.description":
-    "Skriv inn din {{provider}} API-nøkkel for å koble til kontoen din og bruke {{provider}}-modeller i OpenCode.",
-  "provider.connect.apiKey.label": "{{provider}} API-nøkkel",
+    "Skriv inn API-nøkkelen din for {{provider}} for å koble til kontoen din og bruke {{provider}}-modeller i OpenCode.",
+  "provider.connect.apiKey.label": "{{provider}}-API-nøkkel",
   "provider.connect.apiKey.placeholder": "API-nøkkel",
   "provider.connect.apiKey.required": "API-nøkkel er påkrevd",
   "provider.connect.opencodeZen.line1":
@@ -149,7 +257,7 @@ export const dict = {
   "provider.connect.oauth.code.visit.link": "denne lenken",
   "provider.connect.oauth.code.visit.suffix":
     " for å hente autorisasjonskoden din for å koble til kontoen din og bruke {{provider}}-modeller i OpenCode.",
-  "provider.connect.oauth.code.label": "{{method}} autorisasjonskode",
+  "provider.connect.oauth.code.label": "{{method}}-autorisasjonskode",
   "provider.connect.oauth.code.placeholder": "Autorisasjonskode",
   "provider.connect.oauth.code.required": "Autorisasjonskode er påkrevd",
   "provider.connect.oauth.code.invalid": "Ugyldig autorisasjonskode",
@@ -162,6 +270,7 @@ export const dict = {
   "provider.connect.toast.connected.description": "{{provider}}-modeller er nå tilgjengelige.",
 
   "provider.custom.title": "Egendefinert leverandør",
+  "provider.custom.unavailable": "Egendefinerte leverandører er ikke tilgjengelige på denne serveren",
   "provider.custom.description.prefix": "Konfigurer en OpenAI-kompatibel leverandør. Se ",
   "provider.custom.description.link": "dokumentasjon for leverandørkonfigurasjon",
   "provider.custom.description.suffix": ".",
@@ -170,11 +279,12 @@ export const dict = {
   "provider.custom.field.providerID.description": "Små bokstaver, tall, bindestreker eller understreker",
   "provider.custom.field.name.label": "Visningsnavn",
   "provider.custom.field.name.placeholder": "Min AI-leverandør",
-  "provider.custom.field.baseURL.label": "Base-URL",
+  "provider.custom.field.baseURL.label": "Basis-URL",
   "provider.custom.field.baseURL.placeholder": "https://api.myprovider.com/v1",
   "provider.custom.field.apiKey.label": "API-nøkkel",
   "provider.custom.field.apiKey.placeholder": "API-nøkkel",
-  "provider.custom.field.apiKey.description": "Valgfritt. La stå tomt hvis du administrerer autentisering via headers.",
+  "provider.custom.field.apiKey.description":
+    "Valgfritt. La stå tomt hvis du administrerer autentisering via HTTP-hoder.",
   "provider.custom.models.label": "Modeller",
   "provider.custom.models.id.label": "ID",
   "provider.custom.models.id.placeholder": "modell-id",
@@ -182,18 +292,18 @@ export const dict = {
   "provider.custom.models.name.placeholder": "Visningsnavn",
   "provider.custom.models.remove": "Fjern modell",
   "provider.custom.models.add": "Legg til modell",
-  "provider.custom.headers.label": "Headers (valgfritt)",
-  "provider.custom.headers.key.label": "Header",
-  "provider.custom.headers.key.placeholder": "Header-Navn",
+  "provider.custom.headers.label": "HTTP-hoder (valgfritt)",
+  "provider.custom.headers.key.label": "HTTP-hode",
+  "provider.custom.headers.key.placeholder": "Navn på HTTP-hode",
   "provider.custom.headers.value.label": "Verdi",
   "provider.custom.headers.value.placeholder": "verdi",
-  "provider.custom.headers.remove": "Fjern header",
-  "provider.custom.headers.add": "Legg til header",
+  "provider.custom.headers.remove": "Fjern HTTP-hode",
+  "provider.custom.headers.add": "Legg til HTTP-hode",
   "provider.custom.error.providerID.required": "Leverandør-ID er påkrevd",
   "provider.custom.error.providerID.format": "Bruk små bokstaver, tall, bindestreker eller understreker",
-  "provider.custom.error.providerID.exists": "Den leverandør-IDen finnes allerede",
+  "provider.custom.error.providerID.exists": "Denne leverandør-ID-en finnes allerede",
   "provider.custom.error.name.required": "Visningsnavn er påkrevd",
-  "provider.custom.error.baseURL.required": "Base-URL er påkrevd",
+  "provider.custom.error.baseURL.required": "Basis-URL er påkrevd",
   "provider.custom.error.baseURL.format": "Må starte med http:// eller https://",
   "provider.custom.error.required": "Påkrevd",
   "provider.custom.error.duplicate": "Duplikat",
@@ -226,7 +336,7 @@ export const dict = {
   "common.cancel": "Avbryt",
   "common.connect": "Koble til",
   "common.disconnect": "Koble fra",
-  "common.continue": "Send inn",
+  "common.continue": "Fortsett",
   "common.submit": "Send inn",
   "common.save": "Lagre",
   "common.saving": "Lagrer...",
@@ -247,13 +357,13 @@ export const dict = {
   "prompt.example.3": "Fiks ødelagte tester",
   "prompt.example.4": "Forklar hvordan autentisering fungerer",
   "prompt.example.5": "Finn og fiks sikkerhetssårbarheter",
-  "prompt.example.6": "Legg til enhetstester for brukerservicen",
+  "prompt.example.6": "Legg til enhetstester for brukertjenesten",
   "prompt.example.7": "Refaktorer denne funksjonen for bedre lesbarhet",
   "prompt.example.8": "Hva betyr denne feilen?",
   "prompt.example.9": "Hjelp meg med å feilsøke dette problemet",
   "prompt.example.10": "Generer API-dokumentasjon",
   "prompt.example.11": "Optimaliser databasespørringer",
-  "prompt.example.12": "Legg til inputvalidering",
+  "prompt.example.12": "Legg til inndatavalidering",
   "prompt.example.13": "Lag en ny komponent for...",
   "prompt.example.14": "Hvordan deployer jeg dette prosjektet?",
   "prompt.example.15": "Gjennomgå koden min for beste praksis",
@@ -263,7 +373,7 @@ export const dict = {
   "prompt.example.19": "Legg til logging i hele kodebasen",
   "prompt.example.20": "Hvilke avhengigheter er utdaterte?",
   "prompt.example.21": "Hjelp meg med å skrive et migreringsskript",
-  "prompt.example.22": "Implementer caching for dette endepunktet",
+  "prompt.example.22": "Implementer hurtigbufring for dette endepunktet",
   "prompt.example.23": "Legg til paginering i denne listen",
   "prompt.example.24": "Lag en CLI-kommando for...",
   "prompt.example.25": "Hvordan fungerer miljøvariabler her?",
@@ -273,18 +383,24 @@ export const dict = {
   "prompt.dropzone.label": "Slipp bilder, PDF-er eller tekstfiler her",
   "prompt.dropzone.file.label": "Slipp for å @nevne fil",
   "prompt.slash.badge.custom": "egendefinert",
-  "prompt.slash.badge.skill": "skill",
+  "prompt.slash.badge.skill": "ferdighet",
   "prompt.slash.badge.mcp": "mcp",
   "prompt.context.active": "aktiv",
   "prompt.context.includeActiveFile": "Inkluder aktiv fil",
   "prompt.context.removeActiveFile": "Fjern aktiv fil fra kontekst",
   "prompt.context.removeFile": "Fjern fil fra kontekst",
   "prompt.action.attachFile": "Legg ved fil",
+  "prompt.menu.addImagesAndFiles": "Legg til filer og mer",
+  "prompt.menu.imagesAndFiles": "Bilder og filer",
+  "prompt.menu.commands": "Kommandoer",
+  "prompt.menu.context": "Kontekst",
+  "prompt.menu.shellCommand": "Shell-kommando",
   "prompt.attachment.remove": "Fjern vedlegg",
   "prompt.action.send": "Send",
   "prompt.action.stop": "Stopp",
 
   "prompt.toast.pasteUnsupported.title": "Ikke støttet vedlegg",
+  "prompt.toast.attachmentDuplicate.title": "Denne filen er allerede lastet opp",
   "prompt.toast.pasteUnsupported.description": "Kun bilder, PDF-er eller tekstfiler kan legges ved her.",
   "prompt.toast.modelAgentRequired.title": "Velg en agent og modell",
   "prompt.toast.modelAgentRequired.description": "Velg en agent og modell før du sender en forespørsel.",
@@ -293,14 +409,14 @@ export const dict = {
   "prompt.toast.shellSendFailed.title": "Kunne ikke sende shell-kommando",
   "prompt.toast.commandSendFailed.title": "Kunne ikke sende kommando",
   "prompt.toast.promptSendFailed.title": "Kunne ikke sende forespørsel",
-  "prompt.toast.promptSendFailed.description": "Kunne ikke hente økt",
+  "prompt.toast.promptSendFailed.description": "Kunne ikke hente sesjon",
 
   "dialog.mcp.title": "MCP-er",
   "dialog.mcp.description": "{{enabled}} av {{total}} aktivert",
   "dialog.mcp.empty": "Ingen MCP-er konfigurert",
 
   "dialog.lsp.empty": "LSP-er automatisk oppdaget fra filtyper",
-  "dialog.plugins.empty": "Plugins konfigurert i opencode.json",
+  "dialog.plugins.empty": "Programtillegg konfigurert i opencode.json",
 
   "mcp.status.connected": "tilkoblet",
   "mcp.status.failed": "mislyktes",
@@ -312,6 +428,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Søk etter mapper",
   "dialog.directory.empty": "Ingen mapper funnet",
+  "dialog.directory.action.selectFile": "Velg fil",
+  "dialog.directory.action.selectFolder": "Velg mappe",
+  "dialog.directory.root": "Rot",
+  "dialog.directory.parent": "Overordnet",
+  "dialog.directory.readError": "Kan ikke lese denne mappen",
 
   "dialog.server.title": "Servere",
   "dialog.server.description": "Bytt hvilken OpenCode-server denne appen kobler til.",
@@ -355,8 +476,11 @@ export const dict = {
   "dialog.project.edit.worktree.startup.description": "Kjører etter at et nytt arbeidsområde (worktree) er opprettet.",
   "dialog.project.edit.worktree.startup.placeholder": "f.eks. bun install",
 
+  "dialog.usageExceeded.dontShowAgain": "Ikke vis igjen",
+
   "context.breakdown.title": "Kontekstfordeling",
-  "context.breakdown.note": 'Omtrentlig fordeling av input-tokens. "Annet" inkluderer verktøydefinisjoner og overhead.',
+  "context.breakdown.note":
+    'Omtrentlig fordeling av inndatatokener. "Annet" inkluderer verktøydefinisjoner og overhead.',
   "context.breakdown.system": "System",
   "context.breakdown.user": "Bruker",
   "context.breakdown.assistant": "Assistent",
@@ -366,24 +490,26 @@ export const dict = {
   "context.systemPrompt.title": "Systemprompt",
   "context.rawMessages.title": "Rå meldinger",
 
+  "context.export.session": "Eksporter sesjon",
+
   "context.stats.session": "Sesjon",
   "context.stats.messages": "Meldinger",
   "context.stats.provider": "Leverandør",
   "context.stats.model": "Modell",
   "context.stats.limit": "Kontekstgrense",
-  "context.stats.totalTokens": "Totalt antall tokens",
+  "context.stats.totalTokens": "Totalt antall tokener",
   "context.stats.usage": "Forbruk",
-  "context.stats.inputTokens": "Input-tokens",
-  "context.stats.outputTokens": "Output-tokens",
-  "context.stats.reasoningTokens": "Resonnerings-tokens",
-  "context.stats.cacheTokens": "Cache-tokens (les/skriv)",
+  "context.stats.inputTokens": "Inndatatokener",
+  "context.stats.outputTokens": "Utdatatokener",
+  "context.stats.reasoningTokens": "Resonneringstokener",
+  "context.stats.cacheTokens": "Hurtigbuffertokener (les/skriv)",
   "context.stats.userMessages": "Brukermeldinger",
   "context.stats.assistantMessages": "Assistentmeldinger",
   "context.stats.totalCost": "Total kostnad",
   "context.stats.sessionCreated": "Sesjon opprettet",
   "context.stats.lastActivity": "Siste aktivitet",
 
-  "context.usage.tokens": "Tokens",
+  "context.usage.tokens": "Tokener",
   "context.usage.usage": "Forbruk",
   "context.usage.cost": "Kostnad",
   "context.usage.clickToView": "Klikk for å se kontekst",
@@ -414,9 +540,9 @@ export const dict = {
   "toast.scheme.title": "Fargevalg",
 
   "toast.workspace.enabled.title": "Arbeidsområder aktivert",
-  "toast.workspace.enabled.description": "Flere worktrees vises nå i sidefeltet",
+  "toast.workspace.enabled.description": "Flere arbeidsområder vises nå i sidefeltet",
   "toast.workspace.disabled.title": "Arbeidsområder deaktivert",
-  "toast.workspace.disabled.description": "Kun hoved-worktree vises i sidefeltet",
+  "toast.workspace.disabled.description": "Kun hovedarbeidsområdet vises i sidefeltet",
 
   "toast.permissions.autoaccept.on.title": "Aksepterer tillatelser automatisk",
   "toast.permissions.autoaccept.on.description": "Forespørsler om tillatelse vil bli godkjent automatisk",
@@ -443,6 +569,11 @@ export const dict = {
   "toast.session.unshare.failed.title": "Kunne ikke stoppe deling av sesjon",
   "toast.session.unshare.failed.description": "Det oppstod en feil da delingen av sesjonen skulle stoppes",
 
+  "toast.session.export.success.title": "Sesjon eksportert",
+  "toast.session.export.success.description": "Sesjonen ble lagret i {{filename}}",
+  "toast.session.export.failed.title": "Kunne ikke eksportere sesjon",
+  "toast.session.export.failed.description": "Det oppstod en feil under eksport av sesjonen",
+
   "toast.session.listFailed.title": "Kunne ikke laste sesjoner for {{project}}",
 
   "toast.update.title": "Oppdatering tilgjengelig",
@@ -464,10 +595,10 @@ export const dict = {
   "error.page.version": "Versjon: {{version}}",
 
   "error.dev.rootNotFound":
-    "Rotelement ikke funnet. Glemte du å legge det til i index.html? Eller kanskje id-attributten er feilstavet?",
+    "Rotelement ikke funnet. Glemte du å legge det til i index.html? Eller kanskje id-attributtet er feilstavet?",
 
   "error.serverSync.connectFailed": "Kunne ikke koble til server. Kjører det en server på `{{url}}`?",
-  "directory.error.invalidUrl": "Invalid directory in URL.",
+  "directory.error.invalidUrl": "Ugyldig mappe i URL-en.",
 
   "error.chain.unknown": "Ukjent feil",
   "error.chain.causedBy": "Forårsaket av:",
@@ -565,7 +696,7 @@ export const dict = {
   "status.popover.tab.servers": "Servere",
   "status.popover.tab.mcp": "MCP",
   "status.popover.tab.lsp": "LSP",
-  "status.popover.tab.plugins": "Plugins",
+  "status.popover.tab.plugins": "Programtillegg",
   "status.popover.action.manageServers": "Administrer servere",
 
   "session.share.popover.title": "Publiser på nett",
@@ -593,6 +724,12 @@ export const dict = {
   "terminal.connectionLost.title": "Tilkobling mistet",
   "terminal.connectionLost.description":
     "Terminalforbindelsen ble avbrutt. Dette kan skje når serveren starter på nytt.",
+  "terminal.connectTicket.csrfError":
+    "Tilkoblingsbilletten for PTY ble avvist av opprinnelses- eller CSRF-kontroller. Kontroller serverens CORS-konfigurasjon.",
+  "terminal.connectTicket.statusError": "Tilkoblingsbilletten for PTY mislyktes med {{status}}",
+
+  "titlebar.update": "Oppdater",
+  "titlebar.updateVersion": "Oppdater {{version}}",
 
   "common.closeTab": "Lukk fane",
   "common.dismiss": "Avvis",
@@ -600,6 +737,7 @@ export const dict = {
   "common.moreOptions": "Flere alternativer",
   "common.learnMore": "Lær mer",
   "common.rename": "Gi nytt navn",
+  "common.export": "Eksporter",
   "common.reset": "Tilbakestill",
   "common.archive": "Arkiver",
   "common.undo": "Angre",
@@ -611,7 +749,7 @@ export const dict = {
   "common.delete": "Slett",
   "common.close": "Lukk",
   "common.edit": "Rediger",
-  "common.loadMore": "Last flere",
+  "common.loadMore": "Last inn flere",
   "common.key.esc": "ESC",
 
   "sidebar.menu.toggle": "Veksle meny",
@@ -649,16 +787,17 @@ export const dict = {
   "settings.general.row.appearance.title": "Utseende",
   "settings.general.row.appearance.description": "Tilpass hvordan OpenCode ser ut på enheten din",
   "settings.general.row.colorScheme.title": "Fargevalg",
-  "settings.general.row.colorScheme.description": "Velg om OpenCode skal følge systemets, lyst eller mørkt tema",
+  "settings.general.row.colorScheme.description":
+    "Velg om OpenCode skal følge systeminnstillingen eller bruke lyst eller mørkt tema",
   "settings.general.row.theme.title": "Tema",
-  "settings.general.row.theme.description": "Tilpass hvordan OpenCode er tematisert.",
+  "settings.general.row.theme.description": "Tilpass temaet i OpenCode.",
   "settings.general.row.font.title": "Kodefont",
   "settings.general.row.font.description": "Tilpass skrifttypen som brukes i kodeblokker",
-  "settings.general.row.terminalFont.title": "Terminal Font",
-  "settings.general.row.terminalFont.description": "Customise the font used in the terminal",
+  "settings.general.row.terminalFont.title": "Terminalskrift",
+  "settings.general.row.terminalFont.description": "Tilpass skrifttypen som brukes i terminalen",
   "settings.general.row.uiFont.title": "UI-skrift",
   "settings.general.row.uiFont.description": "Tilpass skrifttypen som brukes i hele grensesnittet",
-  "settings.general.row.followup.title": "Oppfølgingsadferd",
+  "settings.general.row.followup.title": "Oppfølgingsatferd",
   "settings.general.row.followup.description": "Velg om oppfølgingsspørsmål skal kjøres umiddelbart eller vente i kø",
   "settings.general.row.followup.option.queue": "Kø",
   "settings.general.row.followup.option.steer": "Styr",
@@ -669,13 +808,10 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "Utvid edit-verktøydeler",
   "settings.general.row.editToolPartsExpanded.description":
     "Vis edit-, write- og patch-verktøydeler utvidet som standard i tidslinjen",
-  "settings.general.row.showSessionProgressBar.title": "Vis fremdriftslinje for sesjonen",
-  "settings.general.row.showSessionProgressBar.description":
-    "Vis den animerte fremdriftslinjen øverst i sesjonen når agenten jobber",
-  "settings.general.row.wayland.title": "Bruk innebygd Wayland",
-  "settings.general.row.wayland.description": "Deaktiver X11-fallback på Wayland. Krever omstart.",
+  "settings.general.row.wayland.title": "Bruk Wayland direkte",
+  "settings.general.row.wayland.description": "Deaktiver X11-reserveløsningen på Wayland. Krever omstart.",
   "settings.general.row.wayland.tooltip":
-    "På Linux med skjermer med blandet oppdateringsfrekvens kan innebygd Wayland være mer stabilt.",
+    "På Linux med skjermer med blandet oppdateringsfrekvens kan direkte Wayland-støtte være mer stabilt.",
 
   "settings.general.row.releaseNotes.title": "Utgivelsesnotater",
   "settings.general.row.releaseNotes.description": 'Vis "Hva er nytt"-vinduer etter oppdateringer',
@@ -686,7 +822,7 @@ export const dict = {
   "settings.updates.row.check.description": "Se etter oppdateringer manuelt og installer hvis tilgjengelig",
   "settings.updates.action.checkNow": "Sjekk nå",
   "settings.updates.action.checking": "Sjekker...",
-  "settings.updates.toast.latest.title": "Du er oppdatert",
+  "settings.updates.toast.latest.title": "OpenCode er oppdatert",
   "settings.updates.toast.latest.description": "Du bruker den nyeste versjonen av OpenCode.",
   "sound.option.none": "Ingen",
   "sound.option.alert01": "Varsel 01",
@@ -755,7 +891,7 @@ export const dict = {
   "settings.shortcuts.reset.toast.title": "Snarveier tilbakestilt",
   "settings.shortcuts.reset.toast.description": "Tastatursnarveier er tilbakestilt til standard.",
   "settings.shortcuts.conflict.title": "Snarvei allerede i bruk",
-  "settings.shortcuts.conflict.description": "{{keybind}} er allerede tilordnet til {{titles}}.",
+  "settings.shortcuts.conflict.description": "{{keybind}} er allerede tilordnet {{titles}}.",
   "settings.shortcuts.unassigned": "Ikke tilordnet",
   "settings.shortcuts.pressKeys": "Trykk taster",
   "settings.shortcuts.search.placeholder": "Søk etter snarveier",
@@ -805,7 +941,7 @@ export const dict = {
   "settings.permissions.tool.grep.title": "Grep",
   "settings.permissions.tool.grep.description": "Søk i filinnhold ved hjelp av regulære uttrykk",
   "settings.permissions.tool.list.title": "Liste",
-  "settings.permissions.tool.list.description": "List filer i en mappe",
+  "settings.permissions.tool.list.description": "List opp filer i en mappe",
   "settings.permissions.tool.bash.title": "Bash",
   "settings.permissions.tool.bash.description": "Kjør shell-kommandoer",
   "settings.permissions.tool.task.title": "Oppgave",
@@ -823,7 +959,7 @@ export const dict = {
   "settings.permissions.tool.external_directory.title": "Ekstern mappe",
   "settings.permissions.tool.external_directory.description": "Få tilgang til filer utenfor prosjektmappen",
   "settings.permissions.tool.doom_loop.title": "Doom Loop",
-  "settings.permissions.tool.doom_loop.description": "Oppdager gjentatte verktøykall med identisk input",
+  "settings.permissions.tool.doom_loop.description": "Oppdager gjentatte verktøykall med identiske inndata",
 
   "session.delete.failed.title": "Kunne ikke slette sesjon",
   "session.delete.title": "Slett sesjon",
@@ -868,14 +1004,14 @@ export const dict = {
   "common.time.hoursAgo.short": "{{count}} t siden",
   "common.time.daysAgo.short": "{{count}} d siden",
   "settings.providers.connected.environmentDescription": "Koblet til fra miljøvariablene dine",
-  "settings.providers.custom.description": "Legg til en OpenAI-kompatibel leverandør via basis-URL.",
+  "settings.providers.custom.description": "Legg til en OpenAI-kompatibel leverandør via en basis-URL.",
 
   "app.server.unreachable": "Kunne ikke nå {{server}}",
   "app.server.retrying": "Prøver på nytt automatisk...",
   "app.server.otherServers": "Andre servere",
   "dialog.server.add.usernamePlaceholder": "brukernavn",
   "dialog.server.add.passwordPlaceholder": "passord",
-  "server.row.noUsername": "inget brukernavn",
+  "server.row.noUsername": "ikke noe brukernavn",
   "session.review.noVcs.createGit.title": "Opprett et Git-depot",
   "session.review.noVcs.createGit.description": "Spor, gjennomgå og angre endringer i dette prosjektet",
   "session.review.noVcs.createGit.actionLoading": "Oppretter Git-depot...",
@@ -884,6 +1020,9 @@ export const dict = {
   "session.question.progress": "{{current}} av {{total}} spørsmål",
   "session.header.open.finder": "Finder",
   "session.header.open.fileExplorer": "Filutforsker",
+  "session.header.reveal.finder": "Vis i Finder",
+  "session.header.reveal.fileExplorer": "Vis i Filutforsker",
+  "session.header.reveal.containingFolder": "Åpne mappen som inneholder dette elementet",
   "session.header.open.fileManager": "Filbehandler",
   "session.header.open.app.vscode": "VS Code",
   "session.header.open.app.cursor": "Cursor",
@@ -902,25 +1041,33 @@ export const dict = {
   "debugBar.na": "i/t",
   "debugBar.nav.label": "NAV",
   "debugBar.nav.tip":
-    "Siste fullførte ruteovergang som berører en sesjonsside, målt fra ruterstart til første opptegning etter at den har roet seg.",
+    "Siste fullførte ruteovergang som berører en sesjonsside, målt fra ruterstart til første gjengivelse etter at den har roet seg.",
   "debugBar.fps.label": "FPS",
   "debugBar.fps.tip": "Rullende bilder per sekund over de siste 5 sekundene.",
   "debugBar.frame.label": "FRAME",
-  "debugBar.frame.tip": "Verste bildetid over de siste 5 sekundene.",
+  "debugBar.frame.tip": "Lengste bildetid over de siste 5 sekundene.",
   "debugBar.jank.label": "JANK",
-  "debugBar.jank.tip": "Bilder over 32ms i de siste 5 sekundene.",
+  "debugBar.jank.tip": "Bilder som tar over 32 ms i de siste 5 sekundene.",
   "debugBar.long.label": "LONG",
-  "debugBar.long.tip": "Blokkert tid og antall lange oppgaver i de siste 5 sekundene. Maks oppgave: {{max}}.",
+  "debugBar.long.tip": "Blokkert tid og antall lange oppgaver i de siste 5 sekundene. Lengste oppgave: {{max}}.",
   "debugBar.delay.label": "DELAY",
-  "debugBar.delay.tip": "Verste observerte inndataforsinkelse i de siste 5 sekundene.",
+  "debugBar.delay.tip": "Lengste observerte inndataforsinkelse i de siste 5 sekundene.",
   "debugBar.inp.label": "INP",
   "debugBar.inp.tip":
     "Omtrentlig interaksjonsvarighet over de siste 5 sekundene. Dette er INP-lignende, ikke den offisielle Web Vitals INP.",
   "debugBar.cls.label": "CLS",
   "debugBar.cls.tip": "Kumulativ layoutforskyvning for gjeldende app-levetid.",
   "debugBar.mem.label": "MEM",
-  "debugBar.mem.tipUnavailable": "Brukt JS-heap vs heap-grense. Kun Chromium.",
-  "debugBar.mem.tip": "Brukt JS-heap vs heap-grense. {{used}} av {{limit}}.",
+  "debugBar.mem.tipUnavailable": "Brukt JS-heap kontra heap-grense. Kun Chromium.",
+  "debugBar.mem.tip": "Brukt JS-heap kontra heap-grense. {{used}} av {{limit}}.",
+  "debugBar.focus.label": "FOCUS",
+  "debugBar.focus.tip": "Tving fokusstiler på alle interaktive elementer",
+  "debugBar.focus.on": "PÅ",
+  "debugBar.focus.off": "AV",
+  "debugBar.direction.label": "DIR",
+  "debugBar.direction.tip": "Tving layoutretningen for hele appen uten å endre valgt språk",
+  "debugBar.direction.ltr": "LTR",
+  "debugBar.direction.rtl": "RTL",
   "common.key.ctrl": "Ctrl",
   "common.key.alt": "Alt",
   "common.key.shift": "Shift",
@@ -944,4 +1091,370 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Kunne ikke opprette vedvarende prosjektikon",
   "error.childStore.storeCreateFailed": "Kunne ikke opprette lager",
   "terminal.connectionLost.abnormalClose": "WebSocket lukket unormalt: {{code}}",
-} satisfies Partial<Record<Keys, string>>
+
+  "command.project.previous": "Forrige prosjekt",
+  "command.project.next": "Neste prosjekt",
+  "command.project.index": "Bytt til prosjekt {{index}}",
+  "command.tab.reopenClosed": "Åpne lukket fane på nytt",
+
+  "model.tooltip.context.label": "Kontekst",
+  "model.tooltip.inputs": "Inndata",
+  "model.tooltip.model": "Modell",
+  "model.tooltip.provider": "Leverandør",
+  "model.tooltip.reasoning": "Resonnering",
+
+  "common.clear": "Tøm",
+
+  "session.child.promptDisabled": "Underagentsesjoner kan ikke motta forespørsler.",
+  "session.child.backToParent": "Tilbake til hovedsesjonen.",
+
+  "wsl.server.add": "Legg til WSL-server",
+  "wsl.server.addShort": "Legg til WSL",
+  "wsl.server.label": "WSL",
+  "wsl.server.menu.label": "WSL-server",
+  "wsl.server.retryStart": "Prøv å starte på nytt",
+  "wsl.server.updating": "Oppdaterer...",
+  "wsl.onboarding.step.distro": "Velg distribusjon",
+  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.checkingRuntime": "Sjekker WSL...",
+  "wsl.onboarding.restartRequired": "Windows må startes på nytt for å fullføre installasjonen av WSL.",
+  "wsl.onboarding.ready": "WSL er klart.",
+  "wsl.onboarding.required": "WSL kreves for å fortsette.",
+  "wsl.onboarding.checkingDistros": "Sjekker distribusjoner...",
+  "wsl.onboarding.installingDistro": "Installerer {{distro}}...",
+  "wsl.onboarding.checkingDistro": "Sjekker {{distro}}...",
+  "wsl.onboarding.listingDistros": "Lister distribusjoner...",
+  "wsl.onboarding.distroReady": "{{distro}} er klar.",
+  "wsl.onboarding.distroNotInstalled": "{{distro}} er ikke installert ennå.",
+  "wsl.onboarding.openDistroOnce": "Åpne {{distro}} én gang for å fullføre oppsettet.",
+  "wsl.onboarding.finishingDistro": "Fullfører oppsettet for {{distro}}.",
+  "wsl.onboarding.pickDistro": "Velg en distribusjon eller installer en nedenfor.",
+  "wsl.onboarding.checkingOpencode": "Sjekker OpenCode...",
+  "wsl.onboarding.checkingOpencodeIn": "Sjekker OpenCode i {{distro}}...",
+  "wsl.onboarding.updatingOpencode": "Oppdaterer OpenCode...",
+  "wsl.onboarding.updatingOpencodeIn": "Oppdaterer OpenCode i {{distro}}...",
+  "wsl.onboarding.updateOpencodeIn": "Oppdater OpenCode i {{distro}}.",
+  "wsl.onboarding.updateOpencode": "Oppdater OpenCode",
+  "wsl.onboarding.opencodeReadyIn": "OpenCode er klar i {{distro}}.",
+  "wsl.onboarding.opencodeReady": "OpenCode er klar.",
+  "wsl.onboarding.installOpencodeIn": "Installer OpenCode i {{distro}}.",
+  "wsl.onboarding.installOpencode": "Installer OpenCode",
+  "wsl.onboarding.chooseDistroFirst": "Velg en distribusjon først.",
+  "wsl.onboarding.loadFailed": "Kunne ikke laste inn WSL-status.",
+  "wsl.onboarding.loading": "Laster...",
+  "wsl.onboarding.installedDistros": "Installerte distribusjoner",
+  "wsl.onboarding.checkAgain": "Sjekk på nytt",
+  "wsl.onboarding.distroStatus.ready": "Klar",
+  "wsl.onboarding.distroStatus.checking": "Sjekker...",
+  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode er ikke installert",
+  "wsl.onboarding.distroStatus.missingTools": "Mangler bash, curl",
+  "wsl.onboarding.distroStatus.unsupported": "Ikke støttet · Bruk WSL 2",
+  "wsl.onboarding.needAnotherDistro": "Trenger du en annen distribusjon?",
+  "wsl.onboarding.needAnotherDistroHint": "Installer en Linux-distribusjon fra WSL-katalogen",
+  "wsl.onboarding.wslNotInstalled.title": "WSL er ikke installert",
+  "wsl.onboarding.wslNotInstalled.description":
+    "WSL (Windows Subsystem for Linux) kreves før OpenCode kan legge til en WSL-server",
+  "wsl.onboarding.wslUnavailable.title": "WSL er utilgjengelig",
+  "wsl.onboarding.wslUnavailable.description": "OpenCode kunne ikke bekrefte WSL på denne maskinen.",
+  "wsl.onboarding.installWsl": "Installer WSL",
+  "wsl.onboarding.windowsRestartRequired":
+    "Start Windows på nytt for å fullføre installasjonen av WSL, og åpne deretter OpenCode på nytt.",
+  "wsl.onboarding.next": "Neste",
+  "wsl.onboarding.refresh": "Oppdater",
+  "wsl.onboarding.allDistrosAdded": "Alle installerte distribusjoner er allerede lagt til.",
+  "wsl.onboarding.noDistros": "Ingen distribusjoner oppdaget ennå.",
+  "wsl.onboarding.install": "Installer",
+  "wsl.onboarding.installing": "Installerer...",
+  "wsl.onboarding.installDistro": "Installer distribusjon",
+  "wsl.onboarding.searchDistros": "Søk etter distribusjoner",
+  "wsl.onboarding.wsl2Required": "WSL 2 er påkrevd.",
+  "wsl.onboarding.toolsRequired": "Denne distribusjonen trenger bash og curl.",
+  "wsl.onboarding.openTerminal": "Åpne terminal",
+  "wsl.onboarding.path": "Bane: {{path}}",
+  "wsl.onboarding.notFound": "ikke funnet",
+  "wsl.onboarding.version": "Versjon: {{version}}",
+  "wsl.onboarding.unknown": "ukjent",
+  "wsl.onboarding.desktopVersion": "skrivebordsapp {{version}}",
+  "wsl.onboarding.versionMismatch": "Den installerte versjonen samsvarer ikke med versjonen av skrivebordsappen.",
+  "wsl.onboarding.adding": "Legger til...",
+
+  "help.tabs.toast.ariaLabel": "Vi introduserer faner. Organiser arbeidet og de aktive sesjonene dine med faner",
+  "help.tabs.toast.dismiss": "Avvis informasjon om faner",
+  "help.tabs.title": "Vi introduserer faner",
+  "help.tabs.description": "Organiser arbeidet og de aktive sesjonene dine med faner",
+  "help.tabs.date": "14. juli",
+  "help.tabs.introduction": "OpenCode Desktop er nå bygget rundt faner.",
+  "help.tabs.sessions":
+    "Start en ny sesjon i en fane, eller åpne en eksisterende sesjon fra et av prosjektene dine. Åpne en ny fane når du skal begynne på noe nytt, og lukk den når du er ferdig.",
+  "help.tabs.organize":
+    "Når du har noen få faner åpne, blir det enklere å organisere de aktive sesjonene. Gi fanene navn som er lette å huske, hvis du planlegger å beholde dem.",
+  "help.tabs.home":
+    "Du finner alle sesjonene og prosjektene dine på den nye Hjem-skjermen. Når du velger en sesjon, åpnes den i en fane.",
+  "help.tabs.persistence": "Fanene er fortsatt åpne når du åpner appen på nytt.",
+  "help.tabs.worktrees":
+    "Det nye oppsettet støtter ikke Git Worktrees ennå, men støtte kommer snart. Hvis du foretrekker å fortsette med det forrige oppsettet, kan du bytte mellom oppsettene i Innstillinger. Vær oppmerksom på at det nye oppsettet blir permanent om noen uker.",
+
+  "language.uk": "Українська",
+
+  "error.page.description.localServerStartup": "Det oppstod en feil under oppstart av den lokale serveren.",
+  "error.page.action.exportLogs": "Eksporter logger",
+
+  "home.title": "Hjem",
+  "home.projects": "Prosjekter",
+  "home.project.add": "Legg til prosjekt",
+  "home.recentlyClosed": "Nylig lukket",
+  "home.server.collapse": "Fold sammen serverprosjekter",
+  "home.server.expand": "Utvid serverprosjekter",
+  "home.sessions.search.placeholder": "Søk etter sesjoner",
+  "home.sessions.search.placeholder.scoped": "Søk etter sesjoner i {{scope}}",
+  "home.sessions.search.sessions": "Sesjoner",
+  "home.sessions.search.noResults": "Ingen sesjoner funnet for {{query}}",
+  "home.sessions.empty": "Ingenting her ennå",
+  "home.sessions.empty.description": "Opprett en sesjon for å komme i gang",
+  "home.sessions.group.today": "I dag",
+  "home.sessions.group.yesterday": "I går",
+  "home.sessions.group.older": "Eldre",
+  "home.providerTip":
+    "Koble til over 75 leverandører for å bruke andre modeller, inkludert Claude, GPT, Gemini og flere",
+
+  "session.tab.unknown": "Ukjent sesjon",
+  "session.error.notFound": "Denne sesjonen finnes ikke",
+  "session.error.notFound.description": "Denne fanen peker til en sesjon som ikke lenger finnes på denne serveren.",
+  "session.error.notFound.closeTab": "Lukk fane",
+  "session.error.serverConnection": "Kan ikke koble til denne serveren",
+  "session.review.noUncommittedChanges": "Ingen endringer som ikke er sjekket inn ennå",
+  "session.review.noBranchChanges": "Ingen grenendringer ennå",
+  "session.question.minimize": "Minimer spørsmål",
+  "session.question.restore": "Gjenopprett spørsmål",
+  "session.question.pending.one": "{{count}} ventende spørsmål",
+  "session.question.pending.other": "{{count}} ventende spørsmål",
+  "session.new.project.new": "Nytt prosjekt",
+  "session.new.project.search": "Søk etter prosjekter",
+  "session.new.project.add": "Legg til prosjekt",
+  "session.new.workspace.runIn": "Kjør sesjonen i",
+  "session.new.workspace.triggerLocal": "Lokalt",
+  "session.new.workspace.local": "Lokalt depot",
+  "session.new.workspace.existing": "Arbeidsområde…",
+  "session.new.git.none": "Ingen Git",
+
+  "sidebar.empty.title": "Ingen åpne prosjekter",
+  "sidebar.empty.description": "Åpne et prosjekt for å komme i gang",
+
+  "settings.general.section.advanced": "Avansert",
+  "settings.general.row.shell.title": "Terminalskall",
+  "settings.general.row.shell.description":
+    "Velg skallet som skal brukes i terminalen. Kompatible skall brukes også til agentens verktøykall.",
+  "settings.general.row.shell.autoDefault": "Automatisk (standard)",
+  "settings.general.row.shell.terminalOnly": "kun terminal",
+  "settings.general.row.showFileTree.title": "Filtre",
+  "settings.general.row.showFileTree.description": "Vis filtrepanelet i sesjoner",
+  "settings.general.row.showNavigation.title": "Navigasjonskontroller",
+  "settings.general.row.showNavigation.description":
+    "Vis tilbake- og fremoverknappene på tittellinjen i skrivebordsappen",
+  "settings.general.row.showSearch.title": "Kommandopalett",
+  "settings.general.row.showSearch.description": "Vis knappen for søk og kommandopalett på tittellinjen",
+  "settings.general.row.showTerminal.title": "Terminal",
+  "settings.general.row.showTerminal.description": "Vis terminalknappen på tittellinjen i skrivebordsappen",
+  "settings.general.row.showStatus.title": "Serverstatus",
+  "settings.general.row.showStatus.description": "Vis serverstatusknappen på tittellinjen",
+  "settings.general.row.mobileTitlebarBottom.title": "Navigasjon nederst",
+  "settings.general.row.mobileTitlebarBottom.description":
+    "Plasser tittellinjen og sesjonsfanene nederst på mobilskjermen",
+  "settings.general.row.showCustomAgents.title": "Vis agent",
+  "settings.general.row.showCustomAgents.description":
+    "Bytt mellom agenter i skrivefeltet. Når velgeren er skjult, brukes Build-agenten som standard.",
+  "settings.general.row.newInterface.title": "Nytt oppsett",
+  "settings.general.row.newInterface.badge": "Ny",
+  "settings.general.row.newInterface.description":
+    "Bruk de nye fanene og startsidens oppsett. I en begrenset periode kan du bytte mellom oppsettene.",
+  "settings.general.row.newInterfaceNotice.title": "Du bruker nå det nye oppsettet",
+  "settings.general.row.newInterfaceNotice.description": "Det forrige oppsettet er ikke lenger tilgjengelig",
+  "settings.general.row.newInterfaceNotice.dismiss": "Avvis",
+  "settings.general.row.pinchZoom.title": "Knip for å zoome",
+  "settings.general.row.pinchZoom.description": "Tillat knipebevegelser på styreflaten og Ctrl-rulling for å zoome",
+  "settings.updates.action.downloading": "Laster ned...",
+  "settings.updates.action.installing": "Installerer...",
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line1": "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.prefix": "Visit ", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.link": "getbot.me", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.suffix": " to collect your API key.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.fetchModels.failed": "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.timeout": "Request to api.getbot.me timed out (15s). Please check your network and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels": "Refresh models", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.title": "AI modified this file", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.", // FORK-i18n-backfill(en 兜底)
+  "home.empty.title": "No recent projects", // FORK-i18n-backfill(en 兜底)
+  "home.empty.description": "Get started by opening a local project", // FORK-i18n-backfill(en 兜底)
+  "common.closeOtherTabs": "Close Other Tabs", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.title": "Anonymous usage statistics", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.description": "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.locked": "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.rename": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.revealInFolder": "Reveal in folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyPath": "Copy path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.cut": "Cut", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toFolder": "Paste into this folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toRoot": "Paste to project root", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFile": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFolder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.refresh": "Refresh", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyRelativePath": "Copy Relative Path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.openInTerminal": "Open in Terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.expandAll": "Expand All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.collapseAll": "Collapse All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.collapsePreviewHint": "Click to collapse preview", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.title": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.label": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.placeholder": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.title": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.label": "Folder name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.placeholder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.fileTitle": "Rename file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.folderTitle": "Rename folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.label": "New name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.confirm": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.unchanged": "Name unchanged", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageSingle": "Are you sure you want to delete \"{{name}}\"?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.confirm": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.create": "Create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.empty": "Name cannot be empty", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.operationFailed": "Operation failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.openFailed": "Failed to open", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedSingle": "Delete failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.createFailed": "Failed to create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.renameFailed": "Failed to rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.single": "Deleted \"{{name}}\"", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.bulk": "Deleted {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.hint": "Recoverable from system trash", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.single": "Moved 1 item", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.bulk": "Moved {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undo": "Undo", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedSingle": "Move failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedSingle": "Copy failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedSingle": "Paste failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessSingle": "Path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessSingle": "Relative path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessBulk": "{{count}} relative paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.terminalFailed": "Failed to open terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.error": "Failed to load file tree", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.title": "Name conflict", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.replace": "Replace", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.keepBoth": "Keep both", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.skip": "Skip", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocx": "Export as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxFail": "Export failed", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.line": "Ln {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.col": "Col {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.addToChat": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.submit": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled", // FORK-i18n-backfill(en 兜底)
+  "settings.tab.feishu": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.title": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.title": "Keep computer awake", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.title": "No Lark account bound", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.add": "Add Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.title": "Bind Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.label": "Domain", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.feishu": "Feishu (China)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.lark": "Lark (Global)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusPending": "Waiting for authorization...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusSuccess": "Bound successfully", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusDenied": "Authorization denied by user", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusExpired": "QR code expired", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusError": "Error: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.done": "Done", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.qrLoading": "Generating QR code...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.edit": "Edit", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelLabel": "model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelDefault": "(use default)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.title": "Edit account settings", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelSectionTitle": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.advancedSectionTitle": "Advanced", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.groupCommand.info": "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.label": "Allow AI to read all group messages without @ mention", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.hint": "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.saving": "Saving...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerLabel": "Provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelLabel": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel.hint": "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerPlaceholder": "Select provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelPlaceholder": "Select model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.save": "Save", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.default": "Default (global home base)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.pick": "Choose folder", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.clear": "Reset to default", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.hintFollow": "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.security": "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.projectListWarning": "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceDefaulted": "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceFallback": "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)} satisfies Partial<Record<Keys, string>>

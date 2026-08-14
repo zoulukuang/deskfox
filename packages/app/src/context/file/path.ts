@@ -140,12 +140,14 @@ export function createPathHelpers(scope: () => string) {
     return normalize(tabValue)
   }
 
-  // FORK: 目录 store key 统一正斜杠 — Windows 下"点击展开"(server 原生 backslash node.path)与
-  //   "拖放后刷新"(absoluteToRelative 产 forward slash)会落成两个独立 key,刷新更新了后者、
-  //   UI 渲染前者 → 移动后源目录残留幽灵条目(user 实测 phase4 拖出 phase3 不消失)。
-  //   tree-store 所有入口(listDir/expand/collapse/dirState/children)都经本函数,单点统一即根治。
-  //   [bug-repro: 文件树拖出目录后源目录残留幽灵条目] 2026-06-13
-  const normalizeDir = (input: string) => normalize(input).replace(/\\/g, "/").replace(/\/+$/, "")
+  // FORK 撤销记录:2026-06-13 曾无条件统一正斜杠(幽灵条目修复);2026-08-11 sync v1.18.16
+  // 上游落地等价 Windows 感知版,取上游
+  const normalizeDir = (input: string) => {
+    const path = normalize(input)
+    const root = scope()
+    const windows = /^[A-Za-z]:/.test(root) || root.startsWith("\\\\")
+    return (windows ? path.replace(/\\/g, "/") : path).replace(/\/+$/, "")
+  }
 
   return {
     normalize,

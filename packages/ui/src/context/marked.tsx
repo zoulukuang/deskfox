@@ -1,5 +1,4 @@
-import { marked } from "marked"
-import markedKatex from "marked-katex-extension"
+import { marked, type MarkedExtension, type Tokens } from "marked"
 import markedShiki from "marked-shiki"
 // FORK: GitHub 风 callout(> [!NOTE] ...)+ 脚注 ([^1])2026-05-05
 import markedAlert from "marked-alert"
@@ -8,8 +7,12 @@ import katex from "katex"
 import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
 // FORK: REQ-098 收紧 del 定界符(只认 ~~)[feat: chat-tilde-del-fix] 2026-08-07
+//   (2026-08-11 sync v1.18.16 复核:marked 18 仅修复部分样例(%区间),纯数字区间 4.80~5.05 /
+//    PE 12~15 仍误判 → 保留本扩展,D5「上游已修」判定不成立)
 import { strictDelExtension } from "./marked-del-strict"
-import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
+import { markedCodeSpanBoundary } from "./marked-code-span"
+import { getSharedHighlighter, ThemeRegistrationResolved } from "@pierre/diffs"
+import { registerOpenCodeTheme } from "./marked-theme-register"
 
 // FORK: 2026-05-08 — GFM 风 heading slug:小写 + 去标点 + 空格转连字符 + 保留中文
 // 与 GitHub 的 anchor 生成规则尽量对齐,让 markdown-test.md 的目录链接 [...](#1-标题层级) 能跳转
@@ -65,375 +68,381 @@ const EMOJI_SHORTCODES: Record<string, string> = {
   earth_americas: "🌎", earth_asia: "🌏", earth_africa: "🌍",
 }
 
-registerCustomTheme("OpenCode", () => {
-  return Promise.resolve({
-    name: "OpenCode",
-    colors: {
-      "editor.background": "var(--color-background-stronger)",
-      "editor.foreground": "var(--text-base)",
-      "gitDecoration.addedResourceForeground": "var(--syntax-diff-add)",
-      "gitDecoration.deletedResourceForeground": "var(--syntax-diff-delete)",
-      // "gitDecoration.conflictingResourceForeground": "#ffca00",
-      // "gitDecoration.modifiedResourceForeground": "#1a76d4",
-      // "gitDecoration.untrackedResourceForeground": "#00cab1",
-      // "gitDecoration.ignoredResourceForeground": "#84848A",
-      // "terminal.titleForeground": "#adadb1",
-      // "terminal.titleInactiveForeground": "#84848A",
-      // "terminal.background": "#141415",
-      // "terminal.foreground": "#adadb1",
-      // "terminal.ansiBlack": "#141415",
-      // "terminal.ansiRed": "#ff2e3f",
-      // "terminal.ansiGreen": "#0dbe4e",
-      // "terminal.ansiYellow": "#ffca00",
-      // "terminal.ansiBlue": "#008cff",
-      // "terminal.ansiMagenta": "#c635e4",
-      // "terminal.ansiCyan": "#08c0ef",
-      // "terminal.ansiWhite": "#c6c6c8",
-      // "terminal.ansiBrightBlack": "#141415",
-      // "terminal.ansiBrightRed": "#ff2e3f",
-      // "terminal.ansiBrightGreen": "#0dbe4e",
-      // "terminal.ansiBrightYellow": "#ffca00",
-      // "terminal.ansiBrightBlue": "#008cff",
-      // "terminal.ansiBrightMagenta": "#c635e4",
-      // "terminal.ansiBrightCyan": "#08c0ef",
-      // "terminal.ansiBrightWhite": "#c6c6c8",
+export const OpenCodeTheme = {
+  name: "OpenCode",
+  bg: "var(--color-background-stronger)",
+  fg: "var(--text-base)",
+  colors: {
+    "editor.background": "var(--color-background-stronger)",
+    "editor.foreground": "var(--text-base)",
+    "gitDecoration.addedResourceForeground": "var(--syntax-diff-add)",
+    "gitDecoration.deletedResourceForeground": "var(--syntax-diff-delete)",
+    "gitDecoration.modifiedResourceForeground": "var(--syntax-diff-unknown)",
+    // "gitDecoration.conflictingResourceForeground": "#ffca00",
+    // "gitDecoration.modifiedResourceForeground": "#1a76d4",
+    // "gitDecoration.untrackedResourceForeground": "#00cab1",
+    // "gitDecoration.ignoredResourceForeground": "#84848A",
+    // "terminal.titleForeground": "#adadb1",
+    // "terminal.titleInactiveForeground": "#84848A",
+    // "terminal.background": "#141415",
+    // "terminal.foreground": "#adadb1",
+    // "terminal.ansiBlack": "#141415",
+    // "terminal.ansiRed": "#ff2e3f",
+    // "terminal.ansiGreen": "#0dbe4e",
+    // "terminal.ansiYellow": "#ffca00",
+    // "terminal.ansiBlue": "#008cff",
+    // "terminal.ansiMagenta": "#c635e4",
+    // "terminal.ansiCyan": "#08c0ef",
+    // "terminal.ansiWhite": "#c6c6c8",
+    // "terminal.ansiBrightBlack": "#141415",
+    // "terminal.ansiBrightRed": "#ff2e3f",
+    // "terminal.ansiBrightGreen": "#0dbe4e",
+    // "terminal.ansiBrightYellow": "#ffca00",
+    // "terminal.ansiBrightBlue": "#008cff",
+    // "terminal.ansiBrightMagenta": "#c635e4",
+    // "terminal.ansiBrightCyan": "#08c0ef",
+    // "terminal.ansiBrightWhite": "#c6c6c8",
+  },
+  tokenColors: [
+    {
+      scope: ["comment", "punctuation.definition.comment", "string.comment"],
+      settings: {
+        foreground: "var(--syntax-comment)",
+      },
     },
-    tokenColors: [
-      {
-        scope: ["comment", "punctuation.definition.comment", "string.comment"],
-        settings: {
-          foreground: "var(--syntax-comment)",
-        },
+    {
+      scope: ["entity.other.attribute-name"],
+      settings: {
+        foreground: "var(--syntax-property)", // maybe attribute
       },
-      {
-        scope: ["entity.other.attribute-name"],
-        settings: {
-          foreground: "var(--syntax-property)", // maybe attribute
-        },
-      },
-      {
-        scope: ["constant", "entity.name.constant", "variable.other.constant", "variable.language", "entity"],
-        settings: {
-          foreground: "var(--syntax-constant)",
-        },
-      },
-      {
-        scope: ["entity.name", "meta.export.default", "meta.definition.variable"],
-        settings: {
-          foreground: "var(--syntax-type)",
-        },
-      },
-      {
-        scope: ["meta.object.member"],
-        settings: {
-          foreground: "var(--syntax-primitive)",
-        },
-      },
-      {
-        scope: [
-          "variable.parameter.function",
-          "meta.jsx.children",
-          "meta.block",
-          "meta.tag.attributes",
-          "entity.name.constant",
-          "meta.embedded.expression",
-          "meta.template.expression",
-          "string.other.begin.yaml",
-          "string.other.end.yaml",
-        ],
-        settings: {
-          foreground: "var(--syntax-punctuation)",
-        },
-      },
-      {
-        scope: ["entity.name.function", "support.type.primitive"],
-        settings: {
-          foreground: "var(--syntax-primitive)",
-        },
-      },
-      {
-        scope: ["support.class.component"],
-        settings: {
-          foreground: "var(--syntax-type)",
-        },
-      },
-      {
-        scope: "keyword",
-        settings: {
-          foreground: "var(--syntax-keyword)",
-        },
-      },
-      {
-        scope: [
-          "keyword.operator",
-          "storage.type.function.arrow",
-          "punctuation.separator.key-value.css",
-          "entity.name.tag.yaml",
-          "punctuation.separator.key-value.mapping.yaml",
-        ],
-        settings: {
-          foreground: "var(--syntax-operator)",
-        },
-      },
-      {
-        scope: ["storage", "storage.type"],
-        settings: {
-          foreground: "var(--syntax-keyword)",
-        },
-      },
-      {
-        scope: ["storage.modifier.package", "storage.modifier.import", "storage.type.java"],
-        settings: {
-          foreground: "var(--syntax-primitive)",
-        },
-      },
-      {
-        scope: [
-          "string",
-          "punctuation.definition.string",
-          "string punctuation.section.embedded source",
-          "entity.name.tag",
-        ],
-        settings: {
-          foreground: "var(--syntax-string)",
-        },
-      },
-      {
-        scope: "support",
-        settings: {
-          foreground: "var(--syntax-primitive)",
-        },
-      },
-      {
-        scope: ["support.type.object.module", "variable.other.object", "support.type.property-name.css"],
-        settings: {
-          foreground: "var(--syntax-object)",
-        },
-      },
-      {
-        scope: "meta.property-name",
-        settings: {
-          foreground: "var(--syntax-property)",
-        },
-      },
-      {
-        scope: "variable",
-        settings: {
-          foreground: "var(--syntax-variable)",
-        },
-      },
-      {
-        scope: "variable.other",
-        settings: {
-          foreground: "var(--syntax-variable)",
-        },
-      },
-      {
-        scope: [
-          "invalid.broken",
-          "invalid.illegal",
-          "invalid.unimplemented",
-          "invalid.deprecated",
-          "message.error",
-          "markup.deleted",
-          "meta.diff.header.from-file",
-          "punctuation.definition.deleted",
-          "brackethighlighter.unmatched",
-          "token.error-token",
-        ],
-        settings: {
-          foreground: "var(--syntax-critical)",
-        },
-      },
-      {
-        scope: "carriage-return",
-        settings: {
-          foreground: "var(--syntax-keyword)",
-        },
-      },
-      {
-        scope: "string source",
-        settings: {
-          foreground: "var(--syntax-variable)",
-        },
-      },
-      {
-        scope: "string variable",
-        settings: {
-          foreground: "var(--syntax-constant)",
-        },
-      },
-      {
-        scope: [
-          "source.regexp",
-          "string.regexp",
-          "string.regexp.character-class",
-          "string.regexp constant.character.escape",
-          "string.regexp source.ruby.embedded",
-          "string.regexp string.regexp.arbitrary-repitition",
-          "string.regexp constant.character.escape",
-        ],
-        settings: {
-          foreground: "var(--syntax-regexp)",
-        },
-      },
-      {
-        scope: "support.constant",
-        settings: {
-          foreground: "var(--syntax-primitive)",
-        },
-      },
-      {
-        scope: "support.variable",
-        settings: {
-          foreground: "var(--syntax-variable)",
-        },
-      },
-      {
-        scope: "meta.module-reference",
-        settings: {
-          foreground: "var(--syntax-info)",
-        },
-      },
-      {
-        scope: "punctuation.definition.list.begin.markdown",
-        settings: {
-          foreground: "var(--syntax-punctuation)",
-        },
-      },
-      {
-        scope: ["markup.heading", "markup.heading entity.name"],
-        settings: {
-          fontStyle: "bold",
-          foreground: "var(--syntax-info)",
-        },
-      },
-      {
-        scope: "markup.quote",
-        settings: {
-          foreground: "var(--syntax-info)",
-        },
-      },
-      {
-        scope: "markup.italic",
-        settings: {
-          fontStyle: "italic",
-          // foreground: "",
-        },
-      },
-      {
-        scope: "markup.bold",
-        settings: {
-          fontStyle: "bold",
-          foreground: "var(--text-strong)",
-        },
-      },
-      {
-        scope: [
-          "markup.raw",
-          "markup.inserted",
-          "meta.diff.header.to-file",
-          "punctuation.definition.inserted",
-          "markup.changed",
-          "punctuation.definition.changed",
-          "markup.ignored",
-          "markup.untracked",
-        ],
-        settings: {
-          foreground: "var(--text-base)",
-        },
-      },
-      {
-        scope: "meta.diff.range",
-        settings: {
-          fontStyle: "bold",
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: "meta.diff.header",
-        settings: {
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: "meta.separator",
-        settings: {
-          fontStyle: "bold",
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: "meta.output",
-        settings: {
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: "meta.export.default",
-        settings: {
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: [
-          "brackethighlighter.tag",
-          "brackethighlighter.curly",
-          "brackethighlighter.round",
-          "brackethighlighter.square",
-          "brackethighlighter.angle",
-          "brackethighlighter.quote",
-        ],
-        settings: {
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: ["constant.other.reference.link", "string.other.link"],
-        settings: {
-          fontStyle: "underline",
-          foreground: "var(--syntax-unknown)",
-        },
-      },
-      {
-        scope: "token.info-token",
-        settings: {
-          foreground: "var(--syntax-info)",
-        },
-      },
-      {
-        scope: "token.warn-token",
-        settings: {
-          foreground: "var(--syntax-warning)",
-        },
-      },
-      {
-        scope: "token.debug-token",
-        settings: {
-          foreground: "var(--syntax-info)",
-        },
-      },
-    ],
-    semanticTokenColors: {
-      comment: "var(--syntax-comment)",
-      string: "var(--syntax-string)",
-      number: "var(--syntax-constant)",
-      regexp: "var(--syntax-regexp)",
-      keyword: "var(--syntax-keyword)",
-      variable: "var(--syntax-variable)",
-      parameter: "var(--syntax-variable)",
-      property: "var(--syntax-property)",
-      function: "var(--syntax-primitive)",
-      method: "var(--syntax-primitive)",
-      type: "var(--syntax-type)",
-      class: "var(--syntax-type)",
-      namespace: "var(--syntax-type)",
-      enumMember: "var(--syntax-primitive)",
-      "variable.constant": "var(--syntax-constant)",
-      "variable.defaultLibrary": "var(--syntax-unknown)",
     },
-  } as unknown as ThemeRegistrationResolved)
-})
+    {
+      scope: ["constant", "entity.name.constant", "variable.other.constant", "variable.language", "entity"],
+      settings: {
+        foreground: "var(--syntax-constant)",
+      },
+    },
+    {
+      scope: ["entity.name", "meta.export.default", "meta.definition.variable"],
+      settings: {
+        foreground: "var(--syntax-type)",
+      },
+    },
+    {
+      scope: ["meta.object.member"],
+      settings: {
+        foreground: "var(--syntax-primitive)",
+      },
+    },
+    {
+      scope: [
+        "variable.parameter.function",
+        "meta.jsx.children",
+        "meta.block",
+        "meta.tag.attributes",
+        "entity.name.constant",
+        "meta.embedded.expression",
+        "meta.template.expression",
+        "string.other.begin.yaml",
+        "string.other.end.yaml",
+      ],
+      settings: {
+        foreground: "var(--syntax-punctuation)",
+      },
+    },
+    {
+      scope: ["entity.name.function", "support.type.primitive"],
+      settings: {
+        foreground: "var(--syntax-primitive)",
+      },
+    },
+    {
+      scope: ["support.class.component"],
+      settings: {
+        foreground: "var(--syntax-type)",
+      },
+    },
+    {
+      scope: "keyword",
+      settings: {
+        foreground: "var(--syntax-keyword)",
+      },
+    },
+    {
+      scope: [
+        "keyword.operator",
+        "storage.type.function.arrow",
+        "punctuation.separator.key-value.css",
+        "entity.name.tag.yaml",
+        "punctuation.separator.key-value.mapping.yaml",
+      ],
+      settings: {
+        foreground: "var(--syntax-operator)",
+      },
+    },
+    {
+      scope: ["storage", "storage.type"],
+      settings: {
+        foreground: "var(--syntax-keyword)",
+      },
+    },
+    {
+      scope: ["storage.modifier.package", "storage.modifier.import", "storage.type.java"],
+      settings: {
+        foreground: "var(--syntax-primitive)",
+      },
+    },
+    {
+      scope: [
+        "string",
+        "punctuation.definition.string",
+        "string punctuation.section.embedded source",
+        "entity.name.tag",
+      ],
+      settings: {
+        foreground: "var(--syntax-string)",
+      },
+    },
+    {
+      scope: "support",
+      settings: {
+        foreground: "var(--syntax-primitive)",
+      },
+    },
+    {
+      scope: ["support.type.object.module", "variable.other.object", "support.type.property-name.css"],
+      settings: {
+        foreground: "var(--syntax-object)",
+      },
+    },
+    {
+      scope: "meta.property-name",
+      settings: {
+        foreground: "var(--syntax-property)",
+      },
+    },
+    {
+      scope: "variable",
+      settings: {
+        foreground: "var(--syntax-variable)",
+      },
+    },
+    {
+      scope: "variable.other",
+      settings: {
+        foreground: "var(--syntax-variable)",
+      },
+    },
+    {
+      scope: [
+        "invalid.broken",
+        "invalid.illegal",
+        "invalid.unimplemented",
+        "invalid.deprecated",
+        "message.error",
+        "markup.deleted",
+        "meta.diff.header.from-file",
+        "punctuation.definition.deleted",
+        "brackethighlighter.unmatched",
+        "token.error-token",
+      ],
+      settings: {
+        foreground: "var(--syntax-critical)",
+      },
+    },
+    {
+      scope: "carriage-return",
+      settings: {
+        foreground: "var(--syntax-keyword)",
+      },
+    },
+    {
+      scope: "string source",
+      settings: {
+        foreground: "var(--syntax-variable)",
+      },
+    },
+    {
+      scope: "string variable",
+      settings: {
+        foreground: "var(--syntax-constant)",
+      },
+    },
+    {
+      scope: [
+        "source.regexp",
+        "string.regexp",
+        "string.regexp.character-class",
+        "string.regexp constant.character.escape",
+        "string.regexp source.ruby.embedded",
+        "string.regexp string.regexp.arbitrary-repitition",
+        "string.regexp constant.character.escape",
+      ],
+      settings: {
+        foreground: "var(--syntax-regexp)",
+      },
+    },
+    {
+      scope: "support.constant",
+      settings: {
+        foreground: "var(--syntax-primitive)",
+      },
+    },
+    {
+      scope: "support.variable",
+      settings: {
+        foreground: "var(--syntax-variable)",
+      },
+    },
+    {
+      scope: "meta.module-reference",
+      settings: {
+        foreground: "var(--syntax-info)",
+      },
+    },
+    {
+      scope: "punctuation.definition.list.begin.markdown",
+      settings: {
+        foreground: "var(--syntax-punctuation)",
+      },
+    },
+    {
+      scope: ["markup.heading", "markup.heading entity.name"],
+      settings: {
+        fontStyle: "bold",
+        foreground: "var(--syntax-info)",
+      },
+    },
+    {
+      scope: "markup.quote",
+      settings: {
+        foreground: "var(--syntax-info)",
+      },
+    },
+    {
+      scope: "markup.italic",
+      settings: {
+        fontStyle: "italic",
+        // foreground: "",
+      },
+    },
+    {
+      scope: "markup.bold",
+      settings: {
+        fontStyle: "bold",
+        foreground: "var(--text-strong)",
+      },
+    },
+    {
+      scope: [
+        "markup.raw",
+        "markup.inserted",
+        "meta.diff.header.to-file",
+        "punctuation.definition.inserted",
+        "markup.changed",
+        "punctuation.definition.changed",
+        "markup.ignored",
+        "markup.untracked",
+      ],
+      settings: {
+        foreground: "var(--text-base)",
+      },
+    },
+    {
+      scope: "meta.diff.range",
+      settings: {
+        fontStyle: "bold",
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: "meta.diff.header",
+      settings: {
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: "meta.separator",
+      settings: {
+        fontStyle: "bold",
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: "meta.output",
+      settings: {
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: "meta.export.default",
+      settings: {
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: [
+        "brackethighlighter.tag",
+        "brackethighlighter.curly",
+        "brackethighlighter.round",
+        "brackethighlighter.square",
+        "brackethighlighter.angle",
+        "brackethighlighter.quote",
+      ],
+      settings: {
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: ["constant.other.reference.link", "string.other.link"],
+      settings: {
+        fontStyle: "underline",
+        foreground: "var(--syntax-unknown)",
+      },
+    },
+    {
+      scope: "token.info-token",
+      settings: {
+        foreground: "var(--syntax-info)",
+      },
+    },
+    {
+      scope: "token.warn-token",
+      settings: {
+        foreground: "var(--syntax-warning)",
+      },
+    },
+    {
+      scope: "token.debug-token",
+      settings: {
+        foreground: "var(--syntax-info)",
+      },
+    },
+  ],
+  semanticTokenColors: {
+    comment: "var(--syntax-comment)",
+    string: "var(--syntax-string)",
+    number: "var(--syntax-constant)",
+    regexp: "var(--syntax-regexp)",
+    keyword: "var(--syntax-keyword)",
+    variable: "var(--syntax-variable)",
+    parameter: "var(--syntax-variable)",
+    property: "var(--syntax-property)",
+    function: "var(--syntax-primitive)",
+    method: "var(--syntax-primitive)",
+    type: "var(--syntax-type)",
+    class: "var(--syntax-type)",
+    namespace: "var(--syntax-type)",
+    enumMember: "var(--syntax-primitive)",
+    "variable.constant": "var(--syntax-constant)",
+    "variable.defaultLibrary": "var(--syntax-unknown)",
+  },
+} as unknown as ThemeRegistrationResolved
+
+// FORK: 2026-08-11 sync v1.18.16 — 上游抽出 marked-theme-register(带幂等守卫);本模块与
+//   worker 侧(pierre/worker)都可能加载,直接 registerCustomTheme 会重复注册刷 console.error,
+//   改走共享守卫入口(主题内容与上游抽出版一致)
+registerOpenCodeTheme()
 
 function renderMathInText(text: string): string {
   let result = text
@@ -451,8 +460,8 @@ function renderMathInText(text: string): string {
     }
   })
 
-  // Inline math: $...$
-  const inlineMathRegex = /(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$(?!\$)/g
+  // Inline math: \(...\)
+  const inlineMathRegex = /\\\(((?:\\.|[^\\\n])*?)\\\)/g
   result = result.replace(inlineMathRegex, (_, math) => {
     try {
       return katex.renderToString(math, {
@@ -460,11 +469,61 @@ function renderMathInText(text: string): string {
         throwOnError: false,
       })
     } catch {
-      return `$${math}$`
+      return `\\(${math}\\)`
     }
   })
 
   return result
+}
+
+const inlineMathRegex = /^\\\(((?:\\.|[^\\\n])*?)\\\)/
+const blockMathRegex = /^\$\$\n([\s\S]+?)\n\$\$(?:\n|$)/
+
+const katexExtension: MarkedExtension = {
+  extensions: [
+    {
+      name: "inlineKatex",
+      level: "inline",
+      start(src) {
+        const index = src.indexOf("\\(")
+        if (index === -1) return
+        return index
+      },
+      tokenizer(src) {
+        const match = src.match(inlineMathRegex)
+        if (!match) return
+        return {
+          type: "inlineKatex",
+          raw: match[0],
+          text: match[1].trim(),
+          displayMode: false,
+        }
+      },
+      renderer: renderKatexToken,
+    },
+    {
+      name: "blockKatex",
+      level: "block",
+      tokenizer(src) {
+        const match = src.match(blockMathRegex)
+        if (!match) return
+        return {
+          type: "blockKatex",
+          raw: match[0],
+          text: match[1].trim(),
+          displayMode: true,
+        }
+      },
+      renderer: renderKatexToken,
+    },
+  ],
+}
+
+function renderKatexToken(token: Tokens.Generic) {
+  return katex.renderToString(typeof token.text === "string" ? token.text : "", {
+    displayMode: token.displayMode === true,
+    throwOnError: false,
+  })
 }
 
 function renderMathExpressions(html: string): string {
@@ -528,6 +587,7 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
   name: "Marked",
   init: (props: { nativeParser?: NativeMarkdownParser }) => {
     const jsParser = marked.use(
+      markedCodeSpanBoundary,
       {
         renderer: {
           link(token) {
@@ -553,9 +613,8 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
           },
         },
       },
-      // FORK: REQ-098 单波浪号误判删除线 —— 内置 GFM del 定界符是 `~~?`(一或两个 ~),
-      // 同行两个「数字~数字」区间会被闭合成 <del>(4.80~5.05 … 5.20~5.35)。收紧成只认 `~~`。
-      // 实现与陷阱(非匹配必须返 undefined)见 ./marked-del-strict.ts 2026-08-07
+      katexExtension,
+      // FORK: REQ-098 单波浪号误判删除线 — 收紧 del 只认 `~~`(marked 18 未全修,见 import 注)
       strictDelExtension,
       // FORK: GitHub 风 callout — > [!NOTE] / > [!TIP] / > [!IMPORTANT] / > [!WARNING] / > [!CAUTION] 2026-05-05
       markedAlert(),
@@ -601,10 +660,6 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
           } as any,
         ],
       },
-      markedKatex({
-        throwOnError: false,
-        nonStandard: true,
-      }),
       markedShiki({
         async highlight(code, lang) {
           // FORK: ```mermaid 代码块拦截 — 在 shiki 处理前返回 placeholder,

@@ -6,7 +6,9 @@ import { Select } from "@opencode-ai/ui/select"
 import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
@@ -28,7 +30,7 @@ import {
 } from "@/context/settings"
 import { decode64 } from "@/utils/base64"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
-import { Link } from "./link"
+import { ExternalLink } from "./external-link"
 import { SettingsList } from "./settings-list"
 
 let demoSoundState = {
@@ -83,6 +85,7 @@ const playDemoSound = (id: string | undefined) => {
 
 export const SettingsGeneral: Component = () => {
   const theme = useTheme()
+  const dialog = useDialog()
   const language = useLanguage()
   const permission = usePermission()
   const platform = usePlatform()
@@ -125,11 +128,14 @@ export const SettingsGeneral: Component = () => {
   const serverSdk = useServerSDK()
 
   const [shells] = createResource(
-    () =>
-      serverSdk.client.pty
-        .shells()
-        .then((res) => res.data ?? [])
-        .catch(() => [] as ShellOption[]),
+    async () => {
+      const sdk = serverSdk()
+      if ((await sdk.protocol) === "v1") {
+        return (await sdk.client.pty.shells()).data ?? []
+      }
+      // return (await sdk.api.pty.shells()).data
+      return [] as ShellOption[]
+    },
     { initialValue: [] as ShellOption[] },
   )
 
@@ -150,11 +156,11 @@ export const SettingsGeneral: Component = () => {
   })
 
   const autoOption = { id: "auto", value: "", label: language.t("settings.general.row.shell.autoDefault") }
-  const currentShell = createMemo(() => serverSync.data.config.shell ?? "")
+  const currentShell = createMemo(() => serverSync().data.config.shell ?? "")
 
   const shellOptions = createMemo<ShellSelectOption[]>(() => {
     const list = shells.latest
-    const current = serverSync.data.config.shell
+    const current = serverSync().data.config.shell
 
     const nameCounts = new Map<string, number>()
     for (const s of list) {
@@ -275,6 +281,50 @@ export const SettingsGeneral: Component = () => {
     triggerVariant: "settings" as const,
   })
 
+  const InterfaceSection = () => (
+    <div class="flex flex-col gap-1">
+      <SettingsList>
+        <SettingsRow
+          title={
+            <span class="flex items-center gap-2">
+              {language.t("settings.general.row.newInterface.title")}
+              <Tag variant="accent">{language.t("settings.general.row.newInterface.badge")}</Tag>
+            </span>
+          }
+          description={language.t("settings.general.row.newInterface.description")}
+        >
+          <div data-action="settings-new-layout-designs">
+            <Switch
+              checked={settings.general.newLayoutDesigns()}
+              onChange={(checked) => {
+                settings.general.setNewLayoutDesigns(checked)
+                if (!checked) return
+                void import("@/components/settings-v2").then((module) => {
+                  void dialog.show(() => <module.DialogSettings />)
+                })
+              }}
+            />
+          </div>
+        </SettingsRow>
+      </SettingsList>
+    </div>
+  )
+
+  const InterfaceNoticeSection = () => (
+    <div class="flex flex-col gap-1">
+      <SettingsList>
+        <SettingsRow
+          title={language.t("settings.general.row.newInterfaceNotice.title")}
+          description={language.t("settings.general.row.newInterfaceNotice.description")}
+        >
+          <Button size="small" variant="ghost" onClick={settings.general.dismissNewInterfaceNotice}>
+            {language.t("settings.general.row.newInterfaceNotice.dismiss")}
+          </Button>
+        </SettingsRow>
+      </SettingsList>
+    </div>
+  )
+
   const GeneralSection = () => (
     <div class="flex flex-col gap-1">
       <SettingsList>
@@ -317,7 +367,7 @@ export const SettingsGeneral: Component = () => {
             onSelect={(option) => {
               if (!option) return
               if (option.value === currentShell()) return
-              serverSync.updateConfig({ shell: option.value })
+              serverSync().updateConfig({ shell: option.value })
             }}
             variant="secondary"
             size="small"
@@ -362,20 +412,6 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
-        <SettingsRow
-          title={language.t("settings.general.row.showSessionProgressBar.title")}
-          description={language.t("settings.general.row.showSessionProgressBar.description")}
-        >
-          <div data-action="settings-show-session-progress-bar">
-            <Switch
-              checked={settings.general.showSessionProgressBar()}
-              onChange={(checked) => settings.general.setShowSessionProgressBar(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        {/* FORK: 隐藏上游「New layout and designs」实验开关 — DeskFox 默认经典布局(newLayoutDesignsDefault=false),
-            v2 布局与既有交互差异大,不对用户暴露切换入口;保留底层字段 + 默认值不变 [feat: settings-panel-cleanup] 2026-06-15 */}
         {/* FORK: 匿名使用统计开关(opt-out,默认开;仅桌面端暴露)[feat: telemetry-usage-stats] */}
         <Show when={platform.getTelemetryEnabled}>
           <SettingsRow
@@ -418,11 +454,6 @@ export const SettingsGeneral: Component = () => {
             value={(o) => o.value}
             label={(o) => o.label}
             onSelect={(option) => option && theme.setColorScheme(option.value)}
-            onHighlight={(option) => {
-              if (!option) return
-              theme.previewColorScheme(option.value)
-              return () => theme.cancelPreview()
-            }}
             variant="secondary"
             size="small"
             triggerVariant="settings"
@@ -435,7 +466,7 @@ export const SettingsGeneral: Component = () => {
           description={
             <>
               {language.t("settings.general.row.theme.description")}{" "}
-              <Link href="https://opencode.ai/docs/themes/">{language.t("common.learnMore")}</Link>
+              <ExternalLink href="https://opencode.ai/docs/themes/">{language.t("common.learnMore")}</ExternalLink>
             </>
           }
         >
@@ -448,11 +479,6 @@ export const SettingsGeneral: Component = () => {
             onSelect={(option) => {
               if (!option) return
               theme.setTheme(option.id)
-            }}
-            onHighlight={(option) => {
-              if (!option) return
-              theme.previewTheme(option.id)
-              return () => theme.cancelPreview()
             }}
             variant="secondary"
             size="small"
@@ -706,6 +732,14 @@ export const SettingsGeneral: Component = () => {
       </div>
 
       <div class="flex flex-col gap-8 w-full">
+        <Show when={settings.general.layoutTransitionAvailable()}>
+          <InterfaceSection />
+        </Show>
+
+        <Show when={settings.general.newInterfaceNoticeVisible()}>
+          <InterfaceNoticeSection />
+        </Show>
+
         <GeneralSection />
 
         <AppearanceSection />

@@ -1,7 +1,8 @@
 import { createStore, reconcile } from "solid-js/store"
-import { createEffect, createMemo } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { persisted } from "@/utils/persist"
+import { usePlatform } from "@/context/platform"
 
 export interface NotificationSettings {
   agent: boolean
@@ -31,9 +32,13 @@ export interface Settings {
     showReasoningSummaries: boolean
     shellToolPartsExpanded: boolean
     editToolPartsExpanded: boolean
-    showSessionProgressBar: boolean
     showCustomAgents: boolean
+    mobileTitlebarPosition: "top" | "bottom"
     newLayoutDesigns?: boolean
+    layoutTransitionEligible?: boolean
+    agentVisibilityInitialized?: boolean
+    newInterfaceNoticeDismissed?: boolean
+    shouldDisplayTabsToast?: boolean
   }
   appearance: {
     fontSize: number
@@ -52,9 +57,96 @@ export interface Settings {
 export const monoDefault = "System Mono"
 export const sansDefault = "System Sans"
 export const terminalDefault = "JetBrainsMono Nerd Font Mono"
-// FORK: DeskFox 默认经典布局(sidebar rail + 会话面板,DeskFox 五栏 REQ-041 的基座);
-// 上游新 v2 布局(标签+聊天)与 DeskFox 既有交互差异大,默认关 [feat: electron-replatform] 2026-06-12
+// FORK-BEGIN: DeskFox 不跟随上游的 v2 界面换代 —— user 2026-08-11 试用后决定继续用 fork 经典布局
+// (推翻 upstream-sync-2026-08 spec 的 D1)。上游有 4 条独立路径会把用户推到 v2,少堵一条就会
+// 在某个时点自己切回去,所以这里一次性全堵:
+//   ① 全渠道默认 legacy(上游原值:非 prod 渠道默认 v2 → dev/local 档会默认 v2)
+//   ② 新用户默认 legacy(上游原值 true)
+//   ③ 不设旧界面退役日(上游原值 2026-09-14,到期后强制 v2 且忽略用户开关)
+//   ④ 版本升级迁移不强切(见下方 shouldEnableNewLayout)
+// 开关本身保留:用户仍可在设置里自愿切到 v2 试用,只是不再是默认、也不会被强制。
+// [feat: keep-legacy-layout] 2026-08-11
+const legacyNewLayoutDesignsDefault = false
 export const newLayoutDesignsDefault = false
+export const oldInterfaceSunset = null as Date | null
+// FORK-END
+const newLayoutDesignsUpgradeCutoff = "1.17.19"
+
+function compareVersions(a: string, b: string) {
+  const parse = (version: string) => {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/i.exec(version.trim())
+    if (!match) return
+    return match.slice(1).map(Number)
+  }
+  const left = parse(a)
+  const right = parse(b)
+  if (!left || !right) return
+  const index = left.findIndex((part, index) => part !== right[index])
+  return index === -1 ? 0 : left[index]! - right[index]!
+}
+
+export function isAppUpgrade(previous: string | undefined, current: string | undefined) {
+  if (!previous || !current) return false
+  const comparison = compareVersions(current, previous)
+  return comparison !== undefined && comparison > 0
+}
+
+export function shouldDisplayTabsToast(
+  previous: string | undefined,
+  current: string | undefined,
+  existingInstall: boolean,
+) {
+  return isAppUpgrade(previous, current) || (!previous && existingInstall)
+}
+
+export function hasExistingWebState(settings: Promise<string> | string | null, previousVersion: string | undefined) {
+  return settings !== null || previousVersion !== undefined
+}
+
+export function initialAgentVisibility(initialized: boolean | undefined, existing: boolean, previousVersion?: string) {
+  if (initialized === true) return
+  return existing || previousVersion !== undefined
+}
+
+// FORK-BEGIN: ④ 升级到 >= 1.17.19 时不把用户强切到 v2(上游的一次性迁移)。
+// 上游原实现原样保留在 upstreamShouldEnableNewLayout 里 —— 不删是为了下次 merge 能正常接上游改动,
+// 只是不再有人调用它。[feat: keep-legacy-layout] 2026-08-11
+export function shouldEnableNewLayout(_previous: string | undefined, _current: string | undefined) {
+  return false
+}
+
+export function upstreamShouldEnableNewLayout(previous: string | undefined, current: string | undefined) {
+  // FORK-END
+  if (!current) return false
+  const currentComparison = compareVersions(current, newLayoutDesignsUpgradeCutoff)
+  if (!previous) return currentComparison !== undefined && currentComparison > 0
+  if (!isAppUpgrade(previous, current)) return false
+  const previousComparison = compareVersions(previous, newLayoutDesignsUpgradeCutoff)
+  return (
+    previousComparison !== undefined &&
+    currentComparison !== undefined &&
+    previousComparison <= 0 &&
+    currentComparison > 0
+  )
+}
+
+export function layoutTransitionState(scheduled: boolean, eligible: boolean, retired: boolean, dismissed: boolean) {
+  return {
+    available: scheduled && eligible && !retired,
+    notice: scheduled && eligible && retired && !dismissed,
+  }
+}
+
+export const maximumSunsetTimeout = 2_147_483_647
+
+export function nextSunsetCheckDelay(sunset: number, now: number) {
+  return Math.min(Math.max(0, sunset - now), maximumSunsetTimeout)
+}
+
+export function resolveNewLayoutDesigns(retired: boolean, preference: boolean | undefined, fallback = true) {
+  if (retired) return true
+  return preference ?? fallback
+}
 
 const monoFallback =
   'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
@@ -110,7 +202,10 @@ const defaultSettings: Settings = {
     autoSave: true,
     releaseNotes: true,
     followup: "steer",
-    showFileTree: true, // FORK: 新用户默认展开右侧文件树面板 [feat: file-tree-ux-polish] 2026-05-04
+    // FORK 撤销记录:2026-05-04 曾默认 true(新用户默认展开文件树);2026-08-11 sync v1.18.4 回退上游
+    // false —— visibility.fileTree = !newLayoutDesigns() || pref,经典布局恒可见不受此值影响(fork
+    // 意图仍成立),v2 下 true 会让经典文件树叠进 v2 review 面板(双树,上游 review 族 e2e 撞名)
+    showFileTree: false,
     showNavigation: false,
     showSearch: false,
     showStatus: false,
@@ -118,8 +213,8 @@ const defaultSettings: Settings = {
     showReasoningSummaries: false,
     shellToolPartsExpanded: false,
     editToolPartsExpanded: false,
-    showSessionProgressBar: true,
     showCustomAgents: false,
+    mobileTitlebarPosition: "top",
   },
   appearance: {
     fontSize: 14,
@@ -154,7 +249,119 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
   name: "Settings",
   gate: false,
   init: () => {
-    const [store, setStore, _, ready] = persisted("settings.v3", createStore<Settings>(defaultSettings))
+    const platform = usePlatform()
+    const [store, setStore, settingsInit, ready] = persisted("settings.v3", createStore<Settings>(defaultSettings))
+    const [launch, setLaunch, , launchReady] = persisted(
+      "app-version.v1",
+      createStore<{ version?: string }>({ version: undefined }),
+    )
+    const [launchState, setLaunchState] = createStore({
+      classified: false,
+      migrationApplied: false,
+      previous: undefined as string | undefined,
+    })
+    const showFileTree = withFallback(() => store.general?.showFileTree, defaultSettings.general.showFileTree)
+    const showSearch = withFallback(() => store.general?.showSearch, defaultSettings.general.showSearch)
+    const showStatus = withFallback(() => store.general?.showStatus, defaultSettings.general.showStatus)
+    const showCustomAgents = withFallback(
+      () => store.general?.showCustomAgents,
+      defaultSettings.general.showCustomAgents,
+    )
+    const sunset = oldInterfaceSunset
+    const [oldInterfaceRetired, setOldInterfaceRetired] = createSignal(sunset ? Date.now() >= sunset.getTime() : false)
+    const layoutTransitionClassified = createMemo(() => typeof store.general?.layoutTransitionEligible === "boolean")
+    const layoutTransitionEligible = withFallback(() => store.general?.layoutTransitionEligible, false)
+    const newInterfaceNoticeDismissed = withFallback(() => store.general?.newInterfaceNoticeDismissed, false)
+    const layoutUpgrade = createMemo(() =>
+      launchState.classified && !launchState.migrationApplied
+        ? shouldEnableNewLayout(launchState.previous, platform.version)
+        : false,
+    )
+    const layoutTransition = createMemo(() =>
+      layoutTransitionState(!!sunset, layoutTransitionEligible(), oldInterfaceRetired(), newInterfaceNoticeDismissed()),
+    )
+    const newLayoutDesigns = createMemo(() => {
+      if (layoutUpgrade()) return true
+      if (!ready() && !oldInterfaceRetired()) return legacyNewLayoutDesignsDefault
+      if (!layoutTransitionClassified()) {
+        return resolveNewLayoutDesigns(
+          oldInterfaceRetired(),
+          store.general?.newLayoutDesigns,
+          legacyNewLayoutDesignsDefault,
+        )
+      }
+      return resolveNewLayoutDesigns(
+        oldInterfaceRetired(),
+        store.general?.newLayoutDesigns,
+        layoutTransitionEligible() ? legacyNewLayoutDesignsDefault : newLayoutDesignsDefault,
+      )
+    })
+    const visible = (preference: () => boolean) => createMemo(() => !newLayoutDesigns() || preference())
+    const initializeAgentVisibility = (existing: boolean) => {
+      const initial = initialAgentVisibility(store.general?.agentVisibilityInitialized, existing, launchState.previous)
+      if (initial === undefined) return
+      batch(() => {
+        setStore("general", "showCustomAgents", initial)
+        setStore("general", "agentVisibilityInitialized", true)
+      })
+    }
+
+    if (sunset && !oldInterfaceRetired()) {
+      const timeout = { current: undefined as ReturnType<typeof setTimeout> | undefined }
+      const checkSunset = () => {
+        if (Date.now() >= sunset.getTime()) {
+          setOldInterfaceRetired(true)
+          return
+        }
+        timeout.current = setTimeout(checkSunset, nextSunsetCheckDelay(sunset.getTime(), Date.now()))
+      }
+      checkSunset()
+      onCleanup(() => {
+        if (timeout.current !== undefined) clearTimeout(timeout.current)
+      })
+    }
+
+    createEffect(() => {
+      if (!launchReady() || launchState.classified) return
+      setLaunchState({
+        classified: true,
+        previous: launch.version,
+      })
+      if (!platform.version || launch.version === platform.version) return
+      setLaunch("version", platform.version)
+    })
+
+    createEffect(() => {
+      if (!ready() || !launchState.classified || platform.platform !== "web") return
+      const existing = hasExistingWebState(settingsInit, launchState.previous)
+      if (!layoutTransitionClassified()) setStore("general", "layoutTransitionEligible", existing)
+      initializeAgentVisibility(existing)
+    })
+
+    createEffect(() => {
+      if (!ready() || !launchState.classified || launchState.migrationApplied) return
+      if (layoutUpgrade() && store.general?.newLayoutDesigns !== true) {
+        setStore("general", "newLayoutDesigns", true)
+      }
+      setLaunchState("migrationApplied", true)
+    })
+
+    createEffect(() => {
+      if (!ready() || !launchState.classified) return
+      if (typeof store.general?.shouldDisplayTabsToast === "boolean") return
+      if (!launchState.previous && !layoutTransitionClassified()) return
+      setStore(
+        "general",
+        "shouldDisplayTabsToast",
+        shouldDisplayTabsToast(launchState.previous, platform.version, layoutTransitionEligible()),
+      )
+    })
+
+    createEffect(() => {
+      if (!ready() || !oldInterfaceRetired()) return
+      if (store.general?.newLayoutDesigns === true) return
+      setStore("general", "newLayoutDesigns", true)
+    })
 
     createEffect(() => {
       if (typeof document === "undefined") return
@@ -189,7 +396,7 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setFollowup(value: "queue" | "steer") {
           setStore("general", "followup", value === "queue" ? "steer" : value)
         },
-        showFileTree: withFallback(() => store.general?.showFileTree, defaultSettings.general.showFileTree),
+        showFileTree,
         setShowFileTree(value: boolean) {
           setStore("general", "showFileTree", value)
         },
@@ -197,11 +404,11 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setShowNavigation(value: boolean) {
           setStore("general", "showNavigation", value)
         },
-        showSearch: withFallback(() => store.general?.showSearch, defaultSettings.general.showSearch),
+        showSearch,
         setShowSearch(value: boolean) {
           setStore("general", "showSearch", value)
         },
-        showStatus: withFallback(() => store.general?.showStatus, defaultSettings.general.showStatus),
+        showStatus,
         setShowStatus(value: boolean) {
           setStore("general", "showStatus", value)
         },
@@ -230,21 +437,46 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setEditToolPartsExpanded(value: boolean) {
           setStore("general", "editToolPartsExpanded", value)
         },
-        showSessionProgressBar: withFallback(
-          () => store.general?.showSessionProgressBar,
-          defaultSettings.general.showSessionProgressBar,
-        ),
-        setShowSessionProgressBar(value: boolean) {
-          setStore("general", "showSessionProgressBar", value)
-        },
-        showCustomAgents: withFallback(() => store.general?.showCustomAgents, defaultSettings.general.showCustomAgents),
+        showCustomAgents,
         setShowCustomAgents(value: boolean) {
           setStore("general", "showCustomAgents", value)
         },
-        newLayoutDesigns: withFallback(() => store.general?.newLayoutDesigns, newLayoutDesignsDefault),
-        setNewLayoutDesigns(value: boolean) {
-          setStore("general", "newLayoutDesigns", value)
+        mobileTitlebarPosition: withFallback(
+          () => store.general?.mobileTitlebarPosition,
+          defaultSettings.general.mobileTitlebarPosition,
+        ),
+        setMobileTitlebarPosition(value: "top" | "bottom") {
+          setStore("general", "mobileTitlebarPosition", value)
         },
+        newLayoutDesigns,
+        setNewLayoutDesigns(value: boolean) {
+          const next = oldInterfaceRetired() ? true : value
+          if (newLayoutDesigns() === next) return
+          setStore("general", "newLayoutDesigns", next)
+          if (typeof window !== "undefined") setTimeout(() => window.location.reload())
+        },
+        layoutTransitionClassified,
+        setOldLayoutEligible(eligible: boolean) {
+          const current = store.general?.layoutTransitionEligible
+          if (typeof current === "boolean") return
+          setStore("general", "layoutTransitionEligible", eligible)
+        },
+        initializeAgentVisibility,
+        layoutTransitionAvailable: createMemo(() => ready() && layoutTransition().available),
+        newInterfaceNoticeVisible: createMemo(() => ready() && layoutTransition().notice),
+        dismissNewInterfaceNotice() {
+          setStore("general", "newInterfaceNoticeDismissed", true)
+        },
+        shouldDisplayTabsToast: withFallback(() => store.general?.shouldDisplayTabsToast, false),
+        dismissTabsToast() {
+          setStore("general", "shouldDisplayTabsToast", false)
+        },
+      },
+      visibility: {
+        fileTree: visible(showFileTree),
+        search: visible(showSearch),
+        status: visible(showStatus),
+        customAgents: visible(showCustomAgents),
       },
       appearance: {
         fontSize: withFallback(() => store.appearance?.fontSize, defaultSettings.appearance.fontSize),

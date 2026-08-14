@@ -1,51 +1,75 @@
-import type { Project, UserMessage } from "@opencode-ai/sdk/v2"
+import type { FilePart, Project, UserMessage, VcsFileDiff } from "@opencode-ai/sdk/v2"
+import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createQuery, skipToken, useMutation, useQueryClient } from "@tanstack/solid-query"
 import {
   batch,
+  ErrorBoundary,
   onCleanup,
+  Suspense,
   Show,
   Match,
   Switch,
   createMemo,
   createEffect,
   createComputed,
+  createSignal,
   on,
   onMount,
+  type ParentProps,
   untrack,
-  createResource,
 } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { debounce } from "@solid-primitives/scheduled"
 import { useLocal } from "@/context/local"
-import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
+import { FileProvider, selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
+import type { SessionReviewLineComment } from "@opencode-ai/session-ui/session-review"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Select } from "@opencode-ai/ui/select"
+import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
+import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode-ai/ui/scroll-view"
 import { Tabs } from "@opencode-ai/ui/tabs"
+import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
-import { previewSelectedLines } from "@opencode-ai/ui/pierre/selection-bridge"
+import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
 import { Button } from "@opencode-ai/ui/button"
 import { showToast } from "@/utils/toast"
-import { checksum } from "@opencode-ai/core/util/encode"
-import { useLocation, useSearchParams } from "@solidjs/router"
+import { base64Encode, checksum } from "@opencode-ai/core/util/encode"
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
-import { useComments } from "@/context/comments"
-import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
+import { ErrorPage } from "@/pages/error"
+import { CommentsProvider, useComments } from "@/context/comments"
+import { useCommand } from "@/context/command"
+import { DirectoryDataProvider } from "@/pages/directory-layout"
 import { useServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
-import { usePrompt } from "@/context/prompt"
+import { ModelsProvider } from "@/context/models"
+import { useNotification } from "@/context/notification"
+import { PromptProvider, usePrompt } from "@/context/prompt"
 import { usePlatform } from "@/context/platform"
-import { useSDK } from "@/context/sdk"
+import { SDKProvider, useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
+import { ServerConnection, serverName, useServer } from "@/context/server"
 import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
-import { useTerminal } from "@/context/terminal"
+import { useTabs } from "@/context/tabs"
+import { TerminalProvider, useTerminal } from "@/context/terminal"
+import { PromptInput } from "@/components/prompt-input"
+import { PromptInputV2Composer, usePromptInputV2Controller } from "@/components/prompt-input-v2"
+import { useSettingsCommand } from "@/components/settings-dialog"
+import { setCursorPosition } from "@/components/prompt-input/editor-dom"
+import { promptLength } from "@/components/prompt-input/history"
 import { type FollowupDraft, sendFollowupDraft } from "@/components/prompt-input/submit"
-import { createSessionComposerState, SessionComposerRegion } from "@/pages/session/composer"
+import {
+  createPromptInputController,
+  createSessionComposerController,
+  createSessionComposerRegionController,
+  SessionComposerRegion,
+} from "@/pages/session/composer"
 import {
   createOpenReviewFile,
   createOpenSessionFileTab,
@@ -57,8 +81,11 @@ import {
 } from "@/pages/session/helpers"
 // FORK: REQ-075 聊天 md 内链拦截 [feat: batch-port-edit-mdlink] 2026-07-07
 import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
+// FORK: 文件树宽度唯一事实源 [feat: file-tree-width-single-source] 2026-08-13
+import { resolvedFileTreeWidth } from "@/pages/session/file-tree-width"
 import { invoke } from "@/utils/native"
-import { MessageTimeline } from "@/pages/session/message-timeline"
+import { MessageTimeline } from "@/pages/session/timeline/message-timeline"
+import { createTimelineModel } from "@/pages/session/timeline/model"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
 // FORK: REQ-083 首启自动打开介绍文档 tab(按目录取出待打开文件)[feat: first-launch-onboarding]
@@ -68,21 +95,35 @@ import { takePendingOpenFile } from "@/pages/session/handoff"
 import { ChatSelectionMenu } from "@/pages/session/chat-selection-menu"
 // FORK: 创作卡作用域随当前 session 切换 [feat: media-creation-mode]
 import { creation, DRAFT_SCOPE } from "@/components/media-creation-store"
-import { useServer } from "@/context/server"
-import { syncSessionModel } from "@/pages/session/session-model-helpers"
+import { restorePromptModel, syncPromptModel, syncSessionModel } from "@/pages/session/session-model-helpers"
+import {
+  clampSessionPanelWidth,
+  SESSION_PANEL_WIDTH_MIN,
+  sessionPanelWidthMax,
+} from "@/pages/session/session-panel-width"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
+import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
+import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
+import { SessionReviewEmptyNoGitV2 } from "@opencode-ai/session-ui/v2/session-review-empty-no-git-v2"
+import { SessionReviewV2SidebarToggle } from "@opencode-ai/session-ui/v2/session-review-v2"
+import { ReviewPanelV2 } from "@/pages/session/v2/review-panel-v2"
+import { createReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
+import { reviewDiffDirectory, reviewDiffNeedsLoad, reviewRootDirectory } from "@/pages/session/v2/review-diff-kinds"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
+import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
+import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
-import { same } from "@/utils/same"
-import { formatServerError } from "@/utils/server-errors"
+import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
+import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
+import { createSessionOwnership } from "./session/session-ownership"
+import { createSessionLineage } from "./session/session-lineage"
 
-const emptyUserMessages: UserMessage[] = []
 type FollowupItem = FollowupDraft & { id: string }
 type FollowupEdit = Pick<FollowupItem, "id" | "prompt" | "context">
 const emptyFollowups: FollowupItem[] = []
@@ -90,108 +131,243 @@ const emptyFollowups: FollowupItem[] = []
 type ChangeMode = "git" | "branch" | "turn"
 type VcsMode = "git" | "branch"
 
-type SessionHistoryWindowInput = {
-  sessionID: () => string | undefined
-  loaded: () => number
-  visibleUserMessages: () => UserMessage[]
-  historyMore: () => boolean
-  historyLoading: () => boolean
-  loadMore: (sessionID: string) => Promise<void>
-  userScrolled: () => boolean
-  scroller: () => HTMLDivElement | undefined
+const sessionViewState = () => ({
+  messageId: undefined as string | undefined,
+  mobileTab: "session" as "session" | "changes",
+})
+
+function isCurrentSessionNotFoundError(error: unknown, sessionID: string | undefined) {
+  if (!sessionID) return false
+  return isSessionNotFoundError(error, sessionID) || isLocalSessionNotFoundError(error, sessionID)
 }
 
-function createSessionHistoryLoader(input: SessionHistoryWindowInput) {
-  const historyScrollThreshold = 200
-  let shiftFrame: number | undefined
-
-  const [state, setState] = createStore({
-    shift: false,
-  })
-
-  const userMessages = createMemo(() => input.visibleUserMessages(), emptyUserMessages, {
-    equals: same,
-  })
-
-  const cancelShiftReset = () => {
-    if (shiftFrame === undefined) return
-    cancelAnimationFrame(shiftFrame)
-    shiftFrame = undefined
-  }
-
-  const scheduleShiftReset = () => {
-    cancelShiftReset()
-    shiftFrame = requestAnimationFrame(() => {
-      shiftFrame = undefined
-      setState("shift", false)
+async function runPromptRollbackMutation<T, R>(input: {
+  capturePrompt: () => { current: () => T[]; set: (value: T[]) => void; reset: () => void }
+  optimistic: (prompt: { set: (value: T[]) => void; reset: () => void }) => void
+  request: () => Promise<R>
+  complete: (result: R) => void
+  rollback: () => void
+  fail: (error: unknown) => void
+}) {
+  const prompt = input.capturePrompt()
+  const previous = prompt.current().slice()
+  batch(() => input.optimistic(prompt))
+  await input
+    .request()
+    .then(input.complete)
+    .catch((error) => {
+      batch(() => {
+        input.rollback()
+        prompt.set(previous)
+      })
+      input.fail(error)
     })
-  }
+}
 
-  const fetchOlderMessages = async () => {
-    const id = input.sessionID()
-    if (!id) return
-    if (!input.historyMore() || input.historyLoading()) return
-
-    // TODO(session-timeline): switch this to core cursor-based part pagination when that API lands.
-    const beforeVisible = input.visibleUserMessages().length
-    let loaded = input.loaded()
-    let growth = 0
-
-    cancelShiftReset()
-    setState("shift", true)
-
-    while (true) {
-      await input.loadMore(id)
-      if (input.sessionID() !== id) return
-
-      const nextLoaded = input.loaded()
-      const raw = nextLoaded - loaded
-      loaded = nextLoaded
-      growth = input.visibleUserMessages().length - beforeVisible
-
-      if (growth > 0) break
-      if (raw <= 0) break
-      if (!input.historyMore()) break
-    }
-
-    if (growth > 0) {
-      scheduleShiftReset()
-      return
-    }
-
-    setState("shift", false)
-  }
-
-  const loadAndReveal = () => fetchOlderMessages()
-
-  const onScrollerScroll = () => {
-    if (!input.userScrolled()) return
-    const el = input.scroller()
-    if (!el) return
-    if (el.scrollTop >= historyScrollThreshold) return
-
-    void fetchOlderMessages()
-  }
-
-  createEffect(
-    on(
-      input.sessionID,
-      () => {
-        cancelShiftReset()
-        setState({ shift: false })
-      },
-      { defer: true },
-    ),
+export function SessionPage() {
+  return (
+    <SessionProviders>
+      <Page />
+    </SessionProviders>
   )
+}
 
-  onCleanup(cancelShiftReset)
+// Rendered under app.tsx's TargetSessionRoute, which owns the per-server keyed
+// remount around the server-scoped providers. Nothing here may key on the
+// session ID: session tabs on the same server share this route instance, and
+// workspace-scoped state (terminal, directory providers) lives below.
+export function TargetSessionRouteContent() {
+  const params = useParams<{ serverKey: string; id: string }>()
+  const serverSync = useServerSync()
+  const directory = createMemo(() => serverSync().session.lineage.peek(params.id)?.session.directory)
+  return (
+    // Settings must keep the target-server SDK, sync, and models context and remain registered
+    // when session content falls back to the route error boundary.
+    <TargetServerScopedProviders directory={directory} sessionID={() => params.id}>
+      <TargetSessionSettingsCommand />
+      <SessionRouteErrorBoundary sessionID={params.id} serverKey={requireServerKey(params.serverKey)} padded>
+        <ResolvedTargetSessionRoute />
+      </SessionRouteErrorBoundary>
+    </TargetServerScopedProviders>
+  )
+}
 
-  return {
-    userMessages,
-    shift: () => state.shift,
-    loadAndReveal,
-    onScrollerScroll,
+function TargetSessionSettingsCommand() {
+  useSettingsCommand()
+  return null
+}
+
+export function SessionRouteErrorBoundary(
+  props: ParentProps<{ sessionID?: string; serverKey?: ServerConnection.Key; padded?: boolean }>,
+) {
+  const settings = useSettings()
+  return (
+    <ErrorBoundary
+      fallback={(error) =>
+        settings.general.newLayoutDesigns() ? (
+          <SessionRouteFrame padded={props.padded}>
+            <SessionPanelFrame newLayout raised={!!props.sessionID}>
+              <SessionErrorFallback error={error} sessionID={props.sessionID} serverKey={props.serverKey} />
+            </SessionPanelFrame>
+          </SessionRouteFrame>
+        ) : (
+          <ErrorPage error={error} />
+        )
+      }
+    >
+      {props.children}
+    </ErrorBoundary>
+  )
+}
+
+function SessionErrorFallback(props: { error: unknown; sessionID?: string; serverKey?: ServerConnection.Key }) {
+  const language = useLanguage()
+  const server = useServer()
+  const tabs = useTabs()
+  const displayServer = createMemo(() => {
+    const key = props.serverKey ?? server.key
+    const conn = server.list.find((item) => ServerConnection.key(item) === key)
+    return conn ? serverName(conn) : key
+  })
+  const closeTab = () => {
+    if (!props.sessionID) return
+    tabs.removeSessionTab({ server: props.serverKey ?? server.key, sessionId: props.sessionID })
   }
+  if (isCurrentSessionNotFoundError(props.error, props.sessionID)) {
+    return (
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <div class="h-full px-6 pb-42 -mt-4 flex flex-col items-center justify-center text-center gap-4">
+          <div class="flex flex-col items-center gap-2">
+            <div class="text-16-medium text-text max-w-md">{language.t("session.error.notFound")}</div>
+            <div class="text-13-regular text-text-weak max-w-md">
+              {language.t("session.error.notFound.description")}
+            </div>
+          </div>
+          <Show when={props.sessionID}>
+            {(sessionID) => (
+              <div class="max-w-full flex flex-col items-center gap-1">
+                <div class="max-w-full text-11-regular text-text-faint break-all">{displayServer()}</div>
+                <code class="max-w-full rounded-[4px] px-1 py-0.5 font-mono text-xs font-medium leading-4 text-text-base break-all bg-[color-mix(in_oklch,var(--v2-text-text-base)_8%,transparent)]">
+                  {sessionID()}
+                </code>
+              </div>
+            )}
+          </Show>
+          <ButtonV2 variant="neutral" size="normal" icon="xmark-small" onClick={closeTab}>
+            {language.t("session.error.notFound.closeTab")}
+          </ButtonV2>
+        </div>
+      </div>
+    )
+  }
+  return <ErrorPage error={props.error} />
+}
+
+function ResolvedTargetSessionRoute() {
+  const params = useParams<{ serverKey: string; id: string }>()
+  const tabs = useTabs()
+  const sync = useServerSync()
+  const serverKey = createMemo(() => requireServerKey(params.serverKey))
+  const current = createSessionLineage(
+    () => params.id,
+    () => sync().session.lineage,
+  )
+  const directory = createMemo(() => current()?.session.directory)
+  const targetDirectory = () => directory()!
+
+  createEffect(() => {
+    const session = current()
+    if (!session) return
+    tabs.addSessionTab({
+      server: serverKey(),
+      sessionId: session.root.id,
+    })
+  })
+
+  return (
+    // Non-keyed: closes only while the target's directory is unknown (uncached
+    // lineage mid-resolution), which tears down the workspace subtree including
+    // the terminal. Same-workspace tab switches keep it open because warm
+    // targets resolve synchronously from the sync cache.
+    <Show when={directory()}>
+      <SDKProvider directory={targetDirectory}>
+        <DirectoryDataProvider directory={targetDirectory} server={serverKey}>
+          <TargetSessionPage />
+        </DirectoryDataProvider>
+      </SDKProvider>
+    </Show>
+  )
+}
+
+// Owns the workspace-identity remount. Must not include the session ID in the
+// key: SessionPage handles session changes reactively, and remounting here
+// destroys workspace-scoped state (terminal PTYs, file/prompt providers).
+function TargetSessionPage() {
+  const sdk = useSDK()
+  const serverSDK = useServerSDK()
+  return (
+    <Show when={`${serverSDK().scope}\0${sdk().directory}`} keyed>
+      <SessionPage />
+    </Show>
+  )
+}
+
+function TargetServerScopedProviders(
+  props: ParentProps<{ directory?: () => string | undefined; sessionID?: () => string | undefined }>,
+) {
+  return (
+    <>
+      <MarkSessionNotificationsViewed sessionID={props.sessionID} />
+      <ModelsProvider directory={props.directory}>{props.children}</ModelsProvider>
+    </>
+  )
+}
+
+function MarkSessionNotificationsViewed(props: { sessionID?: () => string | undefined }) {
+  const notification = useNotification()
+  createEffect(() => {
+    const sessionID = props.sessionID?.()
+    if (!notification.ready() || !sessionID) return
+    if (notification.session.unseenCount(sessionID) === 0) return
+    notification.session.markViewed(sessionID)
+  })
+  return null
+}
+
+function SessionProviders(props: ParentProps) {
+  return (
+    <TerminalProvider>
+      <FileProvider>
+        <PromptProvider>
+          <CommentsProvider>{props.children}</CommentsProvider>
+        </PromptProvider>
+      </FileProvider>
+    </TerminalProvider>
+  )
+}
+
+function SessionRouteFrame(props: ParentProps<{ padded?: boolean }>) {
+  return (
+    <div class="relative size-full overflow-hidden flex flex-col" classList={{ "p-2": props.padded }}>
+      {props.children}
+    </div>
+  )
+}
+
+function SessionPanelFrame(props: ParentProps<{ newLayout: boolean; raised?: boolean }>) {
+  return (
+    <div
+      classList={{
+        "flex-1 min-h-0 flex flex-col": true,
+        "bg-v2-background-bg-base": props.newLayout,
+        "bg-background-stronger": !props.newLayout,
+        "rounded-[10px] overflow-hidden": props.newLayout,
+        "shadow-[var(--v2-elevation-raised)]": props.newLayout && props.raised,
+      }}
+    >
+      {props.children}
+    </div>
+  )
 }
 
 export default function Page() {
@@ -209,11 +385,15 @@ export default function Page() {
   const platform = usePlatform()
   const prompt = usePrompt()
   const comments = useComments()
+  const command = useCommand()
   const terminal = useTerminal()
-  const server = useServer()
   const [searchParams, setSearchParams] = useSearchParams<{ prompt?: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const { params, sessionKey, workspaceKey, tabs, view } = useSessionLayout()
+  const reviewMode = () => view().review.mode() ?? "git"
+  const reviewFile = () => view().review.file()
+  const sessionOwnership = createSessionOwnership(sessionKey)
   const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
 
   createEffect(() => {
@@ -238,9 +418,15 @@ export default function Page() {
     },
   })
 
-  const composer = createSessionComposerState()
+  const composer = createSessionComposerController()
+  const inputController = createPromptInputController({
+    sessionKey,
+    sessionID: () => params.id,
+    queryOptions: serverSync().queryOptions,
+  })
 
   const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
+  const sessionPanelKey = createMemo(() => (params.id ? `${serverSDK().scope}\0${params.id}` : undefined))
 
   createEffect(
     on(
@@ -255,11 +441,11 @@ export default function Page() {
           layout.handoff.clearTabs()
           return
         }
-        if (pending.scope !== server.scope()) return
+        if (pending.scope !== serverSDK().scope) return
 
         if (pending.id !== id) return
         layout.handoff.clearTabs()
-        if (pending.dir !== (params.dir ?? "")) return
+        if (pending.dir !== base64Encode(sdk().directory)) return
 
         const from = workspaceTabs().tabs()
         if (from.all.length === 0 && !from.active) return
@@ -282,22 +468,72 @@ export default function Page() {
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const size = createSizing()
   const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
+  const desktopV2ReviewOpen = createMemo(() => newSessionDesign() && desktopReviewOpen() && !!params.id)
+  const terminalOpen = createMemo(() => view().terminal.opened())
+  const desktopTerminalOpen = createMemo(() => isDesktop() && terminalOpen())
+  const desktopInlineTerminalOnlyOpen = createMemo(
+    () => newSessionDesign() && desktopTerminalOpen() && !desktopV2ReviewOpen(),
+  )
   const desktopFileTreeOpen = createMemo(
     () =>
       isDesktop() &&
       shouldShowFileTree({
-        desktopV2: platform.platform === "desktop" && settings.general.newLayoutDesigns(),
-        showFileTree: settings.general.showFileTree(),
+        visible: settings.visibility.fileTree(),
         opened: layout.fileTree.opened(),
       }),
   )
-  const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
+  const desktopSessionResizeOpen = createMemo(() =>
+    newSessionDesign() ? desktopV2ReviewOpen() || desktopTerminalOpen() : desktopReviewOpen(),
+  )
+  const desktopSidePanelOpen = createMemo(() => desktopSessionResizeOpen() || desktopFileTreeOpen())
+  let panelRow: HTMLDivElement | undefined
+  const [panelRowWidth, setPanelRowWidth] = createSignal<number>()
+  createResizeObserver(
+    () => panelRow,
+    ({ width }) => setPanelRowWidth(width),
+  )
+
+  const splitReview = createMemo(
+    () => (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) && layout.review.diffStyle() === "split",
+  )
+  // The observer reports the content-box width, which already excludes the row
+  // padding; only the flex gap between the panels remains to subtract.
+  const sessionPanelAvailable = createMemo(() => {
+    const width = panelRowWidth()
+    if (width === undefined) return undefined
+    return width - (settings.general.newLayoutDesigns() ? 8 : 0)
+  })
+  const sessionPanelMax = createMemo(() => {
+    const available = sessionPanelAvailable()
+    if (available === undefined) return 1000
+    return sessionPanelWidthMax({ available, split: splitReview() })
+  })
+  // Clamp at render time so window or sidebar resizes squeeze the chat panel
+  // instead of the review pane, without overwriting the persisted width.
+  const sessionPanelResizedWidth = createMemo(() =>
+    clampSessionPanelWidth({
+      width: layout.session.width(),
+      available: sessionPanelAvailable(),
+      split: splitReview(),
+    }),
+  )
   const sessionPanelWidth = createMemo(() => {
     if (!desktopSidePanelOpen()) return "100%"
-    if (desktopReviewOpen()) return `${layout.session.width()}px`
-    return `calc(100% - ${layout.fileTree.width()}px)`
+    if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
+    // FORK: 让位宽度必须与侧面板**实际占位**一致 —— 上游给侧面板加了 max(240, 存储值) 的 clamp
+    //   却没同步这里,存储 200 时侧面板占 240、这里只让 200,聊天区恒定溢出 40px 被右侧面板盖住,
+    //   导致查找框「关闭」按钮与会话「更多」按钮点不到(user 2026-08-13 反馈)。
+    //   [feat: file-tree-width-single-source] 2026-08-13
+    return `calc(100% - ${resolvedFileTreeWidth(layout.fileTree.width())}px)`
   })
-  const centered = createMemo(() => isDesktop() && !desktopReviewOpen())
+  const centered = createMemo(() => isDesktop() && (newSessionDesign() || !desktopReviewOpen()))
+  const desktopV2PanelLayout = createMemo(() =>
+    sessionPanelLayout({
+      review: desktopV2ReviewOpen(),
+      terminal: desktopTerminalOpen(),
+      files: desktopFileTreeOpen(),
+    }),
+  )
 
   function normalizeTab(tab: string) {
     if (!tab.startsWith("file://")) return tab
@@ -333,8 +569,8 @@ export default function Page() {
     setActive: tabs().setActive,
   })
   const handleChatMdLinkClick = createMdLinkClickHandler({
-    root: () => sdk.directory,
-    baseDir: () => sdk.directory,
+    root: () => sdk().directory,
+    baseDir: () => sdk().directory,
     onOpen: (rel) => openChatFileTab(file.tab(rel)),
     checkExists: (root, rel) => invoke<number>("get_file_mtime", { root, path: rel }),
     toast: showToast,
@@ -345,7 +581,9 @@ export default function Page() {
   //   点文件才展开预览(展开链路 createOpenSessionFileTab→openReviewPanel 已现成)。监听项目目录
   //   (sdk.directory)变化主动 close;同项目内切会话 directory 不变、不触发。
   //   [feat: new-project-hide-file-viewer-default] 2026-06-09
-  createEffect(on(() => sdk.directory, () => view().reviewPanel.close()))
+  //   2026-08-11 sync v1.18.4 加 defer:true — 只在 directory 真变化(切项目)时收起;首挂载不触发,
+  //   否则页面 mount 即 close 会吃掉持久化/种子的 panelOpened(上游 v2 review 族 e2e 全靠它)
+  createEffect(on(() => sdk().directory, () => view().reviewPanel.close(), { defer: true }))
 
   // FORK: REQ-083 首启自动打开介绍文档 tab — 按 sdk.directory 取出待打开文件,走完整 openChatFileTab
   //   (open+load+openReviewPanel+setActive)。定义顺序在上面 reviewPanel.close 之后 → 同一 directory
@@ -353,7 +591,7 @@ export default function Page() {
   //   [feat: first-launch-onboarding]
   createEffect(
     on(
-      () => sdk.directory,
+      () => sdk().directory,
       () => {
         const rel = takePendingOpenFile()
         if (!rel) return
@@ -399,10 +637,9 @@ export default function Page() {
     ),
   )
 
-  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
+  const info = createMemo(() => (params.id ? sync().session.get(params.id) : undefined))
   const isChildSession = createMemo(() => !!info()?.parentID)
-  const diffs = createMemo(() => (params.id ? list(sync.data.session_diff[params.id]) : []))
-  const canReview = createMemo(() => !!sync.project)
+  const canReview = createMemo(() => !!sync().project)
   const reviewTab = createMemo(() => isDesktop())
   const tabState = createSessionTabs({
     tabs,
@@ -414,39 +651,15 @@ export default function Page() {
   const activeTab = tabState.activeTab
   const activeFileTab = tabState.activeFileTab
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
-  const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
-  const messagesReady = createMemo(() => {
-    const id = params.id
-    if (!id) return true
-    return sync.data.message[id] !== undefined
-  })
-  const historyMore = createMemo(() => {
-    const id = params.id
-    if (!id) return false
-    return sync.session.history.more(id)
-  })
-  const historyLoading = createMemo(() => {
-    const id = params.id
-    if (!id) return false
-    return sync.session.history.loading(id)
-  })
-  const userMessages = createMemo(
-    () => messages().filter((m) => m.role === "user") as UserMessage[],
-    emptyUserMessages,
-    { equals: same },
-  )
-  const visibleUserMessages = createMemo(
-    () => {
-      const revert = revertMessageID()
-      if (!revert) return userMessages()
-      return userMessages().filter((m) => m.id < revert)
-    },
-    emptyUserMessages,
-    {
-      equals: same,
-    },
-  )
-  const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
+  const timeline = createTimelineModel({ sessionID: () => params.id, revertMessageID })
+  const historyLoading = timeline.history.loading
+  const historyMore = timeline.history.more
+  const lastUserMessage = timeline.lastUserMessage
+  const messages = timeline.messages
+  const messagesReady = timeline.ready
+  const sessionSync = timeline.resource
+  const userMessages = timeline.userMessages
+  const visibleUserMessages = timeline.visibleUserMessages
 
   createEffect(() => {
     const tab = activeFileTab()
@@ -467,9 +680,20 @@ export default function Page() {
     ),
   )
 
+  let restoredModelSession: string | undefined
+  createEffect(() => {
+    const id = params.id
+    if (!id || !prompt.ready() || !local.session.ready()) return
+    if (restoredModelSession !== id) {
+      restoredModelSession = id
+      if (restorePromptModel(local, prompt)) return
+    }
+    syncPromptModel(local, prompt)
+  })
+
   createEffect(
     on(
-      () => ({ dir: params.dir, id: params.id }),
+      () => ({ dir: sdk().directory, id: params.id }),
       (next, prev) => {
         if (!prev) return
         if (next.dir === prev.dir && next.id === prev.id) return
@@ -480,15 +704,13 @@ export default function Page() {
   )
 
   const [store, setStore] = createStore({
-    messageId: undefined as string | undefined,
-    mobileTab: "session" as "session" | "changes",
-    changes: "git" as ChangeMode,
+    ...sessionViewState(),
     newSessionWorktree: "main",
     deferRender: false,
   })
 
   const [followup, setFollowup] = persisted(
-    Persist.serverWorkspace(serverSDK.scope, sdk.directory, "followup", ["followup.v1"]),
+    Persist.serverWorkspace(serverSDK().scope, sdk().directory, "followup", ["followup.v1"]),
     createStore<{
       items: Record<string, FollowupItem[] | undefined>
       failed: Record<string, string | undefined>
@@ -506,16 +728,15 @@ export default function Page() {
     const key = sessionKey()
     if (key !== prev) {
       setStore("deferRender", true)
+      const owner = sessionOwnership.capture()
       requestAnimationFrame(() => {
-        setTimeout(() => setStore("deferRender", false), 0)
+        setTimeout(() => owner.run(() => setStore("deferRender", false)), 0)
       })
     }
     return key
-  }, sessionKey())
+  })
 
   let reviewFrame: number | undefined
-  let refreshFrame: number | undefined
-  let refreshTimer: number | undefined
   let todoFrame: number | undefined
   let todoTimer: number | undefined
   let diffFrame: number | undefined
@@ -535,16 +756,16 @@ export default function Page() {
   }, desktopReviewOpen())
 
   const turnDiffs = createMemo(() => list(lastUserMessage()?.summary?.diffs))
-  const nogit = createMemo(() => !!sync.project && sync.project.vcs !== "git")
+  const nogit = createMemo(() => {
+    const project = sync().project
+    return !!project && project.vcs !== "git"
+  })
   const changesOptions = createMemo<ChangeMode[]>(() => {
     const list: ChangeMode[] = []
-    if (sync.project?.vcs === "git") list.push("git")
-    if (
-      sync.project?.vcs === "git" &&
-      sync.data.vcs?.branch &&
-      sync.data.vcs?.default_branch &&
-      sync.data.vcs.branch !== sync.data.vcs.default_branch
-    ) {
+    const project = sync().project
+    const vcs = sync().data.vcs
+    if (project?.vcs === "git") list.push("git")
+    if (project?.vcs === "git" && vcs?.branch && vcs?.default_branch && vcs.branch !== vcs.default_branch) {
       list.push("branch")
     }
     list.push("turn")
@@ -553,27 +774,30 @@ export default function Page() {
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
   const wantsReview = createMemo(() =>
     isDesktop()
-      ? desktopFileTreeOpen() || (desktopReviewOpen() && activeTab() === "review")
+      ? desktopFileTreeOpen() ||
+        (desktopReviewOpen() && (activeTab() === "review" || (newSessionDesign() && !!activeFileTab())))
       : store.mobileTab === "changes",
   )
   const vcsMode = createMemo<VcsMode | undefined>(() => {
-    if (store.changes === "git" || store.changes === "branch") return store.changes
+    const mode = reviewMode()
+    if (mode === "git" || mode === "branch") return mode
   })
   const vcsKey = createMemo(
-    () => ["session-vcs", sdk.directory, sync.data.vcs?.branch ?? "", sync.data.vcs?.default_branch ?? ""] as const,
+    () =>
+      ["session-vcs", sdk().directory, sync().data.vcs?.branch ?? "", sync().data.vcs?.default_branch ?? ""] as const,
   )
   const vcsQuery = createQuery(() => {
     const mode = vcsMode()
-    const enabled = wantsReview() && sync.project?.vcs === "git"
+    const enabled = wantsReview() && sync().project?.vcs === "git"
 
     return {
       queryKey: [...vcsKey(), mode] as const,
       enabled,
       queryFn: mode
         ? () =>
-            sdk.client.vcs
-              .diff({ mode })
-              .then((result) => list(result.data))
+            sdk()
+              .api.vcs.diff({ location: { directory: sdk().directory }, mode: mode === "git" ? "working" : mode })
+              .then((result) => result.data)
               .catch((error) => {
                 console.debug("[session-review] failed to load vcs diff", { mode, error })
                 return []
@@ -583,22 +807,72 @@ export default function Page() {
   })
   const refreshVcs = debounce(() => void queryClient.invalidateQueries({ queryKey: vcsKey() }), 100)
   const reviewDiffs = () => {
-    if (store.changes === "git" || store.changes === "branch")
+    if (reviewMode() === "git" || reviewMode() === "branch")
       // avoids suspense
       return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
     return turnDiffs()
   }
+  const activeReviewFile = () => {
+    const diffs = reviewDiffs()
+    const selected = reviewFile()
+    if (selected && diffs.some((diff) => diff.file === selected)) return selected
+    return diffs[0]?.file
+  }
   const reviewCount = () => reviewDiffs().length
   const hasReview = () => reviewCount() > 0
   const reviewReady = () => {
-    if (store.changes === "git" || store.changes === "branch") return !vcsQuery.isPending
+    if (reviewMode() === "git" || reviewMode() === "branch") return !vcsQuery.isPending
     return true
+  }
+  const loadReviewDiff = async (file: string, version?: number): Promise<VcsFileDiff | undefined> => {
+    const mode = vcsMode()
+    if (!mode) return
+    const root = reviewRootDirectory(sync().project?.worktree ?? sdk().directory)
+    const directory = reviewDiffDirectory(root, file)
+    const source = reviewDiffs().find((diff) => diff.file === file)
+    const valid = (diff: VcsFileDiff | undefined) => {
+      if (!diff || !source) return
+      if (diff.additions !== source.additions || diff.deletions !== source.deletions) return
+      if (reviewDiffNeedsLoad(diff)) return
+      return diff
+    }
+    const request = (scope: string, context?: number) =>
+      queryClient
+        .fetchQuery({
+          queryKey: [serverSDK().scope, ...vcsKey(), mode, "directory", scope, context, version] as const,
+          staleTime: Number.POSITIVE_INFINITY,
+          retry: 2,
+          queryFn: () =>
+            sdk()
+              .api.vcs.diff({
+                location: { directory: scope },
+                mode: mode === "git" ? "working" : mode,
+                context,
+              })
+              .then((result) => result.data),
+        })
+        .then((diffs) => diffs.find((diff) => diff.file === file))
+
+    if (directory !== root) {
+      try {
+        const scoped = valid(await request(directory))
+        if (scoped) return scoped
+      } catch (error) {
+        console.debug("[session-review] failed to load scoped vcs diff", { mode, file, directory, error })
+      }
+    }
+    try {
+      const bounded = valid(await request(root, 3))
+      if (bounded) return bounded
+    } catch (error) {
+      console.debug("[session-review] failed to load bounded vcs diff", { mode, file, root, error })
+    }
   }
 
   const newSessionWorktree = createMemo(() => {
     if (store.newSessionWorktree === "create") return "create"
-    const project = sync.project
-    if (project && sdk.directory !== project.worktree) return sdk.directory
+    const project = sync().project
+    if (project && sdk().directory !== project.worktree) return sdk().directory
     return "main"
   })
 
@@ -660,11 +934,11 @@ export default function Page() {
   }
 
   function upsert(next: Project) {
-    const list = serverSync.data.project
-    sync.set("project", next.id)
+    const list = serverSync().data.project
+    sync().set("project", next.id)
     const idx = list.findIndex((item) => item.id === next.id)
     if (idx >= 0) {
-      serverSync.set(
+      serverSync().set(
         "project",
         list.map((item, i) => (i === idx ? { ...item, ...next } : item)),
       )
@@ -672,14 +946,14 @@ export default function Page() {
     }
     const at = list.findIndex((item) => item.id > next.id)
     if (at >= 0) {
-      serverSync.set("project", [...list.slice(0, at), next, ...list.slice(at)])
+      serverSync().set("project", [...list.slice(0, at), next, ...list.slice(at)])
       return
     }
-    serverSync.set("project", [...list, next])
+    serverSync().set("project", [...list, next])
   }
 
   const gitMutation = useMutation(() => ({
-    mutationFn: () => sdk.client.project.initGit(),
+    mutationFn: () => sdk().client.project.initGit(),
     onSuccess: (x) => {
       if (!x.data) return
       upsert(x.data)
@@ -704,6 +978,7 @@ export default function Page() {
   let scroller: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
   let revealMessage = (_id: string) => {}
+  let scrollToEnd = () => {}
   let scrollMark = 0
   let messageMark = 0
 
@@ -722,47 +997,14 @@ export default function Page() {
 
   const hasScrollGesture = () => Date.now() - ui.scrollGesture < scrollGestureWindowMs
 
-  const [sessionSync] = createResource(
-    () => [sdk.directory, params.id] as const,
-    ([directory, id]) => {
-      if (refreshFrame !== undefined) cancelAnimationFrame(refreshFrame)
-      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-      refreshFrame = undefined
-      refreshTimer = undefined
-      if (!id) return
-
-      const cached = untrack(() => sync.data.message[id] !== undefined)
-      const stale = !cached
-        ? false
-        : (() => {
-            const info = getSessionPrefetch(serverSDK.scope, directory, id)
-            if (!info) return true
-            return Date.now() - info.at > SESSION_PREFETCH_TTL
-          })()
-
-      refreshFrame = requestAnimationFrame(() => {
-        refreshFrame = undefined
-        refreshTimer = window.setTimeout(() => {
-          refreshTimer = undefined
-          if (params.id !== id) return
-          untrack(() => {
-            if (stale) void sync.session.sync(id, { force: true })
-          })
-        }, 0)
-      })
-
-      return sync.session.sync(id)
-    },
-  )
-
   createEffect(
     on(
       () => {
         const id = params.id
         return [
-          sdk.directory,
+          sdk().directory,
           id,
-          id ? (sync.data.session_status[id]?.type ?? "idle") : "idle",
+          id ? (sync().data.session_status[id]?.type ?? "idle") : "idle",
           id ? composer.blocked() : false,
         ] as const
       },
@@ -773,15 +1015,15 @@ export default function Page() {
         todoTimer = undefined
         if (!id) return
         if (status === "idle" && !blocked) return
-        const cached = untrack(() => sync.data.todo[id] !== undefined || serverSync.data.session_todo[id] !== undefined)
+        const cached = untrack(() => sync().data.todo[id] !== undefined)
 
         todoFrame = requestAnimationFrame(() => {
           todoFrame = undefined
           todoTimer = window.setTimeout(() => {
             todoTimer = undefined
-            if (sdk.directory !== dir || params.id !== id) return
+            if (sdk().directory !== dir || params.id !== id) return
             untrack(() => {
-              void sync.session.todo(id, cached ? { force: true } : undefined)
+              void sync().session.todo(id, cached ? { force: true } : undefined)
             })
           }, 0)
         })
@@ -806,19 +1048,19 @@ export default function Page() {
     on(
       sessionKey,
       () => {
-        setStore("messageId", undefined)
-        setStore("changes", "git")
+        setStore(sessionViewState())
         setUi("pendingMessage", undefined)
       },
       { defer: true },
     ),
   )
 
-  const stopVcs = sdk.event.listen((evt) => {
-    if (evt.details.type !== "file.watcher.updated") return
+  const stopVcs = sdk().event.listen((evt) => {
+    const details = evt.details as { type: string; properties?: unknown }
+    if (details.type !== "file.watcher.updated" && details.type !== "filesystem.changed") return
     const props =
-      typeof evt.details.properties === "object" && evt.details.properties
-        ? (evt.details.properties as Record<string, unknown>)
+      typeof details.properties === "object" && details.properties
+        ? (details.properties as Record<string, unknown>)
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
     if (!file || file.startsWith(".git/")) return
@@ -828,7 +1070,7 @@ export default function Page() {
 
   createEffect(
     on(
-      () => params.dir,
+      () => sdk().directory,
       (dir) => {
         if (!dir) return
         setStore("newSessionWorktree", "main")
@@ -930,35 +1172,38 @@ export default function Page() {
       return
     }
 
-    // Prefer the open terminal over the composer when it can take focus
-    if (view().terminal.opened()) {
-      const id = terminal.active()
-      if (id && shouldFocusTerminalOnKeyDown(event) && focusTerminalById(id)) return
-    }
-
-    // Only treat explicit scroll keys as potential "user scroll" gestures.
-    if (event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End") {
-      markScrollGesture()
+    const key = scrollKey(event)
+    if (key) {
+      if (!scroller || !isScrollKeyTarget(target ?? null, key)) return
+      if (scrollKeyOwner(scroller, target ?? null, key) !== scroller) return
+      markScrollGesture(scroller)
       return
     }
 
     if (event.key.length === 1 && event.key !== "Unidentified" && !(event.ctrlKey || event.metaKey)) {
       if (composer.blocked() || isChildSession()) return
-      inputRef?.focus()
+      const input = inputRef
+      if (!input) return
+      input.focus()
+      setCursorPosition(input, prompt.cursor() ?? promptLength(prompt.current()))
     }
   }
 
   createEffect(() => {
+    if (!layout.ready()) return
+    if (sync().status !== "complete") return
+    if (!sync().project) return
     const list = changesOptions()
-    if (list.includes(store.changes)) return
+    const mode = reviewMode()
+    if (list.includes(mode)) return
     const next = list[0]
     if (!next) return
-    setStore("changes", next)
+    view().review.setMode(next)
   })
 
   createEffect(
     on(
-      () => sync.data.session_status[params.id ?? ""]?.type,
+      () => sync().data.session_status[params.id ?? ""]?.type,
       (next, prev) => {
         if (next !== "idle" || prev === undefined || prev === "idle") return
         refreshVcs()
@@ -973,7 +1218,6 @@ export default function Page() {
   const [tree, setTree] = createStore({
     reviewScroll: undefined as HTMLDivElement | undefined,
     pendingDiff: undefined as string | undefined,
-    activeDiff: undefined as string | undefined,
   })
 
   createEffect(
@@ -983,7 +1227,6 @@ export default function Page() {
         setTree({
           reviewScroll: undefined,
           pendingDiff: undefined,
-          activeDiff: undefined,
         })
       },
       { defer: true },
@@ -1000,12 +1243,22 @@ export default function Page() {
     inputRef?.focus()
   }
 
+  useComposerCommands()
   useSessionCommands({
     navigateMessageByOffset,
     setActiveMessage,
     focusInput,
     review: reviewTab,
+    fileBrowser: () => newSessionDesign() && isDesktop() && !!params.id,
   })
+  command.register("session-palette", () => [
+    {
+      id: "command.palette",
+      title: language.t("command.palette"),
+      hidden: true,
+      onSelect: () => command.trigger("file.open", "palette"),
+    },
+  ])
 
   const openReviewFile = createOpenReviewFile({
     showAllFiles,
@@ -1015,26 +1268,44 @@ export default function Page() {
     loadFile: file.load,
   })
 
+  const changesLabel = (option: ChangeMode) => {
+    if (option === "git") return language.t("ui.sessionReview.title.git")
+    if (option === "branch") return language.t("ui.sessionReview.title.branch")
+    return language.t("ui.sessionReview.title.lastTurn")
+  }
+
   const changesTitle = () => {
     if (!canReview()) {
       return null
     }
 
-    const label = (option: ChangeMode) => {
-      if (option === "git") return language.t("ui.sessionReview.title.git")
-      if (option === "branch") return language.t("ui.sessionReview.title.branch")
-      return language.t("ui.sessionReview.title.lastTurn")
-    }
-
     return (
       <Select
         options={changesOptions()}
-        current={store.changes}
-        label={label}
-        onSelect={(option) => option && setStore("changes", option)}
+        current={reviewMode()}
+        label={changesLabel}
+        onSelect={(option) => option && view().review.setMode(option)}
         variant="ghost"
         size="small"
         valueClass="text-14-medium"
+      />
+    )
+  }
+
+  const changesTitleV2 = () => {
+    if (!canReview()) {
+      return null
+    }
+
+    return (
+      <SelectV2
+        appearance="inline"
+        options={changesOptions()}
+        current={reviewMode()}
+        label={changesLabel}
+        placement="bottom-start"
+        gutter={6}
+        onSelect={(option) => option && view().review.setMode(option)}
       />
     )
   }
@@ -1062,18 +1333,18 @@ export default function Page() {
   )
 
   const reviewEmptyText = createMemo(() => {
-    if (store.changes === "git") return language.t("session.review.noUncommittedChanges")
-    if (store.changes === "branch") return language.t("session.review.noBranchChanges")
+    if (reviewMode() === "git") return language.t("session.review.noUncommittedChanges")
+    if (reviewMode() === "branch") return language.t("session.review.noBranchChanges")
     return language.t("session.review.noChanges")
   })
 
   const reviewEmpty = (input: { loadingClass: string; emptyClass: string }) => {
-    if (store.changes === "git" || store.changes === "branch") {
+    if (reviewMode() === "git" || reviewMode() === "branch") {
       if (!reviewReady()) return <div class={input.loadingClass}>{language.t("session.review.loadingChanges")}</div>
       return empty(reviewEmptyText())
     }
 
-    if (store.changes === "turn") {
+    if (reviewMode() === "turn") {
       if (nogit()) return createGit(input)
       return empty(reviewEmptyText())
     }
@@ -1083,6 +1354,16 @@ export default function Page() {
         <div class="text-14-regular text-text-weak max-w-56">{reviewEmptyText()}</div>
       </div>
     )
+  }
+
+  const reviewEmptyV2 = () => {
+    if ((reviewMode() === "git" || reviewMode() === "branch") && !reviewReady()) {
+      return <div class="px-6 py-4 text-text-weak">{language.t("session.review.loadingChanges")}</div>
+    }
+    if (reviewMode() === "turn" && nogit()) {
+      return <SessionReviewEmptyNoGitV2 pending={gitMutation.isPending} onInitGit={initGit} />
+    }
+    return <SessionReviewEmptyChangesV2 />
   }
 
   const reviewContent = (input: {
@@ -1101,7 +1382,7 @@ export default function Page() {
         diffStyle={input.diffStyle}
         onDiffStyleChange={input.onDiffStyleChange}
         onScrollRef={(el) => setTree("reviewScroll", el)}
-        focusedFile={tree.activeDiff}
+        focusedFile={activeReviewFile()}
         onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
         onLineCommentUpdate={updateCommentInContext}
         onLineCommentDelete={removeCommentFromContext}
@@ -1118,10 +1399,81 @@ export default function Page() {
     </Show>
   )
 
+  const reviewV2State = createReviewPanelV2State()
+
+  // Getters defer reactive reads to the consuming scope. Eager reads here ran inside
+  // the side panel's Show children and remounted the whole review panel on unrelated
+  // updates such as session switches.
+  const reviewPanelV2Props = () => ({
+    get title() {
+      return changesTitleV2()
+    },
+    get empty() {
+      return reviewEmptyV2()
+    },
+    diffs: reviewDiffs,
+    diffsReady: reviewReady,
+    get diffVersion() {
+      return vcsQuery.dataUpdatedAt
+    },
+    loadDiff: loadReviewDiff,
+    get activeFile() {
+      return activeReviewFile()
+    },
+    onSelectFile: focusReviewDiff,
+    get diffStyle() {
+      return layout.review.diffStyle()
+    },
+    onDiffStyleChange: layout.review.setDiffStyle,
+    state: reviewV2State,
+    onLineComment: (comment: SessionReviewLineComment) => addCommentToContext({ ...comment, origin: "review" }),
+    onLineCommentUpdate: updateCommentInContext,
+    onLineCommentDelete: removeCommentFromContext,
+    get lineCommentActions() {
+      return reviewCommentActions()
+    },
+    get comments() {
+      return comments.all()
+    },
+    get focusedComment() {
+      return comments.focus()
+    },
+    onFocusedCommentChange: (focus: { file: string; id: string } | null) => {
+      // The preview clears the focus once it has opened the comment; persist the
+      // focused file as the active selection so the preview stays on it. Skip
+      // files outside the current diff set (their focus is cleared unhandled).
+      if (!focus) {
+        const current = comments.focus()
+        if (current && reviewDiffs().some((diff) => diff.file === current.file)) focusReviewDiff(current.file)
+      }
+      comments.setFocus(focus)
+    },
+  })
+
+  // Latch: defer only the first diff render off the mount critical path. This Page
+  // stays mounted across same-workspace session tab switches, so gating on every
+  // deferRender flip tore down and remounted the whole review pane on tab switch.
+  const reviewPanelV2Rendered = createMemo<boolean>((prev) => prev || !store.deferRender, false)
+
+  const reviewPanelV2 = () => (
+    <div class="flex flex-col h-full overflow-hidden bg-v2-background-bg-base contain-strict">
+      <Show when={reviewPanelV2Rendered()}>
+        <ReviewPanelV2 {...reviewPanelV2Props()} />
+      </Show>
+    </div>
+  )
+
+  // FORK: REQ-097 — 文件预览区 ⌘F 不触发会话查找(data-deskfox-find-ignore = 查找作用域
+  //   注册口,将来预览区自建查找时在此接管)[feat: in-session-find]
   const reviewPanel = () => (
-    // FORK: REQ-097 — 文件预览区 ⌘F 不触发会话查找(data-deskfox-find-ignore = 查找作用域
-    // 注册口,将来预览区自建查找时在此接管)[feat: in-session-find]
-    <div data-deskfox-find-ignore class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
+    <div
+      data-deskfox-find-ignore
+      classList={{
+        "flex flex-col h-full overflow-hidden contain-strict": true,
+        "bg-v2-background-bg-base": settings.general.newLayoutDesigns(),
+        "bg-background-stronger": !settings.general.newLayoutDesigns(),
+      }}
+    >
       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
         {reviewContent({
           diffStyle: layout.review.diffStyle(),
@@ -1182,7 +1534,8 @@ export default function Page() {
   const focusReviewDiff = (path: string) => {
     openReviewPanel()
     view().review.openPath(path)
-    setTree({ activeDiff: path, pendingDiff: path })
+    view().review.setFile(path)
+    setTree("pendingDiff", path)
   }
 
   createEffect(() => {
@@ -1226,50 +1579,12 @@ export default function Page() {
     requestAnimationFrame(() => attempt(0))
   })
 
-  createEffect(() => {
-    const id = params.id
-    if (!id) return
-
-    if (!wantsReview()) return
-    if (sync.data.session_diff[id] !== undefined) return
-    if (sync.status === "loading") return
-
-    void sync.session.diff(id)
-  })
-
-  createEffect(
-    on(
-      () => [sessionKey(), wantsReview()] as const,
-      ([key, wants]) => {
-        if (diffFrame !== undefined) cancelAnimationFrame(diffFrame)
-        if (diffTimer !== undefined) window.clearTimeout(diffTimer)
-        diffFrame = undefined
-        diffTimer = undefined
-        if (!wants) return
-
-        const id = params.id
-        if (!id) return
-        if (!untrack(() => sync.data.session_diff[id] !== undefined)) return
-
-        diffFrame = requestAnimationFrame(() => {
-          diffFrame = undefined
-          diffTimer = window.setTimeout(() => {
-            diffTimer = undefined
-            if (sessionKey() !== key) return
-            void sync.session.diff(id, { force: true })
-          }, 0)
-        })
-      },
-      { defer: true },
-    ),
-  )
-
   let treeDir: string | undefined
   createEffect(() => {
-    const dir = sdk.directory
+    const dir = sdk().directory
     if (!isDesktop()) return
     if (!layout.fileTree.opened()) return
-    if (sync.status === "loading") return
+    if (sync().status === "loading") return
 
     fileTreeTab()
     const refresh = treeDir !== dir
@@ -1279,7 +1594,7 @@ export default function Page() {
 
   createEffect(
     on(
-      () => sdk.directory,
+      () => sdk().directory,
       () => {
         const tab = activeFileTab()
         if (!tab) return
@@ -1293,8 +1608,18 @@ export default function Page() {
 
   const autoScroll = createAutoScroll({
     working: () => true,
-    overflowAnchor: "dynamic",
+    overflowAnchor: "none",
   })
+  createEffect(
+    on(
+      () => params.id,
+      (id, previous) => {
+        if (!id || !previous || id === previous) return
+        if (location.hash || store.messageId || ui.pendingMessage) return
+        autoScroll.resume()
+      },
+    ),
+  )
 
   let scrollStateFrame: number | undefined
   let scrollStateTarget: HTMLDivElement | undefined
@@ -1330,7 +1655,8 @@ export default function Page() {
 
   const resumeScroll = () => {
     setStore("messageId", undefined)
-    autoScroll.forceScrollToBottom()
+    autoScroll.resume()
+    scrollToEnd()
     clearMessageHash()
 
     const el = scroller
@@ -1373,15 +1699,45 @@ export default function Page() {
     },
   )
 
-  const historyLoader = createSessionHistoryLoader({
-    sessionID: () => params.id,
-    loaded: () => messages().length,
-    visibleUserMessages,
-    historyMore,
-    historyLoading,
-    loadMore: (sessionID) => sync.session.history.loadMore(sessionID),
-    userScrolled: autoScroll.userScrolled,
-    scroller: () => scroller,
+  let captureHistoryAnchor = () => {}
+  let restoreHistoryAnchor = (_done: boolean) => {}
+  const historyRequests = new Set<string>()
+  let historyContinuationFrame: number | undefined
+  const loadOlder = async () => {
+    const owner = sessionOwnership.capture()
+    if (historyLoading() || historyRequests.has(owner.key)) return
+    historyRequests.add(owner.key)
+    const before = timeline.messages().length
+    try {
+      await timeline.history.loadOlder({
+        before: () => owner.run(captureHistoryAnchor),
+        after: (done) => owner.run(() => restoreHistoryAnchor(done)),
+      })
+    } finally {
+      historyRequests.delete(owner.key)
+    }
+    if (!owner.current() || timeline.messages().length <= before) return
+    if (!autoScroll.userScrolled() || !scroller || scroller.scrollTop >= 200 || !historyMore()) return
+    if (historyContinuationFrame !== undefined) cancelAnimationFrame(historyContinuationFrame)
+    historyContinuationFrame = requestAnimationFrame(() => {
+      historyContinuationFrame = undefined
+      owner.run(onHistoryScroll)
+    })
+  }
+  const onHistoryScroll = () => {
+    if (
+      historyRequests.has(sessionOwnership.key()) ||
+      historyLoading() ||
+      !autoScroll.userScrolled() ||
+      !scroller ||
+      scroller.scrollTop >= 200
+    )
+      return
+    void loadOlder()
+  }
+
+  onCleanup(() => {
+    if (historyContinuationFrame !== undefined) cancelAnimationFrame(historyContinuationFrame)
   })
 
   fill = () => {
@@ -1398,7 +1754,7 @@ export default function Page() {
       if (el.scrollHeight > el.clientHeight + 1) return
       if (!historyMore()) return
 
-      void historyLoader.loadAndReveal()
+      void loadOlder()
     })
   }
 
@@ -1423,8 +1779,8 @@ export default function Page() {
   )
 
   const draft = (id: string) =>
-    extractPromptFromParts(sync.data.part[id] ?? [], {
-      directory: sdk.directory,
+    extractPromptFromParts(sync().data.part[id] ?? [], {
+      directory: sdk().directory,
       attachmentName: language.t("common.attachment"),
     })
 
@@ -1446,25 +1802,15 @@ export default function Page() {
     })
   }
 
-  const merge = (next: NonNullable<ReturnType<typeof info>>) =>
-    sync.set("session", (list) => {
-      const idx = list.findIndex((item) => item.id === next.id)
-      if (idx < 0) return list
-      const out = list.slice()
-      out[idx] = next
-      return out
-    })
+  const merge = (next: NonNullable<ReturnType<typeof info>>, target = sync()) => target.session.remember(next)
 
-  const roll = (sessionID: string, next: NonNullable<ReturnType<typeof info>>["revert"]) =>
-    sync.set("session", (list) => {
-      const idx = list.findIndex((item) => item.id === sessionID)
-      if (idx < 0) return list
-      const out = list.slice()
-      out[idx] = { ...out[idx], revert: next }
-      return out
-    })
+  const roll = (sessionID: string, next: NonNullable<ReturnType<typeof info>>["revert"], target = sync()) => {
+    const session = target.session.get(sessionID)
+    if (!session) return
+    target.session.remember({ ...session, revert: next })
+  }
 
-  const busy = (sessionID: string) => sync.data.session_working(sessionID)
+  const busy = (sessionID: string) => sync().data.session_working(sessionID)
 
   const queuedFollowups = createMemo(() => {
     const id = params.id
@@ -1480,6 +1826,7 @@ export default function Page() {
 
   const followupMutation = useMutation(() => ({
     mutationFn: async (input: { sessionID: string; id: string; manual?: boolean }) => {
+      const owner = sessionOwnership.capture()
       const item = (followup.items[input.sessionID] ?? []).find((entry) => entry.id === input.id)
       if (!item) return
 
@@ -1487,11 +1834,11 @@ export default function Page() {
       setFollowup("failed", input.sessionID, undefined)
 
       const ok = await sendFollowupDraft({
-        client: sdk.client,
-        sync,
-        serverSync,
+        api: sdk().api.session,
+        sync: sync(),
+        serverSync: serverSync(),
         draft: item,
-        optimisticBusy: item.sessionDirectory === sdk.directory,
+        optimisticBusy: item.sessionDirectory === sdk().directory,
       }).catch((err) => {
         setFollowup("failed", input.sessionID, input.id)
         fail(err)
@@ -1500,7 +1847,7 @@ export default function Page() {
       if (!ok) return
 
       setFollowup("items", input.sessionID, (items) => (items ?? []).filter((entry) => entry.id !== input.id))
-      if (input.manual) resumeScroll()
+      if (input.manual) owner.run(resumeScroll)
     },
   }))
 
@@ -1549,7 +1896,7 @@ export default function Page() {
   const followupDock = createMemo(() => queuedFollowups().map((item) => ({ id: item.id, text: followupText(item) })))
 
   const sendFollowup = (sessionID: string, id: string, opts?: { manual?: boolean }) => {
-    if (sync.session.get(sessionID)?.parentID) return Promise.resolve()
+    if (sync().session.get(sessionID)?.parentID) return Promise.resolve()
     const item = (followup.items[sessionID] ?? []).find((entry) => entry.id === id)
     if (!item) return Promise.resolve()
     if (followupBusy(sessionID)) return Promise.resolve()
@@ -1582,10 +1929,11 @@ export default function Page() {
 
   // FORK: 停止失败不再静默吞错(原 .catch(()=>{})),弹真实提示;残留 busy 由 session.status()
   // 对账自愈,见 global-sync/session-status-reconcile.ts [feat: stuck-working-status-reconcile] 2026-06-13
+  // (2026-08-11 sync v1.18.16:API 随上游 abort→interrupt)
   const halt = async (sessionID: string) => {
     if (!busy(sessionID)) return
     try {
-      await sdk.client.session.abort({ sessionID })
+      await sdk().api.session.interrupt({ sessionID })
     } catch (err) {
       showToast({
         title: language.t("common.requestFailed"),
@@ -1596,25 +1944,21 @@ export default function Page() {
 
   const revertMutation = useMutation(() => ({
     mutationFn: async (input: { sessionID: string; messageID: string }) => {
-      const prev = prompt.current().slice()
-      const last = info()?.revert
+      const session = sdk().api.session
+      const target = sync()
+      const last = target.session.get(input.sessionID)?.revert
       const value = draft(input.messageID)
-      batch(() => {
-        roll(input.sessionID, { messageID: input.messageID })
-        prompt.set(value)
+      await runPromptRollbackMutation({
+        capturePrompt: prompt.capture,
+        optimistic: (prompt) => {
+          roll(input.sessionID, { messageID: input.messageID }, target)
+          prompt.set(value)
+        },
+        request: () => halt(input.sessionID).then(() => session.revert.stage(input)),
+        complete: () => undefined,
+        rollback: () => roll(input.sessionID, last, target),
+        fail,
       })
-      await halt(input.sessionID)
-        .then(() => sdk.client.session.revert(input))
-        .then((result) => {
-          if (result.data) merge(result.data)
-        })
-        .catch((err) => {
-          batch(() => {
-            roll(input.sessionID, last)
-            prompt.set(prev)
-          })
-          fail(err)
-        })
     },
   }))
 
@@ -1623,39 +1967,31 @@ export default function Page() {
       const sessionID = params.id
       if (!sessionID) return
 
-      const next = userMessages().find((item) => item.id > id)
-      const prev = prompt.current().slice()
-      const last = info()?.revert
+      const session = sdk().api.session
+      const target = sync()
+      const index = userMessages().findIndex((item) => item.id === id)
+      if (index < 0) return
+      const next = userMessages()[index + 1]
+      const last = target.session.get(sessionID)?.revert
 
-      batch(() => {
-        roll(sessionID, next ? { messageID: next.id } : undefined)
-        if (next) {
-          prompt.set(draft(next.id))
-          return
-        }
-        prompt.reset()
+      await runPromptRollbackMutation({
+        capturePrompt: prompt.capture,
+        optimistic: (promptSession) => {
+          roll(sessionID, next ? { messageID: next.id } : undefined, target)
+          if (next) {
+            promptSession.set(draft(next.id))
+            return
+          }
+          promptSession.reset()
+        },
+        request: () =>
+          !next
+            ? halt(sessionID).then(() => session.revert.clear({ sessionID }))
+            : halt(sessionID).then(() => session.revert.stage({ sessionID, messageID: next.id }).then(() => undefined)),
+        complete: () => undefined,
+        rollback: () => roll(sessionID, last, target),
+        fail,
       })
-
-      const task = !next
-        ? halt(sessionID).then(() => sdk.client.session.unrevert({ sessionID }))
-        : halt(sessionID).then(() =>
-            sdk.client.session.revert({
-              sessionID,
-              messageID: next.id,
-            }),
-          )
-
-      await task
-        .then((result) => {
-          if (result.data) merge(result.data)
-        })
-        .catch((err) => {
-          batch(() => {
-            roll(sessionID, last)
-            prompt.set(prev)
-          })
-          fail(err)
-        })
     },
   }))
 
@@ -1675,12 +2011,37 @@ export default function Page() {
   const rolled = createMemo(() => {
     const id = revertMessageID()
     if (!id) return []
+    const index = userMessages().findIndex((item) => item.id === id)
+    if (index < 0) return []
     return userMessages()
-      .filter((item) => item.id >= id)
+      .slice(index)
       .map((item) => ({ id: item.id, text: line(item.id) }))
   })
 
-  const actions = { revert }
+  // attachment bytes are embedded as a data URL, so downloading always works;
+  // revealing requires the on-disk path captured by the client that attached the file
+  const openAttachment = (file: FilePart) => {
+    const download = () => {
+      const anchor = document.createElement("a")
+      anchor.href = file.url
+      anchor.download = getFilename(file.filename) || "attachment"
+      anchor.click()
+    }
+    const path = file.filename ?? ""
+    const absolute = path.startsWith("/") || path.startsWith("\\\\") || /^[a-zA-Z]:[\\/]/.test(path)
+    if (platform.revealPath && absolute) {
+      void platform.revealPath(path).then(
+        (revealed) => {
+          if (!revealed) download()
+        },
+        () => download(),
+      )
+      return
+    }
+    download()
+  }
+
+  const actions = { revert, openAttachment }
 
   createEffect(() => {
     const sessionID = params.id
@@ -1713,7 +2074,7 @@ export default function Page() {
 
       dockHeight = next
 
-      if (stick) autoScroll.forceScrollToBottom()
+      if (stick) scrollToEnd()
 
       if (el) scheduleScrollState(el)
       fill()
@@ -1727,12 +2088,18 @@ export default function Page() {
     visibleUserMessages,
     historyMore,
     historyLoading,
-    loadMore: (sessionID) => sync.session.history.loadMore(sessionID),
+    loadMore: (sessionID) => sync().session.history.loadMore(sessionID),
     currentMessageId: () => store.messageId,
     pendingMessage: () => ui.pendingMessage,
     setPendingMessage: (value) => setUi("pendingMessage", value),
     setActiveMessage,
-    autoScroll,
+    autoScroll: {
+      pause: autoScroll.pause,
+      forceScrollToBottom: () => {
+        autoScroll.resume()
+        scrollToEnd()
+      },
+    },
     scroller: () => scroller,
     anchor,
     revealMessage: (id) => revealMessage(id),
@@ -1755,8 +2122,6 @@ export default function Page() {
 
   onCleanup(() => {
     if (reviewFrame !== undefined) cancelAnimationFrame(reviewFrame)
-    if (refreshFrame !== undefined) cancelAnimationFrame(refreshFrame)
-    if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
     if (todoFrame !== undefined) cancelAnimationFrame(todoFrame)
     if (todoTimer !== undefined) window.clearTimeout(todoTimer)
     if (diffFrame !== undefined) cancelAnimationFrame(diffFrame)
@@ -1767,61 +2132,257 @@ export default function Page() {
 
   useUsageExceededDialogs()
 
-  const composerRegion = (placement: "dock" | "inline") => (
-    <SessionComposerRegion
-      state={composer}
-      ready={!store.deferRender && messagesReady()}
-      centered={placement === "dock" && centered()}
-      placement={placement}
-      inputRef={(el) => {
-        inputRef = el
-      }}
-      newSessionWorktree={newSessionWorktree()}
-      onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
-      onSubmit={() => {
-        comments.clear()
-        resumeScroll()
-      }}
-      onResponseSubmit={resumeScroll}
-      followup={
-        params.id && !isChildSession()
-          ? {
-              queue: queueEnabled,
-              items: followupDock(),
-              sending: sendingFollowup(),
-              edit: editingFollowup(),
-              onQueue: queueFollowup,
-              onAbort: () => {
-                const id = params.id
-                if (!id) return
-                setFollowup("paused", id, true)
-              },
-              onSend: (id) => {
-                void sendFollowup(params.id!, id, { manual: true })
-              },
-              onEdit: editFollowup,
-              onEditLoaded: clearFollowupEdit,
-            }
-          : undefined
-      }
-      revert={
-        rolled().length > 0
-          ? {
-              items: rolled(),
-              restoring: restoring(),
-              disabled: reverting(),
-              onRestore: restore,
-            }
-          : undefined
-      }
-      setPromptDockRef={(el) => {
-        promptDock = el
-      }}
-    />
+  // FORK: md:order-last —— 经典布局镜像由 row-reverse 改为 order 后(见下方五栏容器注释),
+  //   row-reverse 原本把本组 tab 推到视觉最右;order 方案下需显式声明,否则会插到聊天区前面。
+  //   仅影响 web 端非桌面 + md 以上宽度这一组合(桌面 app isDesktop() 恒真、不渲染本组)。
+  //   [feat: mirror-layout-overflow] 2026-08-12
+  const mobileTabs = (compact = false, bottom = false) => (
+    <Tabs value={store.mobileTab} class="h-auto md:order-last">
+      <Tabs.List
+        classList={{
+          "!h-9": compact,
+          "[&::after]:!border-b-0 [&::after]:!border-t [&::after]:!border-border-weak-base": bottom,
+        }}
+      >
+        <Tabs.Trigger
+          value="session"
+          classList={{
+            "!w-1/2 !max-w-none": true,
+            "!border-b-0 !border-t !border-border-weak-base [&:has([data-selected])]:!border-t-transparent": bottom,
+          }}
+          classes={{ button: compact ? "w-full !py-2" : "w-full" }}
+          onClick={() => setStore("mobileTab", "session")}
+        >
+          {language.t("session.tab.session")}
+        </Tabs.Trigger>
+        <Tabs.Trigger
+          value="changes"
+          classList={{
+            "!w-1/2 !max-w-none !border-r-0": true,
+            "!border-b-0 !border-t !border-border-weak-base [&:has([data-selected])]:!border-t-transparent": bottom,
+          }}
+          classes={{ button: compact ? "w-full !py-2" : "w-full" }}
+          onClick={() => setStore("mobileTab", "changes")}
+        >
+          {hasReview()
+            ? language.t("session.review.filesChanged", { count: reviewCount() })
+            : language.t("session.review.change.other")}
+        </Tabs.Trigger>
+      </Tabs.List>
+    </Tabs>
+  )
+  const mobileTabsBottom = createMemo(
+    () => !isDesktop() && settings.general.newLayoutDesigns() && settings.general.mobileTitlebarPosition() === "bottom",
+  )
+
+  const sessionErrorFallback = (error: unknown, reset: () => void) => {
+    createEffect(on(sessionKey, reset, { defer: true }))
+    return <SessionErrorFallback error={error} sessionID={params.id} />
+  }
+
+  const sessionPanelContent = () => (
+    <>
+      {sessionSync() ?? ""}
+      <Show when={!isDesktop() && !!params.id && settings.general.newLayoutDesigns() && !mobileTabsBottom()}>
+        {mobileTabs(true)}
+      </Show>
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <Switch>
+          <Match when={params.id && mobileChanges()}>
+            <div class="relative h-full overflow-hidden">
+              {reviewContent({
+                diffStyle: "unified",
+                classes: {
+                  root: "pb-8 [&_[data-slot=session-review-list]]:pb-0",
+                  header: "px-4 !h-16 !pb-4",
+                  container: "px-4",
+                },
+                loadingClass: "px-4 py-4 text-text-weak",
+                emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
+              })}
+            </div>
+          </Match>
+          <Match when={params.id}>
+            <Show when={messagesReady() ? params.id : undefined} keyed>
+              {(_id) => (
+                // FORK: REQ-075 聊天 md 内链拦截委托容器(display:contents 零布局影响,只借点击冒泡;
+                //   外链 a.external-link 由 desktop renderer 全局委托处理,不冲突)
+                //   2026-08-12:上游 merge 把这层包裹冲掉了(handler 还在定义、只是没人用),按 user
+                //   全面比对反馈接回。[feat: batch-port-edit-mdlink] 2026-07-07
+                <div class="contents" onClick={handleChatMdLinkClick}>
+                <MessageTimeline
+                  actions={actions}
+                  scroll={ui.scroll}
+                  onResumeScroll={resumeScroll}
+                  setScrollRef={setScrollRef}
+                  onScheduleScrollState={scheduleScrollState}
+                  onAutoScrollHandleScroll={autoScroll.handleScroll}
+                  onMarkScrollGesture={markScrollGesture}
+                  hasScrollGesture={hasScrollGesture}
+                  onUserScroll={markUserScroll}
+                  onHistoryScroll={onHistoryScroll}
+                  // FORK: REQ-097 会话内查找 — 桥历史分页给查找条(深位未加载命中渐进翻页;
+                  //   bare loadOlder 不带视口锚定,跳转由 revealFindOccurrence 自己滚)[feat: in-session-find]
+                  findHistory={{
+                    more: historyMore,
+                    loading: historyLoading,
+                    loadMore: () => timeline.history.loadOlder(),
+                  }}
+                  onAutoScrollInteraction={autoScroll.handleInteraction}
+                  shouldAnchorBottom={() =>
+                    !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
+                  }
+                  centered={centered()}
+                  setContentRef={(el) => {
+                    content = el
+                    autoScroll.contentRef(el)
+
+                    const root = scroller
+                    if (root) scheduleScrollState(root)
+                  }}
+                  userMessages={visibleUserMessages()}
+                  setHistoryAnchor={(handlers) => {
+                    captureHistoryAnchor = handlers.capture
+                    restoreHistoryAnchor = handlers.restore
+                  }}
+                  anchor={anchor}
+                  setRevealMessage={(fn) => {
+                    revealMessage = fn
+                  }}
+                  setScrollToEnd={(fn) => {
+                    scrollToEnd = fn
+                  }}
+                />
+                </div>
+              )}
+            </Show>
+          </Match>
+          <Match when={true}>
+            <NewSessionView worktree={newSessionWorktree()} />
+          </Match>
+        </Switch>
+      </div>
+
+      <Show when={(params.id || !newSessionDesign()) && !mobileChanges()}>
+        {(_) => {
+          const controller = createSessionComposerRegionController({
+            state: composer,
+            sessionKey,
+            sessionID: () => params.id,
+            prompt,
+            ready: () => !store.deferRender && messagesReady(),
+            centered,
+            todo: {
+              collapsed: () => view().todoCollapsed.get(),
+              onToggle: () => view().todoCollapsed.set(!view().todoCollapsed.get()),
+            },
+            followup: () =>
+              params.id && !isChildSession()
+                ? {
+                    items: followupDock(),
+                    sending: sendingFollowup(),
+                    onSend: (id) => void sendFollowup(params.id!, id, { manual: true }),
+                    onEdit: editFollowup,
+                  }
+                : undefined,
+            revert: () =>
+              rolled().length > 0
+                ? {
+                    items: rolled(),
+                    restoring: restoring(),
+                    disabled: reverting(),
+                    onRestore: restore,
+                  }
+                : undefined,
+            onResponseSubmit: resumeScroll,
+            openParent: () => {
+              const id = info()?.parentID
+              if (!id) return
+              navigate(
+                params.serverKey
+                  ? sessionHref(requireServerKey(params.serverKey), id)
+                  : legacySessionHref(sdk().directory, id),
+              )
+            },
+            setPromptRef: (el) => {
+              inputRef = el
+            },
+            setDockRef: (el) => {
+              promptDock = el
+            },
+          })
+          return (
+            <SessionComposerRegion
+              controller={controller}
+              promptInput={
+                <Show
+                  when={newSessionDesign()}
+                  fallback={
+                    <PromptInput
+                      controls={inputController()}
+                      ref={(el) => {
+                        inputRef = el
+                      }}
+                      newSessionWorktree={newSessionWorktree()}
+                      onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
+                      onSubmit={() => {
+                        comments.clear()
+                        resumeScroll()
+                      }}
+                      edit={editingFollowup()}
+                      onEditLoaded={clearFollowupEdit}
+                      shouldQueue={queueEnabled}
+                      onQueue={queueFollowup}
+                      onAbort={() => {
+                        const id = params.id
+                        if (!id) return
+                        setFollowup("paused", id, true)
+                      }}
+                    />
+                  }
+                >
+                  {(_) => {
+                    const controller = usePromptInputV2Controller({
+                      get controls() {
+                        return inputController()
+                      },
+                      ref: (el) => {
+                        inputRef = el
+                      },
+                      get newSessionWorktree() {
+                        return newSessionWorktree()
+                      },
+                      onNewSessionWorktreeReset: () => setStore("newSessionWorktree", "main"),
+                      onSubmit: () => {
+                        comments.clear()
+                        resumeScroll()
+                      },
+                      get edit() {
+                        return editingFollowup()
+                      },
+                      onEditLoaded: clearFollowupEdit,
+                      shouldQueue: queueEnabled,
+                      onQueue: queueFollowup,
+                      onAbort: () => {
+                        const id = params.id
+                        if (!id) return
+                        setFollowup("paused", id, true)
+                      },
+                    })
+                    return <PromptInputV2Composer controller={controller} borderUnderlay />
+                  }}
+                </Show>
+              }
+            />
+          )
+        }}
+      </Show>
+      <Show when={!!params.id && mobileTabsBottom()}>{mobileTabs(true, true)}</Show>
+    </>
   )
 
   return (
-    <div class="relative size-full overflow-hidden flex flex-col">
+    <SessionRouteFrame>
       {sessionSync() ?? ""}
       {/* FORK: 选区菜单 Host 提到 Session 顶层(原在 MessageTimeline,被 messagesReady Show 门控)
           确保 user 看 PDF/office 无 chat 会话时也能用右键菜单 + 拖拽 overlay
@@ -1829,38 +2390,24 @@ export default function Page() {
       <ChatSelectionMenu />
       <SessionHeader />
       <div
+        ref={panelRow}
         // FORK: REQ-041 五栏 — 经典布局下文件树/审查面板锚左(rail 右侧)、聊天居中,对齐 DeskFox Image#2;
         //   上游新 v2 维持 flex-row [feat: electron-replatform] 2026-06-12
+        //
+        // FORK: 镜像由 `md:flex-row-reverse` 改为 `md:flex-row` + 子项 order [feat: mirror-layout-overflow] 2026-08-12
+        //   [bug-repro: 窄窗口下文件树面板左侧被 activity rail 盖住,user 2026-08-12 真机反馈]
+        //   两个子项(聊天区 / 侧面板)都是 style 固定宽度,总宽超出可用宽度时必然溢出;
+        //   row-reverse 会把溢出方向从「右」翻成「左」,而左边是 rail 的地盘 → 压在 rail 底下。
+        //   实测 1280 宽:可用 771,聊天区 570 + 侧面板 240 = 810,超 39px,面板 x 由 64 变 25。
+        //   改用 order 后视觉顺序不变(侧面板仍在左)、DOM 顺序不变(上游增删子项仍可正常 merge),
+        //   但溢出方向恢复向右 —— 即 user 要求的「宽度不够该省略右侧,而不是切左边」。
         class="flex-1 min-h-0 flex flex-col "
         classList={{
           "md:flex-row gap-2 p-2": settings.general.newLayoutDesigns(),
-          "md:flex-row-reverse": !settings.general.newLayoutDesigns(),
+          "md:flex-row": !settings.general.newLayoutDesigns(),
         }}
       >
-        <Show when={!isDesktop() && !!params.id}>
-          <Tabs value={store.mobileTab} class="h-auto">
-            <Tabs.List>
-              <Tabs.Trigger
-                value="session"
-                class="!w-1/2 !max-w-none"
-                classes={{ button: "w-full" }}
-                onClick={() => setStore("mobileTab", "session")}
-              >
-                {language.t("session.tab.session")}
-              </Tabs.Trigger>
-              <Tabs.Trigger
-                value="changes"
-                class="!w-1/2 !max-w-none !border-r-0"
-                classes={{ button: "w-full" }}
-                onClick={() => setStore("mobileTab", "changes")}
-              >
-                {hasReview()
-                  ? language.t("session.review.filesChanged", { count: reviewCount() })
-                  : language.t("session.review.change.other")}
-              </Tabs.Trigger>
-            </Tabs.List>
-          </Tabs>
-        </Show>
+        <Show when={!isDesktop() && !!params.id && !settings.general.newLayoutDesigns()}>{mobileTabs()}</Show>
 
         <div
           classList={{
@@ -1884,82 +2431,23 @@ export default function Page() {
               "shadow-[var(--v2-elevation-raised)]": settings.general.newLayoutDesigns() && !!params.id,
             }}
           >
-            <div class="flex-1 min-h-0 overflow-hidden">
-              <Switch>
-                <Match when={params.id && mobileChanges()}>
-                  <div class="relative h-full overflow-hidden">
-                    {reviewContent({
-                      diffStyle: "unified",
-                      classes: {
-                        root: "pb-8",
-                        header: "px-4",
-                        container: "px-4",
-                      },
-                      loadingClass: "px-4 py-4 text-text-weak",
-                      emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
-                    })}
-                  </div>
-                </Match>
-                <Match when={params.id}>
-                  <Show when={messagesReady()}>
-                    {/* FORK: REQ-075 聊天 md 内链拦截委托容器(display:contents 零布局影响,
-                        只借点击冒泡;外链 a.external-link 由 desktop renderer 全局委托处理,不冲突)
-                        [feat: batch-port-edit-mdlink] 2026-07-07 */}
-                    <div class="contents" onClick={handleChatMdLinkClick}>
-                    <MessageTimeline
-                      actions={actions}
-                      scroll={ui.scroll}
-                      onResumeScroll={resumeScroll}
-                      setScrollRef={setScrollRef}
-                      onScheduleScrollState={scheduleScrollState}
-                      onAutoScrollHandleScroll={autoScroll.handleScroll}
-                      onMarkScrollGesture={markScrollGesture}
-                      hasScrollGesture={hasScrollGesture}
-                      onUserScroll={markUserScroll}
-                      onHistoryScroll={historyLoader.onScrollerScroll}
-                      onAutoScrollInteraction={autoScroll.handleInteraction}
-                      shouldAnchorBottom={() =>
-                        !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
-                      }
-                      centered={centered()}
-                      setContentRef={(el) => {
-                        content = el
-                        autoScroll.contentRef(el)
-
-                        const root = scroller
-                        if (root) scheduleScrollState(root)
-                      }}
-                      historyShift={historyLoader.shift()}
-                      userMessages={historyLoader.userMessages()}
-                      anchor={anchor}
-                      setRevealMessage={(fn) => {
-                        revealMessage = fn
-                      }}
-                    />
-                    </div>
-                  </Show>
-                </Match>
-                <Match when={true}>
-                  <NewSessionView worktree={newSessionWorktree()} />
-                </Match>
-              </Switch>
-            </div>
-
-            <Show when={params.id || !newSessionDesign()}>{composerRegion("dock")}</Show>
+            {/* 2026-08-11 sync v1.18.4:面板内容(时间线+composer 区)统一走上游抽取的
+                sessionPanelContent();原内联副本删除 — 它缺 composer 区导致输入框整体消失 */}
+            {sessionPanelContent()}
           </div>
 
-          <Show when={desktopReviewOpen()}>
+          <Show when={desktopSessionResizeOpen()}>
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
                 classList={{
-                  "-right-1": settings.general.newLayoutDesigns(),
+                  "-end-1": settings.general.newLayoutDesigns(),
                 }}
                 direction="horizontal"
                 // FORK: 经典布局镜像后聊天区在右,拖左缘增宽 = start 语义(上游默认 end 拖不动)2026-06-13
                 edge={settings.general.newLayoutDesigns() ? undefined : "start"}
-                size={layout.session.width()}
-                min={450}
-                max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}
+                size={sessionPanelResizedWidth()}
+                min={SESSION_PANEL_WIDTH_MIN}
+                max={sessionPanelMax()}
                 onResize={(width) => {
                   size.touch()
                   layout.session.resize(width)
@@ -1969,22 +2457,91 @@ export default function Page() {
           </Show>
         </div>
 
-        <SessionSidePanel
-          canReview={canReview}
-          diffs={reviewDiffs}
-          diffsReady={reviewReady}
-          empty={reviewEmptyText}
-          hasReview={hasReview}
-          reviewCount={reviewCount}
-          reviewPanel={reviewPanel}
-          activeDiff={tree.activeDiff}
-          focusReviewDiff={focusReviewDiff}
-          reviewSnap={ui.reviewSnap}
-          size={size}
-        />
+        <Show when={!newSessionDesign() && desktopSidePanelOpen()}>
+          <Suspense>
+            <SessionSidePanel
+              canReview={canReview}
+              diffs={reviewDiffs}
+              diffsReady={reviewReady}
+              empty={reviewEmptyText}
+              hasReview={hasReview}
+              reviewHasFocusableContent={hasReview}
+              reviewCount={reviewCount}
+              reviewPanel={reviewPanel}
+              activeDiff={activeReviewFile()}
+              focusReviewDiff={focusReviewDiff}
+              reviewSnap={ui.reviewSnap}
+              size={size}
+            />
+          </Suspense>
+        </Show>
+        <Show when={newSessionDesign()}>
+          <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>
+            <div class="min-w-0 h-full flex flex-1 flex-col">
+              <Show when={isDesktop() && (desktopV2ReviewOpen() || desktopFileTreeOpen())}>
+                <div class="min-h-0 flex-1">
+                  <Suspense>
+                    <SessionSidePanel
+                      canReview={canReview}
+                      diffs={reviewDiffs}
+                      diffsReady={reviewReady}
+                      empty={reviewEmptyText}
+                      hasReview={hasReview}
+                      reviewHasFocusableContent={() => hasReview() || reviewV2State.sidebarOpened()}
+                      reviewCount={reviewCount}
+                      reviewPanel={reviewPanelV2}
+                      reviewSidebarToggle={(disabled) => (
+                        <SessionReviewV2SidebarToggle
+                          opened={reviewV2State.sidebarOpened()}
+                          disabled={disabled}
+                          onToggle={reviewV2State.toggleSidebar}
+                        />
+                      )}
+                      fileBrowserState={reviewV2State}
+                      activeDiff={activeReviewFile()}
+                      focusReviewDiff={focusReviewDiff}
+                      reviewSnap={ui.reviewSnap}
+                      size={size}
+                      stacked={desktopV2PanelLayout().stacked}
+                    />
+                  </Suspense>
+                </div>
+              </Show>
+              <Show when={desktopV2PanelLayout().stacked}>
+                <div class="relative h-2 shrink-0" onPointerDown={() => size.start()}>
+                  <ResizeHandle
+                    class="!relative !inset-auto !h-full !w-full !transform-none"
+                    direction="vertical"
+                    size={layout.terminal.height()}
+                    min={100}
+                    max={typeof window === "undefined" ? 600 : window.innerHeight * 0.6}
+                    collapseThreshold={50}
+                    onResize={(height) => {
+                      size.touch()
+                      layout.terminal.resize(height)
+                    }}
+                    onCollapse={() => view().terminal.close()}
+                  />
+                </div>
+              </Show>
+              <Show when={terminalOpen()}>
+                <div
+                  classList={{
+                    "min-h-0 shrink-0": desktopV2PanelLayout().stacked,
+                    "min-h-0 flex-1": !desktopV2PanelLayout().stacked,
+                  }}
+                >
+                  <TerminalPanelV2 stacked={desktopV2PanelLayout().stacked} />
+                </div>
+              </Show>
+            </div>
+          </Show>
+        </Show>
       </div>
 
-      <TerminalPanel />
-    </div>
+      <Show when={!newSessionDesign()}>
+        <TerminalPanel />
+      </Show>
+    </SessionRouteFrame>
   )
 }

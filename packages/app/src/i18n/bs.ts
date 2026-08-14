@@ -1,4 +1,104 @@
 export const dict = {
+  "desktop.menu.app": "OpenCode",
+  "desktop.menu.file": "Datoteka",
+  "desktop.menu.edit": "Uredi",
+  "desktop.menu.view": "Prikaz",
+  "desktop.menu.go": "Idi",
+  "desktop.menu.window": "Prozor",
+  "desktop.menu.help": "Pomoć",
+  "desktop.menu.checkForUpdates": "Provjeri ima li ažuriranja...",
+  "desktop.menu.settings": "Postavke",
+  "desktop.menu.reloadWebview": "Ponovo učitaj Webview",
+  "desktop.menu.restart": "Ponovo pokreni",
+  "desktop.menu.exportLogs": "Izvezi zapisnike...",
+  "desktop.menu.newSession": "Nova sesija",
+  "desktop.menu.openProject": "Otvori projekat...",
+  "desktop.menu.newWindow": "Novi prozor",
+  "desktop.menu.closeWindow": "Zatvori prozor",
+  "desktop.menu.undo": "Poništi",
+  "desktop.menu.redo": "Vrati",
+  "desktop.menu.cut": "Izreži",
+  "desktop.menu.copy": "Kopiraj",
+  "desktop.menu.paste": "Zalijepi",
+  "desktop.menu.delete": "Izbriši",
+  "desktop.menu.selectAll": "Odaberi sve",
+  "desktop.menu.toggleSidebar": "Prikaži ili sakrij bočnu traku",
+  "desktop.menu.toggleTerminal": "Prikaži ili sakrij terminal",
+  "desktop.menu.toggleFileTree": "Prikaži ili sakrij stablo datoteka",
+  "desktop.menu.reload": "Ponovo učitaj",
+  "desktop.menu.toggleDeveloperTools": "Prikaži ili sakrij alate za programere",
+  "desktop.menu.actualSize": "Stvarna veličina",
+  "desktop.menu.zoomIn": "Uvećaj",
+  "desktop.menu.zoomOut": "Umanji",
+  "desktop.menu.toggleFullScreen": "Prikaži ili sakrij prikaz preko cijelog ekrana",
+  "desktop.menu.back": "Nazad",
+  "desktop.menu.forward": "Naprijed",
+  "desktop.menu.previousSession": "Prethodna sesija",
+  "desktop.menu.nextSession": "Sljedeća sesija",
+  "desktop.menu.previousProject": "Prethodni projekat",
+  "desktop.menu.nextProject": "Sljedeći projekat",
+  "desktop.menu.minimize": "Minimiziraj",
+  "desktop.menu.maximize": "Maksimiziraj",
+  "desktop.menu.documentation": "Dokumentacija za OpenCode",
+  "desktop.menu.supportForum": "Forum za podršku",
+  "desktop.menu.shareFeedback": "Pošalji povratne informacije",
+  "desktop.menu.reportBug": "Prijavi grešku",
+  "desktop.menu.ariaLabel": "OpenCode meni",
+
+  "desktop.updater.dialog.checkFailed.message": "Provjera ažuriranja nije uspjela.",
+  "desktop.updater.dialog.checkFailed.title": "Greška pri ažuriranju",
+  "desktop.updater.dialog.upToDate.message": "Sve je ažurno.",
+  "desktop.updater.dialog.upToDate.title": "Nema ažuriranja",
+  "desktop.updater.dialog.ready.message":
+    "Ažuriranje {{version}} je preuzeto. Želiš li sada ponovo pokrenuti aplikaciju?",
+  "desktop.updater.dialog.ready.title": "Ažuriranje je spremno",
+  "desktop.updater.dialog.restart": "Ponovo pokreni",
+  "desktop.updater.dialog.later": "Kasnije",
+
+  "desktop.recovery.action.relaunch": "Ponovo pokreni",
+  "desktop.recovery.action.exportLogs": "Izvezi zapisnike",
+  "desktop.recovery.action.keepWaiting": "Nastavi čekati",
+  "desktop.recovery.action.quit": "Izađi",
+  "desktop.recovery.loadFailed": "OpenCode se nije uspio učitati",
+  "desktop.recovery.terminated": "Prozor OpenCode-a neočekivano je zatvoren",
+  "desktop.recovery.unresponsive": "OpenCode ne reaguje",
+  "desktop.recovery.unresponsive.detail": "Možeš ponovo pokrenuti aplikaciju, otvoriti zapisnike ili nastaviti čekati.",
+  "desktop.recovery.loadFailed.detail": "Prozor: {{window}}\nURL: {{url}}\nGreška: {{code}} {{description}}",
+  "desktop.recovery.terminated.detail": "Prozor: {{window}}\nRazlog: {{reason}}\nKod: {{code}}",
+  "desktop.recovery.unknown": "<nepoznato>",
+
+  "desktop.dialog.chooseFolder": "Odaberi fasciklu",
+  "desktop.dialog.chooseFile": "Odaberi datoteku",
+  "desktop.dialog.saveFile": "Sačuvaj datoteku",
+  "desktop.dialog.files": "Datoteke",
+  "desktop.server.local": "Lokalni server",
+
+  "desktop.wsl.error.windowsOnly": "WSL je dostupan samo u Windowsu",
+  "desktop.wsl.error.unavailable": "WSL nije dostupan",
+  "desktop.wsl.error.listInstalled": "Nije uspjelo prikazivanje instaliranih WSL distribucija",
+  "desktop.wsl.error.listOnline": "Nije uspjelo prikazivanje dostupnih WSL distribucija",
+  "desktop.wsl.error.executeDistro": "Nije moguće izvršiti komande u distribuciji",
+  "desktop.wsl.error.installWsl": "Instalacija WSL-a nije uspjela",
+  "desktop.wsl.error.installDistro": "Instalacija distribucije nije uspjela: {{distro}}",
+  "desktop.wsl.error.installOpencode": "Instalacija OpenCode-a nije uspjela",
+  "desktop.wsl.error.alreadyAdded": "Distribucija {{distro}} je već dodana",
+  "desktop.wsl.error.opencodeMissing": "opencode nije instaliran u ovoj distribuciji",
+  "desktop.wsl.error.opencodeCannotRun": "opencode je instaliran, ali se ne može pokrenuti",
+  "desktop.wsl.error.opencodeNotInstalled": "OpenCode nije instaliran u distribuciji {{distro}}",
+  "desktop.wsl.error.updateVersion":
+    "Ažuriranje OpenCode-a je završeno, ali {{distro}} i dalje prijavljuje {{installed}}; očekivano je {{expected}}",
+  "desktop.wsl.error.noVersion": "nema verzije",
+  "desktop.wsl.error.serverExited": "WSL server se zatvorio nakon pokretanja (code={{code}} signal={{signal}})",
+  "desktop.wsl.error.serverExitedBeforeHealthy":
+    "WSL server se zatvorio prije nego što je postao dostupan (code={{code}} signal={{signal}}){{output}}",
+  "desktop.wsl.error.healthTimeout":
+    "Isteklo je vrijeme provjere dostupnosti komponente Sidecar za {{distro}} nakon {{timeout}} ms",
+  "desktop.wsl.error.commandTimeout": "Isteklo je vrijeme za {{command}} {{args}} nakon {{timeout}} ms",
+  "desktop.wsl.error.failedPort": "Nije uspjelo dohvaćanje porta",
+
+  "desktop.picker.error.notSelected": "Datoteka nije odabrana u izborniku",
+  "desktop.picker.error.sizeLimit": "Odabrani prilozi premašuju ograničenje od {{limit}} MB",
+
   "command.category.suggested": "Predloženo",
   "command.category.view": "Prikaz",
   "command.category.project": "Projekat",
@@ -16,6 +116,7 @@ export const dict = {
   "command.category.permissions": "Dozvole",
   "command.category.workspace": "Radni prostor",
   "command.category.settings": "Postavke",
+  "command.logs.export": "Izvezi zapisnike",
 
   "theme.scheme.system": "Sistem",
   "theme.scheme.light": "Svijetlo",
@@ -23,6 +124,9 @@ export const dict = {
 
   "command.sidebar.toggle": "Prikaži/sakrij bočnu traku",
   "command.project.open": "Otvori projekat",
+  "command.project.previous": "Prethodni projekat",
+  "command.project.next": "Sljedeći projekat",
+  "command.project.index": "Prebaci na projekat {{index}}",
   "command.provider.connect": "Poveži provajdera",
   "command.server.switch": "Promijeni server",
   "command.settings.open": "Otvori postavke",
@@ -45,6 +149,7 @@ export const dict = {
   "command.session.new": "Nova sesija",
   "command.file.open": "Otvori datoteku",
   "command.tab.close": "Zatvori karticu",
+  "command.tab.reopenClosed": "Ponovo otvori zatvorenu karticu",
   "command.context.addSelection": "Dodaj odabir u kontekst",
   "command.context.addSelection.description": "Dodaj odabrane linije iz trenutne datoteke",
   "command.input.focus": "Fokusiraj polje za unos",
@@ -88,7 +193,11 @@ export const dict = {
   "command.session.unshare": "Ukini dijeljenje sesije",
   "command.session.unshare.description": "Zaustavi dijeljenje ove sesije",
 
+  "command.session.export": "Izvezi sesiju",
+  "command.session.export.description": "Izvezi cijeli zapis sesije u JSON formatu",
+
   "palette.search.placeholder": "Pretraži datoteke, komande i sesije",
+  "palette.search.placeholder.home": "Pretraži komande i sesije",
   "palette.empty": "Nema rezultata",
   "palette.group.commands": "Komande",
   "palette.group.files": "Datoteke",
@@ -100,6 +209,7 @@ export const dict = {
   "dialog.provider.empty": "Nema pronađenih provajdera",
   "dialog.provider.group.popular": "Popularno",
   "dialog.provider.group.other": "Ostalo",
+  "dialog.provider.custom.label": "Prilagođeni provajder kompatibilan s OpenAI-jem",
   "dialog.provider.tag.recommended": "Preporučeno",
   "dialog.provider.opencode.note": "Kurirani modeli uključujući Claude, GPT, Gemini i druge",
   "dialog.provider.opencode.tagline": "Pouzdani optimizovani modeli",
@@ -120,6 +230,7 @@ export const dict = {
 
   "dialog.model.unpaid.freeModels.title": "Besplatni modeli koje obezbjeđuje OpenCode",
   "dialog.model.unpaid.addMore.title": "Dodaj još modela od popularnih provajdera",
+  "dialog.model.unpaid.viewMoreProviders": "Pogledaj još više od 70 provajdera",
 
   "dialog.provider.viewAll": "Prikaži više provajdera",
 
@@ -127,6 +238,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Prijavi se putem Claude Pro/Max",
   "provider.connect.selectMethod": "Odaberi način prijave za {{provider}}.",
   "provider.connect.method.apiKey": "API ključ",
+  "provider.connect.method.browser": "Preglednik",
+  "provider.connect.method.headless": "Bez grafičkog interfejsa",
   "provider.connect.status.inProgress": "Autorizacija je u toku...",
   "provider.connect.status.waiting": "Čekanje na autorizaciju...",
   "provider.connect.status.failed": "Autorizacija nije uspjela: {{error}}",
@@ -159,6 +272,7 @@ export const dict = {
   "provider.connect.toast.connected.description": "{{provider}} modeli su sada dostupni za korištenje.",
 
   "provider.custom.title": "Prilagođeni provajder",
+  "provider.custom.unavailable": "Prilagođeni provajderi nisu dostupni na ovom serveru",
   "provider.custom.description.prefix": "Konfiguriši OpenAI-kompatibilnog provajdera. Pogledaj ",
   "provider.custom.description.link": "dokumentaciju za konfiguraciju provajdera",
   "provider.custom.description.suffix": ".",
@@ -212,6 +326,11 @@ export const dict = {
   "model.input.video": "video",
   "model.input.pdf": "pdf",
   "model.tooltip.allows": "Podržava: {{inputs}}",
+  "model.tooltip.context.label": "Kontekst",
+  "model.tooltip.inputs": "Ulazi",
+  "model.tooltip.model": "Model",
+  "model.tooltip.provider": "Provajder",
+  "model.tooltip.reasoning": "Rasuđivanje",
   "model.tooltip.reasoning.allowed": "Podržava rasuđivanje",
   "model.tooltip.reasoning.none": "Bez rasuđivanja",
   "model.tooltip.context": "Limit konteksta {{limit}}",
@@ -222,9 +341,10 @@ export const dict = {
   "common.loading": "Učitavanje",
   "common.loading.ellipsis": "...",
   "common.cancel": "Otkaži",
+  "common.clear": "Očisti",
   "common.connect": "Poveži",
   "common.disconnect": "Prekini vezu",
-  "common.continue": "Pošalji",
+  "common.continue": "Nastavi",
   "common.submit": "Pošalji",
   "common.save": "Sačuvaj",
   "common.saving": "Čuvanje...",
@@ -239,6 +359,8 @@ export const dict = {
   "prompt.mode.shell": "Shell",
   "prompt.mode.normal": "Prompt",
   "prompt.mode.shell.exit": "esc za izlaz",
+  "session.child.promptDisabled": "Sesijama podagenta nije moguće slati upite.",
+  "session.child.backToParent": "Nazad na glavnu sesiju.",
 
   "prompt.example.1": "Popravi TODO u bazi koda",
   "prompt.example.2": "Koji je tehnološki stack ovog projekta?",
@@ -253,7 +375,7 @@ export const dict = {
   "prompt.example.11": "Optimizuj upite prema bazi podataka",
   "prompt.example.12": "Dodaj validaciju ulaza",
   "prompt.example.13": "Napravi novu komponentu za...",
-  "prompt.example.14": "Kako da deployam ovaj projekat?",
+  "prompt.example.14": "Kako da postavim ovaj projekat?",
   "prompt.example.15": "Pregledaj moj kod prema najboljim praksama",
   "prompt.example.16": "Dodaj obradu grešaka u ovu funkciju",
   "prompt.example.17": "Objasni ovaj regex obrazac",
@@ -261,14 +383,14 @@ export const dict = {
   "prompt.example.19": "Dodaj logovanje kroz cijelu bazu koda",
   "prompt.example.20": "Koje su zavisnosti zastarjele?",
   "prompt.example.21": "Pomozi mi da napišem migracijsku skriptu",
-  "prompt.example.22": "Implementiraj keširanje za ovaj endpoint",
+  "prompt.example.22": "Implementiraj keširanje za ovu krajnju tačku",
   "prompt.example.23": "Dodaj paginaciju u ovu listu",
   "prompt.example.24": "Napravi CLI komandu za...",
   "prompt.example.25": "Kako ovdje rade varijable okruženja?",
 
   "prompt.popover.emptyResults": "Nema rezultata",
   "prompt.popover.emptyCommands": "Nema komandi",
-  "prompt.dropzone.label": "Ovdje prevucite slike, PDF-ove ili tekstualne datoteke",
+  "prompt.dropzone.label": "Ovdje prevuci slike, PDF-ove ili tekstualne datoteke",
   "prompt.dropzone.file.label": "Spusti za @spominjanje datoteke",
   "prompt.slash.badge.custom": "prilagođeno",
   "prompt.slash.badge.skill": "skill",
@@ -277,12 +399,18 @@ export const dict = {
   "prompt.context.includeActiveFile": "Uključi aktivnu datoteku",
   "prompt.context.removeActiveFile": "Ukloni aktivnu datoteku iz konteksta",
   "prompt.context.removeFile": "Ukloni datoteku iz konteksta",
-  "prompt.action.attachFile": "Priloži datoteku",
+  "prompt.action.attachFile": "Dodaj datoteke",
+  "prompt.menu.addImagesAndFiles": "Dodaj datoteke i više",
+  "prompt.menu.imagesAndFiles": "Slike i datoteke",
+  "prompt.menu.commands": "Komande",
+  "prompt.menu.context": "Kontekst",
+  "prompt.menu.shellCommand": "Shell naredba",
   "prompt.attachment.remove": "Ukloni prilog",
   "prompt.action.send": "Pošalji",
   "prompt.action.stop": "Zaustavi",
 
   "prompt.toast.pasteUnsupported.title": "Nepodržan prilog",
+  "prompt.toast.attachmentDuplicate.title": "Ova datoteka je već učitana",
   "prompt.toast.pasteUnsupported.description": "Ovdje se mogu priložiti samo slike, PDF-ovi ili tekstualne datoteke.",
   "prompt.toast.modelAgentRequired.title": "Odaberi agenta i model",
   "prompt.toast.modelAgentRequired.description": "Odaberi agenta i model prije slanja upita.",
@@ -295,7 +423,7 @@ export const dict = {
 
   "dialog.mcp.title": "MCP-ovi",
   "dialog.mcp.description": "{{enabled}} od {{total}} omogućeno",
-  "dialog.mcp.empty": "Nema konfigurisnih MCP-ova",
+  "dialog.mcp.empty": "Nema konfigurisanih MCP-ova",
 
   "dialog.lsp.empty": "LSP-ovi se automatski otkrivaju prema tipu datoteke",
   "dialog.plugins.empty": "Plugini su konfigurisani u opencode.json",
@@ -303,13 +431,18 @@ export const dict = {
   "mcp.status.connected": "povezano",
   "mcp.status.failed": "neuspjelo",
   "mcp.status.needs_auth": "potrebna autentifikacija",
-  "mcp.auth.clickToAuthenticate": "Kliknite za autentifikaciju",
+  "mcp.auth.clickToAuthenticate": "Klikni za autentifikaciju",
   "mcp.status.disabled": "onemogućeno",
 
   "dialog.fork.empty": "Nema poruka za fork",
 
-  "dialog.directory.search.placeholder": "Pretraži foldere",
-  "dialog.directory.empty": "Nema pronađenih foldera",
+  "dialog.directory.search.placeholder": "Pretraži fascikle",
+  "dialog.directory.empty": "Nema pronađenih fascikli",
+  "dialog.directory.action.selectFile": "Odaberi datoteku",
+  "dialog.directory.action.selectFolder": "Odaberi fasciklu",
+  "dialog.directory.root": "Korijen",
+  "dialog.directory.parent": "Nadređena fascikla",
+  "dialog.directory.readError": "Nije moguće pročitati ovu fasciklu",
 
   "dialog.server.title": "Serveri",
   "dialog.server.description": "Promijeni na koji se OpenCode server ova aplikacija povezuje.",
@@ -328,7 +461,7 @@ export const dict = {
   "dialog.server.edit.title": "Uredi server",
   "dialog.server.default.title": "Podrazumijevani server",
   "dialog.server.default.description":
-    "Poveži se na ovaj server pri pokretanju aplikacije umjesto pokretanja lokalnog servera. Potreban je restart.",
+    "Poveži se na ovaj server pri pokretanju aplikacije umjesto pokretanja lokalnog servera. Potrebno je ponovo pokrenuti aplikaciju.",
   "dialog.server.default.none": "Nije odabran server",
   "dialog.server.default.set": "Postavi trenutni server kao podrazumijevani",
   "dialog.server.default.clear": "Očisti",
@@ -340,6 +473,91 @@ export const dict = {
   "dialog.server.menu.delete": "Izbriši",
   "dialog.server.current": "Trenutni server",
   "dialog.server.status.default": "Podrazumijevano",
+  "wsl.server.add": "Dodaj WSL server",
+  "wsl.server.addShort": "Dodaj WSL",
+  "wsl.server.label": "WSL",
+  "wsl.server.menu.label": "WSL server",
+  "wsl.server.retryStart": "Ponovi pokretanje",
+  "wsl.server.updating": "Ažuriranje...",
+  "wsl.onboarding.step.distro": "Odaberi distribuciju",
+  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.checkingRuntime": "Provjera WSL-a...",
+  "wsl.onboarding.restartRequired": "Potrebno je ponovo pokrenuti Windows da bi se završila instalacija WSL-a.",
+  "wsl.onboarding.ready": "WSL je spreman.",
+  "wsl.onboarding.required": "WSL je potreban za nastavak.",
+  "wsl.onboarding.checkingDistros": "Provjera distribucija...",
+  "wsl.onboarding.installingDistro": "Instaliranje {{distro}}...",
+  "wsl.onboarding.checkingDistro": "Provjera {{distro}}...",
+  "wsl.onboarding.listingDistros": "Učitavanje liste distribucija...",
+  "wsl.onboarding.distroReady": "Distribucija {{distro}} je spremna.",
+  "wsl.onboarding.distroNotInstalled": "Distribucija {{distro}} još nije instalirana.",
+  "wsl.onboarding.openDistroOnce": "Otvori {{distro}} jednom da završiš postavljanje.",
+  "wsl.onboarding.finishingDistro": "Završavanje postavljanja za {{distro}}.",
+  "wsl.onboarding.pickDistro": "Odaberi distribuciju ili instaliraj jednu ispod.",
+  "wsl.onboarding.checkingOpencode": "Provjera OpenCode...",
+  "wsl.onboarding.checkingOpencodeIn": "Provjera OpenCode u distribuciji {{distro}}...",
+  "wsl.onboarding.updatingOpencode": "Ažuriranje OpenCode...",
+  "wsl.onboarding.updatingOpencodeIn": "Ažuriranje OpenCode u distribuciji {{distro}}...",
+  "wsl.onboarding.updateOpencodeIn": "Ažuriraj OpenCode u distribuciji {{distro}}.",
+  "wsl.onboarding.updateOpencode": "Ažuriraj OpenCode",
+  "wsl.onboarding.opencodeReadyIn": "OpenCode je spreman u distribuciji {{distro}}.",
+  "wsl.onboarding.opencodeReady": "OpenCode je spreman.",
+  "wsl.onboarding.installOpencodeIn": "Instaliraj OpenCode u distribuciji {{distro}}.",
+  "wsl.onboarding.installOpencode": "Instaliraj OpenCode",
+  "wsl.onboarding.chooseDistroFirst": "Prvo odaberi distribuciju.",
+  "wsl.onboarding.loadFailed": "Nije uspjelo učitavanje WSL stanja.",
+  "wsl.onboarding.loading": "Učitavanje...",
+  "wsl.onboarding.installedDistros": "Instalirane distribucije",
+  "wsl.onboarding.checkAgain": "Provjeri ponovo",
+  "wsl.onboarding.distroStatus.ready": "Spremno",
+  "wsl.onboarding.distroStatus.checking": "Provjera...",
+  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode nije instaliran",
+  "wsl.onboarding.distroStatus.missingTools": "Nedostaju bash i curl",
+  "wsl.onboarding.distroStatus.unsupported": "Nije podržano · Koristi WSL 2",
+  "wsl.onboarding.needAnotherDistro": "Treba ti druga distribucija?",
+  "wsl.onboarding.needAnotherDistroHint": "Instaliraj Linux distribuciju iz WSL kataloga",
+  "wsl.onboarding.wslNotInstalled.title": "WSL nije instaliran",
+  "wsl.onboarding.wslNotInstalled.description":
+    "WSL (Windows Subsystem for Linux) je potreban da bi OpenCode mogao dodati WSL server",
+  "wsl.onboarding.wslUnavailable.title": "WSL nije dostupan",
+  "wsl.onboarding.wslUnavailable.description": "OpenCode nije mogao provjeriti WSL na ovom uređaju.",
+  "wsl.onboarding.installWsl": "Instaliraj WSL",
+  "wsl.onboarding.windowsRestartRequired":
+    "Ponovo pokreni Windows da završiš instalaciju WSL-a, zatim ponovo otvori OpenCode.",
+  "wsl.onboarding.next": "Dalje",
+  "wsl.onboarding.refresh": "Osvježi",
+  "wsl.onboarding.allDistrosAdded": "Sve instalirane distribucije su već dodane.",
+  "wsl.onboarding.noDistros": "Još nema otkrivenih distribucija.",
+  "wsl.onboarding.install": "Instaliraj",
+  "wsl.onboarding.installing": "Instaliranje...",
+  "wsl.onboarding.installDistro": "Instaliraj distribuciju",
+  "wsl.onboarding.searchDistros": "Pretraži distribucije",
+  "wsl.onboarding.wsl2Required": "Potreban je WSL 2.",
+  "wsl.onboarding.toolsRequired": "Ovoj distribuciji su potrebni bash i curl.",
+  "wsl.onboarding.openTerminal": "Otvori terminal",
+  "wsl.onboarding.path": "Putanja: {{path}}",
+  "wsl.onboarding.notFound": "nije pronađeno",
+  "wsl.onboarding.version": "Verzija: {{version}}",
+  "wsl.onboarding.unknown": "nepoznato",
+  "wsl.onboarding.desktopVersion": "desktop {{version}}",
+  "wsl.onboarding.versionMismatch": "Instalirana verzija ne odgovara verziji desktop aplikacije.",
+  "wsl.onboarding.adding": "Dodavanje...",
+
+  "help.tabs.toast.ariaLabel": "Predstavljamo kartice. Organizuj svoj rad i aktivne sesije pomoću kartica",
+  "help.tabs.toast.dismiss": "Odbaci informacije o karticama",
+  "help.tabs.title": "Predstavljamo kartice",
+  "help.tabs.description": "Organizuj svoj rad i aktivne sesije pomoću kartica",
+  "help.tabs.date": "14. juli",
+  "help.tabs.introduction": "OpenCode Desktop sada je organizovan oko kartica.",
+  "help.tabs.sessions":
+    "Započni novu sesiju u kartici ili otvori postojeću sesiju iz bilo kojeg projekta. Otvori novu karticu kada započinješ nešto novo, a zatvori je kada završiš.",
+  "help.tabs.organize":
+    "Nekoliko otvorenih kartica olakšava organizovanje aktivnih sesija. Preimenuj kartice tako da ih možeš lako prepoznati ako ih namjeravaš zadržati.",
+  "help.tabs.home":
+    "Sve svoje sesije i projekte pronaći ćeš na novom početnom ekranu. Odabirom sesije ona se otvara u kartici.",
+  "help.tabs.persistence": "Kada ponovo otvoriš aplikaciju, tvoje kartice ostaju otvorene.",
+  "help.tabs.worktrees":
+    "Novi dizajn još ne podržava Git Worktrees, ali podrška stiže uskoro. Ako želiš nastaviti koristiti prethodni raspored, možeš mijenjati rasporede u Postavkama. Imaj na umu da će novi raspored za nekoliko sedmica postati trajan.",
 
   "dialog.project.edit.title": "Uredi projekat",
   "dialog.project.edit.name": "Naziv",
@@ -353,9 +571,11 @@ export const dict = {
   "dialog.project.edit.worktree.startup.description": "Pokreće se nakon kreiranja novog radnog prostora (worktree).",
   "dialog.project.edit.worktree.startup.placeholder": "npr. bun install",
 
+  "dialog.usageExceeded.dontShowAgain": "Nemoj više prikazivati",
+
   "context.breakdown.title": "Razlaganje konteksta",
   "context.breakdown.note":
-    'Približna raspodjela ulaznih tokena. "Ostalo" uključuje definicije alata i dodatni overhead.',
+    'Približna raspodjela ulaznih tokena. "Ostalo" uključuje definicije alata i dodatno opterećenje.',
   "context.breakdown.system": "Sistem",
   "context.breakdown.user": "Korisnik",
   "context.breakdown.assistant": "Asistent",
@@ -364,6 +584,8 @@ export const dict = {
 
   "context.systemPrompt.title": "Sistemski prompt",
   "context.rawMessages.title": "Sirove poruke",
+
+  "context.export.session": "Izvezi sesiju",
 
   "context.stats.session": "Sesija",
   "context.stats.messages": "Poruke",
@@ -375,7 +597,7 @@ export const dict = {
   "context.stats.inputTokens": "Ulazni tokeni",
   "context.stats.outputTokens": "Izlazni tokeni",
   "context.stats.reasoningTokens": "Tokeni za rasuđivanje",
-  "context.stats.cacheTokens": "Cache tokeni (čitanje/pisanje)",
+  "context.stats.cacheTokens": "Keširani tokeni (čitanje/pisanje)",
   "context.stats.userMessages": "Korisničke poruke",
   "context.stats.assistantMessages": "Poruke asistenta",
   "context.stats.totalCost": "Ukupni trošak",
@@ -403,6 +625,7 @@ export const dict = {
   "language.no": "Norsk",
   "language.br": "Português (Brasil)",
   "language.bs": "Bosanski",
+  "language.uk": "Українська",
   "language.th": "ไทย",
   "language.tr": "Türkçe",
 
@@ -442,19 +665,26 @@ export const dict = {
   "toast.session.unshare.failed.title": "Neuspjelo ukidanje dijeljenja",
   "toast.session.unshare.failed.description": "Došlo je do greške prilikom ukidanja dijeljenja",
 
+  "toast.session.export.success.title": "Sesija izvezena",
+  "toast.session.export.success.description": "Sesija je sačuvana kao {{filename}}",
+  "toast.session.export.failed.title": "Izvoz sesije nije uspio",
+  "toast.session.export.failed.description": "Došlo je do greške prilikom izvoza sesije",
+
   "toast.session.listFailed.title": "Neuspjelo učitavanje sesija za {{project}}",
 
   "toast.update.title": "Dostupno ažuriranje",
   "toast.update.description": "Nova verzija OpenCode-a ({{version}}) je dostupna za instalaciju.",
-  "toast.update.action.installRestart": "Instaliraj i restartuj",
+  "toast.update.action.installRestart": "Instaliraj i ponovo pokreni",
   "toast.update.action.notYet": "Ne još",
 
   "error.page.title": "Nešto je pošlo po zlu",
   "error.page.description": "Došlo je do greške prilikom učitavanja aplikacije.",
+  "error.page.description.localServerStartup": "Došlo je do greške pri pokretanju lokalnog servera.",
   "error.page.details.label": "Detalji greške",
-  "error.page.action.restart": "Restartuj",
+  "error.page.action.restart": "Ponovo pokreni",
   "error.page.action.report": "Prijavi grešku",
   "error.page.action.reported": "Greška prijavljena",
+  "error.page.action.exportLogs": "Izvezi logove",
   "error.page.action.checking": "Provjera...",
   "error.page.action.checkUpdates": "Provjeri ažuriranja",
   "error.page.action.updateTo": "Ažuriraj na {{version}}",
@@ -476,7 +706,7 @@ export const dict = {
   "error.chain.responseBody": "Tijelo odgovora:\n{{body}}",
   "error.chain.didYouMean": "Da li si mislio: {{suggestions}}",
   "error.chain.modelNotFound": "Model nije pronađen: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Provjeri konfiguraciju (opencode.json) provider/model names",
+  "error.chain.checkConfig": "Provjeri nazive provajdera/modela u konfiguraciji (opencode.json)",
   "error.chain.mcpFailed": 'MCP server "{{name}}" nije uspio. Napomena: OpenCode još ne podržava MCP autentifikaciju.',
   "error.chain.providerAuthFailed": "Autentifikacija provajdera nije uspjela ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
@@ -503,20 +733,46 @@ export const dict = {
   "home.welcome.title": "Vaš lični AI asistent je spreman",
   "home.welcome.description": "Predajte svoj lokalni projektni folder Foxu — duboko će razumjeti strukturu vašeg projekta i pomoći vam u svakom trenutku",
   "home.welcome.open": "Otvori folder",
+  "home.empty.title": "Nema nedavnih projekata",
+  "home.empty.description": "Kreni tako što ćeš otvoriti lokalni projekat",
+  "home.title": "Početna",
+  "home.projects": "Projekti",
+  "home.project.add": "Dodaj projekat",
+  "home.recentlyClosed": "Nedavno zatvoreni projekti",
+  "home.server.collapse": "Sažmi projekte servera",
+  "home.server.expand": "Proširi projekte servera",
+  "home.sessions.search.placeholder": "Pretraži sesije",
+  "home.sessions.search.placeholder.scoped": "Pretraži sesije u {{scope}}",
+  "home.sessions.search.sessions": "Sesije",
+  "home.sessions.search.noResults": "Nema pronađenih sesija za {{query}}",
+  "home.sessions.empty": "Ovdje još nema ničega",
+  "home.sessions.empty.description": "Kreiraj sesiju za početak",
+  "home.sessions.group.today": "Danas",
+  "home.sessions.group.yesterday": "Jučer",
+  "home.sessions.group.older": "Starije",
+  "home.providerTip":
+    "Poveži se s više od 75 provajdera da koristiš druge modele, uključujući Claude, GPT, Gemini i druge",
 
   "session.tab.session": "Sesija",
   "session.tab.review": "Pregled",
   "session.tab.context": "Kontekst",
+  "session.tab.unknown": "Nepoznata sesija",
   "session.panel.reviewAndFiles": "Pregled i datoteke",
+  "session.error.notFound": "Ova sesija nije pronađena",
+  "session.error.notFound.description": "Ova kartica upućuje na sesiju koja više ne postoji na ovom serveru.",
+  "session.error.notFound.closeTab": "Zatvori karticu",
+  "session.error.serverConnection": "Nije moguće povezati se s ovim serverom",
   "session.review.filesChanged": "Izmijenjeno {{count}} datoteka",
   "session.review.change.one": "Izmjena",
   "session.review.change.other": "Izmjene",
   "session.review.loadingChanges": "Učitavanje izmjena...",
   "session.review.empty": "Još nema izmjena u ovoj sesiji",
-  "session.review.noVcs": "Nije detektovan Git sistem kontrole verzija, promjene se ne prikazuju",
+  "session.review.noVcs": "Nije otkriven Git sistem za kontrolu verzija, pa se promjene ne prikazuju",
   "session.review.noSnapshot":
     "Praćenje snimaka (snapshot) je onemogućeno u konfiguraciji, pa promjene sesije nisu dostupne",
   "session.review.noChanges": "Nema izmjena",
+  "session.review.noUncommittedChanges": "Još nema promjena koje nisu commitovane",
+  "session.review.noBranchChanges": "Još nema promjena na grani",
 
   "session.files.selectToOpen": "Odaberi datoteku za otvaranje",
   "session.files.all": "Sve datoteke",
@@ -533,22 +789,37 @@ export const dict = {
   "session.todo.title": "Zadaci",
   "session.todo.collapse": "Sažmi",
   "session.todo.expand": "Proširi",
+  "session.question.minimize": "Minimiziraj pitanje",
+  "session.question.restore": "Vrati pitanje",
+  "session.question.pending.one": "{{count}} pitanje na čekanju",
+  "session.question.pending.few": "{{count}} pitanja na čekanju",
+  "session.question.pending.other": "{{count}} pitanja na čekanju",
   "session.followupDock.summary.one": "{{count}} poruka na čekanju",
+  "session.followupDock.summary.few": "{{count}} poruke na čekanju",
   "session.followupDock.summary.other": "{{count}} poruka na čekanju",
   "session.followupDock.sendNow": "Pošalji sada",
   "session.followupDock.edit": "Uredi",
   "session.followupDock.collapse": "Sažmi poruke na čekanju",
   "session.followupDock.expand": "Proširi poruke na čekanju",
   "session.revertDock.summary.one": "{{count}} vraćena poruka",
+  "session.revertDock.summary.few": "{{count}} vraćene poruke",
   "session.revertDock.summary.other": "{{count}} vraćenih poruka",
   "session.revertDock.collapse": "Sažmi vraćene poruke",
   "session.revertDock.expand": "Proširi vraćene poruke",
   "session.revertDock.restore": "Vrati poruku",
 
   "session.new.title": "Napravi bilo šta",
+  "session.new.project.new": "Novi projekat",
+  "session.new.project.search": "Pretraži projekte",
+  "session.new.project.add": "Dodaj projekat",
   "session.new.worktree.main": "Glavna grana",
   "session.new.worktree.mainWithBranch": "Glavna grana ({{branch}})",
   "session.new.worktree.create": "Kreiraj novi worktree",
+  "session.new.workspace.runIn": "Pokreni sesiju u",
+  "session.new.workspace.triggerLocal": "Lokalno",
+  "session.new.workspace.local": "Lokalni repozitorij",
+  "session.new.workspace.existing": "Radni prostor…",
+  "session.new.git.none": "Nema Gita",
   "session.new.lastModified": "Posljednja izmjena",
 
   "session.header.search.placeholder": "Pretraži {{project}}",
@@ -589,7 +860,13 @@ export const dict = {
   "terminal.close": "Zatvori terminal",
   "terminal.connectionLost.title": "Veza prekinuta",
   "terminal.connectionLost.description":
-    "Veza s terminalom je prekinuta. Ovo se može desiti kada se server restartuje.",
+    "Veza s terminalom je prekinuta. Ovo se može desiti kada se server ponovo pokrene.",
+  "terminal.connectTicket.csrfError":
+    "PTY tiket za povezivanje odbijen je zbog provjera porijekla ili CSRF-a. Provjeri CORS konfiguraciju servera.",
+  "terminal.connectTicket.statusError": "PTY tiket za povezivanje nije uspio sa statusom {{status}}",
+
+  "titlebar.update": "Ažuriraj",
+  "titlebar.updateVersion": "Ažuriraj {{version}}",
 
   "common.closeTab": "Zatvori karticu",
   "common.dismiss": "Odbaci",
@@ -597,7 +874,8 @@ export const dict = {
   "common.moreOptions": "Više opcija",
   "common.learnMore": "Saznaj više",
   "common.rename": "Preimenuj",
-  "common.reset": "Resetuj",
+  "common.export": "Izvezi",
+  "common.reset": "Vrati na početno stanje",
   "common.archive": "Arhiviraj",
   "common.undo": "Poništi",
   "find.placeholder": "Pronađi u sesiji",
@@ -623,6 +901,8 @@ export const dict = {
   "sidebar.project.recentSessions": "Nedavne sesije",
   "sidebar.project.viewAllSessions": "Prikaži sve sesije",
   "sidebar.project.clearNotifications": "Očisti obavijesti",
+  "sidebar.empty.title": "Nema otvorenih projekata",
+  "sidebar.empty.description": "Otvori projekat za početak",
 
   "app.name.desktop": "OpenCode Desktop",
 
@@ -635,6 +915,7 @@ export const dict = {
   "settings.desktop.wsl.description": "Pokreni OpenCode server unutar WSL-a na Windowsu.",
 
   "settings.general.section.appearance": "Izgled",
+  "settings.general.section.advanced": "Napredno",
   "settings.general.section.notifications": "Sistemske obavijesti",
   "settings.general.section.updates": "Ažuriranja",
   "settings.general.section.sounds": "Zvučni efekti",
@@ -643,6 +924,11 @@ export const dict = {
 
   "settings.general.row.language.title": "Jezik",
   "settings.general.row.language.description": "Promijeni jezik prikaza u OpenCode-u",
+  "settings.general.row.shell.title": "Shell terminala",
+  "settings.general.row.shell.description":
+    "Odaberi shell koji se koristi za terminal. Kompatibilni shellovi koriste se i za pozive alata agenta.",
+  "settings.general.row.shell.autoDefault": "Automatski (podrazumijevano)",
+  "settings.general.row.shell.terminalOnly": "samo terminal",
   "settings.general.row.appearance.title": "Izgled",
   "settings.general.row.appearance.description": "Prilagodi kako OpenCode izgleda na tvom uređaju",
   "settings.general.row.colorScheme.title": "Šema boja",
@@ -651,14 +937,30 @@ export const dict = {
   "settings.general.row.theme.description": "Prilagodi temu OpenCode-a.",
   "settings.general.row.font.title": "Font za kod",
   "settings.general.row.font.description": "Prilagodi font koji se koristi u blokovima koda",
-  "settings.general.row.terminalFont.title": "Terminal Font",
-  "settings.general.row.terminalFont.description": "Customise the font used in the terminal",
+  "settings.general.row.terminalFont.title": "Font terminala",
+  "settings.general.row.terminalFont.description": "Prilagodi font koji se koristi u terminalu",
   "settings.general.row.uiFont.title": "UI font",
   "settings.general.row.uiFont.description": "Prilagodi font koji se koristi u cijelom interfejsu",
   "settings.general.row.followup.title": "Ponašanje nadovezivanja",
   "settings.general.row.followup.description": "Odaberi da li upiti nadovezivanja usmjeravaju odmah ili čekaju u redu",
   "settings.general.row.followup.option.queue": "Red čekanja",
   "settings.general.row.followup.option.steer": "Usmjeri",
+  "settings.general.row.showFileTree.title": "Stablo datoteka",
+  "settings.general.row.showFileTree.description": "Prikaži stablo datoteka u sesijama",
+  "settings.general.row.showNavigation.title": "Kontrole navigacije",
+  "settings.general.row.showNavigation.description":
+    "Prikaži dugmad za nazad i naprijed u naslovnoj traci desktop aplikacije",
+  "settings.general.row.showSearch.title": "Paleta komandi",
+  "settings.general.row.showSearch.description": "Prikaži dugme za pretragu i paletu komandi u naslovnoj traci",
+  "settings.general.row.showTerminal.title": "Terminal",
+  "settings.general.row.showTerminal.description": "Prikaži dugme terminala u naslovnoj traci desktop aplikacije",
+  "settings.general.row.showStatus.title": "Status servera",
+  "settings.general.row.showStatus.description": "Prikaži dugme statusa servera u naslovnoj traci",
+  "settings.general.row.mobileTitlebarBottom.title": "Donja navigacija",
+  "settings.general.row.mobileTitlebarBottom.description":
+    "Postavi naslovnu traku i kartice sesije na dno ekrana na mobilnim uređajima",
+  "settings.general.row.showCustomAgents.title": "Prilagođeni agenti",
+  "settings.general.row.showCustomAgents.description": "Prikaži izbor agenta u uređivaču poruke",
   "settings.general.row.reasoningSummaries.title": "Prikaži sažetke rasuđivanja",
   "settings.general.row.reasoningSummaries.description": "Prikaži sažetke rasuđivanja modela na vremenskoj traci",
 
@@ -668,11 +970,19 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "Proširi dijelove alata za uređivanje",
   "settings.general.row.editToolPartsExpanded.description":
     "Prikaži dijelove alata za uređivanje, pisanje i patch podrazumijevano proširene na vremenskoj traci",
-  "settings.general.row.showSessionProgressBar.title": "Prikaži traku napretka sesije",
-  "settings.general.row.showSessionProgressBar.description":
-    "Prikaži animiranu traku napretka na vrhu sesije kada agent radi",
+  "settings.general.row.newInterface.title": "Novi raspored",
+  "settings.general.row.newInterface.badge": "Novo",
+  "settings.general.row.newInterface.description":
+    "Koristi nove kartice i raspored početne stranice. Ograničeno vrijeme možeš se prebacivati između rasporeda.",
+  "settings.general.row.newInterfaceNotice.title": "Sada koristiš novi raspored",
+  "settings.general.row.newInterfaceNotice.description": "Prethodni raspored više nije dostupan",
+  "settings.general.row.newInterfaceNotice.dismiss": "Odbaci",
+  "settings.general.row.pinchZoom.title": "Zumiranje štipanjem",
+  "settings.general.row.pinchZoom.description":
+    "Dozvoli zumiranje gestom štipanja na dodirnoj ploči i pomoću Ctrl-pomjeranja",
   "settings.general.row.wayland.title": "Koristi nativni Wayland",
-  "settings.general.row.wayland.description": "Onemogući X11 fallback na Waylandu. Zahtijeva restart.",
+  "settings.general.row.wayland.description":
+    "Onemogući rezervni X11 način rada na Waylandu. Zahtijeva ponovno pokretanje.",
   "settings.general.row.wayland.tooltip":
     "Na Linuxu sa monitorima miješanih stopa osvježavanja, nativni Wayland može biti stabilniji.",
 
@@ -685,6 +995,8 @@ export const dict = {
   "settings.updates.row.check.description": "Ručno provjeri ažuriranja i instaliraj ako su dostupna",
   "settings.updates.action.checkNow": "Provjeri sada",
   "settings.updates.action.checking": "Provjera...",
+  "settings.updates.action.downloading": "Preuzimanje...",
+  "settings.updates.action.installing": "Instaliranje...",
   "settings.updates.toast.latest.title": "Sve je ažurno",
   "settings.updates.toast.latest.description": "Koristiš najnoviju verziju OpenCode-a.",
   "sound.option.none": "Nijedan",
@@ -786,7 +1098,7 @@ export const dict = {
   "settings.mcp.description": "MCP postavke će se ovdje moći podešavati.",
 
   "settings.permissions.title": "Dozvole",
-  "settings.permissions.description": "Kontroliši koje alate server smije koristiti po defaultu.",
+  "settings.permissions.description": "Kontroliši koje alate server smije koristiti zadano.",
   "settings.permissions.section.tools": "Alati",
   "settings.permissions.toast.updateFailed.title": "Neuspjelo ažuriranje dozvola",
 
@@ -798,7 +1110,7 @@ export const dict = {
   "settings.permissions.tool.read.description": "Čitanje datoteke (podudara se s putanjom datoteke)",
   "settings.permissions.tool.edit.title": "Uređivanje",
   "settings.permissions.tool.edit.description":
-    "Mijenjanje datoteka, uključujući izmjene, pisanja, patch-eve i multi-izmjene",
+    "Mijenjanje datoteka, uključujući uređivanje, pisanje, zakrpe i višestruke izmjene",
   "settings.permissions.tool.glob.title": "Glob",
   "settings.permissions.tool.glob.description": "Podudaranje datoteka pomoću glob šablona",
   "settings.permissions.tool.grep.title": "Grep",
@@ -834,26 +1146,26 @@ export const dict = {
   "workspace.type.sandbox": "sandbox",
   "workspace.create.failed.title": "Neuspješno kreiranje radnog prostora",
   "workspace.delete.failed.title": "Neuspješno brisanje radnog prostora",
-  "workspace.resetting.title": "Resetovanje radnog prostora",
+  "workspace.resetting.title": "Vraćanje radnog prostora na početno stanje",
   "workspace.resetting.description": "Ovo može potrajati minut.",
-  "workspace.reset.failed.title": "Neuspješno resetovanje radnog prostora",
-  "workspace.reset.success.title": "Radni prostor resetovan",
+  "workspace.reset.failed.title": "Neuspješno vraćanje radnog prostora na početno stanje",
+  "workspace.reset.success.title": "Radni prostor vraćen na početno stanje",
   "workspace.reset.success.description": "Radni prostor sada odgovara podrazumijevanoj grani.",
   "workspace.error.stillPreparing": "Radni prostor se još priprema",
-  "workspace.status.checking": "Provjera neobjedinjenih promjena...",
+  "workspace.status.checking": "Provjera promjena koje nisu commitovane...",
   "workspace.status.error": "Nije moguće provjeriti git status.",
-  "workspace.status.clean": "Nisu pronađene neobjedinjene promjene.",
-  "workspace.status.dirty": "Pronađene su neobjedinjene promjene u ovom radnom prostoru.",
+  "workspace.status.clean": "Nisu pronađene promjene koje nisu commitovane.",
+  "workspace.status.dirty": "Pronađene su promjene koje nisu commitovane u ovom radnom prostoru.",
   "workspace.delete.title": "Izbriši radni prostor",
   "workspace.delete.confirm": 'Izbriši radni prostor "{{name}}"?',
   "workspace.delete.button": "Izbriši radni prostor",
-  "workspace.reset.title": "Resetuj radni prostor",
-  "workspace.reset.confirm": 'Resetuj radni prostor "{{name}}"?',
-  "workspace.reset.button": "Resetuj radni prostor",
+  "workspace.reset.title": "Vrati radni prostor na početno stanje",
+  "workspace.reset.confirm": 'Vrati radni prostor "{{name}}" na početno stanje?',
+  "workspace.reset.button": "Vrati radni prostor na početno stanje",
   "workspace.reset.archived.none": "Nijedna aktivna sesija neće biti arhivirana.",
   "workspace.reset.archived.one": "1 sesija će biti arhivirana.",
   "workspace.reset.archived.many": "Biće arhivirano {{count}} sesija.",
-  "workspace.reset.note": "Ovo će resetovati radni prostor da odgovara podrazumijevanoj grani.",
+  "workspace.reset.note": "Ovo će vratiti radni prostor na stanje podrazumijevane grane.",
   "common.open": "Otvori",
   "dialog.releaseNotes.action.getStarted": "Započni",
   "dialog.releaseNotes.action.next": "Sljedeće",
@@ -866,8 +1178,8 @@ export const dict = {
   "common.time.minutesAgo.short": "prije {{count}} min",
   "common.time.hoursAgo.short": "prije {{count}} h",
   "common.time.daysAgo.short": "prije {{count}} d",
-  "settings.providers.connected.environmentDescription": "Povezano sa vašim varijablama okruženja",
-  "settings.providers.custom.description": "Dodajte provajdera kompatibilnog s OpenAI putem osnovnog URL-a.",
+  "settings.providers.connected.environmentDescription": "Povezano s tvojim varijablama okruženja",
+  "settings.providers.custom.description": "Dodaj provajdera kompatibilnog s OpenAI putem baznog URL-a.",
 
   "app.server.unreachable": "Nije moguće pristupiti {{server}}",
   "app.server.retrying": "Automatski ponovni pokušaj...",
@@ -876,13 +1188,16 @@ export const dict = {
   "dialog.server.add.passwordPlaceholder": "lozinka",
   "server.row.noUsername": "nema korisničkog imena",
   "session.review.noVcs.createGit.title": "Kreiraj Git repozitorij",
-  "session.review.noVcs.createGit.description": "Pratite, pregledajte i poništite promjene u ovom projektu",
+  "session.review.noVcs.createGit.description": "Prati, pregledaj i poništi promjene u ovom projektu",
   "session.review.noVcs.createGit.actionLoading": "Kreiranje Git repozitorija...",
   "session.review.noVcs.createGit.action": "Kreiraj Git repozitorij",
   "session.todo.progress": "{{done}} od {{total}} zadataka završeno",
   "session.question.progress": "{{current}} od {{total}} pitanja",
   "session.header.open.finder": "Finder",
   "session.header.open.fileExplorer": "File Explorer",
+  "session.header.reveal.finder": "Prikaži u Finderu",
+  "session.header.reveal.fileExplorer": "Prikaži u File Exploreru",
+  "session.header.reveal.containingFolder": "Otvori fasciklu koja sadrži ovu stavku",
   "session.header.open.fileManager": "File Manager",
   "session.header.open.app.vscode": "VS Code",
   "session.header.open.app.cursor": "Cursor",
@@ -920,6 +1235,14 @@ export const dict = {
   "debugBar.mem.label": "MEM",
   "debugBar.mem.tipUnavailable": "Korišteni JS heap naspram limita heapa. Samo Chromium.",
   "debugBar.mem.tip": "Korišteni JS heap naspram limita heapa. {{used}} od {{limit}}.",
+  "debugBar.focus.label": "FOCUS",
+  "debugBar.focus.tip": "Prisilno primijeni stilove fokusa na sve interaktivne elemente",
+  "debugBar.focus.on": "UKLJUČENO",
+  "debugBar.focus.off": "ISKLJUČENO",
+  "debugBar.direction.label": "DIR",
+  "debugBar.direction.tip": "Prisilno postavi smjer rasporeda cijele aplikacije bez promjene odabranog jezika",
+  "debugBar.direction.ltr": "LTR",
+  "debugBar.direction.rtl": "RTL",
   "common.key.ctrl": "Ctrl",
   "common.key.alt": "Alt",
   "common.key.shift": "Shift",
@@ -943,4 +1266,186 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Nije uspjelo kreiranje trajne ikone projekta",
   "error.childStore.storeCreateFailed": "Nije uspjelo kreiranje skladišta",
   "terminal.connectionLost.abnormalClose": "WebSocket zatvoren nenormalno: {{code}}",
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line1": "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.prefix": "Visit ", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.link": "getbot.me", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.suffix": " to collect your API key.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.fetchModels.failed": "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.timeout": "Request to api.getbot.me timed out (15s). Please check your network and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels": "Refresh models", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.title": "AI modified this file", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.", // FORK-i18n-backfill(en 兜底)
+  "common.closeOtherTabs": "Close Other Tabs", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.title": "Anonymous usage statistics", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.description": "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.locked": "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.rename": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.revealInFolder": "Reveal in folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyPath": "Copy path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.cut": "Cut", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toFolder": "Paste into this folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toRoot": "Paste to project root", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFile": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFolder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.refresh": "Refresh", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyRelativePath": "Copy Relative Path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.openInTerminal": "Open in Terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.expandAll": "Expand All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.collapseAll": "Collapse All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.collapsePreviewHint": "Click to collapse preview", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.title": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.label": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.placeholder": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.title": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.label": "Folder name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.placeholder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.fileTitle": "Rename file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.folderTitle": "Rename folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.label": "New name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.confirm": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.unchanged": "Name unchanged", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageSingle": "Are you sure you want to delete \"{{name}}\"?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.confirm": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.create": "Create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.empty": "Name cannot be empty", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.operationFailed": "Operation failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.openFailed": "Failed to open", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedSingle": "Delete failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.createFailed": "Failed to create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.renameFailed": "Failed to rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.single": "Deleted \"{{name}}\"", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.bulk": "Deleted {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.hint": "Recoverable from system trash", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.single": "Moved 1 item", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.bulk": "Moved {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undo": "Undo", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedSingle": "Move failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedSingle": "Copy failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedSingle": "Paste failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessSingle": "Path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessSingle": "Relative path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessBulk": "{{count}} relative paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.terminalFailed": "Failed to open terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.error": "Failed to load file tree", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.title": "Name conflict", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.replace": "Replace", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.keepBoth": "Keep both", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.skip": "Skip", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocx": "Export as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxFail": "Export failed", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.line": "Ln {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.col": "Col {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.addToChat": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.submit": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled", // FORK-i18n-backfill(en 兜底)
+  "settings.tab.feishu": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.title": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.title": "Keep computer awake", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.title": "No Lark account bound", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.add": "Add Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.title": "Bind Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.label": "Domain", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.feishu": "Feishu (China)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.lark": "Lark (Global)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusPending": "Waiting for authorization...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusSuccess": "Bound successfully", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusDenied": "Authorization denied by user", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusExpired": "QR code expired", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusError": "Error: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.done": "Done", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.qrLoading": "Generating QR code...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.edit": "Edit", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelLabel": "model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelDefault": "(use default)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.title": "Edit account settings", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelSectionTitle": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.advancedSectionTitle": "Advanced", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.groupCommand.info": "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.label": "Allow AI to read all group messages without @ mention", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.hint": "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.saving": "Saving...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerLabel": "Provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelLabel": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel.hint": "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerPlaceholder": "Select provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelPlaceholder": "Select model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.save": "Save", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.default": "Default (global home base)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.pick": "Choose folder", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.clear": "Reset to default", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.hintFollow": "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.security": "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.projectListWarning": "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceDefaulted": "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceFallback": "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)
 }

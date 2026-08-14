@@ -4,13 +4,12 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { createMemo, createSignal, type Component, For, Show } from "solid-js"
+import { createMemo, createSignal, type Accessor, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
-import { useServerSDK } from "@/context/server-sdk"
+import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
+import { DialogConnectProvider, useProviderConnectController } from "../dialog-connect-provider"
 import { usePlatform } from "@/context/platform"
-import { DialogConnectProvider } from "../dialog-connect-provider"
-import { DialogSelectProvider } from "../dialog-select-provider"
 import { DialogCustomProvider } from "../dialog-custom-provider"
 import { SettingsListV2 } from "./parts/list"
 import "./settings-v2.css"
@@ -40,13 +39,23 @@ const PROVIDER_NOTES = [
 
 const PROVIDER_ICON_SIZE = 16
 
-export const SettingsProvidersV2: Component = () => {
+export const SettingsProvidersV2: Component<{
+  directory: Accessor<string | undefined>
+  onBack?: () => void
+}> = (props) => {
   const dialog = useDialog()
   const language = useLanguage()
   const serverSdk = useServerSDK()
+  const protocol = useServerProtocol()
   const serverSync = useServerSync()
   const platform = usePlatform()
-  const providers = useProviders()
+  const providers = useProviders(props.directory)
+  const providerConnect = useProviderConnectController({ onBack: props.onBack })
+
+  const connect = (provider?: string) => {
+    providerConnect.select(provider)
+    void dialog.show(() => <DialogConnectProvider directory={props.directory} controller={providerConnect} />)
+  }
   // FORK: REQ-054 — getbot 刷新模型加载状态 2026-06-18
   const [getbotRefreshing, setGetbotRefreshing] = createSignal(false)
 
@@ -85,12 +94,13 @@ export const SettingsProvidersV2: Component = () => {
     return language.t("settings.providers.tag.other")
   }
 
-  const canDisconnect = (item: ProviderItem) => source(item) !== "env"
+  const canDisconnect = (item: ProviderItem) =>
+    source(item) !== "env" && (protocol() === "v1" || !isConfigCustom(item.id))
 
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 
   const isConfigCustom = (providerID: string) => {
-    const provider = serverSync.data.config.provider?.[providerID]
+    const provider = serverSync().data.config.provider?.[providerID]
     if (!provider) return false
     if (provider.npm !== "@ai-sdk/openai-compatible") return false
     if (!provider.models || Object.keys(provider.models).length === 0) return false
@@ -100,7 +110,7 @@ export const SettingsProvidersV2: Component = () => {
   // FORK-BEGIN: REQ-054 — getbot 刷新模型列表 handler (v2 layout) 2026-06-18
   const refreshGetbotModels = async () => {
     if (getbotRefreshing()) return
-    const apiKey = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
+    const apiKey = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.options?.apiKey as
       | string
       | undefined
     if (!apiKey) {
@@ -110,15 +120,15 @@ export const SettingsProvidersV2: Component = () => {
     setGetbotRefreshing(true)
     try {
       const remoteIds = await fetchGetbotChatModels(apiKey, { fetch: platform.fetch })
-      const existingModels = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
+      const existingModels = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID]?.models ?? {}
       const merged = mergeGetbotModels(existingModels, remoteIds)
       // AC2: 整块替换 — 读取现有 provider config 展开,避免只写 models 字典时丢失 name/npm/options
-      const existingProviderConfig = serverSync.data.config.provider?.[GETBOT_PROVIDER_ID] ?? {}
+      const existingProviderConfig = serverSync().data.config.provider?.[GETBOT_PROVIDER_ID] ?? {}
       const freshConfig = buildGetbotProviderConfig(apiKey, [])
-      await serverSync.updateConfig({
+      await serverSync().updateConfig({
         provider: { [GETBOT_PROVIDER_ID]: { ...freshConfig, ...existingProviderConfig, models: merged } },
       })
-      serverSync.refreshProviders()
+      serverSync().refreshProviders()
       showToast({
         variant: "success",
         icon: "circle-check",
@@ -137,11 +147,12 @@ export const SettingsProvidersV2: Component = () => {
   // FORK-END
 
   const disableProvider = async (providerID: string, name: string) => {
-    const before = serverSync.data.config.disabled_providers ?? []
+    if (protocol() !== "v1") return
+    const before = serverSync().data.config.disabled_providers ?? []
     const next = before.includes(providerID) ? before : [...before, providerID]
-    serverSync.set("config", "disabled_providers", next)
+    serverSync().set("config", "disabled_providers", next)
 
-    await serverSync
+    await serverSync()
       .updateConfig({ disabled_providers: next })
       .then(() => {
         showToast({
@@ -152,7 +163,7 @@ export const SettingsProvidersV2: Component = () => {
         })
       })
       .catch((err: unknown) => {
-        serverSync.set("config", "disabled_providers", before)
+        serverSync().set("config", "disabled_providers", before)
         const message = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description: message })
       })
@@ -160,16 +171,18 @@ export const SettingsProvidersV2: Component = () => {
 
   const disconnect = async (providerID: string, name: string) => {
     if (isConfigCustom(providerID)) {
-      await serverSdk.client.auth.remove({ providerID }).catch(() => undefined)
+      await serverSdk()
+        .client.auth.remove({ providerID })
+        .catch(() => undefined)
       await disableProvider(providerID, name)
       return
     }
-    await serverSdk.client.auth
-      .remove({ providerID })
+    await serverSdk()
+      .client.auth.remove({ providerID })
       .then(async () => {
-        await serverSdk.client.global.dispose()
+        await serverSdk().client.global.dispose()
         // FORK: REQ-052 — 断开收尾强制失效 providers query,使列表立即消失,无需重启 2026-06-18
-        serverSync.refreshProviders()
+        serverSync().refreshProviders()
         showToast({
           variant: "success",
           icon: "circle-check",
@@ -281,56 +294,47 @@ export const SettingsProvidersV2: Component = () => {
                       </Show>
                     </div>
                   </div>
-                  <ButtonV2
-                    size="normal"
-                    variant="neutral"
-                    icon="plus"
-                    onClick={() => {
-                      dialog.show(() => <DialogConnectProvider provider={item.id} />)
-                    }}
-                  >
+                  <ButtonV2 size="normal" variant="neutral" icon="plus" onClick={() => connect(item.id)}>
                     {language.t("common.connect")}
                   </ButtonV2>
                 </div>
               )}
             </For>
 
-            <div class="settings-v2-provider-row" data-component="custom-provider-section">
-              <div class="settings-v2-provider-lead">
-                <ProviderIcon
-                  id="synthetic"
-                  width={PROVIDER_ICON_SIZE}
-                  height={PROVIDER_ICON_SIZE}
-                  class="settings-v2-provider-icon shrink-0"
-                />
-                <div class="settings-v2-provider-copy">
-                  <div class="settings-v2-provider-main">
-                    <span class="settings-v2-provider-name">{language.t("provider.custom.title")}</span>
-                    <Tag>{language.t("settings.providers.tag.custom")}</Tag>
+            <Show when={protocol() === "v1"}>
+              <div class="settings-v2-provider-row" data-component="custom-provider-section">
+                <div class="settings-v2-provider-lead">
+                  <ProviderIcon
+                    id="synthetic"
+                    width={PROVIDER_ICON_SIZE}
+                    height={PROVIDER_ICON_SIZE}
+                    class="settings-v2-provider-icon shrink-0"
+                  />
+                  <div class="settings-v2-provider-copy">
+                    <div class="settings-v2-provider-main">
+                      <span class="settings-v2-provider-name">{language.t("provider.custom.title")}</span>
+                      <Tag>{language.t("settings.providers.tag.custom")}</Tag>
+                    </div>
+                    <p class="settings-v2-provider-description">
+                      {language.t("settings.providers.custom.description")}
+                    </p>
                   </div>
-                  <p class="settings-v2-provider-description">{language.t("settings.providers.custom.description")}</p>
                 </div>
+                <ButtonV2
+                  size="normal"
+                  variant="neutral"
+                  icon="plus"
+                  onClick={() => {
+                    dialog.show(() => <DialogCustomProvider onBack={dialog.close} />)
+                  }}
+                >
+                  {language.t("common.connect")}
+                </ButtonV2>
               </div>
-              <ButtonV2
-                size="normal"
-                variant="neutral"
-                icon="plus"
-                onClick={() => {
-                  dialog.show(() => <DialogCustomProvider back="close" />)
-                }}
-              >
-                {language.t("common.connect")}
-              </ButtonV2>
-            </div>
+            </Show>
           </SettingsListV2>
 
-          <button
-            type="button"
-            class="settings-v2-providers-view-all"
-            onClick={() => {
-              dialog.show(() => <DialogSelectProvider />)
-            }}
-          >
+          <button type="button" class="settings-v2-providers-view-all" onClick={() => connect()}>
             {language.t("dialog.provider.viewAll")}
           </button>
         </div>

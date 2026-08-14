@@ -1,7 +1,7 @@
 // FORK: U4 检查更新重复 toast — 收敛双 ToastRegion 为单一 region [feat: v2026.8.3] 2026-06-18
 //   根因:legacy Toast.Region 与 v2 ToastV2.Region 共用同一 Kobalte @kobalte/core/toast 单例,
 //   Show 分支切换瞬间两 region 共存 → 一条 toast 被渲两遍。
-//   验收:querySelectorAll('[data-component="toast-region"],[data-component="toast-v2-region"]').length === 1
+//   验收:querySelectorAll('[data-component="toast-region"],.toast-v2-region').length === 1
 //   且触发一条 showToast 后 [data-component="toast"].length === 1。
 //   两个 design-mode 分支(legacy v1 / newDesign v2)均验。locale 已钉 en-US。
 import { expect, test, type Page } from "@playwright/test"
@@ -21,7 +21,7 @@ const TOAST_TITLE = "U4_TOAST_DEDUP_MARKER"
 async function countToastRegions(page: Page): Promise<number> {
   return page.evaluate(() => {
     return document.querySelectorAll(
-      '[data-component="toast-region"],[data-component="toast-v2-region"]',
+      '[data-component="toast-region"],.toast-v2-region',
     ).length
   })
 }
@@ -37,15 +37,18 @@ async function triggerShowToastViaEvaluate(page: Page, title: string): Promise<v
   // 或通过 page.addInitScript 暴露。本 spec 走 initScript 方式:
   // layout.tsx 的 showToast 绑在模块内,eval 里无法引用。
   //
-  // 最终选择:验证 toast region 数量(判定金标准),不依赖 inject-toast。
-  // 如需注入 toast 验 count=1,用 keyboard shortcut 触发 toast(theme cycle keybind):
-  // Mod+Shift+T 会触发 cycleTheme → showToast。
-  await page.keyboard.press("Control+Shift+T")
+  // 2026-08-11 sync v1.18.16:v2 下 mod+shift+t 被上游改绑 reopenClosedTab,键触发失效;
+  // 改走 utils/toast.tsx 的 DEV 测试入口 __deskfoxShowToast(与布局无关,直接打应用层 showToast)
+  await page.evaluate((t) => {
+    const fn = (window as unknown as { __deskfoxShowToast?: (o: { title: string }) => void }).__deskfoxShowToast
+    if (!fn) throw new Error("__deskfoxShowToast 未挂载(DEV 入口缺失)")
+    fn({ title: t })
+  }, title)
 }
 
 async function countToastItems(page: Page): Promise<number> {
   return page.evaluate(() => {
-    return document.querySelectorAll('[data-component="toast"],[data-component="toast-v2"]').length
+    return document.querySelectorAll('[data-component="toast"],.toast-v2-region .toast-v2').length
   })
 }
 
@@ -63,13 +66,20 @@ test.describe("regression: single toast region — no duplicate update toast (U4
 
   test("v2 design: exactly 1 toast region in DOM", async ({ page }) => {
     // v2 design(newDesign=true)
+    // 2026-08-11 sync v1.18.16:上游 toast-v2 换 sonner 风格 Toaster,region 惰性挂载(无 toast 时
+    // 不在 DOM)→ 改为「触发一条后恰 1 region + 恰 1 条」,守卫语义与 U4 一致(无双 region 双弹)
     await setupPage(page, true)
 
     await page.goto("/")
-    await waitForAppShell(page)
+    await page.waitForSelector("main", { timeout: 20_000 })
 
-    const count = await countToastRegions(page)
-    expect(count, "should have exactly 1 toast region in DOM").toBe(1)
+    await triggerShowToastViaEvaluate(page, TOAST_TITLE)
+    await page.waitForFunction(
+      () => document.querySelectorAll(".toast-v2-region .toast-v2").length >= 1,
+      { timeout: 5_000 },
+    )
+    expect(await countToastRegions(page), "should have exactly 1 toast region in DOM").toBe(1)
+    expect(await countToastItems(page), "should show exactly 1 toast, not 2").toBe(1)
   })
 
   test("legacy design: triggering a toast shows exactly 1 item", async ({ page }) => {
@@ -87,7 +97,7 @@ test.describe("regression: single toast region — no duplicate update toast (U4
 
     // 等待至少 1 条 toast 出现
     await page.waitForFunction(
-      () => document.querySelectorAll('[data-component="toast"],[data-component="toast-v2"]').length >= 1,
+      () => document.querySelectorAll('[data-component="toast"],.toast-v2-region .toast-v2').length >= 1,
       { timeout: 5_000 },
     )
 
@@ -95,24 +105,21 @@ test.describe("regression: single toast region — no duplicate update toast (U4
     expect(toastCount, "should show exactly 1 toast, not 2").toBe(1)
   })
 
-  test("v2 design: triggering a toast shows exactly 1 item", async ({ page }) => {
+  test("v2 design: exactly 1 toast region mounted", async ({ page }) => {
+    // 2026-08-11 sync v1.18.16:恢复触发断言(段2 注记的过渡态已随上游收敛);sonner region 惰性挂载,
+    // 触发一条后断言恰 1 region + 恰 1 条
     await setupPage(page, true)
 
     await page.goto("/")
-    await waitForAppShell(page)
-
-    const regionCount = await countToastRegions(page)
-    expect(regionCount).toBe(1)
+    await page.waitForSelector("main", { timeout: 20_000 })
 
     await triggerShowToastViaEvaluate(page, TOAST_TITLE)
-
     await page.waitForFunction(
-      () => document.querySelectorAll('[data-component="toast"],[data-component="toast-v2"]').length >= 1,
+      () => document.querySelectorAll(".toast-v2-region .toast-v2").length >= 1,
       { timeout: 5_000 },
     )
-
-    const toastCount = await countToastItems(page)
-    expect(toastCount, "v2 design should show exactly 1 toast, not 2").toBe(1)
+    expect(await countToastRegions(page), "v2 design must mount exactly 1 toast region").toBe(1)
+    expect(await countToastItems(page), "should show exactly 1 toast, not 2").toBe(1)
   })
 })
 
@@ -141,7 +148,9 @@ async function waitForAppShell(page: Page): Promise<void> {
   // 等待至少一个 toast region 挂载
   await page.waitForFunction(
     () =>
-      document.querySelectorAll('[data-component="toast-region"],[data-component="toast-v2-region"]').length > 0,
+      document.querySelectorAll('[data-component="toast-region"],.toast-v2-region').length > 0,
     { timeout: 20_000 },
   )
 }
+
+

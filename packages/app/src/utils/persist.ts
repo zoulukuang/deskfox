@@ -15,7 +15,9 @@ type PersistedWithReady<T> = [
 ]
 
 type PersistTarget = {
+  draft?: boolean
   storage?: string
+  scope?: "window"
   legacyStorageNames?: string[]
   key: string
   legacy?: string[]
@@ -24,6 +26,7 @@ type PersistTarget = {
 
 const LEGACY_STORAGE = "default.dat"
 const GLOBAL_STORAGE = "opencode.global.dat"
+const WINDOW_STORAGE = "opencode.window"
 const LOCAL_PREFIX = "opencode."
 const fallback = new Map<string, boolean>()
 
@@ -372,6 +375,14 @@ async function removeAsync(storage: AsyncStorage, key: string) {
   } catch {}
 }
 
+function toAsyncStorage(storage: SyncStorage | AsyncStorage): AsyncStorage {
+  return {
+    getItem: async (key) => storage.getItem(key),
+    setItem: async (key, value) => storage.setItem(key, value),
+    removeItem: async (key) => storage.removeItem(key),
+  }
+}
+
 async function migrateLegacyAsync(input: {
   current: AsyncStorage
   legacyStore?: AsyncStorage
@@ -424,6 +435,11 @@ function draftStorage(draftID: string) {
   const head = (draftID.slice(0, 12) || "draft").replace(/[^a-zA-Z0-9._-]/g, "-")
   const sum = checksum(draftID) ?? "0"
   return `opencode.draft.${head}.${sum}.dat`
+}
+
+function windowStorage(windowID: string) {
+  const safe = (windowID || "browser").replace(/[^a-zA-Z0-9._-]/g, "-")
+  return `${WINDOW_STORAGE}.${safe}.dat`
 }
 
 function legacyWorkspaceStorage(dir: string) {
@@ -535,7 +551,7 @@ function localStorageDirect(): SyncStorage {
   }
 }
 
-const DRAFT_PERSISTED_KEYS = ["prompt", "comments", "model-selection", "file-view", "layout"]
+const DRAFT_PERSISTED_KEYS = ["prompt", "comments", "file-view", "layout"]
 
 export function draftPersistedKeys() {
   return DRAFT_PERSISTED_KEYS
@@ -546,6 +562,8 @@ export const PersistTesting = {
   localStorageWithPrefix,
   migrateLegacy,
   normalize,
+  resolveTarget,
+  windowStorage,
   workspaceStorage,
   // FORK-BEGIN: REQ-087 节流内部件测试钩子 [feat: renderer-snapshot-oom] 2026-08-02
   throttledWrite,
@@ -562,6 +580,9 @@ export const PersistTesting = {
 export const Persist = {
   global(key: string, legacy?: string[]): PersistTarget {
     return { storage: GLOBAL_STORAGE, key, legacy }
+  },
+  window(key: string, legacy?: string[]): PersistTarget {
+    return { scope: "window", key, legacy }
   },
   draft(draftID: string, key: string, legacy?: string[]): PersistTarget {
     return { storage: draftStorage(draftID), key: `draft:${key}`, legacy }
@@ -590,12 +611,28 @@ export const Persist = {
     if (session) return Persist.serverSession(scope, dir, session, key, legacy)
     return Persist.serverWorkspace(scope, dir, key, legacy)
   },
+  prompt(target: PersistTarget): PersistTarget {
+    return { ...target, draft: true }
+  },
+}
+
+function resolveTarget(target: PersistTarget, platform: Platform): PersistTarget {
+  if (target.scope !== "window") return target
+  if (platform.platform === "desktop" && !platform.windowID) return { ...target, storage: GLOBAL_STORAGE }
+  const windowID = platform.platform === "desktop" ? (platform.windowID ?? "browser") : "browser"
+  return {
+    ...target,
+    storage: windowStorage(windowID),
+  }
 }
 
 export function removePersisted(
-  target: { storage?: string; legacyStorageNames?: string[]; key: string },
+  target: { draft?: boolean; storage?: string; legacyStorageNames?: string[]; key: string },
   platform?: Platform,
 ) {
+  if (target.draft && platform?.draftStore) {
+    void platform.draftStore.removeItem(`${target.storage ?? "default"}:${target.key}`)
+  }
   const isDesktop = platform?.platform === "desktop" && !!platform.storage
 
   if (isDesktop) {
@@ -620,16 +657,26 @@ export function removePersisted(
 export function persisted<T>(
   target: string | PersistTarget,
   store: [Store<T>, SetStoreFunction<T>],
+  platformOverride?: Platform,
 ): PersistedWithReady<T> {
-  const platform = usePlatform()
-  const config: PersistTarget = typeof target === "string" ? { key: target } : target
+  const platform = platformOverride ?? usePlatform()
+  const config = resolveTarget(typeof target === "string" ? { key: target } : target, platform)
 
   const defaults = snapshot(store[0])
   const legacy = config.legacy ?? []
 
   const isDesktop = platform.platform === "desktop" && !!platform.storage
+  const draft = config.draft ? platform.draftStore : undefined
 
   const currentStorage = (() => {
+    if (draft) {
+      const prefix = `${config.storage ?? "default"}:`
+      return {
+        getItem: (key: string) => draft.getItem(prefix + key),
+        setItem: (key: string, value: string) => draft.setItem(prefix + key, value),
+        removeItem: (key: string) => draft.removeItem(prefix + key),
+      } satisfies AsyncStorage
+    }
     if (isDesktop) return platform.storage?.(config.storage)
     if (!config.storage) return localStorageDirect()
     return localStorageWithPrefix(config.storage)
@@ -644,7 +691,7 @@ export function persisted<T>(
   const legacyStorageNames = config.legacyStorageNames ?? []
 
   const storage = (() => {
-    if (!isDesktop) {
+    if (!isDesktop && !draft) {
       const current = currentStorage as SyncStorage
       const legacyStore = legacyStorage as SyncStorage
       const legacyStores = legacyStorageNames.map(localStorageWithPrefix)
@@ -676,15 +723,26 @@ export function persisted<T>(
 
     const current = currentStorage as AsyncStorage
     const legacyStore = legacyStorage as AsyncStorage | undefined
-    const legacyStores = legacyStorageNames
-      .map((name) => platform.storage?.(name) as AsyncStorage | undefined)
+    const oldCurrent = draft
+      ? isDesktop
+        ? platform.storage?.(config.storage)
+        : config.storage
+          ? localStorageWithPrefix(config.storage)
+          : localStorageDirect()
+      : undefined
+    const legacyStores = [
+      oldCurrent,
+      ...legacyStorageNames.map((name) => (isDesktop ? platform.storage?.(name) : localStorageWithPrefix(name))),
+    ]
       .filter((x) => !!x)
+      .map(toAsyncStorage)
+    let draftLatest: string | undefined
 
     const api: AsyncStorage = {
       getItem: async (key) => {
         const value = await readCurrentAsync({ storage: current, key, defaults, migrate: config.migrate })
         if (value !== undefined) return value
-        return migrateLegacyAsync({
+        const migrated = await migrateLegacyAsync({
           current,
           legacyStore,
           stores: legacyStores,
@@ -693,11 +751,18 @@ export function persisted<T>(
           defaults,
           migrate: config.migrate,
         })
+        if (draftLatest === undefined) {
+          if (draft && migrated !== null) return (await current.getItem(key)) ?? migrated
+          return migrated
+        }
+        await current.setItem(key, draftLatest)
+        return draftLatest
       },
       // FORK-BEGIN: REQ-087 写盘节流接入(桌面 async 路径)[feat: renderer-snapshot-oom] 2026-08-02
       setItem: async (key, value) => {
+        if (draft) draftLatest = value
         installFlushHooks()
-        throttledWrite(`${config.storage ?? ""}\u0000${key}`, value, (latest) => void current.setItem(key, latest))
+        throttledWrite(`${config.storage ?? ""} ${key}`, value, (latest) => void current.setItem(key, latest))
       },
       removeItem: async (key) => {
         cancelPendingWrite(`${config.storage ?? ""}\u0000${key}`)

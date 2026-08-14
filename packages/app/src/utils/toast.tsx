@@ -1,6 +1,12 @@
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
-import { Toast, showToast as showLegacyToast, type ToastOptions, type ToastVariant } from "@opencode-ai/ui/toast"
-import { ToastV2, showToastV2 } from "@opencode-ai/ui/v2/toast-v2"
+import {
+  Toast,
+  showToast as showLegacyToast,
+  toaster as legacyToaster,
+  type ToastOptions,
+  type ToastVariant,
+} from "@opencode-ai/ui/toast"
+import { ToastV2, showToastV2, toasterV2 } from "@opencode-ai/ui/v2/toast-v2"
 
 let v2 = false
 
@@ -25,6 +31,19 @@ export function showToast(options: ToastOptions | string) {
       variant: action.onClick === "dismiss" ? "secondary" : "primary",
     })),
   })
+}
+
+// v1 and v2 ids come from separate registries, so dismissal has to use the same
+// implementation that issued the id.
+// FORK: e2e 稳定触发口(仅 DEV)— U4 单 region 守卫需要与布局无关的 showToast 入口
+//   (legacy 靠 mod+shift+t=theme.cycle,v2 该键位被上游改绑 reopenClosedTab)2026-08-11
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  ;(window as unknown as { __deskfoxShowToast?: typeof showToast }).__deskfoxShowToast = showToast
+}
+
+export function dismissToast(toastId: number) {
+  if (!v2) return legacyToaster.dismiss(toastId)
+  return toasterV2.dismiss(toastId)
 }
 
 function resolveIcon(icon: IconProps["name"] | undefined, variant: ToastVariant | undefined) {

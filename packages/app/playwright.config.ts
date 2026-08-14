@@ -4,6 +4,10 @@ import { defineConfig, devices } from "@playwright/test"
 //   导致 e2e 全程跑在错误的 app 上(v2026.8.2 U6 头一次失败即此因)。改用专用冷门端口 4319;
 //   仍可用 PLAYWRIGHT_PORT 覆盖。详见 OPENCODE-PLAN 协作方案/前端自动化测试-工具与方法论.md §一。2026-06-18
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 4319)
+// FORK: 回填 env —— mock-server.ts 的 appPort 兜底读 PLAYWRIGHT_PORT(缺省 3000);fork 改用
+//   4319 后若不回填,相对路径 fetch(如 /global/health)会 route.fallback 落到 vite index.html
+//   (上游 transport「passes through non-event fetches」e2e 实锤)。2026-08-11
+process.env.PLAYWRIGHT_PORT ??= String(port)
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`
 const serverHost = process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"
 const serverPort = process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"
@@ -12,6 +16,7 @@ const reuse = !process.env.CI
 const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? (process.env.CI ? 5 : 0)) || undefined
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: process.env.OPENCODE_PERFORMANCE === "1" ? "performance/**/*.test.ts" : "performance/**",
   outputDir: "./e2e/test-results",
   timeout: 60_000,
   expect: {

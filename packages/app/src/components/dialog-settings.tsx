@@ -1,9 +1,10 @@
-import { Component } from "solid-js"
+import { Component, createSignal, startTransition } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { SettingsGeneral } from "./settings-general"
 import { SettingsKeybinds } from "./settings-keybinds"
 import { SettingsProviders } from "./settings-providers"
@@ -15,9 +16,15 @@ import { SettingsFeishu } from "./settings-feishu"
 // installer-versions.json 由 bump-installer-version.{ps1,sh} 在每次 bump 时同步更新对应平台 key
 import installerVersions from "@opencode-ai/branding/installer-versions.json"
 
-export const DialogSettings: Component<{ defaultTab?: string }> = (props) => {
+export const DialogSettings: Component<{ defaultValue?: string }> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
+  const dialog = useDialog()
+  const [tab, setTab] = createSignal(props.defaultValue ?? "general")
+
+  const showProviders = () => {
+    void dialog.show(() => <DialogSettings defaultValue="providers" />)
+  }
 
   // FORK: 设置页脚 — DeskFox <Platform> + installer 版本号
   const platformLabel =
@@ -38,8 +45,14 @@ export const DialogSettings: Component<{ defaultTab?: string }> = (props) => {
   const installerVer = versions[verKey] ?? versions[platKey] ?? platform.version
 
   return (
-    <Dialog size="x-large" transition class="h-full">
-      <Tabs orientation="vertical" variant="settings" defaultValue={props.defaultTab ?? "general"} class="h-full settings-dialog">
+    <Dialog size="x-large" transition>
+      <Tabs
+        orientation="vertical"
+        variant="settings"
+        value={tab()}
+        onChange={(value) => void startTransition(() => setTab(value))}
+        class="h-full settings-dialog"
+      >
         <Tabs.List>
           <div class="flex flex-col justify-between h-full w-full gap-4">
             <div class="flex flex-col gap-3 w-full pt-3">
@@ -98,7 +111,7 @@ export const DialogSettings: Component<{ defaultTab?: string }> = (props) => {
           <SettingsServers />
         </Tabs.Content>
         <Tabs.Content value="providers" class="no-scrollbar">
-          <SettingsProviders />
+          <SettingsProviders onBack={showProviders} />
         </Tabs.Content>
         <Tabs.Content value="models" class="no-scrollbar">
           <SettingsModels />

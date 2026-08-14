@@ -17,6 +17,9 @@ import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectCopy } from "@opencode-ai/core/project/copy"
 import { AppProcess } from "@opencode-ai/core/process"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { ProjectDirectories } from "@opencode-ai/core/project/directories"
+import { EventV2 } from "@opencode-ai/core/event"
+import { Git } from "@opencode-ai/core/git"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { ProjectTable, ProjectDirectoryTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -25,23 +28,16 @@ import { SessionID } from "../../src/session/schema"
 import { tmpdirScoped } from "../fixture/fixture"
 import { Effect, Layer } from "effect"
 import { testEffect } from "../lib/effect"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 
 // Project.defaultLayer 内部固定 provide 了 RuntimeFlags.defaultLayer(env 派生,默认关),
 // 外部 merge 无法覆盖;故基于 Project.layer 手工 provide 子层 + RuntimeFlags.layer({override})。
-const projectLayerWithFlag = (nonGitFolderIdentity: boolean) =>
-  Project.layer.pipe(
-    Layer.provide(RuntimeFlags.layer({ nonGitFolderIdentity })),
-    Layer.provide(EventV2Bridge.defaultLayer),
-    Layer.provide(ProjectV2.defaultLayer),
-    Layer.provide(ProjectCopy.defaultLayer),
-    Layer.provide(AppProcess.defaultLayer),
-    Layer.provide(CrossSpawnSpawner.defaultLayer),
-    Layer.provide(FSUtil.defaultLayer),
-    Layer.provide(Database.defaultLayer),
-  )
-
-const baseLayer = (flag: boolean) =>
-  Layer.mergeAll(projectLayerWithFlag(flag), Database.defaultLayer, CrossSpawnSpawner.defaultLayer)
+// 2026-08-11 sync v1.17.13:上游 layer→node 体系,按 opencode/test/project/project.test.ts 范式改
+// AppNodeBuilder + RuntimeFlags 覆盖注入(替代原 defaultLayer 组装)
+const projectTestNode = LayerNode.group([Project.node, Database.node, CrossSpawnSpawner.node])
+const baseLayer = (nonGitFolderIdentity: boolean) =>
+  AppNodeBuilder.build(projectTestNode, [[RuntimeFlags.node, RuntimeFlags.layer({ nonGitFolderIdentity })]])
 
 const itOn = testEffect(baseLayer(true))
 
@@ -127,17 +123,19 @@ describe("REQ-069 M8 存量 global session 析出回归", () => {
       const otherRow = yield* sessionProjectId(other)
       expect(otherRow!.project_id).toBe(GLOBAL)
 
-      // saveProjectDirectory 对新 id 落了 main 行,directory=真实目录
+      // saveProjectDirectory 对新 id 落了目录行,directory=真实目录
+      // (2026-08-11 sync v1.17.8:上游 ProjectDirectories.create 改写 strategy 语义,
+      //  不再写 type 列 — type 保留为遗留列,新行为 null;M6 恢复逻辑对 null 有 candidates[0] 回落)
       const dirRow = yield* Database.Service.use(({ db }) =>
         db
           .select()
           .from(ProjectDirectoryTable)
-          .where(and(eq(ProjectDirectoryTable.project_id, p.id), eq(ProjectDirectoryTable.directory, dir)))
+          .where(and(eq(ProjectDirectoryTable.project_id, p.id), eq(ProjectDirectoryTable.directory, AbsolutePath.make(dir))))
           .get()
           .pipe(Effect.orDie),
       )
       expect(dirRow).toBeDefined()
-      expect(dirRow!.type).toBe("main")
+      expect(dirRow!.type).toBeNull()
     }),
   )
 

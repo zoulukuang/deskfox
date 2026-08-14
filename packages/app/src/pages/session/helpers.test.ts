@@ -3,20 +3,19 @@ import { createMemo, createRoot } from "solid-js"
 import { createStore } from "solid-js/store"
 import {
   closeOtherTabs,
+  SESSION_OPEN_FILE_TAB,
   createOpenReviewFile,
   createOpenSessionFileTab,
   createSessionTabs,
   focusTerminalById,
   getTabReorderIndex,
-  shouldFocusTerminalOnKeyDown,
   shouldShowFileTree,
 } from "./helpers"
 
 describe("shouldShowFileTree", () => {
-  test("does not reserve space for a disabled v2 file tree", () => {
-    expect(shouldShowFileTree({ desktopV2: true, showFileTree: false, opened: true })).toBe(false)
-    expect(shouldShowFileTree({ desktopV2: false, showFileTree: false, opened: true })).toBe(true)
-    expect(shouldShowFileTree({ desktopV2: true, showFileTree: true, opened: true })).toBe(true)
+  test("does not reserve space for a disabled file tree", () => {
+    expect(shouldShowFileTree({ visible: false, opened: true })).toBe(false)
+    expect(shouldShowFileTree({ visible: true, opened: true })).toBe(true)
   })
 })
 
@@ -155,26 +154,6 @@ describe("focusTerminalById", () => {
   })
 })
 
-describe("shouldFocusTerminalOnKeyDown", () => {
-  test("skips pure modifier keys", () => {
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "Meta", metaKey: true }))).toBe(false)
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "Control", ctrlKey: true }))).toBe(false)
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "Alt", altKey: true }))).toBe(false)
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }))).toBe(false)
-  })
-
-  test("skips shortcut key combos", () => {
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "c", metaKey: true }))).toBe(false)
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "c", ctrlKey: true }))).toBe(false)
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true }))).toBe(false)
-  })
-
-  test("keeps plain typing focused on terminal", () => {
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "a" }))).toBe(true)
-    expect(shouldFocusTerminalOnKeyDown(new KeyboardEvent("keydown", { key: "A", shiftKey: true }))).toBe(true)
-  })
-})
-
 describe("getTabReorderIndex", () => {
   test("returns target index for valid drag reorder", () => {
     expect(getTabReorderIndex(["a", "b", "c"], "a", "c")).toBe(2)
@@ -186,6 +165,25 @@ describe("getTabReorderIndex", () => {
 })
 
 describe("createSessionTabs", () => {
+  // FORK: [bug-repro: 聊天引用在文件预览区开出空白 tab] 2026-08-12
+  test("聊天引用的伪路径不进预览 tab(含已存进项目 tab 的存量)", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: undefined as string | undefined,
+        all: ["file://src/a.ts", "file://<chat selection>", "<chat selection>", "file://%3Cchat%20selection%3E"],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => (tab.startsWith("file://") ? tab.slice("file://".length) : undefined),
+        normalizeTab: (tab) => tab,
+      })
+
+      expect(result.openedTabs()).toEqual(["file://src/a.ts"])
+      dispose()
+    })
+  })
+
   test("normalizes the effective file tab", () => {
     createRoot((dispose) => {
       const [state] = createStore({
@@ -243,6 +241,51 @@ describe("createSessionTabs", () => {
       expect(result.activeTab()).toBe("review")
       expect(result.activeFileTab()).toBeUndefined()
       expect(result.closableTab()).toBeUndefined()
+      dispose()
+    })
+  })
+
+  test("exposes the Open File tab without treating it as a file tab", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: SESSION_OPEN_FILE_TAB as string | undefined,
+        all: ["file://src/a.ts", SESSION_OPEN_FILE_TAB],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => (tab.startsWith("file://") ? tab.slice("file://".length) : undefined),
+        normalizeTab: (tab) => tab,
+        fileBrowser: () => true,
+      })
+
+      expect(result.openFileOpen()).toBe(true)
+      expect(result.panelTabs()).toEqual(["file://src/a.ts", SESSION_OPEN_FILE_TAB])
+      expect(result.openedTabs()).toEqual(["file://src/a.ts"])
+      expect(result.activeTab()).toBe(SESSION_OPEN_FILE_TAB)
+      expect(result.activeFileTab()).toBeUndefined()
+      expect(result.closableTab()).toBe(SESSION_OPEN_FILE_TAB)
+      dispose()
+    })
+  })
+
+  test("hides the Open File placeholder when the file browser is unavailable", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: SESSION_OPEN_FILE_TAB as string | undefined,
+        all: ["file://src/a.ts", SESSION_OPEN_FILE_TAB],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: (tab) => (tab.startsWith("file://") ? tab.slice("file://".length) : undefined),
+        normalizeTab: (tab) => tab,
+        fileBrowser: () => false,
+      })
+
+      expect(result.openFileOpen()).toBe(false)
+      expect(result.panelTabs()).toEqual(["file://src/a.ts"])
+      expect(result.activeTab()).toBe("file://src/a.ts")
       dispose()
     })
   })

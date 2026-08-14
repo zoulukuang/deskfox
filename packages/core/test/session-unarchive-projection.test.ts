@@ -14,10 +14,10 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { testEffect } from "./lib/effect"
 
-const database = Database.layerFromPath(":memory:")
-const events = EventV2.layer.pipe(Layer.provide(database))
-const projector = SessionProjector.layer.pipe(Layer.provide(events), Layer.provide(database))
-const it = testEffect(Layer.mergeAll(database, events, projector))
+// 2026-08-11 sync v1.17.13:上游 layer→node 体系,按 project-copy.test.ts 范式改 node 组装
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([SessionProjector.node, EventV2.node, Database.node])))
 
 const sessionID = SessionV2.ID.make("ses_unarchive_test")
 

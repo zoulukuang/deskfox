@@ -3,6 +3,7 @@ import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { showToast, toaster } from "@opencode-ai/ui/toast"
 import { useParams } from "@solidjs/router"
+import { base64Encode } from "@opencode-ai/core/util/encode"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
@@ -72,10 +73,10 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const language = useLanguage()
     const layout = useLayout()
 
-    const scope = createMemo(() => sdk.directory)
+    const scope = createMemo(() => sdk().directory)
     const path = createPathHelpers(scope)
     const tabs = layout.tabs(() =>
-      SessionStateKey.from(serverSDK.scope, SessionRouteKey.fromRoute(params.dir, params.id)),
+      SessionStateKey.from(serverSDK().scope, SessionRouteKey.fromRoute(base64Encode(sdk().directory), params.id)),
     )
 
     const inflight = new Map<string, Promise<void>>()
@@ -94,7 +95,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const listWithRetry = async (dir: string) => {
       for (let attempt = 0; ; attempt++) {
         try {
-          const res = await sdk.client.file.list({ path: dir })
+          const res = await sdk().client.file.list({ path: dir })
           return res.data ?? []
         } catch (e) {
           if (attempt >= LIST_RETRY_BACKOFF_MS.length || !isRetryableListError(e)) throw e
@@ -156,7 +157,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       })
     })
 
-    const viewCache = createFileViewCache(serverSDK.scope)
+    const viewCache = createFileViewCache(serverSDK().scope)
     const view = createMemo(() => viewCache.load(scope(), params.id))
 
     const ensure = (file: string) => {
@@ -260,7 +261,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
         }
 
         try {
-          const x = await sdk.client.file.read({ path: file })
+          const x = await sdk().client.file.read({ path: file })
           if (scope() !== directory) return
           const content = x.data
           setLoaded(file, content)
@@ -280,11 +281,24 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       return promise
     }
 
-    const search = (query: string, dirs: "true" | "false") =>
-      sdk.client.find.files({ query, dirs }).then(
-        (x) => (x.data ?? []).map(path.normalize),
-        () => [],
-      )
+    const search = (query: string, dirs: "true" | "false", options?: { limit?: number; signal?: AbortSignal }) =>
+      serverSDK()
+        .api.file.find(
+          {
+            location: { directory: sdk().directory },
+            query,
+            type: dirs === "true" ? "directory" : "file",
+            limit: options?.limit,
+          },
+          { signal: options?.signal },
+        )
+        .then(
+          (x) => x.data.map((entry) => path.normalize(entry.path)),
+          (error) => {
+            if (options?.signal?.aborted) throw error
+            return []
+          },
+        )
 
     // FORK: 编辑态 dirty 守卫,防止 AI/外部写文件覆盖用户未保存草稿(查看器-自动刷新)2026-04-28
     const dirtyPaths = new Set<string>()
@@ -369,7 +383,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       }
     }
 
-    const stop = sdk.event.listen((e) => {
+    const stop = sdk().event.listen((e) => {
       invalidateFromWatcher(e.details, {
         normalize: path.normalize,
         hasFile: (file) => Boolean(store.file[file]),
@@ -483,7 +497,8 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       setScrollLeft,
       selectedLines,
       setSelectedLines,
-      searchFiles: (query: string) => search(query, "false"),
+      searchFiles: (query: string, options?: { limit?: number; signal?: AbortSignal }) =>
+        search(query, "false", options),
       searchFilesAndDirectories: (query: string) => search(query, "true"),
     }
   },

@@ -2,6 +2,10 @@ import { batch, createMemo, onCleanup, onMount, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { same } from "@/utils/same"
+import { SESSION_OPEN_FILE_TAB } from "@/context/layout-tabs"
+import { CHAT_SELECTION_PATH } from "@/utils/context-menu-host/dom-provider"
+
+export { SESSION_OPEN_FILE_TAB } from "@/context/layout-tabs"
 
 const emptyTabs: string[] = []
 
@@ -16,19 +20,37 @@ type TabsInput = {
   normalizeTab: (tab: string) => string
   review?: Accessor<boolean>
   hasReview?: Accessor<boolean>
+  fileBrowser?: Accessor<boolean>
 }
 
 export const getSessionKey = (dir: string | undefined, id: string | undefined) => `${dir ?? ""}${id ? `/${id}` : ""}`
 
-export function shouldShowFileTree(input: { desktopV2: boolean; showFileTree: boolean; opened: boolean }) {
-  return input.opened && (!input.desktopV2 || input.showFileTree)
+/** FORK: 判断一个 tab 是不是聊天引用的伪路径(tab 里可能是 URL 编码形式)。
+ *  [feat: 聊天选区-卡片化-换行] 2026-08-12 */
+export const isChatSelectionTab = (tab: string) => {
+  if (tab.includes(CHAT_SELECTION_PATH)) return true
+  try {
+    return decodeURIComponent(tab).includes(CHAT_SELECTION_PATH)
+  } catch {
+    return false
+  }
+}
+
+export function shouldShowFileTree(input: { visible: boolean; opened: boolean }) {
+  return input.opened && input.visible
 }
 
 export const createSessionTabs = (input: TabsInput) => {
   const review = input.review ?? (() => false)
   const hasReview = input.hasReview ?? (() => false)
+  const fileBrowser = input.fileBrowser ?? (() => false)
   const contextOpen = createMemo(() => input.tabs().active() === "context" || input.tabs().all().includes("context"))
-  const openedTabs = createMemo(
+  const openFileOpen = createMemo(
+    () =>
+      fileBrowser() &&
+      (input.tabs().active() === SESSION_OPEN_FILE_TAB || input.tabs().all().includes(SESSION_OPEN_FILE_TAB)),
+  )
+  const panelTabs = createMemo(
     () => {
       const seen = new Set<string>()
       return input
@@ -36,6 +58,13 @@ export const createSessionTabs = (input: TabsInput) => {
         .all()
         .flatMap((tab) => {
           if (tab === "context" || tab === "review") return []
+          if (tab === SESSION_OPEN_FILE_TAB && !fileBrowser()) return []
+          // FORK: 聊天引用的伪路径不是真实文件,任何情况下都不该成为预览 tab(否则是一张空白页)。
+          //   入口已在 openComment 拦住,这里再兜一道 —— 让**已经存进项目 tab 的存量**也自动消失。
+          //   ⚠️ tab 里存的是 URL 编码形式(file://%3Cchat%20selection%3E),必须解码后再比,
+          //      直接 includes 原文匹配不上(2026-08-12 真机实测)。
+          //   [feat: 聊天选区-卡片化-换行] 2026-08-12
+          if (isChatSelectionTab(tab)) return []
           const value = input.pathFromTab(tab) ? input.normalizeTab(tab) : tab
           if (seen.has(value)) return []
           seen.add(value)
@@ -45,9 +74,13 @@ export const createSessionTabs = (input: TabsInput) => {
     emptyTabs,
     { equals: same },
   )
+  const openedTabs = createMemo(() => panelTabs().filter((tab) => tab !== SESSION_OPEN_FILE_TAB), emptyTabs, {
+    equals: same,
+  })
   const activeTab = createMemo(() => {
     const active = input.tabs().active()
     if (active === "context") return active
+    if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (active === "review" && review()) return active
     if (active && input.pathFromTab(active)) return input.normalizeTab(active)
 
@@ -65,12 +98,15 @@ export const createSessionTabs = (input: TabsInput) => {
   const closableTab = createMemo(() => {
     const active = activeTab()
     if (active === "context") return active
+    if (active === SESSION_OPEN_FILE_TAB && openFileOpen()) return active
     if (!openedTabs().includes(active)) return
     return active
   })
 
   return {
     contextOpen,
+    openFileOpen,
+    panelTabs,
     openedTabs,
     activeTab,
     activeFileTab,
@@ -96,13 +132,6 @@ export const focusTerminalById = (id: string) => {
       : new MouseEvent("pointerdown", { bubbles: true, cancelable: true }),
   )
   return true
-}
-
-const skip = new Set(["Alt", "Control", "Meta", "Shift"])
-
-export const shouldFocusTerminalOnKeyDown = (event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">) => {
-  if (skip.has(event.key)) return false
-  return !(event.ctrlKey || event.metaKey || event.altKey)
 }
 
 export const createOpenReviewFile = (input: {
@@ -220,3 +249,10 @@ export const createSizing = () => {
 }
 
 export type Sizing = ReturnType<typeof createSizing>
+
+// FORK: 段3 上游删除,本地保留(终端聚焦键判定)[feat: iconbar-left-decouple]
+const terminalFocusSkip = new Set(["Alt", "Control", "Meta", "Shift"])
+export const shouldFocusTerminalOnKeyDown = (event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">) => {
+  if (terminalFocusSkip.has(event.key)) return false
+  return !(event.ctrlKey || event.metaKey || event.altKey)
+}

@@ -15,9 +15,10 @@ const after = (src: string) => new Marked().use(strictDelExtension).parse(src) a
 const before = (src: string) => new Marked().parse(src) as string
 
 // 同一行两个区间 —— 真正会触发的形态
+// (2026-08-11 sync v1.18.16:marked 17→18 修复了 %区间样例(0.5%~1.2%),从 REPRO 移除;
+//  纯数字区间实测 18 仍中招,REQ-098 扩展继续保留)
 const REPRO = [
   "预计在 4.80~5.05 区间内震荡,突破 5.20~5.35 的概率低",
-  "波动 0.5%~1.2%,回撤 3%~5%",
   "PE 12~15 倍,PB 1.2~1.8 倍",
 ]
 
@@ -84,7 +85,8 @@ describe("REQ-098 单波浪号误判删除线", () => {
   describe("实现陷阱", () => {
     test("非匹配返回 undefined(返 false 会回退内置 `~~?` 规则,等于没改)", () => {
       const lexer = { inlineTokens: () => [] }
-      const del = strictDelExtension.tokenizer!.del!
+      // 2026-08-11 marked 17.x tokenizer 形参签名扩展,测试侧窄化 this-call 类型
+      const del = strictDelExtension.tokenizer!.del! as unknown as (this: unknown, src: string) => unknown
       expect(del.call({ lexer } as never, "4.80~5.05 区间")).toBeUndefined()
     })
 

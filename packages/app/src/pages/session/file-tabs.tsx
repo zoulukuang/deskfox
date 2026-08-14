@@ -2,14 +2,14 @@ import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMo
 import { createStore } from "solid-js/store"
 import { Dynamic, Portal } from "solid-js/web"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import type { FileSearchHandle } from "@opencode-ai/ui/file"
+import type { FileSearchHandle } from "@opencode-ai/session-ui/file"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
-import { cloneSelectedLineRange, previewSelectedLines } from "@opencode-ai/ui/pierre/selection-bridge"
-import { createLineCommentController } from "@opencode-ai/ui/line-comment-annotations"
+import { cloneSelectedLineRange, previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
+import { createLineCommentController } from "@opencode-ai/session-ui/line-comment-annotations"
 import { sampledChecksum } from "@opencode-ai/core/util/encode"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Markdown } from "@opencode-ai/ui/markdown"
+import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -470,7 +470,7 @@ export function FileTabContent(props: {
   }
   const startEdit = async () => {
     const p = path()
-    const root = sdk.directory
+    const root = sdk().directory
     if (!p || !root) return
     try {
       const mtime = await invoke<number>("get_file_mtime", { root, path: p })
@@ -505,7 +505,7 @@ export function FileTabContent(props: {
   // [feat: auto-save-debounce-flush] 2026-05-21
   const saveEditCore = async (opts: { silent: boolean }) => {
     const p = path()
-    const root = sdk.directory
+    const root = sdk().directory
     if (!p || !root || draft() === null) return
     try {
       // FORK: 标记 self-writing 短期窗口,防 watcher 误识别为外部 AI 修改弹 toast
@@ -597,10 +597,10 @@ export function FileTabContent(props: {
   onCleanup(() => {
     autoSave.cancel()
     const oldPath = path()
-    if (editing() && dirty() && oldPath && sdk.directory) {
+    if (editing() && dirty() && oldPath && sdk().directory) {
       const snap = draft() ?? ""
       const mtime = loadedMtime()
-      const root = sdk.directory
+      const root = sdk().directory
       void (async () => {
         try {
           file.markSelfWriting(oldPath)
@@ -637,7 +637,10 @@ export function FileTabContent(props: {
     }
     window.addEventListener("deskfox-flush-now", handler)
     let unlisten: (() => void) | undefined
-    void listen("deskfox-flush-before-close", handler).then((u) => (unlisten = u))
+    // FORK: 2026-08-11 — 浏览器/e2e 环境无 preload 桥,native.listen 同步 throw 会炸全屏
+    //   ErrorBoundary(上游 v1.18.4 v2 review e2e 首次在浏览器 mount 本组件暴露);桥不在时
+    //   仅走 DOM 事件路径(deskfox-flush-now)兜底
+    if (isDesktopApp()) void listen("deskfox-flush-before-close", handler).then((u) => (unlisten = u))
     onCleanup(() => {
       window.removeEventListener("deskfox-flush-now", handler)
       unlisten?.()
@@ -1167,7 +1170,7 @@ export function FileTabContent(props: {
       p.replace(/\\/g, "/").split("/").pop()?.replace(/\.(md|markdown)$/i, "") || "untitled"
     // mdFileDir = .md 文件所在目录绝对路径(同 mdAssetRewriter 计算逻辑),
     // 让 helper 把 ![](./img.png) 等本地图替换为 base64 dataURL 嵌入 docx
-    const root = sdk.directory
+    const root = sdk().directory
     const mdFileDir = root && p ? pathDirname(`${root}/${p}`.replace(/\\/g, "/")) : undefined
 
     await exportMdAsDocx({
@@ -1287,9 +1290,9 @@ export function FileTabContent(props: {
   })
 
   // FORK: 给 <Markdown> 注入本地资源 src 重写(.md 同目录/相对目录 <img>/<video>/<audio> 走 localasset:// 而非 404)2026-05-05
-  // baseDir = 当前 .md 文件所在目录的绝对路径(sdk.directory + dirname(path()));聊天侧不传 rewriteAssetSrc 钩子,无回归
+  // baseDir = 当前 .md 文件所在目录的绝对路径(sdk().directory + dirname(path()));聊天侧不传 rewriteAssetSrc 钩子,无回归
   const mdAssetRewriter = createMemo(() => {
-    const root = sdk.directory
+    const root = sdk().directory
     const p = path()
     if (!root || !p) return undefined
     const fileAbs = `${root}/${p}`.replace(/\\/g, "/")
@@ -1305,9 +1308,9 @@ export function FileTabContent(props: {
   // FORK: REQ-075 — 逻辑提取到 md-link-click.ts 与聊天区共享,此处 baseDir=当前文件所在目录,
   // 行为不变(R1 回归用例守护)[feat: batch-port-edit-mdlink] 2026-07-07
   const handleMdLinkClick = createMdLinkClickHandler({
-    root: () => sdk.directory,
+    root: () => sdk().directory,
     baseDir: () => {
-      const root = sdk.directory
+      const root = sdk().directory
       const p = path()
       if (!root || !p) return undefined
       return pathDirname(`${root}/${p}`.replace(/\\/g, "/"))
@@ -1341,7 +1344,7 @@ export function FileTabContent(props: {
     if (!p) return null
     const m = mediaKindFromPath(p)
     if (!m) return null
-    const root = sdk.directory
+    const root = sdk().directory
     if (!root) return null
     return { root, path: p, mimes: m.mimes, kind: m.kind }
   })
@@ -1384,7 +1387,7 @@ export function FileTabContent(props: {
   })
 
   const openMediaInSystemPlayer = async () => {
-    const root = sdk.directory
+    const root = sdk().directory
     const p = path()
     if (!root || !p) return
     const absPath = `${root}/${p}`.replace(/\\/g, "/")
@@ -1485,8 +1488,17 @@ export function FileTabContent(props: {
           contents: source,
           cacheKey: cacheKey(),
         }}
-        enableLineSelection
-        enableHoverUtility
+        // FORK: 关闭代码视图的「选中即弹行内评论」[feat: unify-selection-to-chat] 2026-08-13
+        //   [bug-repro: user 反馈「TXT 文件选中文字后直接出来了评论框,应该跟其他文件格式看齐 ——
+        //    选中文字后点右键加入聊天窗口,统一交互方式」]
+        //   分野的来源:走 CodeMirror 的格式(.txt/.json/.toml/.py 及各类代码文件)带行号,
+        //   选中行会触发上游的行内评论;而走 DocumentViewer 的格式(.md/.docx/.pdf/图片)
+        //   走的是 fork 的「选中 → 右键 → 加入聊天」(handleSelectionContextMenu)。
+        //   user 2026-08-13 拍板「后者彻底统一」:代码类文件去掉行内评论,只保留加入聊天。
+        //   去掉 enableLineSelection / enableGutterUtility 后,选中不再弹评论框,
+        //   右键菜单仍由 handleSelectionContextMenu 接管(非编辑态),两类格式交互一致。
+        //   注:审查(review)面板的行评论走 session.tsx 的 onLineComment(origin: "review"),
+        //   与本处(origin: "file")是两条路径,不受影响。
         selectedLines={activeSelection()}
         commentedLines={commentedLines()}
         onRendered={() => {
@@ -1494,11 +1506,10 @@ export function FileTabContent(props: {
         }}
         annotations={commentsUi.annotations()}
         renderAnnotation={commentsUi.renderAnnotation}
-        renderHoverUtility={commentsUi.renderHoverUtility}
+        renderGutterUtility={commentsUi.renderGutterUtility}
         onLineSelected={(range: SelectedLineRange | null) => {
           commentsUi.onLineSelected(range)
         }}
-        onLineNumberSelectionEnd={commentsUi.onLineNumberSelectionEnd}
         onLineSelectionEnd={(range: SelectedLineRange | null) => {
           commentsUi.onLineSelectionEnd(range)
         }}
@@ -1520,17 +1531,17 @@ export function FileTabContent(props: {
             // FORK: office 路由已在后端 HttpApi(/office-tooling/*),SDK 已 regen 生成 office.tooling.* 方法 [feat: electron-replatform]
             
             getStatus: async () =>
-              sdk.client.office.tooling
+              sdk().client.office.tooling
                 .status()
                 .then((x) => x.data as any)
                 .catch(() => undefined),
             startInstall: async () =>
-              sdk.client.office.tooling
+              sdk().client.office.tooling
                 .install()
                 .then((x) => x.data as any)
                 .catch(() => undefined),
             getProgress: async () =>
-              sdk.client.office.tooling
+              sdk().client.office.tooling
                 .progress()
                 .then((x) => x.data as any)
                 .catch(() => undefined),
@@ -1540,7 +1551,7 @@ export function FileTabContent(props: {
             if (p) void file.load(p, { force: true })
           },
           onOpenExternal: () => {
-            const root = sdk.directory
+            const root = sdk().directory
             const p = path()
             if (!root || !p) return
             const absPath = `${root}/${p}`.replace(/\\/g, "/")
@@ -1553,12 +1564,12 @@ export function FileTabContent(props: {
             })
           },
           loadOfficePdf: async (filePath: string) => {
-            const cacheKey = `${sdk.directory ?? ""}::${filePath}`
+            const cacheKey = `${sdk().directory ?? ""}::${filePath}`
             const cached = officePdfCacheGet(cacheKey)
             if (cached) return cached
             try {
               // FORK: /file/office-pdf 路由已在后端,SDK 已 regen 生成 file.officePdf [feat: electron-replatform]
-              const res = await sdk.client.file.officePdf(
+              const res = await sdk().client.file.officePdf(
                 { path: filePath },
                 { parseAs: "arrayBuffer" } as any,
               )
@@ -1596,7 +1607,7 @@ export function FileTabContent(props: {
             <button
               type="button"
               onClick={() => {
-                const root = sdk.directory
+                const root = sdk().directory
                 const p = path()
                 if (!root || !p) return
                 const absPath = `${root}/${p}`.replace(/\\/g, "/")
@@ -1627,7 +1638,7 @@ export function FileTabContent(props: {
   // 大文件(>10MB)走 placeholder(预览 + 编辑同卡,渲染源码也无意义)
   // FORK: 2026-05-14 去顶部 toolbar(预览/源码 toggle 删除)+ 阈值 2MB→10MB + 右键菜单接入 [feat: html-viewer-ux-polish]
   const renderHtml = (source: string) => {
-    const root = sdk.directory
+    const root = sdk().directory
     const p = path()
     const sourceLen = source?.length ?? 0
     const tooLargeForPreview = sourceLen > HTML_PREVIEW_MAX_BYTES
@@ -1717,7 +1728,7 @@ export function FileTabContent(props: {
       <CsvTable
         text={source}
         onOpenExternal={() => {
-          const root = sdk.directory
+          const root = sdk().directory
           const p = path()
           if (!root || !p) return
           invoke("open_path", { path: `${root}/${p}`.replace(/\\/g, "/"), appName: null }).catch((e) => {
@@ -1737,7 +1748,7 @@ export function FileTabContent(props: {
       return (
         <FileTooLarge
           path={p}
-          root={sdk.directory ?? ""}
+          root={sdk().directory ?? ""}
           size={tooLarge.size}
           category={tooLarge.category}
           limit={tooLarge.limit}
@@ -1801,7 +1812,7 @@ export function FileTabContent(props: {
                 extraExtensions={
                   isMarkdownPath(path())
                     ? markdownEditorExtensions({
-                        projectRoot: sdk.directory,
+                        projectRoot: sdk().directory,
                         filePathRel: path() ?? undefined,
                         locale: language.locale(),
                       })
@@ -1936,4 +1947,19 @@ export function FileTabContent(props: {
       </Show>
     </Tabs.Content>
   )
+}
+
+// FORK 兼容层(2026-08-11 sync v1.18.4):上游把文件渲染抽成 SessionFileView(v2 inline file browser 用),
+// DeskFox 保留段2 文件查看器主体;此 shim 复用 FileTabContent 满足 v2 浏览器 tab 的最小契约
+// (diff 详情增强等 v2 专属能力待段4 评估)。
+import type { RenderDiff as V2RenderDiff } from "@/pages/session/v2/review-diff-kinds"
+export type SessionFileViewProps = {
+  tab: string
+  diff?: V2RenderDiff
+  diffVersion?: number
+  loadDiff?: (path: string, version?: number) => Promise<V2RenderDiff | undefined>
+  expandUnchanged?: boolean
+}
+export function SessionFileView(props: SessionFileViewProps) {
+  return <FileTabContent tab={props.tab} />
 }

@@ -1,4 +1,103 @@
 export const dict = {
+  "desktop.menu.app": "OpenCode",
+  "desktop.menu.file": "Файл",
+  "desktop.menu.edit": "Правка",
+  "desktop.menu.view": "Вид",
+  "desktop.menu.go": "Переход",
+  "desktop.menu.window": "Окно",
+  "desktop.menu.help": "Справка",
+  "desktop.menu.checkForUpdates": "Проверить наличие обновлений...",
+  "desktop.menu.settings": "Настройки",
+  "desktop.menu.reloadWebview": "Перезагрузить веб-представление",
+  "desktop.menu.restart": "Перезапустить",
+  "desktop.menu.exportLogs": "Экспортировать журналы...",
+  "desktop.menu.newSession": "Новая сессия",
+  "desktop.menu.openProject": "Открыть проект...",
+  "desktop.menu.newWindow": "Новое окно",
+  "desktop.menu.closeWindow": "Закрыть окно",
+  "desktop.menu.undo": "Отменить",
+  "desktop.menu.redo": "Повторить",
+  "desktop.menu.cut": "Вырезать",
+  "desktop.menu.copy": "Копировать",
+  "desktop.menu.paste": "Вставить",
+  "desktop.menu.delete": "Удалить",
+  "desktop.menu.selectAll": "Выбрать всё",
+  "desktop.menu.toggleSidebar": "Переключить боковую панель",
+  "desktop.menu.toggleTerminal": "Переключить терминал",
+  "desktop.menu.toggleFileTree": "Переключить дерево файлов",
+  "desktop.menu.reload": "Перезагрузить",
+  "desktop.menu.toggleDeveloperTools": "Переключить инструменты разработчика",
+  "desktop.menu.actualSize": "Фактический размер",
+  "desktop.menu.zoomIn": "Увеличить",
+  "desktop.menu.zoomOut": "Уменьшить",
+  "desktop.menu.toggleFullScreen": "Переключить полноэкранный режим",
+  "desktop.menu.back": "Назад",
+  "desktop.menu.forward": "Вперёд",
+  "desktop.menu.previousSession": "Предыдущая сессия",
+  "desktop.menu.nextSession": "Следующая сессия",
+  "desktop.menu.previousProject": "Предыдущий проект",
+  "desktop.menu.nextProject": "Следующий проект",
+  "desktop.menu.minimize": "Свернуть",
+  "desktop.menu.maximize": "Развернуть",
+  "desktop.menu.documentation": "Документация OpenCode",
+  "desktop.menu.supportForum": "Форум поддержки",
+  "desktop.menu.shareFeedback": "Отправить отзыв",
+  "desktop.menu.reportBug": "Сообщить об ошибке",
+  "desktop.menu.ariaLabel": "Меню OpenCode",
+
+  "desktop.updater.dialog.checkFailed.message": "Не удалось проверить наличие обновлений.",
+  "desktop.updater.dialog.checkFailed.title": "Ошибка обновления",
+  "desktop.updater.dialog.upToDate.message": "У вас установлена последняя версия.",
+  "desktop.updater.dialog.upToDate.title": "Обновлений нет",
+  "desktop.updater.dialog.ready.message": "Обновление {{version}} загружено. Перезапустить сейчас?",
+  "desktop.updater.dialog.ready.title": "Обновление готово",
+  "desktop.updater.dialog.restart": "Перезапустить",
+  "desktop.updater.dialog.later": "Позже",
+
+  "desktop.recovery.action.relaunch": "Запустить снова",
+  "desktop.recovery.action.exportLogs": "Экспортировать журналы",
+  "desktop.recovery.action.keepWaiting": "Продолжить ожидание",
+  "desktop.recovery.action.quit": "Выйти",
+  "desktop.recovery.loadFailed": "Не удалось загрузить OpenCode",
+  "desktop.recovery.terminated": "Окно OpenCode неожиданно завершило работу",
+  "desktop.recovery.unresponsive": "OpenCode не отвечает",
+  "desktop.recovery.unresponsive.detail": "Можно снова запустить приложение, открыть журналы или продолжить ожидание.",
+  "desktop.recovery.loadFailed.detail": "Окно: {{window}}\nURL: {{url}}\nОшибка: {{code}} {{description}}",
+  "desktop.recovery.terminated.detail": "Окно: {{window}}\nПричина: {{reason}}\nКод: {{code}}",
+  "desktop.recovery.unknown": "<неизвестно>",
+
+  "desktop.dialog.chooseFolder": "Выберите папку",
+  "desktop.dialog.chooseFile": "Выберите файл",
+  "desktop.dialog.saveFile": "Сохранить файл",
+  "desktop.dialog.files": "Файлы",
+  "desktop.server.local": "Локальный сервер",
+
+  "desktop.wsl.error.windowsOnly": "WSL доступна только в Windows",
+  "desktop.wsl.error.unavailable": "WSL недоступна",
+  "desktop.wsl.error.listInstalled": "Не удалось получить список установленных дистрибутивов WSL",
+  "desktop.wsl.error.listOnline": "Не удалось получить список доступных дистрибутивов WSL",
+  "desktop.wsl.error.executeDistro": "Не удаётся выполнять команды в дистрибутиве",
+  "desktop.wsl.error.installWsl": "Не удалось установить WSL",
+  "desktop.wsl.error.installDistro": "Не удалось установить дистрибутив: {{distro}}",
+  "desktop.wsl.error.installOpencode": "Не удалось установить OpenCode",
+  "desktop.wsl.error.alreadyAdded": "Дистрибутив {{distro}} уже добавлен",
+  "desktop.wsl.error.opencodeMissing": "opencode не установлен в этом дистрибутиве",
+  "desktop.wsl.error.opencodeCannotRun": "opencode установлен, но его не удалось запустить",
+  "desktop.wsl.error.opencodeNotInstalled": "OpenCode не установлен в {{distro}}",
+  "desktop.wsl.error.updateVersion":
+    "Обновление OpenCode завершено, но {{distro}} по-прежнему сообщает версию {{installed}}; ожидалась {{expected}}",
+  "desktop.wsl.error.noVersion": "нет версии",
+  "desktop.wsl.error.serverExited": "Сервер WSL завершил работу после запуска (код={{code}}, сигнал={{signal}})",
+  "desktop.wsl.error.serverExitedBeforeHealthy":
+    "Сервер WSL завершил работу до перехода в рабочее состояние (код={{code}}, сигнал={{signal}}){{output}}",
+  "desktop.wsl.error.healthTimeout":
+    "Истекло время ожидания проверки работоспособности Sidecar для {{distro}} ({{timeout}} мс)",
+  "desktop.wsl.error.commandTimeout": "Истекло время ожидания выполнения {{command}} {{args}} ({{timeout}} мс)",
+  "desktop.wsl.error.failedPort": "Не удалось получить порт",
+
+  "desktop.picker.error.notSelected": "В средстве выбора не выбран файл",
+  "desktop.picker.error.sizeLimit": "Размер выбранных вложений превышает лимит {{limit}} МБ",
+
   "command.category.suggested": "Предложено",
   "command.category.view": "Просмотр",
   "command.category.project": "Проект",
@@ -16,6 +115,7 @@ export const dict = {
   "command.category.permissions": "Разрешения",
   "command.category.workspace": "Рабочее пространство",
   "command.category.settings": "Настройки",
+  "command.logs.export": "Экспортировать журналы",
 
   "theme.scheme.system": "Системная",
   "theme.scheme.light": "Светлая",
@@ -23,6 +123,9 @@ export const dict = {
 
   "command.sidebar.toggle": "Переключить боковую панель",
   "command.project.open": "Открыть проект",
+  "command.project.previous": "Предыдущий проект",
+  "command.project.next": "Следующий проект",
+  "command.project.index": "Переключиться на проект {{index}}",
   "command.provider.connect": "Подключить провайдера",
   "command.server.switch": "Переключить сервер",
   "command.settings.open": "Открыть настройки",
@@ -34,20 +137,21 @@ export const dict = {
 
   "command.palette": "Палитра команд",
 
-  "command.theme.cycle": "Цикл тем",
+  "command.theme.cycle": "Переключить тему",
   "command.theme.set": "Использовать тему: {{theme}}",
-  "command.theme.scheme.cycle": "Цикл цветовой схемы",
+  "command.theme.scheme.cycle": "Переключить цветовую схему",
   "command.theme.scheme.set": "Использовать цветовую схему: {{scheme}}",
 
-  "command.language.cycle": "Цикл языков",
+  "command.language.cycle": "Переключить язык",
   "command.language.set": "Использовать язык: {{language}}",
 
   "command.session.new": "Новая сессия",
   "command.file.open": "Открыть файл",
   "command.tab.close": "Закрыть вкладку",
+  "command.tab.reopenClosed": "Повторно открыть закрытую вкладку",
   "command.context.addSelection": "Добавить выделение в контекст",
   "command.context.addSelection.description": "Добавить выбранные строки из текущего файла",
-  "command.input.focus": "Фокус на поле ввода",
+  "command.input.focus": "Перейти к полю ввода",
   "command.terminal.toggle": "Переключить терминал",
   "command.fileTree.toggle": "Переключить дерево файлов",
   "command.review.toggle": "Переключить обзор",
@@ -63,11 +167,11 @@ export const dict = {
   "command.model.choose.description": "Выбрать другую модель",
   "command.mcp.toggle": "Переключить MCP",
   "command.mcp.toggle.description": "Переключить MCP",
-  "command.agent.cycle": "Цикл агентов",
+  "command.agent.cycle": "Следующий агент",
   "command.agent.cycle.description": "Переключиться к следующему агенту",
-  "command.agent.cycle.reverse": "Цикл агентов назад",
+  "command.agent.cycle.reverse": "Предыдущий агент",
   "command.agent.cycle.reverse.description": "Переключиться к предыдущему агенту",
-  "command.model.variant.cycle": "Цикл режимов мышления",
+  "command.model.variant.cycle": "Переключить уровень усилий",
   "command.model.variant.cycle.description": "Переключиться к следующему уровню усилий",
   "command.prompt.mode.shell": "Оболочка",
   "command.prompt.mode.normal": "Промпт",
@@ -88,7 +192,11 @@ export const dict = {
   "command.session.unshare": "Отменить публикацию",
   "command.session.unshare.description": "Прекратить публикацию сессии",
 
+  "command.session.export": "Экспортировать сессию",
+  "command.session.export.description": "Экспортировать полную историю сессии в формате JSON",
+
   "palette.search.placeholder": "Поиск файлов, команд и сессий",
+  "palette.search.placeholder.home": "Поиск команд и сессий",
   "palette.empty": "Ничего не найдено",
   "palette.group.commands": "Команды",
   "palette.group.files": "Файлы",
@@ -100,9 +208,10 @@ export const dict = {
   "dialog.provider.empty": "Провайдеры не найдены",
   "dialog.provider.group.popular": "Популярные",
   "dialog.provider.group.other": "Другие",
+  "dialog.provider.custom.label": "Пользовательский провайдер, совместимый с OpenAI",
   "dialog.provider.tag.recommended": "Рекомендуемые",
   "dialog.provider.opencode.note": "Отобранные модели, включая Claude, GPT, Gemini и другие",
-  "dialog.provider.opencode.tagline": "Надежные оптимизированные модели",
+  "dialog.provider.opencode.tagline": "Надёжные оптимизированные модели",
   "dialog.provider.opencodeGo.tagline": "Доступная подписка для всех",
   "dialog.provider.anthropic.note": "Прямой доступ к моделям Claude, включая Pro и Max",
   "dialog.provider.copilot.note": "ИИ-модели для помощи в кодировании через GitHub Copilot",
@@ -115,33 +224,36 @@ export const dict = {
   "dialog.model.search.placeholder": "Поиск моделей",
   "dialog.model.empty": "Модели не найдены",
   "dialog.model.manage": "Управление моделями",
-  "dialog.model.manage.description": "Настройте какие модели появляются в выборе модели",
+  "dialog.model.manage.description": "Настройте, какие модели отображаются при выборе модели",
   "dialog.model.manage.provider.toggle": "Переключить все модели {{provider}}",
 
   "dialog.model.unpaid.freeModels.title": "Бесплатные модели от OpenCode",
   "dialog.model.unpaid.addMore.title": "Добавьте больше моделей от популярных провайдеров",
+  "dialog.model.unpaid.viewMoreProviders": "Посмотреть ещё более 70 провайдеров",
 
   "dialog.provider.viewAll": "Показать больше провайдеров",
 
   "provider.connect.title": "Подключить {{provider}}",
   "provider.connect.title.anthropicProMax": "Войти с помощью Claude Pro/Max",
   "provider.connect.selectMethod": "Выберите способ входа для {{provider}}.",
-  "provider.connect.method.apiKey": "API ключ",
+  "provider.connect.method.apiKey": "Ключ API",
+  "provider.connect.method.browser": "Браузер",
+  "provider.connect.method.headless": "Без браузера",
   "provider.connect.status.inProgress": "Авторизация...",
   "provider.connect.status.waiting": "Ожидание авторизации...",
   "provider.connect.status.failed": "Ошибка авторизации: {{error}}",
   "provider.connect.apiKey.description":
-    "Введите ваш API ключ {{provider}} для подключения аккаунта и использования моделей {{provider}} в OpenCode.",
-  "provider.connect.apiKey.label": "{{provider}} API ключ",
-  "provider.connect.apiKey.placeholder": "API ключ",
-  "provider.connect.apiKey.required": "API ключ обязателен",
+    "Введите ключ API {{provider}}, чтобы подключить аккаунт и использовать модели {{provider}} в OpenCode.",
+  "provider.connect.apiKey.label": "Ключ API {{provider}}",
+  "provider.connect.apiKey.placeholder": "Ключ API",
+  "provider.connect.apiKey.required": "Требуется ключ API",
   "provider.connect.opencodeZen.line1":
     "OpenCode Zen даёт вам доступ к отобранным надёжным оптимизированным моделям для агентов программирования.",
   "provider.connect.opencodeZen.line2":
-    "С одним API ключом вы получите доступ к таким моделям как Claude, GPT, Gemini, GLM и другим.",
+    "С одним ключом API вы получите доступ к таким моделям, как Claude, GPT, Gemini, GLM и другие.",
   "provider.connect.opencodeZen.visit.prefix": "Посетите ",
   "provider.connect.opencodeZen.visit.link": "opencode.ai/zen",
-  "provider.connect.opencodeZen.visit.suffix": " чтобы получить ваш API ключ.",
+  "provider.connect.opencodeZen.visit.suffix": ", чтобы получить ключ API.",
   "provider.connect.oauth.code.visit.prefix": "Посетите ",
   "provider.connect.oauth.code.visit.link": "эту ссылку",
   "provider.connect.oauth.code.visit.suffix":
@@ -159,18 +271,19 @@ export const dict = {
   "provider.connect.toast.connected.description": "Модели {{provider}} теперь доступны.",
 
   "provider.custom.title": "Пользовательский провайдер",
-  "provider.custom.description.prefix": "Настройте OpenAI-совместимого провайдера. См. ",
+  "provider.custom.unavailable": "Пользовательские провайдеры недоступны на этом сервере",
+  "provider.custom.description.prefix": "Настройте провайдера, совместимого с OpenAI. См. ",
   "provider.custom.description.link": "документацию по настройке провайдера",
   "provider.custom.description.suffix": ".",
   "provider.custom.field.providerID.label": "ID провайдера",
   "provider.custom.field.providerID.placeholder": "myprovider",
   "provider.custom.field.providerID.description": "Строчные буквы, цифры, дефисы или подчёркивания",
   "provider.custom.field.name.label": "Отображаемое имя",
-  "provider.custom.field.name.placeholder": "Мой AI провайдер",
+  "provider.custom.field.name.placeholder": "Мой ИИ-провайдер",
   "provider.custom.field.baseURL.label": "Базовый URL",
   "provider.custom.field.baseURL.placeholder": "https://api.myprovider.com/v1",
-  "provider.custom.field.apiKey.label": "API ключ",
-  "provider.custom.field.apiKey.placeholder": "API ключ",
+  "provider.custom.field.apiKey.label": "Ключ API",
+  "provider.custom.field.apiKey.placeholder": "Ключ API",
   "provider.custom.field.apiKey.description":
     "Необязательно. Оставьте пустым, если управляете авторизацией через заголовки.",
   "provider.custom.models.label": "Модели",
@@ -209,10 +322,15 @@ export const dict = {
   "model.input.image": "изображение",
   "model.input.audio": "аудио",
   "model.input.video": "видео",
-  "model.input.pdf": "pdf",
-  "model.tooltip.allows": "Разрешено: {{inputs}}",
-  "model.tooltip.reasoning.allowed": "Разрешает рассуждение",
-  "model.tooltip.reasoning.none": "Без рассуждения",
+  "model.input.pdf": "PDF",
+  "model.tooltip.allows": "Поддерживает: {{inputs}}",
+  "model.tooltip.context.label": "Контекст",
+  "model.tooltip.inputs": "Входные данные",
+  "model.tooltip.model": "Модель",
+  "model.tooltip.provider": "Провайдер",
+  "model.tooltip.reasoning": "Рассуждение",
+  "model.tooltip.reasoning.allowed": "Поддерживает рассуждения",
+  "model.tooltip.reasoning.none": "Без рассуждений",
   "model.tooltip.context": "Лимит контекста {{limit}}",
 
   "common.search.placeholder": "Поиск",
@@ -221,9 +339,10 @@ export const dict = {
   "common.loading": "Загрузка",
   "common.loading.ellipsis": "...",
   "common.cancel": "Отмена",
+  "common.clear": "Очистить",
   "common.connect": "Подключить",
   "common.disconnect": "Отключить",
-  "common.continue": "Отправить",
+  "common.continue": "Продолжить",
   "common.submit": "Отправить",
   "common.save": "Сохранить",
   "common.saving": "Сохранение...",
@@ -233,42 +352,44 @@ export const dict = {
   "prompt.placeholder.shell": "Введите команду оболочки... {{example}}",
   "prompt.placeholder.normal": 'Спросите что угодно... "{{example}}"',
   "prompt.placeholder.simple": "Спросите что угодно...",
-  "prompt.placeholder.summarizeComments": "Суммировать комментарии…",
-  "prompt.placeholder.summarizeComment": "Суммировать комментарий…",
+  "prompt.placeholder.summarizeComments": "Обобщить комментарии…",
+  "prompt.placeholder.summarizeComment": "Обобщить комментарий…",
   "prompt.mode.shell": "Оболочка",
   "prompt.mode.normal": "Промпт",
   "prompt.mode.shell.exit": "esc для выхода",
+  "session.child.promptDisabled": "В сессиях субагентов нельзя отправлять запросы.",
+  "session.child.backToParent": "Вернуться к основной сессии.",
 
   "prompt.example.1": "Исправить TODO в коде",
   "prompt.example.2": "Какой технологический стек этого проекта?",
   "prompt.example.3": "Исправить сломанные тесты",
-  "prompt.example.4": "Объясни как работает аутентификация",
+  "prompt.example.4": "Объясни, как работает аутентификация",
   "prompt.example.5": "Найти и исправить уязвимости безопасности",
-  "prompt.example.6": "Добавить юнит-тесты для сервиса пользователя",
+  "prompt.example.6": "Добавить модульные тесты для службы пользователей",
   "prompt.example.7": "Рефакторить эту функцию для лучшей читаемости",
   "prompt.example.8": "Что означает эта ошибка?",
   "prompt.example.9": "Помоги мне отладить эту проблему",
   "prompt.example.10": "Сгенерировать документацию API",
   "prompt.example.11": "Оптимизировать запросы к базе данных",
-  "prompt.example.12": "Добавить валидацию ввода",
+  "prompt.example.12": "Добавить проверку входных данных",
   "prompt.example.13": "Создать новый компонент для...",
   "prompt.example.14": "Как развернуть этот проект?",
-  "prompt.example.15": "Проверь мой код на лучшие практики",
+  "prompt.example.15": "Проверь, соответствует ли мой код рекомендациям",
   "prompt.example.16": "Добавить обработку ошибок в эту функцию",
-  "prompt.example.17": "Объясни этот паттерн regex",
-  "prompt.example.18": "Конвертировать это в TypeScript",
+  "prompt.example.17": "Объясни это регулярное выражение",
+  "prompt.example.18": "Преобразовать это в TypeScript",
   "prompt.example.19": "Добавить логирование по всему проекту",
   "prompt.example.20": "Какие зависимости устарели?",
   "prompt.example.21": "Помоги написать скрипт миграции",
-  "prompt.example.22": "Реализовать кэширование для этой конечной точки",
+  "prompt.example.22": "Реализовать кеширование для этой конечной точки",
   "prompt.example.23": "Добавить пагинацию в этот список",
-  "prompt.example.24": "Создать CLI команду для...",
-  "prompt.example.25": "Как работают переменные окружения здесь?",
+  "prompt.example.24": "Создать CLI-команду для...",
+  "prompt.example.25": "Как здесь работают переменные окружения?",
 
   "prompt.popover.emptyResults": "Нет совпадений",
   "prompt.popover.emptyCommands": "Нет совпадающих команд",
   "prompt.dropzone.label": "Перетащите сюда изображения, PDF или текстовые файлы",
-  "prompt.dropzone.file.label": "Отпустите для @упоминания файла",
+  "prompt.dropzone.file.label": "Отпустите, чтобы упомянуть файл через @",
   "prompt.slash.badge.custom": "своё",
   "prompt.slash.badge.skill": "навык",
   "prompt.slash.badge.mcp": "mcp",
@@ -277,11 +398,17 @@ export const dict = {
   "prompt.context.removeActiveFile": "Удалить активный файл из контекста",
   "prompt.context.removeFile": "Удалить файл из контекста",
   "prompt.action.attachFile": "Прикрепить файл",
+  "prompt.menu.addImagesAndFiles": "Добавить файлы и другое",
+  "prompt.menu.imagesAndFiles": "Изображения и файлы",
+  "prompt.menu.commands": "Команды",
+  "prompt.menu.context": "Контекст",
+  "prompt.menu.shellCommand": "Команда оболочки",
   "prompt.attachment.remove": "Удалить вложение",
   "prompt.action.send": "Отправить",
   "prompt.action.stop": "Остановить",
 
   "prompt.toast.pasteUnsupported.title": "Неподдерживаемое вложение",
+  "prompt.toast.attachmentDuplicate.title": "Этот файл уже загружен",
   "prompt.toast.pasteUnsupported.description": "Здесь можно прикрепить только изображения, PDF или текстовые файлы.",
   "prompt.toast.modelAgentRequired.title": "Выберите агента и модель",
   "prompt.toast.modelAgentRequired.description": "Выберите агента и модель перед отправкой запроса.",
@@ -309,9 +436,14 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Поиск папок",
   "dialog.directory.empty": "Папки не найдены",
+  "dialog.directory.action.selectFile": "Выбрать файл",
+  "dialog.directory.action.selectFolder": "Выбрать папку",
+  "dialog.directory.root": "Корень",
+  "dialog.directory.parent": "Родительская папка",
+  "dialog.directory.readError": "Не удалось прочитать эту папку",
 
   "dialog.server.title": "Серверы",
-  "dialog.server.description": "Переключите сервер OpenCode к которому подключается приложение.",
+  "dialog.server.description": "Выберите сервер OpenCode, к которому подключается приложение.",
   "dialog.server.search.placeholder": "Поиск серверов",
   "dialog.server.empty": "Серверов пока нет",
   "dialog.server.add.title": "Добавить сервер",
@@ -335,17 +467,102 @@ export const dict = {
 
   "dialog.server.menu.edit": "Редактировать",
   "dialog.server.menu.default": "Сделать по умолчанию",
-  "dialog.server.menu.defaultRemove": "Удалить по умолчанию",
+  "dialog.server.menu.defaultRemove": "Отменить выбор по умолчанию",
   "dialog.server.menu.delete": "Удалить",
   "dialog.server.current": "Текущий сервер",
   "dialog.server.status.default": "По умолч.",
+  "wsl.server.add": "Добавить сервер WSL",
+  "wsl.server.addShort": "Добавить WSL",
+  "wsl.server.label": "WSL",
+  "wsl.server.menu.label": "Сервер WSL",
+  "wsl.server.retryStart": "Повторить запуск",
+  "wsl.server.updating": "Обновление...",
+  "wsl.onboarding.step.distro": "Выбрать дистрибутив",
+  "wsl.onboarding.step.opencode": "OpenCode",
+  "wsl.onboarding.checkingRuntime": "Проверка WSL...",
+  "wsl.onboarding.restartRequired": "Чтобы завершить установку WSL, перезапустите Windows.",
+  "wsl.onboarding.ready": "WSL готова к работе.",
+  "wsl.onboarding.required": "Для продолжения требуется WSL.",
+  "wsl.onboarding.checkingDistros": "Проверка дистрибутивов...",
+  "wsl.onboarding.installingDistro": "Установка {{distro}}...",
+  "wsl.onboarding.checkingDistro": "Проверка {{distro}}...",
+  "wsl.onboarding.listingDistros": "Получение списка дистрибутивов...",
+  "wsl.onboarding.distroReady": "Дистрибутив {{distro}} готов к работе.",
+  "wsl.onboarding.distroNotInstalled": "Дистрибутив {{distro}} пока не установлен.",
+  "wsl.onboarding.openDistroOnce": "Откройте {{distro}} один раз, чтобы завершить настройку.",
+  "wsl.onboarding.finishingDistro": "Завершение настройки {{distro}}.",
+  "wsl.onboarding.pickDistro": "Выберите дистрибутив или установите его ниже.",
+  "wsl.onboarding.checkingOpencode": "Проверка OpenCode...",
+  "wsl.onboarding.checkingOpencodeIn": "Проверка OpenCode в {{distro}}...",
+  "wsl.onboarding.updatingOpencode": "Обновление OpenCode...",
+  "wsl.onboarding.updatingOpencodeIn": "Обновление OpenCode в {{distro}}...",
+  "wsl.onboarding.updateOpencodeIn": "Обновите OpenCode в {{distro}}.",
+  "wsl.onboarding.updateOpencode": "Обновить OpenCode",
+  "wsl.onboarding.opencodeReadyIn": "OpenCode в {{distro}} готов к работе.",
+  "wsl.onboarding.opencodeReady": "OpenCode готов к работе.",
+  "wsl.onboarding.installOpencodeIn": "Установите OpenCode в {{distro}}.",
+  "wsl.onboarding.installOpencode": "Установить OpenCode",
+  "wsl.onboarding.chooseDistroFirst": "Сначала выберите дистрибутив.",
+  "wsl.onboarding.loadFailed": "Не удалось загрузить состояние WSL.",
+  "wsl.onboarding.loading": "Загрузка...",
+  "wsl.onboarding.installedDistros": "Установленные дистрибутивы",
+  "wsl.onboarding.checkAgain": "Проверить снова",
+  "wsl.onboarding.distroStatus.ready": "Готов",
+  "wsl.onboarding.distroStatus.checking": "Проверка...",
+  "wsl.onboarding.distroStatus.opencodeMissing": "OpenCode не установлен",
+  "wsl.onboarding.distroStatus.missingTools": "Отсутствуют bash и curl",
+  "wsl.onboarding.distroStatus.unsupported": "Не поддерживается · Используйте WSL 2",
+  "wsl.onboarding.needAnotherDistro": "Нужен другой дистрибутив?",
+  "wsl.onboarding.needAnotherDistroHint": "Установите дистрибутив Linux из каталога WSL",
+  "wsl.onboarding.wslNotInstalled.title": "WSL не установлена",
+  "wsl.onboarding.wslNotInstalled.description":
+    "Для добавления сервера WSL в OpenCode требуется WSL (Подсистема Windows для Linux)",
+  "wsl.onboarding.wslUnavailable.title": "WSL недоступна",
+  "wsl.onboarding.wslUnavailable.description": "OpenCode не смог проверить WSL на этом компьютере.",
+  "wsl.onboarding.installWsl": "Установить WSL",
+  "wsl.onboarding.windowsRestartRequired":
+    "Перезапустите Windows, чтобы завершить установку WSL, затем снова откройте OpenCode.",
+  "wsl.onboarding.next": "Далее",
+  "wsl.onboarding.refresh": "Обновить",
+  "wsl.onboarding.allDistrosAdded": "Все установленные дистрибутивы уже добавлены.",
+  "wsl.onboarding.noDistros": "Дистрибутивы пока не обнаружены.",
+  "wsl.onboarding.install": "Установить",
+  "wsl.onboarding.installing": "Установка...",
+  "wsl.onboarding.installDistro": "Установить дистрибутив",
+  "wsl.onboarding.searchDistros": "Поиск дистрибутивов",
+  "wsl.onboarding.wsl2Required": "Требуется WSL 2.",
+  "wsl.onboarding.toolsRequired": "Для этого дистрибутива нужны bash и curl.",
+  "wsl.onboarding.openTerminal": "Открыть терминал",
+  "wsl.onboarding.path": "Путь: {{path}}",
+  "wsl.onboarding.notFound": "не найден",
+  "wsl.onboarding.version": "Версия: {{version}}",
+  "wsl.onboarding.unknown": "неизвестно",
+  "wsl.onboarding.desktopVersion": "приложение {{version}}",
+  "wsl.onboarding.versionMismatch": "Установленная версия не соответствует версии приложения.",
+  "wsl.onboarding.adding": "Добавление...",
+
+  "help.tabs.toast.ariaLabel": "Представляем вкладки. Организуйте работу и активные сессии с помощью вкладок",
+  "help.tabs.toast.dismiss": "Закрыть сведения о вкладках",
+  "help.tabs.title": "Представляем вкладки",
+  "help.tabs.description": "Организуйте работу и активные сессии с помощью вкладок",
+  "help.tabs.date": "14 июля",
+  "help.tabs.introduction": "Теперь работа в OpenCode Desktop организована с помощью вкладок.",
+  "help.tabs.sessions":
+    "Начните новую сессию во вкладке или откройте существующую сессию из любого проекта. Открывайте новую вкладку, когда начинаете новую задачу, и закрывайте её по завершении.",
+  "help.tabs.organize":
+    "Несколько открытых вкладок упрощают организацию активных сессий. Если вы планируете оставить вкладки открытыми, присвойте им запоминающиеся названия.",
+  "help.tabs.home":
+    "Все сессии и проекты находятся на новом экране «Главная». При выборе сессии она открывается во вкладке.",
+  "help.tabs.persistence": "После повторного открытия приложения вкладки останутся открытыми.",
+  "help.tabs.worktrees":
+    "Новый дизайн пока не поддерживает Git Worktrees, но эта возможность скоро появится. Если вы предпочитаете прежний макет, переключиться между макетами можно в разделе «Настройки». Учтите, что через несколько недель новый макет станет постоянным.",
 
   "dialog.project.edit.title": "Редактировать проект",
   "dialog.project.edit.name": "Название",
-  "dialog.project.edit.icon": "Иконка",
-  "dialog.project.edit.icon.alt": "Иконка проекта",
+  "dialog.project.edit.icon": "Значок",
+  "dialog.project.edit.icon.alt": "Значок проекта",
   "dialog.project.edit.icon.hint": "Нажмите или перетащите изображение",
-  "dialog.project.edit.icon.recommended": "Рекомендуется: 128x128px",
+  "dialog.project.edit.icon.recommended": "Рекомендуется: 128 x 128 пикселей",
   "dialog.project.edit.color": "Цвет",
   "dialog.project.edit.color.select": "Выбрать цвет {{color}}",
 
@@ -353,6 +570,8 @@ export const dict = {
   "dialog.project.edit.worktree.startup.description":
     "Запускается после создания нового рабочего пространства (worktree).",
   "dialog.project.edit.worktree.startup.placeholder": "например, bun install",
+  "dialog.usageExceeded.dontShowAgain": "Больше не показывать",
+
   "context.breakdown.title": "Разбивка контекста",
   "context.breakdown.note":
     'Приблизительная разбивка входных токенов. "Другое" включает определения инструментов и накладные расходы.',
@@ -365,6 +584,8 @@ export const dict = {
   "context.systemPrompt.title": "Системный промпт",
   "context.rawMessages.title": "Исходные сообщения",
 
+  "context.export.session": "Экспортировать сессию",
+
   "context.stats.session": "Сессия",
   "context.stats.messages": "Сообщения",
   "context.stats.provider": "Провайдер",
@@ -375,7 +596,7 @@ export const dict = {
   "context.stats.inputTokens": "Входные токены",
   "context.stats.outputTokens": "Выходные токены",
   "context.stats.reasoningTokens": "Токены рассуждения",
-  "context.stats.cacheTokens": "Токены кэша (чтение/запись)",
+  "context.stats.cacheTokens": "Токены кеша (чтение/запись)",
   "context.stats.userMessages": "Сообщения пользователя",
   "context.stats.assistantMessages": "Сообщения ассистента",
   "context.stats.totalCost": "Общая стоимость",
@@ -403,6 +624,7 @@ export const dict = {
   "language.no": "Norsk",
   "language.br": "Português (Brasil)",
   "language.bs": "Bosanski",
+  "language.uk": "Українська",
   "language.th": "ไทย",
   "language.tr": "Türkçe",
 
@@ -441,6 +663,11 @@ export const dict = {
   "toast.session.unshare.failed.title": "Не удалось отменить публикацию",
   "toast.session.unshare.failed.description": "Произошла ошибка при отмене публикации",
 
+  "toast.session.export.success.title": "Сессия экспортирована",
+  "toast.session.export.success.description": "Сессия сохранена в файл {{filename}}",
+  "toast.session.export.failed.title": "Не удалось экспортировать сессию",
+  "toast.session.export.failed.description": "Произошла ошибка при экспорте сессии",
+
   "toast.session.listFailed.title": "Не удалось загрузить сессии для {{project}}",
 
   "toast.update.title": "Доступно обновление",
@@ -450,10 +677,12 @@ export const dict = {
 
   "error.page.title": "Что-то пошло не так",
   "error.page.description": "Произошла ошибка при загрузке приложения.",
+  "error.page.description.localServerStartup": "Произошла ошибка при запуске локального сервера.",
   "error.page.details.label": "Детали ошибки",
   "error.page.action.restart": "Перезапустить",
   "error.page.action.report": "Сообщить об ошибке",
   "error.page.action.reported": "Об ошибке сообщено",
+  "error.page.action.exportLogs": "Экспортировать журналы",
   "error.page.action.checking": "Проверка...",
   "error.page.action.checkUpdates": "Проверить обновления",
   "error.page.action.updateTo": "Обновить до {{version}}",
@@ -471,27 +700,27 @@ export const dict = {
   "error.chain.causedBy": "Причина:",
   "error.chain.apiError": "Ошибка API",
   "error.chain.status": "Статус: {{status}}",
-  "error.chain.retryable": "Повторная попытка: {{retryable}}",
+  "error.chain.retryable": "Можно повторить: {{retryable}}",
   "error.chain.responseBody": "Тело ответа:\n{{body}}",
   "error.chain.didYouMean": "Возможно, вы имели в виду: {{suggestions}}",
   "error.chain.modelNotFound": "Модель не найдена: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Проверьте названия провайдера/модели в конфиге (opencode.json)",
+  "error.chain.checkConfig": "Проверьте названия провайдера и модели в конфигурации (opencode.json)",
   "error.chain.mcpFailed":
-    'MCP сервер "{{name}}" завершился с ошибкой. Обратите внимание, что OpenCode пока не поддерживает MCP авторизацию.',
+    'MCP-сервер "{{name}}" завершился с ошибкой. Обратите внимание: OpenCode пока не поддерживает MCP-авторизацию.',
   "error.chain.providerAuthFailed": "Ошибка аутентификации провайдера ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
     'Не удалось инициализировать провайдера "{{provider}}". Проверьте учётные данные и конфигурацию.',
-  "error.chain.configJsonInvalid": "Конфигурационный файл по адресу {{path}} не является валидным JSON(C)",
+  "error.chain.configJsonInvalid": "Конфигурационный файл по адресу {{path}} содержит некорректный JSON(C)",
   "error.chain.configJsonInvalidWithMessage":
-    "Конфигурационный файл по адресу {{path}} не является валидным JSON(C): {{message}}",
+    "Конфигурационный файл по адресу {{path}} содержит некорректный JSON(C): {{message}}",
   "error.chain.configDirectoryTypo":
-    'Папка "{{dir}}" в {{path}} невалидна. Переименуйте папку в "{{suggestion}}" или удалите её. Это распространённая опечатка.',
+    'Папка "{{dir}}" в {{path}} недопустима. Переименуйте папку в "{{suggestion}}" или удалите её. Это распространённая опечатка.',
   "error.chain.configFrontmatterError": "Не удалось разобрать frontmatter в {{path}}:\n{{message}}",
-  "error.chain.configInvalid": "Конфигурационный файл по адресу {{path}} невалиден",
-  "error.chain.configInvalidWithMessage": "Конфигурационный файл по адресу {{path}} невалиден: {{message}}",
+  "error.chain.configInvalid": "Недопустимый конфигурационный файл по адресу {{path}}",
+  "error.chain.configInvalidWithMessage": "Недопустимый конфигурационный файл по адресу {{path}}: {{message}}",
 
   "notification.permission.title": "Требуется разрешение",
-  "notification.permission.description": "{{sessionTitle}} в {{projectName}} требуется разрешение",
+  "notification.permission.description": "Для {{sessionTitle}} в {{projectName}} требуется разрешение",
   "notification.question.title": "Вопрос",
   "notification.question.description": "У {{sessionTitle}} в {{projectName}} есть вопрос",
   "notification.action.goToSession": "Перейти к сессии",
@@ -504,12 +733,36 @@ export const dict = {
   "home.welcome.title": "Ваш персональный ИИ-ассистент готов",
   "home.welcome.description": "Передайте Fox папку локального проекта — он глубоко изучит структуру вашего проекта и поможет вам в любой момент",
   "home.welcome.open": "Открыть папку",
+  "home.empty.title": "Нет недавних проектов",
+  "home.empty.description": "Начните с открытия локального проекта",
+  "home.title": "Главная",
+  "home.projects": "Проекты",
+  "home.project.add": "Добавить проект",
+  "home.recentlyClosed": "Недавно закрытые",
+  "home.server.collapse": "Свернуть проекты сервера",
+  "home.server.expand": "Развернуть проекты сервера",
+  "home.sessions.search.placeholder": "Поиск сессий",
+  "home.sessions.search.placeholder.scoped": "Поиск сессий в {{scope}}",
+  "home.sessions.search.sessions": "Сессии",
+  "home.sessions.search.noResults": "Сессии по запросу {{query}} не найдены",
+  "home.sessions.empty": "Здесь пока ничего нет",
+  "home.sessions.empty.description": "Создайте сессию, чтобы начать",
+  "home.sessions.group.today": "Сегодня",
+  "home.sessions.group.yesterday": "Вчера",
+  "home.sessions.group.older": "Ранее",
+  "home.providerTip":
+    "Подключитесь к более чем 75 провайдерам, чтобы использовать другие модели, включая Claude, GPT, Gemini и другие",
 
   "session.tab.session": "Сессия",
   "session.tab.review": "Обзор",
   "session.tab.context": "Контекст",
+  "session.tab.unknown": "Неизвестная сессия",
   "session.panel.reviewAndFiles": "Обзор и файлы",
-  "session.review.filesChanged": "{{count}} файлов изменено",
+  "session.error.notFound": "Эта сессия не найдена",
+  "session.error.notFound.description": "Эта вкладка указывает на сессию, которой больше нет на этом сервере.",
+  "session.error.notFound.closeTab": "Закрыть вкладку",
+  "session.error.serverConnection": "Не удаётся подключиться к этому серверу",
+  "session.review.filesChanged": "Изменено файлов: {{count}}",
   "session.review.change.one": "Изменение",
   "session.review.change.other": "Изменения",
   "session.review.loadingChanges": "Загрузка изменений...",
@@ -517,6 +770,8 @@ export const dict = {
   "session.review.noVcs": "Система контроля версий Git не обнаружена, изменения не отображаются",
   "session.review.noSnapshot": "Отслеживание снимков отключено в настройках, поэтому изменения сессии недоступны",
   "session.review.noChanges": "Нет изменений",
+  "session.review.noUncommittedChanges": "Пока нет незафиксированных изменений",
+  "session.review.noBranchChanges": "Пока нет изменений в ветке",
   "session.files.selectToOpen": "Выберите файл, чтобы открыть",
   "session.files.all": "Все файлы",
   "session.files.empty": "Нет файлов",
@@ -531,22 +786,40 @@ export const dict = {
   "session.todo.title": "Задачи",
   "session.todo.collapse": "Свернуть",
   "session.todo.expand": "Развернуть",
+  "session.question.minimize": "Свернуть вопрос",
+  "session.question.restore": "Восстановить вопрос",
+  "session.question.pending.one": "{{count}} вопрос без ответа",
+  "session.question.pending.few": "{{count}} вопроса без ответа",
+  "session.question.pending.many": "{{count}} вопросов без ответа",
+  "session.question.pending.other": "Вопросы без ответа: {{count}}",
   "session.followupDock.summary.one": "{{count}} сообщение в очереди",
-  "session.followupDock.summary.other": "{{count}} сообщений в очереди",
+  "session.followupDock.summary.few": "{{count}} сообщения в очереди",
+  "session.followupDock.summary.many": "{{count}} сообщений в очереди",
+  "session.followupDock.summary.other": "Сообщений в очереди: {{count}}",
   "session.followupDock.sendNow": "Отправить сейчас",
   "session.followupDock.edit": "Редактировать",
   "session.followupDock.collapse": "Свернуть сообщения в очереди",
   "session.followupDock.expand": "Развернуть сообщения в очереди",
   "session.revertDock.summary.one": "{{count}} сообщение возвращено",
-  "session.revertDock.summary.other": "{{count}} сообщений возвращено",
+  "session.revertDock.summary.few": "{{count}} сообщения возвращены",
+  "session.revertDock.summary.many": "{{count}} сообщений возвращено",
+  "session.revertDock.summary.other": "Возвращено сообщений: {{count}}",
   "session.revertDock.collapse": "Свернуть возвращённые сообщения",
   "session.revertDock.expand": "Развернуть возвращённые сообщения",
   "session.revertDock.restore": "Восстановить сообщение",
 
   "session.new.title": "Создавайте что угодно",
+  "session.new.project.new": "Новый проект",
+  "session.new.project.search": "Поиск проектов",
+  "session.new.project.add": "Добавить проект",
   "session.new.worktree.main": "Основная ветка",
   "session.new.worktree.mainWithBranch": "Основная ветка ({{branch}})",
   "session.new.worktree.create": "Создать новый worktree",
+  "session.new.workspace.runIn": "Запустить сессию в",
+  "session.new.workspace.triggerLocal": "Локально",
+  "session.new.workspace.local": "Локальный репозиторий",
+  "session.new.workspace.existing": "Рабочее пространство…",
+  "session.new.git.none": "Нет Git",
   "session.new.lastModified": "Последнее изменение",
 
   "session.header.search.placeholder": "Поиск {{project}}",
@@ -579,7 +852,7 @@ export const dict = {
   "session.share.copy.copied": "Скопировано",
   "session.share.copy.copyLink": "Копировать ссылку",
 
-  "lsp.tooltip.none": "Нет LSP серверов",
+  "lsp.tooltip.none": "Нет LSP-серверов",
   "lsp.label.connected": "{{count}} LSP",
 
   "prompt.loading": "Загрузка запроса...",
@@ -590,6 +863,12 @@ export const dict = {
   "terminal.connectionLost.title": "Соединение потеряно",
   "terminal.connectionLost.description":
     "Соединение с терминалом прервано. Это может произойти при перезапуске сервера.",
+  "terminal.connectTicket.csrfError":
+    "Билет подключения PTY отклонён при проверке источника или CSRF. Проверьте конфигурацию CORS сервера.",
+  "terminal.connectTicket.statusError": "Не удалось получить билет подключения PTY, статус: {{status}}",
+
+  "titlebar.update": "Обновить",
+  "titlebar.updateVersion": "Обновить {{version}}",
 
   "common.closeTab": "Закрыть вкладку",
   "common.dismiss": "Закрыть",
@@ -597,6 +876,7 @@ export const dict = {
   "common.moreOptions": "Дополнительные опции",
   "common.learnMore": "Подробнее",
   "common.rename": "Переименовать",
+  "common.export": "Экспортировать",
   "common.reset": "Сбросить",
   "common.archive": "Архивировать",
   "common.undo": "Отменить",
@@ -624,6 +904,8 @@ export const dict = {
   "sidebar.project.recentSessions": "Недавние сессии",
   "sidebar.project.viewAllSessions": "Посмотреть все сессии",
   "sidebar.project.clearNotifications": "Очистить уведомления",
+  "sidebar.empty.title": "Нет открытых проектов",
+  "sidebar.empty.description": "Откройте проект, чтобы начать",
 
   "app.name.desktop": "OpenCode Desktop",
   "settings.section.desktop": "Приложение",
@@ -635,31 +917,54 @@ export const dict = {
   "settings.desktop.wsl.description": "Запускать сервер OpenCode внутри WSL на Windows.",
 
   "settings.general.section.appearance": "Внешний вид",
+  "settings.general.section.advanced": "Дополнительно",
   "settings.general.section.notifications": "Системные уведомления",
   "settings.general.section.updates": "Обновления",
   "settings.general.section.sounds": "Звуковые эффекты",
   "settings.general.section.feed": "Лента",
-  "settings.general.section.display": "Дисплей",
+  "settings.general.section.display": "Экран",
 
   "settings.general.row.language.title": "Язык",
   "settings.general.row.language.description": "Изменить язык отображения OpenCode",
+  "settings.general.row.shell.title": "Оболочка терминала",
+  "settings.general.row.shell.description":
+    "Выберите оболочку для терминала. Совместимые оболочки также используются агентом при вызове инструментов.",
+  "settings.general.row.shell.autoDefault": "Авто (по умолчанию)",
+  "settings.general.row.shell.terminalOnly": "только терминал",
   "settings.general.row.appearance.title": "Внешний вид",
-  "settings.general.row.appearance.description": "Настройте как OpenCode выглядит на вашем устройстве",
+  "settings.general.row.appearance.description": "Настройте внешний вид OpenCode на вашем устройстве",
   "settings.general.row.colorScheme.title": "Цветовая схема",
   "settings.general.row.colorScheme.description": "Выберите, следует ли OpenCode системной, светлой или тёмной теме",
   "settings.general.row.theme.title": "Тема",
   "settings.general.row.theme.description": "Настройте оформление OpenCode.",
   "settings.general.row.font.title": "Шрифт кода",
   "settings.general.row.font.description": "Настройте шрифт, используемый в блоках кода",
-  "settings.general.row.terminalFont.title": "Terminal Font",
-  "settings.general.row.terminalFont.description": "Customise the font used in the terminal",
+  "settings.general.row.terminalFont.title": "Шрифт терминала",
+  "settings.general.row.terminalFont.description": "Настройте шрифт, используемый в терминале",
   "settings.general.row.uiFont.title": "Шрифт интерфейса",
-  "settings.general.row.uiFont.description": "Настройте шрифт, используемый во всем интерфейсе",
+  "settings.general.row.uiFont.description": "Настройте шрифт, используемый во всём интерфейсе",
   "settings.general.row.followup.title": "Поведение уточняющих вопросов",
   "settings.general.row.followup.description":
     "Выберите, отправлять ли уточняющие вопросы сразу или помещать их в очередь",
   "settings.general.row.followup.option.queue": "Очередь",
   "settings.general.row.followup.option.steer": "Направлять",
+  "settings.general.row.showFileTree.title": "Дерево файлов",
+  "settings.general.row.showFileTree.description": "Показывать панель дерева файлов в сессиях",
+  "settings.general.row.showNavigation.title": "Элементы навигации",
+  "settings.general.row.showNavigation.description":
+    "Показывать кнопки «Назад» и «Вперёд» в строке заголовка приложения",
+  "settings.general.row.showSearch.title": "Палитра команд",
+  "settings.general.row.showSearch.description": "Показывать кнопку поиска и палитры команд в строке заголовка",
+  "settings.general.row.showTerminal.title": "Терминал",
+  "settings.general.row.showTerminal.description": "Показывать кнопку терминала в строке заголовка приложения",
+  "settings.general.row.showStatus.title": "Состояние сервера",
+  "settings.general.row.showStatus.description": "Показывать кнопку состояния сервера в строке заголовка",
+  "settings.general.row.mobileTitlebarBottom.title": "Нижняя навигация",
+  "settings.general.row.mobileTitlebarBottom.description":
+    "На мобильных устройствах размещать строку заголовка и вкладки сессии внизу экрана",
+  "settings.general.row.showCustomAgents.title": "Выбор агента",
+  "settings.general.row.showCustomAgents.description":
+    "Показывать переключатель агентов в редакторе запросов. Если он скрыт, по умолчанию используется агент Build.",
   "settings.general.row.reasoningSummaries.title": "Показывать сводки рассуждений",
   "settings.general.row.reasoningSummaries.description": "Отображать сводки рассуждений модели в ленте",
 
@@ -669,11 +974,18 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "Разворачивать элементы инструмента edit",
   "settings.general.row.editToolPartsExpanded.description":
     "Показывать элементы инструментов edit, write и patch в ленте развернутыми по умолчанию",
-  "settings.general.row.showSessionProgressBar.title": "Показывать индикатор прогресса сессии",
-  "settings.general.row.showSessionProgressBar.description":
-    "Показывать анимированный индикатор прогресса вверху сессии, когда агент работает",
+  "settings.general.row.newInterface.title": "Новая компоновка",
+  "settings.general.row.newInterface.badge": "Новое",
+  "settings.general.row.newInterface.description":
+    "Используйте новые вкладки и компоновку главной страницы. В течение ограниченного времени можно переключаться между вариантами компоновки.",
+  "settings.general.row.newInterfaceNotice.title": "Теперь вы используете новую компоновку",
+  "settings.general.row.newInterfaceNotice.description": "Прежняя компоновка больше недоступна",
+  "settings.general.row.newInterfaceNotice.dismiss": "Закрыть",
+  "settings.general.row.pinchZoom.title": "Масштабирование сведением пальцев",
+  "settings.general.row.pinchZoom.description":
+    "Разрешить масштабирование сведением пальцев на трекпаде и прокруткой с нажатой клавишей Ctrl",
   "settings.general.row.wayland.title": "Использовать нативный Wayland",
-  "settings.general.row.wayland.description": "Отключить X11 fallback на Wayland. Требуется перезапуск.",
+  "settings.general.row.wayland.description": "Отключить резервный режим X11 в Wayland. Требуется перезапуск.",
   "settings.general.row.wayland.tooltip":
     "На Linux с мониторами разной частоты обновления нативный Wayland может быть стабильнее.",
 
@@ -686,6 +998,8 @@ export const dict = {
   "settings.updates.row.check.description": "Проверить обновления вручную и установить, если доступны",
   "settings.updates.action.checkNow": "Проверить сейчас",
   "settings.updates.action.checking": "Проверка...",
+  "settings.updates.action.downloading": "Загрузка...",
+  "settings.updates.action.installing": "Установка...",
   "settings.updates.toast.latest.title": "У вас последняя версия",
   "settings.updates.toast.latest.description": "Вы используете последнюю версию OpenCode.",
   "sound.option.none": "Нет",
@@ -737,22 +1051,22 @@ export const dict = {
 
   "settings.general.notifications.agent.title": "Агент",
   "settings.general.notifications.agent.description":
-    "Показывать системное уведомление когда агент завершён или требует внимания",
+    "Показывать системное уведомление, когда агент завершил работу или требует внимания",
   "settings.general.notifications.permissions.title": "Разрешения",
   "settings.general.notifications.permissions.description":
-    "Показывать системное уведомление когда требуется разрешение",
+    "Показывать системное уведомление, когда требуется разрешение",
   "settings.general.notifications.errors.title": "Ошибки",
-  "settings.general.notifications.errors.description": "Показывать системное уведомление когда происходит ошибка",
+  "settings.general.notifications.errors.description": "Показывать системное уведомление, когда происходит ошибка",
 
   "settings.general.sounds.agent.title": "Агент",
-  "settings.general.sounds.agent.description": "Воспроизводить звук когда агент завершён или требует внимания",
+  "settings.general.sounds.agent.description": "Воспроизводить звук, когда агент завершил работу или требует внимания",
   "settings.general.sounds.permissions.title": "Разрешения",
-  "settings.general.sounds.permissions.description": "Воспроизводить звук когда требуется разрешение",
+  "settings.general.sounds.permissions.description": "Воспроизводить звук, когда требуется разрешение",
   "settings.general.sounds.errors.title": "Ошибки",
-  "settings.general.sounds.errors.description": "Воспроизводить звук когда происходит ошибка",
+  "settings.general.sounds.errors.description": "Воспроизводить звук, когда происходит ошибка",
 
   "settings.shortcuts.title": "Горячие клавиши",
-  "settings.shortcuts.reset.button": "Сбросить к умолчаниям",
+  "settings.shortcuts.reset.button": "Восстановить настройки по умолчанию",
   "settings.shortcuts.reset.toast.title": "Горячие клавиши сброшены",
   "settings.shortcuts.reset.toast.description": "Горячие клавиши были сброшены к значениям по умолчанию.",
   "settings.shortcuts.conflict.title": "Сочетание уже используется",
@@ -788,7 +1102,7 @@ export const dict = {
   "settings.mcp.description": "Настройки MCP будут доступны здесь.",
 
   "settings.permissions.title": "Разрешения",
-  "settings.permissions.description": "Контролируйте какие инструменты сервер может использовать по умолчанию.",
+  "settings.permissions.description": "Укажите, какие инструменты сервер может использовать по умолчанию.",
   "settings.permissions.section.tools": "Инструменты",
   "settings.permissions.toast.updateFailed.title": "Не удалось обновить разрешения",
 
@@ -800,7 +1114,7 @@ export const dict = {
   "settings.permissions.tool.read.description": "Чтение файла (по совпадению пути)",
   "settings.permissions.tool.edit.title": "Редактирование",
   "settings.permissions.tool.edit.description":
-    "Изменение файлов, включая редактирование, запись, патчи и мульти-редактирование",
+    "Изменение файлов, включая редактирование, запись, патчи и множественное редактирование",
   "settings.permissions.tool.glob.title": "Glob",
   "settings.permissions.tool.glob.description": "Сопоставление файлов по паттернам glob",
   "settings.permissions.tool.grep.title": "Grep",
@@ -810,7 +1124,7 @@ export const dict = {
   "settings.permissions.tool.bash.title": "Bash",
   "settings.permissions.tool.bash.description": "Запуск команд оболочки",
   "settings.permissions.tool.task.title": "Task",
-  "settings.permissions.tool.task.description": "Запуск подагентов",
+  "settings.permissions.tool.task.description": "Запуск субагентов",
   "settings.permissions.tool.skill.title": "Skill",
   "settings.permissions.tool.skill.description": "Загрузка навыка по имени",
   "settings.permissions.tool.lsp.title": "LSP",
@@ -844,7 +1158,7 @@ export const dict = {
   "workspace.reset.success.description": "Рабочее пространство теперь соответствует ветке по умолчанию.",
   "workspace.error.stillPreparing": "Рабочее пространство всё ещё подготавливается",
   "workspace.status.checking": "Проверка незафиксированных изменений...",
-  "workspace.status.error": "Не удалось проверить статус git.",
+  "workspace.status.error": "Не удалось проверить состояние Git.",
   "workspace.status.clean": "Незафиксированных изменений не обнаружено.",
   "workspace.status.dirty": "В этом рабочем пространстве обнаружены незафиксированные изменения.",
   "workspace.delete.title": "Удалить рабочее пространство",
@@ -855,13 +1169,13 @@ export const dict = {
   "workspace.reset.button": "Сбросить рабочее пространство",
   "workspace.reset.archived.none": "Активные сессии не будут архивированы.",
   "workspace.reset.archived.one": "1 сессия будет архивирована.",
-  "workspace.reset.archived.many": "{{count}} сессий будет архивировано.",
+  "workspace.reset.archived.many": "Будут архивированы сессии: {{count}}.",
   "workspace.reset.note": "Это сбросит рабочее пространство до соответствия ветке по умолчанию.",
   "common.open": "Открыть",
   "dialog.releaseNotes.action.getStarted": "Начать",
   "dialog.releaseNotes.action.next": "Далее",
   "dialog.releaseNotes.action.hideFuture": "Больше не показывать",
-  "dialog.releaseNotes.media.alt": "Превью релиза",
+  "dialog.releaseNotes.media.alt": "Предварительный просмотр выпуска",
   "toast.project.reloadFailed.title": "Не удалось перезагрузить {{project}}",
   "error.server.invalidConfiguration": "Недопустимая конфигурация",
   "common.moreCountSuffix": " (ещё {{count}})",
@@ -886,6 +1200,9 @@ export const dict = {
   "session.question.progress": "{{current}} из {{total}} вопросов",
   "session.header.open.finder": "Finder",
   "session.header.open.fileExplorer": "Проводник",
+  "session.header.reveal.finder": "Показать в Finder",
+  "session.header.reveal.fileExplorer": "Показать в Проводнике",
+  "session.header.reveal.containingFolder": "Открыть папку расположения",
   "session.header.open.fileManager": "Файловый менеджер",
   "session.header.open.app.vscode": "VS Code",
   "session.header.open.app.cursor": "Cursor",
@@ -904,7 +1221,7 @@ export const dict = {
   "debugBar.na": "н/д",
   "debugBar.nav.label": "NAV",
   "debugBar.nav.tip":
-    "Последний завершенный переход маршрута, затрагивающий страницу сеанса, измеренный от запуска маршрутизатора до первой отрисовки после стабилизации.",
+    "Последний завершённый переход по маршруту, затрагивающий страницу сессии: от запуска маршрутизатора до первой отрисовки после стабилизации.",
   "debugBar.fps.label": "FPS",
   "debugBar.fps.tip": "Скользящая частота кадров в секунду за последние 5 секунд.",
   "debugBar.frame.label": "FRAME",
@@ -919,10 +1236,18 @@ export const dict = {
   "debugBar.inp.tip":
     "Приблизительная продолжительность взаимодействия за последние 5 секунд. Это похоже на INP, а не официальный Web Vitals INP.",
   "debugBar.cls.label": "CLS",
-  "debugBar.cls.tip": "Кумулятивный сдвиг макета за текущее время жизни приложения.",
+  "debugBar.cls.tip": "Совокупное смещение макета за время работы приложения.",
   "debugBar.mem.label": "MEM",
   "debugBar.mem.tipUnavailable": "Используемая куча JS по сравнению с лимитом кучи. Только Chromium.",
   "debugBar.mem.tip": "Используемая куча JS по сравнению с лимитом кучи. {{used}} из {{limit}}.",
+  "debugBar.focus.label": "FOCUS",
+  "debugBar.focus.tip": "Принудительно применить стили фокуса ко всем интерактивным элементам",
+  "debugBar.focus.on": "ВКЛ.",
+  "debugBar.focus.off": "ВЫКЛ.",
+  "debugBar.direction.label": "DIR",
+  "debugBar.direction.tip": "Принудительно задать направление макета всего приложения, не меняя выбранный язык",
+  "debugBar.direction.ltr": "LTR",
+  "debugBar.direction.rtl": "RTL",
   "common.key.ctrl": "Ctrl",
   "common.key.alt": "Alt",
   "common.key.shift": "Shift",
@@ -941,9 +1266,191 @@ export const dict = {
   "error.page.circular": "[Циклично]",
   "error.serverSDK.noServerAvailable": "Нет доступного сервера",
   "error.serverSDK.serverNotAvailable": "Сервер недоступен",
-  "error.childStore.persistedCacheCreateFailed": "Не удалось создать постоянный кэш",
+  "error.childStore.persistedCacheCreateFailed": "Не удалось создать постоянный кеш",
   "error.childStore.persistedProjectMetadataCreateFailed": "Не удалось создать постоянные метаданные проекта",
   "error.childStore.persistedProjectIconCreateFailed": "Не удалось создать постоянный значок проекта",
   "error.childStore.storeCreateFailed": "Не удалось создать хранилище",
   "terminal.connectionLost.abnormalClose": "WebSocket закрыт аварийно: {{code}}",
+  "dialog.provider.getbot.tagline": "Aggregated models, pay-as-you-go", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line1": "GetBot is a model aggregation gateway. With one API key you get Qwen, DeepSeek, Kimi, Minimax, GLM and more, billed by usage.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.line2": "We will fetch your available chat models right after the key is saved.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.prefix": "Visit ", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.link": "getbot.me", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.visit.suffix": " to collect your API key.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.fetchModels.failed": "API key saved, but failed to fetch model list: {{error}}. You can refresh later from Settings.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.apiKey.invalid": "API key validation failed. Please check the key and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.connect.getbot.timeout": "Request to api.getbot.me timed out (15s). Please check your network and try again.", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels": "Refresh models", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
+  "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.title": "AI modified this file", // FORK-i18n-backfill(en 兜底)
+  "toast.file.dirtyConflict.description": "Your draft is preserved. On save you'll be prompted to choose whether to overwrite the disk version.", // FORK-i18n-backfill(en 兜底)
+  "common.closeOtherTabs": "Close Other Tabs", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.title": "Anonymous usage statistics", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.description": "Send anonymous usage stats (app version, OS, launches, updates) to help improve DeskFox. No files, prompts, model names, or personal data are ever collected. You can turn this off anytime.", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.saveFailed": "Failed to save the usage-statistics setting", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.telemetry.locked": "(Currently controlled by the OPENCODE_TELEMETRY environment variable or another config file, so this toggle is disabled.)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.rename": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.revealInFolder": "Reveal in folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyPath": "Copy path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.cut": "Cut", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toFolder": "Paste into this folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toCurrentDir": "Paste to current directory", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.paste.toRoot": "Paste to project root", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFile": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.newFolder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.refresh": "Refresh", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.copyRelativePath": "Copy Relative Path", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.openInTerminal": "Open in Terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.expandAll": "Expand All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.menu.collapseAll": "Collapse All", // FORK-i18n-backfill(en 兜底)
+  "fileTree.collapsePreviewHint": "Click to collapse preview", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.title": "New file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.label": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFile.placeholder": "File name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.title": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.label": "Folder name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.newFolder.placeholder": "New folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.fileTitle": "Rename file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.folderTitle": "Rename folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.label": "New name", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.confirm": "Rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.rename.unchanged": "Name unchanged", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.fileTitle": "Delete file", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.folderTitle": "Delete folder", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkTitle": "Delete items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageSingle": "Are you sure you want to delete \"{{name}}\"?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.messageBulk": "Are you sure you want to delete {{name}}?", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.bulkName": "{{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.detail": "Items will move to the system trash. You can restore them from there.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.confirmDelete.confirm": "Delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.create": "Create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.empty": "Name cannot be empty", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.invalidChar": "Name cannot contain / or \\", // FORK-i18n-backfill(en 兜底)
+  "fileTree.dialog.validation.duplicate": "A file or folder with this name already exists", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.operationFailed": "Operation failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.openFailed": "Failed to open", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedSingle": "Delete failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleteFailedBulk": "{{count}} items failed to delete", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.createFailed": "Failed to create", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.renameFailed": "Failed to rename", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.single": "Deleted \"{{name}}\"", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.bulk": "Deleted {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.deleted.hint": "Recoverable from system trash", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.single": "Moved 1 item", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moved.bulk": "Moved {{count}} items", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undo": "Undo", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedSingle": "Move failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.moveFailedBulk": "{{count}} items failed to move", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedSingle": "Copy failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyFailedBulk": "{{count}} items failed to copy", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedSingle": "Paste failed", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.pasteFailedBulk": "{{count}} items failed to paste", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.undoFailedPartial": "Undo failed (partial)", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessSingle": "Path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyPathSuccessBulk": "{{count}} paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessSingle": "Relative path copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.copyRelPathSuccessBulk": "{{count}} relative paths copied", // FORK-i18n-backfill(en 兜底)
+  "fileTree.toast.terminalFailed": "Failed to open terminal", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.error": "Failed to load file tree", // FORK-i18n-backfill(en 兜底)
+  "fileTree.placeholder.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.title": "Name conflict", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.message": "\"{{name}}\" already exists in the destination", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.detail": "Choose how to handle it. Replace moves the existing item to the recycle bin.", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.applyToAll": "Apply to all remaining conflicts", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.replace": "Replace", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.keepBoth": "Keep both", // FORK-i18n-backfill(en 兜底)
+  "fileTree.conflict.skip": "Skip", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocx": "Export as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.exportDocxOnlyMd": "Only Markdown (.md / .markdown) files can be exported as Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.dialog.exportDocxTitle": "Save as Word document", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxSuccess": "Exported to Word", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.toast.exportDocxFail": "Export failed", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.line": "Ln {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.col": "Col {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editor.statusBar.sel": "Sel {{count}}", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.addToChat": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.copy": "Copy", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.placeholder": "How would you change it / What would you ask...", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.shortcutHint": "Enter to submit · Shift+Enter for newline · Esc to cancel", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.input.submit": "Add to Chat", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.menu.crossPageHint": "Cross-page selection is not supported. Please select within a single page.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.desktopOnly": "Editing is only available in the desktop app", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.office": "Office files can't be edited in DeskFox yet — please open them with a native app.", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.binary": "Binary files cannot be edited", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.editDisabled.tooLarge": "File is too large, editing disabled", // FORK-i18n-backfill(en 兜底)
+  "settings.tab.feishu": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.title": "Lark Bridge", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.description": "Talk to your AI agent via Lark / Feishu.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.title": "Keep computer awake", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.preventSleep.description": "When on, the computer won't sleep (the screen can still turn off), so Feishu messages always get a response.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady": "Lark adapter is not running.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.adapter.notReady.hint": "Phase 2+ will spawn the sidecar automatically. For now, set FEISHU_ADAPTER_URL / USERNAME / PASSWORD env vars and restart DeskFox.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.title": "No default LLM model configured", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.noDefaultModel.hint": "You can still bind a Lark account, but DeskFox can't reply to incoming messages until a default model is set. Open Settings → Providers, add an API key for any provider — the build agent default will pick a model automatically.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.title": "No Lark account bound", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.empty.description": "Bind your first Lark / Feishu account to start receiving messages.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.add": "Add Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.delete": "Delete", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.title": "Bind Lark account", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.label": "Domain", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.feishu": "Feishu (China)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.domain.lark": "Lark (Global)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.scanQr": "Scan the QR code below with the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.userCodeLabel": "Or enter this user_code in the Lark app", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.expiresIn": "Expires in {{secs}}s", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusPending": "Waiting for authorization...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusSuccess": "Bound successfully", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusDenied": "Authorization denied by user", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusExpired": "QR code expired", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.statusError": "Error: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.retry": "Retry", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.done": "Done", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToLark": "Need to bind a Lark (Global) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.switchToFeishu": "Need to bind a Feishu (China) account? Switch", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.qrLoading": "Generating QR code...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.edit": "Edit", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelLabel": "model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.account.modelDefault": "(use default)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.title": "Edit account settings", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.description": "Configure model and advanced capabilities for Lark account {{account}}.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelSectionTitle": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.advancedSectionTitle": "Advanced", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.groupCommand.info": "Group creation: in DM, send `/group <name>` (e.g. `/group project-talk`); AI sends a confirmation card and the group is only created after you tap confirm.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.label": "Allow AI to read all group messages without @ mention", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.allowReadAll.hint": "Off by default: bot only replies to @ messages in groups.\nWhen on: ① bot responds to all group messages (suits 1-group-1-project workspace model); ② any group member can send `/new` to start a new conversation in the current group (clears session, **affects everyone**).\n⚠️ Before turning on: open.larksuite.com → your bot → Events: change `im.message.receive_v1` scope to \"All group messages\" + request `im:message` permission + re-publish. Otherwise Lark won't push non-@ messages and this toggle has no effect.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.saving": "Saving...", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerLabel": "Provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelLabel": "Model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel": "Auto (always a free model)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.autoFreeModel.hint": "Always uses OpenCode Zen's first free model — keeps working even if the model lineup changes. No setup or login required.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.providerPlaceholder": "Select provider", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.modelPlaceholder": "Select model", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.noProviders": "No LLM providers configured. Set up providers in DeskFox first.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.save": "Save", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.cancel": "Cancel", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.loadFailed": "Failed to load providers: {{msg}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspaceSectionTitle": "Workspace", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.default": "Default (global home base)", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.defaultPath": "Default: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.pick": "Choose folder", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.clear": "Reset to default", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.hintFollow": "Conversation memory follows the workspace — switching folders starts a fresh conversation; the old one stays in the old folder.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.security": "⚠️ This account's AI will be able to read/write real files in the chosen project and run commands (for remote development). Sensitive reads or irreversible actions will send a Feishu card for your approval.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.edit.workspace.projectListWarning": "No project folder set: this account's Feishu sessions will not appear in the desktop project list (global session list only).", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceDefaulted": "Workspace set to the current project: {{path}}\nThis account's Feishu sessions will appear in that project's session list; files sent via Feishu are saved to the project's _deskfox/ folder (auto-added to .gitignore). You can change this under Edit.", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceKept": "Workspace kept from existing settings: {{path}}", // FORK-i18n-backfill(en 兜底)
+  "settings.feishu.bind.workspaceFallback": "No project is currently open, so the workspace uses the global default; this account's sessions will not appear in the project list. You can set a project folder under Edit.", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
+  "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)
 }

@@ -4,6 +4,10 @@ import { encodeFilePath } from "@/context/file/path"
 import { DialogFileTreeConfirm, DialogFileTreeConflict, type ConflictAction } from "@/components/dialog-file-tree"
 // FORK: 纯逻辑 helper 抽出(test-isolation;原定义见 file-tree-helpers.ts)[feat: test-isolation-file-tree] 2026-06-14
 import { shouldListRoot, dirsToExpand } from "@/components/file-tree-helpers"
+// FORK: 行重挂后补焦点 [feat: filetree-shortcut-focus-scope] 2026-08-13
+import { restoreRowFocus } from "@/components/file-tree-focus"
+// FORK: @-mention 路径分隔符归一化(Win 反斜杠 → 正斜杠)[feat: external-drop-path-ref] 2026-08-14
+import { toMentionSeparators } from "@/components/prompt-input/multi-path-drop"
 // FORK: 文件树拖放移动 2026-04-27
 import {
   encodeDragPaths,
@@ -47,10 +51,11 @@ import type { FileNode } from "@opencode-ai/sdk/v2"
 
 const MAX_DEPTH = 128
 
-function pathToFileUrl(filepath: string): string {
+export function pathToFileUrl(filepath: string): string {
   return `file://${encodeFilePath(filepath)}`
 }
 
+export type Kind = "add" | "del" | "mix"
 function trimTrailingSep(p: string): string {
   return p.replace(/[/\\]+$/, "")
 }
@@ -75,9 +80,8 @@ function joinAbs(parent: string, name: string): string {
   return `${trimTrailingSep(parent)}/${name}`
 }
 
-type Kind = "add" | "del" | "mix"
 
-type Filter = {
+export type Filter = {
   files: Set<string>
   dirs: Set<string>
 }
@@ -103,7 +107,7 @@ const kindDotColor = (kind: Kind) => {
   return "background-color: var(--icon-diff-modified-base)"
 }
 
-const visibleKind = (node: FileNode, kinds?: ReadonlyMap<string, Kind>, marks?: Set<string>) => {
+export const visibleKind = (node: FileNode, kinds?: ReadonlyMap<string, Kind>, marks?: Set<string>) => {
   const kind = kinds?.get(node.path)
   if (!kind) return
   if (!marks?.has(node.path)) return
@@ -224,7 +228,7 @@ const buildDragImage = (target: HTMLElement) => {
   return image
 }
 
-const withFileDragImage = (event: DragEvent) => {
+export const withFileDragImage = (event: DragEvent) => {
   const image = buildDragImage(event.currentTarget as HTMLElement)
   if (!image) return
   document.body.appendChild(image)
@@ -300,6 +304,28 @@ const FileTreeNode = (
 
   // FORK: 多选行 click 拦截器 — 修饰键时阻止默认行为(展开/打开),仅做选择;否则透传给原 onClick 2026-04-27
   const handleClick = (event: MouseEvent) => {
+    // FORK: 点击时把 DOM 焦点显式落到本行 [feat: filetree-shortcut-focus-scope] 2026-08-13
+    //   [bug-repro: 点击文件树项后 document.activeElement 实测是 **body** —— 行本身是
+    //    <button tabIndex=0> 且确实在 filetree 容器内,但点击后焦点没留住。
+    //    这正是原实现需要「B 路径」(焦点在中性区也接管键盘)来兜底的根因:
+    //    A 路径 activeInFileTree() 永远为 false,不兜底就完全没有键盘操作。]
+    //   user 2026-08-13 定的规则是「键盘生效与否取决于焦点在不在文件树目录区」,
+    //   所以正解是**让焦点真的落在文件树内**,而不是绕过焦点判定去兜底。
+    //   焦点落位后:点文件树 → A 路径成立、键盘可用;点别处 → 焦点转移、键盘自动失效。
+    const row = event.currentTarget
+    if (row instanceof HTMLElement) row.focus({ preventScroll: true })
+
+    // FORK: 行重挂后把焦点补回来 [feat: filetree-shortcut-focus-scope] 2026-08-13
+    //   [bug-repro: 上面这句 focus() 对**目录**行有效,对**文件**行无效 —— 点文件后
+    //    activeElement 又是 body。根因不是没设焦点,而是设完之后行被重挂:文件被打开 →
+    //    该行成为 active 且预览区已开 → 命中下面 Tooltip 的 `inactive={...}` 包裹分支,
+    //    DOM 节点销毁重建(实测「旧节点还在文档里 = false」),焦点随之掉回 body。
+    //    目录行永远不会成为 active,所以不触发 —— 这就是当初「只修好一半」的由来。]
+    //   故补焦点必须排到重挂之后;`restoreRowFocus` 只在焦点确实掉回 body 时才补,
+    //   用户主动点别处不会被抢回来(边界见 file-tree-focus.test.ts 的反向用例)。
+    const path = local.node.path
+    requestAnimationFrame(() => restoreRowFocus(path))
+
     const handled = local.onSelectMaybe?.(event) ?? false
     if (handled) {
       event.preventDefault()
@@ -328,7 +354,7 @@ const FileTreeNode = (
       // FORK: data-tree-path — 让外部(session-side-panel)能 scrollIntoView 到指定节点 2026-05-05
       data-tree-path={local.node.path}
       classList={{
-        "w-full min-w-0 h-6 flex items-center justify-start gap-x-1.5 rounded-md px-1.5 py-0 text-left hover:bg-surface-raised-base-hover active:bg-surface-base-active transition-colors cursor-pointer": true,
+        "w-full min-w-0 h-6 flex items-center justify-start gap-x-1.5 rounded-md px-1.5 py-0 text-start hover:bg-surface-raised-base-hover active:bg-surface-base-active transition-colors cursor-pointer": true,
         // FORK: REQ-062 — 多选选中态复用文件 active 同款 filled 底色(并入此行,classList 对象不可重复 key),
         // 去掉原文件夹专属 ring 圆角线框 2026-06-17
         "bg-surface-base-active": local.node.path === local.active || !!local.contextOpen || !!local.selected,
@@ -343,7 +369,7 @@ const FileTreeNode = (
         [local.class ?? ""]: !!local.class,
         [local.nodeClass ?? ""]: !!local.nodeClass,
       }}
-      style={`padding-left: ${Math.max(0, 8 + local.level * 12 - (local.node.type === "file" ? 24 : 4))}px`}
+      style={`padding-inline-start: ${Math.max(0, 8 + local.level * 12 - (local.node.type === "file" ? 24 : 4))}px`}
       draggable={local.draggable}
       onDragStart={(event: DragEvent) => {
         if (!local.draggable) return
@@ -352,7 +378,11 @@ const FileTreeNode = (
         // 单源 → 走原 text/plain "file:<rel>" 协议(兼容 attachments.ts 的 @-mention)
         // 多源 → 写自定义 MIME,attachments 收不到 file: 前缀就退回外部文件 drop 路径
         if (sources.length === 1) {
-          event.dataTransfer?.setData("text/plain", `file:${local.node.path}`)
+          // FORK: 归一化分隔符 —— `node.path` 在 Windows 上是 `docs\x.md`(OS 原生写法,
+          // 供 fs 操作用),直接塞进 @-mention 会让同一个文件出现两种引用写法:
+          // 补全/多选拖入/外部拖入都给 `docs/x.md`,唯独单选拖入给 `docs\x.md`。
+          // [feat: external-drop-path-ref] 2026-08-14
+          event.dataTransfer?.setData("text/plain", `file:${toMentionSeparators(local.node.path)}`)
           event.dataTransfer?.setData("text/uri-list", pathToFileUrl(local.node.path))
         } else {
           event.dataTransfer?.setData("application/x-deskfox-paths", JSON.stringify(sources))
@@ -421,6 +451,7 @@ export default function FileTree(props: {
   kinds?: ReadonlyMap<string, Kind>
   draggable?: boolean
   onFileClick?: (file: FileNode) => void
+  onFileDoubleClick?: (file: FileNode) => void
 
   _filter?: Filter
   _marks?: Set<string>
@@ -602,7 +633,7 @@ export default function FileTree(props: {
     const refreshTargets = new Set<string>([targetDirRel])
     if (mode === "cut") {
       for (const parent of uniqueParents(valid)) {
-        const rel = absoluteToRelative(parent, sdk.directory)
+        const rel = absoluteToRelative(parent, sdk().directory)
         if (rel !== null) refreshTargets.add(rel)
       }
     }
@@ -633,7 +664,7 @@ export default function FileTree(props: {
   /** Ctrl+V 智能 paste:从 selection 推断 target(文件夹→自身;文件→其父目录);否则到项目根 */
   const pasteSmart = async () => {
     const sel = selection.paths()
-    let targetAbs = sdk.directory
+    let targetAbs = sdk().directory
     let targetRel = props.path
     if (sel.length >= 1) {
       // 用 selection 中第一个作锚(多选时通常用户视觉锚定的是第一个/最后一个)
@@ -646,7 +677,7 @@ export default function FileTree(props: {
       } else {
         // 文件 → 粘到其父目录
         const parentAbs = anchorAbs.replace(/[/\\][^/\\]+$/, "")
-        const parentRel = absoluteToRelative(parentAbs, sdk.directory)
+        const parentRel = absoluteToRelative(parentAbs, sdk().directory)
         if (parentRel !== null) {
           targetAbs = parentAbs
           targetRel = parentRel
@@ -659,7 +690,7 @@ export default function FileTree(props: {
   /** 通过遍历 children 找 node,避免 path normalize 不一致导致 file.tree.node(rel) 找不到 */
   const findNodeByAbsolute = (abs: string): FileNode | undefined => {
     const parentAbs = abs.replace(/[/\\][^/\\]+$/, "")
-    const parentRel = absoluteToRelative(parentAbs, sdk.directory)
+    const parentRel = absoluteToRelative(parentAbs, sdk().directory)
     if (parentRel === null) return undefined
     const children = file.tree.children(parentRel)
     return children.find((n) => n.absolute === abs)
@@ -719,7 +750,7 @@ export default function FileTree(props: {
     // 刷新涉及的目录(rel)
     const refreshRels = new Set<string>()
     for (const abs of result.refreshAbs) {
-      const rel = absoluteToRelative(abs, sdk.directory)
+      const rel = absoluteToRelative(abs, sdk().directory)
       if (rel !== null) refreshRels.add(rel)
     }
     await Promise.all([...refreshRels].map((r) => file.tree.refresh(r)))
@@ -851,7 +882,6 @@ export default function FileTree(props: {
       onEnter: onEnterAction,
       onRename: onRenameAction,
       onDelete: onDeleteAction,
-      hasSelection: () => selection.paths().length > 0,
     })
 
     // (外部 OS 文件 drop 走 dropHandlers 的 HTML5 路径 — Tauri webview 在 Windows 上 File 对象的非标准 path 字段可用,见 file-tree-dnd.ts parseExternalFilePaths)
@@ -1034,7 +1064,7 @@ export default function FileTree(props: {
     // 刷新源父目录(去重)+ 目标目录
     const refreshTargets = new Set<string>([targetRel])
     for (const parent of uniqueParents(valid)) {
-      const rel = absoluteToRelative(parent, sdk.directory)
+      const rel = absoluteToRelative(parent, sdk().directory)
       if (rel !== null) refreshTargets.add(rel)
     }
     await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
@@ -1184,7 +1214,7 @@ export default function FileTree(props: {
     }
     const refreshTargets = new Set<string>()
     for (const parent of uniqueParents(targets)) {
-      const rel = absoluteToRelative(parent, sdk.directory)
+      const rel = absoluteToRelative(parent, sdk().directory)
       if (rel !== null) refreshTargets.add(rel)
     }
     await Promise.all([...refreshTargets].map((r) => file.tree.refresh(r)))
@@ -1295,7 +1325,7 @@ export default function FileTree(props: {
   }
 
   const renderEmptyMenuItems = () => {
-    const rootAbs = sdk.directory
+    const rootAbs = sdk().directory
     const rootRel = props.path
     // FORK-BEGIN: 空白处右键菜单重整 — 2 组(新建/[粘贴] → 刷新);
     // 刷新改用 refreshAll 递归刷新所有 expanded 子目录,修"刷新但子目录没变"问题
@@ -1705,7 +1735,7 @@ export default function FileTree(props: {
   }
 
   // FORK-BEGIN: 树根空白区也接收 drop = 移到项目根;dragLeave 用 relatedTarget 判定真离开 2026-04-27
-  const rootDropHandlers = dropHandlers(sdk.directory, props.path)
+  const rootDropHandlers = dropHandlers(sdk().directory, props.path)
   const onRootDragLeave = (event: DragEvent) => {
     const root = event.currentTarget as HTMLElement | null
     const related = event.relatedTarget as Node | null
@@ -1720,12 +1750,12 @@ export default function FileTree(props: {
         as="div"
         data-component="filetree"
         // FORK: 给 Tauri onDragDropEvent 找 root target 用(commit #4)2026-04-28
-        data-tree-root-abs={sdk.directory}
+        data-tree-root-abs={sdk().directory}
         data-tree-root-rel={props.path}
         classList={{
           [bodyClass]: true,
           // 拖动时整个根区域淡蓝背景提示可 drop
-          "bg-surface-raised-base/30": isDragging() && dropTargetPath() === sdk.directory,
+          "bg-surface-raised-base/30": isDragging() && dropTargetPath() === sdk().directory,
         }}
         onDragOver={rootDropHandlers.onDragOver}
         onDragLeave={onRootDragLeave}

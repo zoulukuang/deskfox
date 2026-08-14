@@ -38,8 +38,6 @@ export type ShortcutHandlers = {
   onDelete?: () => void
   // FORK: Ctrl+A 全选 [feat: file-tree-select-all] 2026-06-13
   onSelectAll?: () => void
-  /** 当前 selection 是否非空 — 用于 B 路径判定 */
-  hasSelection?: () => boolean
 }
 
 /** activeElement 是否在文件树内 */
@@ -49,58 +47,21 @@ function activeInFileTree(): boolean {
   return Boolean(el.closest('[data-component="filetree"]'))
 }
 
-/** activeElement 是否是可编辑控件(避免抢编辑器/输入框 Ctrl+X/C/V) */
-function activeIsEditable(): boolean {
-  const el = document.activeElement
-  if (!(el instanceof HTMLElement)) return false
-  if (el.isContentEditable) return true
-  const tag = el.tagName
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
-}
-
-/**
- * 浏览器文本选区是否非空且落在文件树之外。
- * 聊天区 / 只读文档查看器是普通 div,activeElement 多为 body —— 单凭 activeIsEditable 防不住。
- * 用户在这些区域选了文本按 Ctrl+C,意图就是复制文本,B 路径不能抢。
- */
-function hasTextSelectionOutsideFileTree(): boolean {
-  const sel = window.getSelection()
-  if (!sel || sel.isCollapsed) return false
-  if (sel.toString().length === 0) return false
-  const node = sel.anchorNode
-  const el = node instanceof Element ? node : (node?.parentElement ?? null)
-  if (!el) return false
-  return !el.closest('[data-component="filetree"]')
-}
-
-// FORK-BEGIN: REQ-085 判定改用事件原始 target [feat: popup-enter-passthrough] 2026-08-02
-// bug:「加入聊天」浮层(chat-selection / md-selection 菜单)textarea 里按 Enter,元素级 handler
-// preventDefault + 提交后【同步卸载浮层】→ document.activeElement 瞬间回落 body;同一事件继续
-// 冒泡到本 window 级监听时,activeIsEditable() 已看不到 textarea → 误判「中性区」,若文件树
-// selection 非空即走 B 路径把 Enter 当导航键吃掉(打开文件/toggle 预览区)。
-// event.target 是派发时刻的真实来源(即使节点已 detach 也不变),对文件树之外的可编辑控件
-// 一律不接管;文件树内部(含重命名 input,自带 stopPropagation)仍走原 A 路径,行为不变。
-export function keyEventFromEditableOutsideTree(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.closest('[data-component="filetree"]')) return false
-  if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
-}
-// FORK-END
-
 export function useFileTreeShortcuts(handlers: ShortcutHandlers) {
-  const shouldTrigger = (): boolean => {
-    if (activeInFileTree()) return true // A:focus 在文件树
-    if (activeIsEditable()) return false // 可编辑控件优先,即便 selection 非空也不抢
-    // 中性区(body 等)有文本选区 → 用户要复制文本,让原生 Ctrl+C/X/V 走
-    if (hasTextSelectionOutsideFileTree()) return false
-    return Boolean(handlers.hasSelection?.()) // B:focus 在中性区 + 文件树 selection 非空
-  }
+  // FORK: 2026-08-13 user 拍板 —— **焦点不在文件树区域,键盘一律不接管**(含方向键)。
+  //   原实现有一条「B 路径」:焦点在中性区(body / 聊天区等普通 div)时,只要文件树 selection 非空
+  //   就仍然接管键盘,方便用户不点回文件树也能键盘浏览。
+  //   [bug-repro: user 反馈「鼠标点到其他地方已经失去焦点后,按回车会打开和关闭文件预览」——
+  //    点过文件树某项(selection 残留)再点聊天区,Enter 仍被文件树吃掉去 toggle 预览。
+  //    2026-08-13 CDP 实测复现:activeElement = div.scroll-view__viewport(聊天区滚动容器),
+  //    连按 Enter 预览 true→false→true。]
+  //   B 路径接管的不只 Enter,还有 F2 / Delete / Backspace —— **失焦状态下能重命名和删除文件**,
+  //   比误开预览危险得多。user 决定整条路径去掉,只保留 A 路径(焦点真在文件树内才响应)。
+  //   [feat: filetree-shortcut-focus-scope] 2026-08-13
+  const shouldTrigger = (): boolean => activeInFileTree()
 
   const onKeyDown = (event: KeyboardEvent) => {
     // FORK: REQ-085 [feat: popup-enter-passthrough] 2026-08-02
-    if (keyEventFromEditableOutsideTree(event.target)) return
     if (!shouldTrigger()) return
 
     // FORK-BEGIN: 导航键 — 无任何 modifier 时响应 [feat: file-tree-ux-polish] 2026-05-04
