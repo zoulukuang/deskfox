@@ -13,6 +13,12 @@
 
 
 
+
+## [macOS] 2026.10.0 - 2026-08-14 20:44
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows dev] 2026.7.1 - 2026-08-14 15:16
 
 **⚠️ 非发布版本 —— 为验证 NSIS 安装/升级/卸载而打,未 ship、未上传、未配 publish。**
