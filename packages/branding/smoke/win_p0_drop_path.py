@@ -15,8 +15,12 @@
 所以本脚本的定位是:**把「同一个文件的两种引用写法」这个不变式里能自动验的两条腿钉死**,
 外部拖入那条腿由单测(external-drop.test.ts 的 W1–W5)+ 人工验收覆盖。
 
-跑法:`DeskFox 本地版` 带 --remote-debugging-port=9222 起着,且已打开一个含子目录文件的项目。
-    python packages/branding/smoke/win_p0_drop_path.py
+跑法:目标应用带 --remote-debugging-port 起着,且已打开一个含子目录文件的项目。
+    python packages/branding/smoke/win_p0_drop_path.py                        # 默认本地版 9222
+    python packages/branding/smoke/win_p0_drop_path.py 9224 "DeskFox 预览版"  # 换渠道/端口
+
+支持指定渠道是刻意的:验安装包时要能对**装出来的那一档**跑同一套判据,
+否则「修复有没有随包发出」只能靠翻 asar 猜,而 app.asar 是单一归档、grep 转义不可靠。
 """
 import json
 import sys
@@ -83,8 +87,11 @@ def box_of_tree_path(ui, path):
 
 
 def main():
-    ui = UI()
+    port = sys.argv[1] if len(sys.argv) > 1 else "9222"
+    process = sys.argv[2] if len(sys.argv) > 2 else "DeskFox 本地版"
+    ui = UI(host="127.0.0.1:%s" % port, process_name=process)
     try:
+        print("目标: %s @ 端口 %s" % (process, port))
         geo = ui.window_geometry()
         print("窗口: 视口 %sx%s | 平台 %s | 在屏幕外=%s\n"
               % (geo["viewport"]["w"], geo["viewport"]["h"], geo.get("platform"), geo.get("offscreen")))

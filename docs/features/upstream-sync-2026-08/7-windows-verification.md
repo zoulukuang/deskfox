@@ -13,7 +13,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md 
 ## 零、一句话结论
 
 **Windows 端可以合。** 4 个 P0/P1 缺陷已在分支内修完并回归,全部自动化用例绿;
-剩 1 项(NSIS 安装包的安装/升级/卸载)因**必须杀掉 user 正在使用的正式版**而未做,需 user 择机点头。
+NSIS 安装包的安装 / 升级 / 卸载已于 2026-08-14 补做完毕(§七),**全部通过,无遗留项**。
 
 ## 一、结果总览
 
@@ -168,6 +168,8 @@ Win 直接 `WM_SETTEXT` 写进「文件夹:」输入框 + `BM_CLICK` 确认,**�
 
 ## 六、三档身份与数据隔离(P0-2,除安装包外已验)
 
+> NSIS 安装包本身的安装/升级/卸载见 §七(已补做,全部通过)。本节是**运行期**的身份与数据隔离。
+
 | 项 | 证据 |
 |---|---|
 | appId 四档 | 磁盘上并存 `ai.deskfox.app` / `.beta` / `.dev` / `.local` 四个 appData 目录 |
@@ -177,16 +179,63 @@ Win 直接 `WM_SETTEXT` 写进「文件夹:」输入框 + `BM_CLICK` 确认,**�
 | 渠道徽标 | 标题栏显示 `LOCAL` |
 | 产物命名 | `DeskFox-Local-` / `DeskFox-Dev-` / `DeskFox-` 前缀由 config 的 `ARTIFACT_PREFIX` 决定 |
 
-## 七、未做的一项,需 user 点头
+## 七、NSIS 安装包:安装 / 升级 / 卸载(2026-08-14 补做,user 批准后执行)
 
-**`-Env dev` 出 NSIS 安装包 → 安装 / 升级 / 卸载**(6-windows-handoff §二 P0-2 第 2 条)。
+对应 6-windows-handoff §二 P0-2 第 2 条。**全部通过。**
 
-没做的原因:按 CLAUDE.md 的进程处置规则,打**发布三档**(prod/dev/beta)的包必须
-**三档一起杀**(它们共享 `opencode.db`,设计上不能共存)—— 而 user 的正式版 DeskFox 正开着工作,
-杀它 = 打断 user。这不是能自行决定的事。
+### 做法
 
-需要时请告诉我时机,我会:出 dev NSIS 包 → 装 → 验身份/数据与正式版隔离 → 验升级覆盖 → 验卸载残留。
-预计 15-20 分钟,期间正式版不可用。
+验「升级」需要两个真实不同的版本,故:装旧版 `DeskFox-Dev-2026.7.0`(6/15 的存量产物)
+→ 用 `bump-installer-version.ps1` 把 dev 号线 bump 到 `2026.7.1` → 用本分支代码打 NSIS
+→ **升级安装** → 验证 → **卸载** → 验证残留。
+
+### 结果
+
+| 项 | 结果 |
+|---|---|
+| 出包 | `DeskFox-Dev-2026.7.1-win-x64.exe`(340 MB),post-build 复验 soffice + 非空 presets 通过 |
+| 版本号来源 | 产物名与 UA 均为 `2026.7.1` = `installer-versions.json` 的 `dev-windows`,**非硬编码** ✅ |
+| 升级安装 | 58 秒完成;注册表 `DeskFox Dev 2026.7.0` → `DeskFox 预览版 2026.7.1`,**单条替换无重复** ✅ |
+| 跨 productName 改名 | 旧版 productName 是 `DeskFox Dev`、新版是 `DeskFox 预览版` —— 旧 exe 已清除、无双 exe 残留 ✅ |
+| 数据保留 | dev appData 1244 文件 / 214.3 MB / 53 个 workspace 记录,升级前后**完全一致** ✅ |
+| LibreOffice 随包 | 安装目录下 `libreoffice/program/soffice.exe` 存在 ✅ |
+| 运行与身份 | UA `DeskFox预览版/2026.7.1`,**DEV 徽标**,窗口 1440×902(fork 默认,非上游 1280×800)✅ |
+| 修复随包发出 | 在**装出来的**预览版上跑 `win_p0_drop_path.py 9224 "DeskFox 预览版"`,拖入插入 `@docs/中文文件名 带空格.md` —— 正斜杠,P0-1 修复确认已进安装包 ✅ |
+| 卸载 | 安装目录**完全移除**、注册表条目移除;appData **按设计保留**(`deleteAppDataOnUninstall: false`)✅ |
+| 与 prod 隔离 | 全程 prod 安装目录、appData(454 文件 / 306.4 MB)、注册表条目**一字未动** ✅ |
+
+### 沿途两个值得记的发现
+
+**① 首次升级会一次性清掉一批空 store —— 是预期,不是数据丢失。**
+
+跑新 dev 后 `opencode.workspace.*.dat` 从 53 掉到 37,乍看像丢数据。应用自己的日志给了确证:
+`cleaned scoped store files { count: 17, scanned: 53 }`。这是本次同步从上游带进来的新机制
+(`store-cleanup.ts`,上游 PR #34651),规则是**只删空 store(≤128B)与超 30 天/超 100 条的陈旧草稿,
+非空 workspace 记录永不删**。基线 `e77443750e` 上没有这个文件 —— 所以**老用户升级到本分支后
+第一次启动会看到一次性清理**,量取决于历史遗留的空记录数。建议在 release note 提一句,免得被当成故障。
+
+**② 跑新 dev 会迁移 `opencode.db`,而它是发布三档共享的。**
+
+本分支代码比 user 在用的 prod 2026.9.1 新,dev 一跑就对共享库做了迁移(WAL 从 4 MB 涨到 128 MB)。
+prod 是老代码,回去可能打不开(仓内记忆里正是这个坑)。
+故本次测试**先完整备份 1.4 GB 会话库再动**,测完还原,并另存了一份「dev 跑后」的状态备查。
+还原后 prod 启动正常(6 进程 / 主窗口在 / sidecar + server ready / 日志无错)。
+
+> 这条对**真实发布**同样成立:prod 与 dev/beta 共享 `opencode.db`,一旦用户装了带新迁移的
+> 预览版并运行过,再退回旧正式版就有风险。合 main 并发正式版之后此问题自然消失,
+> 但**预览版先行期间**要提醒用户「装了预览版就别再退回旧正式版」。
+
+### 一处非本次引入的观察
+
+注册表里还留着一条 `DeskFox 2026.7.2 → D:\softwares\DeskFox\uninstall.exe` —— 那是 Tauri 时代
+正式版的卸载登记,目录早已不在。属历史残留,与本次同步无关,未处理。
+
+### 收尾
+
+dev 已卸载(user 原本就没装 dev,回到原状态);prod 已拉起并确认正常。
+`installer-versions.json` 的 `dev-windows` 保持在 2026.7.1 未回退 —— 产物确实存在过,
+回退会让台账与磁盘对不上;下次真正 ship dev 从 2026.7.2 起
+(台账 `docs/installer-versions.md` 已标注该条为「非发布版本」)。
 
 ## 八、复跑方式
 
