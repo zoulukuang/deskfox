@@ -14,6 +14,38 @@
 
 
 
+## [Windows] 2026.10.0 - 2026-08-14 22:25
+
+**主题**:上游同步 v1.17.4 → v1.18.16(`upstream-sync-2026-08`,1365 commits)首次进 prod 的 **Windows 端**,与 8-14 已发的 macOS 2026.10.0 **同批次同版本号**。按功能波次 minor 进位 2026.9.1 → 2026.10.0。
+
+**本次内容**(自 `ship-prod-2026.9.1` 起,fork 侧改动):
+
+- **界面与布局**:不跟随上游 v2 换代,默认保持经典布局(`keep-legacy-layout`),标题栏图标锚左 + 渠道徽标/工具组挂载点回植;修右侧面板遮挡功能按钮、镜像布局下文件树被 activity rail 盖住(`mirror-layout-overflow`,含源码级守卫防复发);补回文件树与聊天区主分隔线并改伪元素绘制;窄窗口自动收起右侧项目侧栏 + 预览区最小宽度兜底;默认窗口 1440×900。
+- **稳定性**:启动前清理孤儿 `project_directory` 行(`db-orphan-prune`)—— 存量库升级撞上游迁移外键约束会导致 sidecar exit 1、应用完全打不开;local 档配置隔离 + 修 plugin-install 写错配置文件的潜伏 bug。
+- **交互**:外部拖入非图片改走路径引用(任何类型可拖入)+ 修「模型不支持图片」拦截误伤 .txt/.csv;四条通道的 `@` 路径统一为正斜杠(Win 文件树单选拖入此前给反斜杠);点文件树行焦点真正落入,键盘作用域恢复;`[窗口]` 菜单三个 Electron role 项补中文。
+- **测试基础设施**:新增 `uiprobe` 界面交互测试工具包(native 层按平台分派并接入 Windows,四组功能清单已自动化);修若干仅 Win 触发的测试问题(`new URL().pathname` 盘符多斜杠致 row-reverse 守卫从未执行、locale 检测跨 ICU 版本行为分叉、本地包 channel 判据跨不过换行恒报假)。
+
+**发版前安全网**:`bun turbo typecheck`(排除 console)29/29 绿;单测 media-gen 140 / adapter-feishu-lark 792 / app `bun run test` 1008 + 41,**0 fail**。Windows 端验收已在 sync 分支走完(P0/P1/P2 自动化 + 人工单 4 通过 1 跳过 + NSIS 安装/升级/卸载,见 `docs/features/upstream-sync-2026-08/7-windows-verification.md`)。
+
+**打包一处观察(非缺陷)**:electron-builder 对 LibreOffice bundle 内数千个 exe 逐个跑 signtool,该阶段耗时约 8 分钟且日志静默;随后 7za LZMA 压缩的产物大小在末尾才一次性刷盘(中途看 `.nsis.7z` 只涨几 MB,容易误判卡死)。全程 exit 0,post-build 守卫「最终包含 soffice.exe + 非空 presets」通过。
+
+**产物**:
+- `DeskFox-2026.10.0-win-x64.exe` — 339,796,119 bytes
+  sha256 `e27a0369e6238a36c9919ce3248bb7ebd3bedcacebccd324d6cfc88efa3513ce`
+- 体积较 2026.9.1(276 MB)增长约 63 MB,与上游同步后 Dev 2026.7.1(340 MB)同量级。
+
+**发布范围**:
+- GitHub Release `ship-prod-2026.10.0`(`--latest`)
+- 阿里云 CDN:`dl.clawtray.com/DeskFox-2026.10.0-win-x64.exe`
+- Gitee Release(元数据 + 下载链接,附件超 100MB 不传)
+- updater(electron):`updates.deskfox.ai/electron/prod/latest.yml`
+- Tauri→Electron 迁移桥:`updates.deskfox.ai/v1/latest/desktop/windows/latest.json`
+- 官网 deskfox.ai Windows 下载链接
+
+**installer 路径**:`packages/desktop/dist-deskfox/DeskFox-2026.10.0-win-x64.exe`
+
+---
+
 ## [macOS] 2026.10.0 - 2026-08-14
 
 **主题**:上游同步 v1.17.4 → v1.18.16 首次进 prod(`upstream-sync-2026-08`,1365 commits / 2359 文件),按功能波次 minor 进位 2026.9.1 → 2026.10.0。双 arch 一次发齐。
