@@ -26,69 +26,90 @@ macOS 只认「哪个 app 注册了这个类型/协议」,很可能把请求交�
 
 ---
 
-## 一、只能人工验的项(共 10 条,约 35 分钟)
+## 一、只能人工验的项(共 5 条,约 15 分钟)
 
-### #7 文件关联(双击 `.md`)
+> 2026-08-14:原 10 条中 **#10/#11/#12 已自动化**、**#7 功能不存在已移出**、**#51b/#56/#57 user 已自验通过**。剩下这几条见下。
 
-| | |
-|---|---|
-| **步骤** | Finder 里双击 `/Volumes/ExtSSD/deskfox-uitest/README.md` |
-| **通过** | DeskFox 被唤起并打开该文件(不是被 TextEdit / VS Code 抢走) |
-| **失败记什么** | 实际被哪个 app 打开;`mdls -name kMDItemContentType README.md` 的输出 |
-| **机器为什么做不到** | 双击走 LaunchServices 的默认应用路由,在应用进程之外;CDP 只能操作已打开的窗口 |
-| **注意** | 系统默认多半指向**正式版**。要验本地版,先 `pkill -f "/Applications/DeskFox.app/Contents/"` |
+### ~~#7 文件关联~~ —— ⚠️ **功能不存在,已移出本单**
+
+实测:打包产物 `Info.plist` 的 **`CFBundleDocumentTypes` 为空** —— DeskFox 一种文件类型都没注册,
+双击 `.md` 永远不会打开它。且**基准版没有、全仓历史从未有过、上游 anomalyco/opencode 也没有**
+(上游只声明 `protocols: { schemes: ["opencode"] }`)。三方一致 = **从未实现**,不是缺陷。
+
+原条目是把「一个桌面应用大概该有的功能」当成了「DeskFox 有的功能」——
+与 #12(崩溃恢复对话框实为静默自愈)、#21(通知面板实为第三方库无障碍标签)、
+#48(重开标签是上游新命令)同类,**这已经是第四次**。
+
+已转为需求 ⏸「有条件的拒绝」:
+[`OPENCODE-PLAN/需求池/文件关联-双击文件用DeskFox打开.md`](../../../../OPENCODE-PLAN/需求池/文件关联-双击文件用DeskFox打开.md)
+(主因:DeskFox 打开的是**项目**不是孤立文件,「双击的散落文件属于哪个工作区」没有好答案)。
 
 ### #8 深链 `opencode://`
 
+「深链」= 一条 `opencode://` 开头的链接,**点一下就让 DeskFox 打开指定项目**。
+用途是从外部唤起:飞书消息里放一条链接、同事一点就跳到对应项目;或文档里放链接直达工作区。
+
+实测支持**两条**路由(`packages/app/src/pages/layout/deep-links.ts`),没有别的:
+
+```bash
+# ① 打开项目(file 参可选,相对项目根;首启引导就是用它把介绍文档作首个 tab)
+open "opencode://open-project?directory=/Volumes/ExtSSD/deskfox-uitest"
+open "opencode://open-project?directory=/Volumes/ExtSSD/deskfox-uitest&file=README.md"
+
+# ② 在指定项目下新建会话(prompt 参可选,预填提示词)
+open "opencode://new-session?directory=/Volumes/ExtSSD/deskfox-uitest"
+open "opencode://new-session?directory=/Volumes/ExtSSD/deskfox-uitest&prompt=你好"
+```
+
 | | |
 |---|---|
-| **步骤** | 终端执行 `open "opencode://session"`(或产品里能拿到的任一深链) |
-| **通过** | DeskFox 被唤起并路由到对应页面,不报错、不停在空白页 |
+| **通过** | ① 打开项目:切到该项目;带 `file` 时该文件作为 tab 打开<br>② 新建会话:在该项目下开出新会话;带 `prompt` 时输入框已预填 |
 | **失败记什么** | 是否唤起、停在哪个页面;`~/Library/Application Support/ai.deskfox.app.local/logs/` 最新日志里 `deep link received` 那行 |
-| **机器为什么做不到** | 同上,URL scheme 由 LaunchServices 分发;且注册的是 `opencode` 协议(`app.setAsDefaultProtocolClient("opencode")`),同样可能被正式版接走 |
+| **机器为什么做不到** | URL scheme 由 LaunchServices 分发,在应用进程之外 |
+| **注意** | ⚠️ 之前本单写的 `open "opencode://session"` **是错的** —— 没有这个 hostname,跑了静默无反应,会被误判成「深链坏了」。<br>另:`opencode` 协议**正式版也注册了**,系统可能把链接交给正式版。要验本地版先退正式版。 |
 
-### #9 拖拽文件进窗口
+### #9a 拖文件进聊天输入框 → 变成**附件**
 
 | | |
 |---|---|
-| **步骤** | 从 Finder 拖 `deskfox-uitest/docs/sample.pdf` 到 DeskFox 窗口的聊天区,松手 |
-| **通过** | 文件被接收(进入待发送区 / 打开预览),**不是**整个窗口跳转成浏览器打开该文件 |
-| **失败记什么** | 松手后发生了什么;控制台有无报错 |
+| **步骤** | 从访达把 `deskfox-uitest/images/sample.png` 拖到 DeskFox 的聊天输入框,松手 |
+| **通过** | 文件进入待发送区(输入框上方出现附件卡片),可随消息一起发出 |
+| **额外验** | ① 一次拖**多个**文件都能进(实现里有 `parseMultiPathDropPaths`)<br>② 当前模型**不支持图片**时,拖图片应被拦下并给提示(REQ-026),不是静默丢弃 |
+| **实现位置** | `packages/app/src/components/prompt-input/attachments.ts` |
 | **机器为什么做不到** | 系统级拖放(NSDragging)不经过 renderer;CDP 的 `Input.dispatchDragEvent` 只能模拟**页面内**拖拽,喂不进跨进程的文件拖放 |
 
-### #10 首启引导(REQ-083)
+### #9b 文件树内拖动 → **移动文件**
 
 | | |
 |---|---|
-| **前置** | 备份并清标记:<br>`cp ~/Library/Application\ Support/ai.deskfox.app.local/opencode.settings /tmp/oc.settings.bak`<br>然后编辑该文件,把 `"onboarding.completed": true` 改成 `false`(或删掉这一行) |
-| **步骤** | 完全退出本地版 → 重新打开 |
-| **通过** | ① 系统「文稿」目录下出现 `New DeskFox/`,内含《关于 DeskFox 你该知道的几件事.md》<br>② 应用自动以该目录为工作区打开,该文档作为首个 tab |
-| **再验一次(老用户不该被打扰)** | 把标记改回 `true` → 重启 → **不应**再次触发,也不应重建目录 |
-| **收尾** | `cp /tmp/oc.settings.bak ~/Library/Application\ Support/ai.deskfox.app.local/opencode.settings` |
-| **机器为什么做不到** | 判定点在**冷启动最初几秒**且涉及主进程建目录/拷文件;脚本要连上 CDP 时引导已经跑完了,拿不到「首启那一瞬」的状态 |
+| **步骤** | 在文件树里把 `code/plain.txt` 拖到 `docs/` 目录上,松手 |
+| **通过** | 文件真的移动到 `docs/`(树刷新,磁盘上文件也在新位置);同名冲突时有询问而非静默覆盖 |
+| **实现位置** | `packages/app/src/utils/file-tree-dnd.ts` + `file-conflict.ts` |
+| **可否自动化** | **可以** —— 这是**页面内**拖拽,CDP 能模拟。尚未补进脚本,属可补缺口 |
 
-### #11 更新器 UI(检查更新)
+### ~~#10 首启引导 / #11 更新器 / #12 崩溃恢复~~ —— 已全部自动化(2026-08-14)
+
+这三条我原先写了「机器为什么做不到」,**判断是错的**,user 质疑后重做,现由
+[`run_group1_native.py`](./run_group1_native.py) 全自动跑通:
+
+| # | 现在怎么验 |
+|---|---|
+| 10 | 用**产品自带的 `OPENCODE_TEST_ONBOARDING=1` 钩子**跑全新安装语义(userData/XDG 全指临时目录、DB `:memory:`),断言建出 `New DeskFox` 并自动打开为工作区。**完全不碰真实档案** |
+| 11 | 本地版**按设计禁用更新器**(`UPDATER_ENABLED`),故判据是「菜单项存在且置灰」。⚠️ **完整的「点开 → 对话框 → 中文文案」仍需 prod/beta 包**,见下方保留条目 |
+| 12 | CDP `Page.crash()` 造真崩溃(reason=`crashed`,可数;`pkill` 是 `killed` 不算)→ 断言恢复对话框出现、三个按钮齐、点「重新启动」后恢复 |
+
+> **#12 顺带更正了一处我判反的结论**:我曾断言「崩溃恢复没有对话框,是静默自愈」,
+> 依据只有 `renderer-crash-guard.ts`,**看漏了 `windows.ts` 的 `wireWindowRecovery`**。
+> 总清单原文是对的。实测文案:`DeskFox 窗口意外终止 / 原因:crashed / 代码:5`。
+
+### #11b 更新器完整对话框(**需 prod / beta 包**)
 
 | | |
 |---|---|
-| **步骤** | 菜单栏 → DeskFox →「检查更新...」 |
-| **通过** | 弹出对话框、**文案是中文**、按钮可点;无更新时给「已是最新」之类的明确反馈,不是静默无响应 |
-| **失败记什么** | 对话框文案截图;是否有英文残留 |
-| **机器为什么做不到** | 结果依赖真实更新源的网络往返(且本地版**不参与 updater 比较**);对话框是原生的,文案要肉眼判中文质量 |
-
-### #12 崩溃自愈(REQ-087)—— ⚠️ 条目原文有误
-
-**总清单原写的是「崩溃/无响应恢复对话框 — 出现且按钮可用」,实现里没有这个对话框。**
-读 `packages/desktop/src/main/deskfox/renderer-crash-guard.ts` 可知实际行为是**静默自愈**:
-120 秒内发生**第二次**可数崩溃(crashed / oom / abnormal-exit / integrity-failure / launch-failed)
-→ 把 renderer 状态快照 `.dat` 改名为 `.bak-<时间戳>` 隔离 → reload。单次崩溃只记日志、不动作。
-
-| | |
-|---|---|
-| **步骤** | 连续两次杀掉 renderer 进程(间隔 < 120 秒):<br>`pkill -f "DeskFox 本地版 Helper (Renderer)"`,等约 10 秒,再执行一次 |
-| **通过** | ① 应用没有进入「一打开就崩」的死循环,界面能恢复<br>② `~/Library/Application Support/ai.deskfox.app.local/` 下出现 `*.dat.bak-<时间戳>`<br>③ `logs/` 最新目录里有隔离记录 |
-| **注意** | `pkill` 属于 `killed`,**不在可数原因里**,可能不触发自愈 —— 若要严格验,需真造 OOM。判不出来就如实记「未能构造出可数崩溃」,别硬报通过 |
-| **机器为什么做不到** | 要真把渲染进程搞崩;而 CDP 连接本身就挂在渲染进程上,一崩探针自己先断了 |
+| **前置** | 本地版验不了 —— `UPDATER_ENABLED = app.isPackaged && CHANNEL !== "dev" && CHANNEL !== "local"` |
+| **步骤** | 在 prod 或 beta 包上:菜单栏 → DeskFox →「检查更新…」 |
+| **通过** | 弹出对话框、**文案是中文**、按钮可点;无更新时给「已是最新」之类明确反馈 |
+| **机器为什么做不到** | 不是做不到,是**当前测试环境没有 prod/beta 包**。有包时这条同样可自动化(判据与 #12 同构) |
 
 ### #4 托盘「保持电脑不休眠」
 
@@ -154,16 +175,14 @@ macOS 只认「哪个 app 注册了这个类型/协议」,很可能把请求交�
 
 | # | 条目 | 结果 | 备注 |
 |---|---|---|---|
-| 7 | 文件关联 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 8 | 深链 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 9 | 拖拽文件 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 10 | 首启引导 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 11 | 更新器 UI | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 12 | 崩溃自愈 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
+| 8 | 深链(两条路由) | ☐ 通过 ☐ 失败 ☐ 跳过 | |
+| 9a | 拖文件进聊天框 → 附件 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
+| 9b | 文件树内拖动 → 移动文件 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
+| 11b | 更新器对话框(需 prod/beta 包) | ☐ 通过 ☐ 失败 ☐ 跳过 | |
 | 4 | 防休眠 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 51b | 创作生成一次 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 56 | 飞书绑定 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
-| 57 | 群消息策略 | ☐ 通过 ☐ 失败 ☐ 跳过 | |
+| 51b | 创作生成一次 | ☑ 通过(user 2026-08-14 自验) | |
+| 56 | 飞书绑定 | ☑ 通过(user 2026-08-14 自验) | |
+| 57 | 群消息策略 | ☑ 通过(user 2026-08-14 自验) | |
 
 **填「失败」时务必记下:实际现象 + 截图 + 日志片段。** 只写「不行」的条目,下次没人能复现。
 
