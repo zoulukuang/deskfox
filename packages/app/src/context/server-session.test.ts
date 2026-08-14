@@ -1,4 +1,15 @@
 import { describe, expect, test } from "bun:test"
+// FORK: 断言前先 unwrap SolidJS store [feat: upstream-sync-2026-08] 2026-08-14
+//   [bug-repro: 上游这 3 条断言在本仓 `bun run test`(带 `--conditions=browser`)下必红。
+//    **不是产品缺陷,也不是本仓改坏** —— 实测证据:
+//      · 内容完全一致:JSON 解包后同样的 toMatchObject 直接通过;
+//      · `toEqual` 对同一个 store 数组通过,单个元素的 toMatchObject 也通过,
+//        只有「toMatchObject + store 数组/含嵌套数组的 store 对象」这一个组合失败;
+//      · 去掉 `--conditions=browser` 就全绿 —— 那时 solid 解析到 server 构建、
+//        store 不是真 proxy;带上该 flag(真实 client 构建)才复现。
+//    即 bun 1.3.14 的 toMatchObject 处理 solid store proxy 有问题。
+//    修法只能用 `unwrap()`:浅展开 `[...]` 只能救顶层,救不了嵌套数组(实测仍红)。]
+import { unwrap } from "solid-js/store"
 import type { retry } from "@opencode-ai/core/util/retry"
 import type { OpenCodeEvent, SessionApi } from "@opencode-ai/client/promise"
 import type { Message, OpencodeClient, Part, Session } from "@opencode-ai/sdk/v2/client"
@@ -204,13 +215,13 @@ describe("server session", () => {
       data: { sessionID: "child", assistantMessageID: "msg_2_assistant", ordinal: 0, delta: "world" },
     })
 
-    expect(ctx.store.data.session_message.child?.at(-1)).toMatchObject({
+    expect(unwrap(ctx.store.data.session_message.child?.at(-1))).toMatchObject({
       id: "msg_2_assistant",
       type: "assistant",
       content: [{ type: "text", text: "world" }],
     })
     expect(ctx.store.data.message.child?.map((message) => message.id)).toEqual(["msg_1_user", "msg_2_assistant"])
-    expect(ctx.store.data.part.msg_2_assistant).toMatchObject([{ type: "text", text: "world" }])
+    expect(unwrap(ctx.store.data.part.msg_2_assistant)).toMatchObject([{ type: "text", text: "world" }])
   })
 
   test("resolves lineage by session ID without directory", async () => {
@@ -331,7 +342,7 @@ describe("server session", () => {
     await store.sync("root")
 
     expect(store.data.message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
-    expect(store.data.session_message.root).toMatchObject([
+    expect(unwrap(store.data.session_message.root)).toMatchObject([
       { id: user.id, type: "user", text: "text" },
       { id: assistant.id, type: "assistant" },
     ])
@@ -1416,6 +1427,14 @@ describe("server session", () => {
     guard.active = true
 
     await store.history.loadMore("child")
+    // FORK: 断言前关掉守卫 [feat: upstream-sync-2026-08] 2026-08-14
+    //   [bug-repro: 本仓 `bun run test`(带 `--conditions=browser`)下必红,报 "cached role accessed"。
+    //    堆栈显示触发点是**下面这行断言本身**(proxy 陷阱 ← solid store 透传 ← expect 行),
+    //    不是实现里扫了 role:`toEqual` 深比对会把所有属性读一遍,而 store 是真 proxy 时
+    //    会把读透传到测试自己布的陷阱上。守卫的本意是「**loadMore 期间**不许扫 role」,
+    //    该意图在上一行已经检验完毕,故在断言前复位,不削弱断言强度。
+    //    去掉 `--conditions=browser` 就不复现 —— 那时 solid 走 server 构建、store 不是真 proxy。]
+    guard.active = false
 
     expect(store.data.message.child).toEqual([older, latest])
   })
