@@ -14,6 +14,8 @@ import { createBlobReference, type DraftStore } from "@/utils/draft-store"
 import { attachmentMime } from "./files"
 // FORK: 多选拖动 abs→rel 转换 helper(无 context 依赖,可单测) 2026-05-15
 import { parseMultiPathDropPaths } from "./multi-path-drop"
+// FORK: 外部拖入路由(非图片走路径引用)[feat: external-drop-path-ref] 2026-08-14
+import { rejectionToastKind, routeExternalDrop, shouldBlockAsImage } from "./external-drop"
 import { normalizePaste, pasteMode } from "./paste"
 
 type PromptTarget = Pick<ReturnType<ReturnType<typeof usePrompt>["capture"]>, "current" | "cursor" | "set">
@@ -60,7 +62,11 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
       return false
     }
     // FORK: REQ-026 当前模型明确不支持图片 → 拦截 + toast(2026-08-11 移植到 Core 注入式)[feat: model-capability-ui]
-    if (input.isImageBlocked?.()) {
+    //   [bug-repro: 这里原先**对所有附件生效**,不只图片 —— 模型不支持图片时,连 .txt/.csv
+    //    也会被这条拦掉并弹「模型不支持图片」。此前被 attachmentMime 白名单掩盖着不易察觉;
+    //    档一放开类型后会立刻暴露。判据加 `mime.startsWith("image/")`。
+    //    [feat: external-drop-path-ref] 2026-08-14]
+    if (shouldBlockAsImage(mime, input.isImageBlocked?.() ?? false)) {
       if (toast) input.warnImageUnsupported?.()
       return false
     }
@@ -88,8 +94,12 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
     }
 
     // FORK: REQ-026 多文件全被拦时分流提示:模型不支持图片给专属 toast,其余保持原「不支持的粘贴」
+    //   [bug-repro: 与上面 `add()` 里同一个毛病 —— 这里也不看文件是不是图片就弹
+    //    「模型不支持图片」。一批全是 .txt 被拒时,用户会看到一句莫名其妙的图片提示。
+    //    加 `files.some(isImageDrop)` 限定。[feat: external-drop-path-ref] 2026-08-14]
     if (!found && files.length > 0 && toast) {
-      if (input.isImageBlocked?.()) input.warnImageUnsupported?.()
+      if (rejectionToastKind(files, input.isImageBlocked?.() ?? false) === "image-unsupported")
+        input.warnImageUnsupported?.()
       else input.warn?.()
     }
     return found
@@ -258,7 +268,29 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     const dropped = event.dataTransfer?.files
     if (!dropped) return
 
-    await attachments.addAttachments(Array.from(dropped))
+    // FORK: 外部拖入按类型分流 —— 非图片改走**路径引用**(与文件树内拖一致),
+    //   于是任何类型都拖得进来;图片仍走内联(视觉模型要的是字节)。
+    //   路由规则在 `external-drop.ts`(纯函数,可离线单测 —— 系统级拖放 e2e 覆盖不到)。
+    //   [feat: external-drop-path-ref] 2026-08-14
+    const files = Array.from(dropped)
+    const inline: File[] = []
+    let referenced = false
+    for (const file of files) {
+      const route = routeExternalDrop({
+        type: file.type,
+        name: file.name,
+        path: input.getPathForFile?.(file),
+      })
+      if (route.kind === "path") {
+        input.focusEditor()
+        input.addPart({ type: "file", path: route.path, content: "@" + route.path, start: 0, end: 0 })
+        referenced = true
+        continue
+      }
+      inline.push(file)
+    }
+    // 全部走了引用就别再报「不支持的附件」—— 那条 toast 是内联通道的
+    if (inline.length > 0) await attachments.addAttachments(inline, !referenced)
   }
 
   onMount(() => {

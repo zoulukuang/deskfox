@@ -75,7 +75,8 @@ open "opencode://new-session?directory=/Volumes/ExtSSD/deskfox-uitest&prompt=你
 | **步骤** | 从访达把 `deskfox-uitest/images/sample.png` 拖到 DeskFox 的聊天输入框,松手 |
 | **通过** | 文件进入待发送区(输入框上方出现附件卡片),可随消息一起发出 |
 | **额外验** | ① 一次拖**多个**文件都能进(实现里有 `parseMultiPathDropPaths`)<br>② 当前模型**不支持图片**时,拖图片应被拦下并给提示(REQ-026),不是静默丢弃 |
-| **实现位置** | `packages/app/src/components/prompt-input/attachments.ts` |
+| **实现位置** | 路由 `prompt-input/external-drop.ts`(纯函数,已 16 条单测);接线 `attachments.ts` |
+| **2026-08-14 行为变化** | 非图片改走**路径引用**,任何类型都拖得进来;图片仍内联。二进制拖进来后 agent 仍读不了(档二解决),但会明确报错 |
 | **机器为什么做不到** | 系统级拖放(NSDragging)不经过 renderer;CDP 的 `Input.dispatchDragEvent` 只能模拟**页面内**拖拽,喂不进跨进程的文件拖放 |
 
 ### #9b 文件树内拖动 → **移动文件**
