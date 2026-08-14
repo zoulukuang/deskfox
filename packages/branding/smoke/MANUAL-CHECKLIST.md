@@ -65,8 +65,29 @@ open "opencode://new-session?directory=/Volumes/ExtSSD/deskfox-uitest&prompt=你
 |---|---|
 | **通过** | ① 打开项目:切到该项目;带 `file` 时该文件作为 tab 打开<br>② 新建会话:在该项目下开出新会话;带 `prompt` 时输入框已预填 |
 | **失败记什么** | 是否唤起、停在哪个页面;`~/Library/Application Support/ai.deskfox.app.local/logs/` 最新日志里 `deep link received` 那行 |
-| **机器为什么做不到** | URL scheme 由 LaunchServices 分发,在应用进程之外 |
+| **机器为什么做不到** | URL scheme 由 LaunchServices(Win 为注册表 `HKCU\Software\Classes\opencode`)分发,在应用进程之外 |
 | **注意** | ⚠️ 之前本单写的 `open "opencode://session"` **是错的** —— 没有这个 hostname,跑了静默无反应,会被误判成「深链坏了」。<br>另:`opencode` 协议**正式版也注册了**,系统可能把链接交给正式版。要验本地版先退正式版。 |
+
+**Windows 用这套命令**(PowerShell;`open` 是 macOS 的):
+
+```powershell
+Start-Process "opencode://open-project?directory=D:/deskfox-uitest"
+Start-Process "opencode://open-project?directory=D:/deskfox-uitest&file=README.md"
+Start-Process "opencode://new-session?directory=D:/deskfox-uitest"
+Start-Process "opencode://new-session?directory=D:/deskfox-uitest&prompt=你好"
+```
+
+⚠️ **Win 端协议是「后启动者通吃」**:`index.ts` 的 `app.setAsDefaultProtocolClient("opencode")` 每次启动都写
+`HKCU\Software\Classes\opencode\shell\open\command`,**本地版一启动就把协议从正式版抢走**。
+所以 Win 上验这条**不必先退正式版**(与 macOS 不同),但**验完要还回去** ——
+重开一次正式版即可,或直接改回注册表值:
+
+```powershell
+Set-ItemProperty 'HKCU:\Software\Classes\opencode\shell\open\command' -Name '(default)' `
+  -Value '"C:\Users\<你>\AppData\Local\Programs\deskfox\DeskFox.exe" "%1"'
+```
+
+不还回去的后果:以后点任何深链都会打开那个本地测试版。日志在 `%APPDATA%\ai.deskfox.app.local\logs\<最新目录>\`。
 
 ### #9a 拖文件进聊天输入框 → 变成**附件**
 
@@ -120,6 +141,7 @@ open "opencode://new-session?directory=/Volumes/ExtSSD/deskfox-uitest&prompt=你
 | **通过** | ① 勾选态在重启后**保持**<br>② 开启期间 `pmset -g assertions` 里能看到 `PreventUserIdleSystemSleep` 且持有者是 DeskFox |
 | **收尾** | 记得取消勾选,别让机器一直不休眠 |
 | **机器为什么做不到** | 勾选态本身 AppleScript 读得到(可自动化),但「重启后保持」+「系统断言真的生效」需要跨进程重启与系统级观察,值得人过一遍 |
+| **Windows 差异** | 实现是**跨平台同一套**(`deskfox/prevent-sleep.ts` → Electron `powerSaveBlocker`,非 macOS 专属),Win 上一样验。<br>系统断言查法换成**管理员** PowerShell 跑 `powercfg /requests`(看 `SYSTEM:` 段有无 DeskFox);`pmset` 是 macOS 命令,Win 上没有 |
 
 ### #51b 创作模式「生成一次」(**会花钱**)
 
@@ -171,6 +193,23 @@ open "opencode://new-session?directory=/Volumes/ExtSSD/deskfox-uitest&prompt=你
 > 下次再有人想把某条塞进人工单时,先看看是不是同一类误判。
 
 ## 三、执行记录(每轮复制一份填)
+
+### 2026-08-14 · Windows · DeskFox 本地版 2026.9.1 · user 自验
+
+分支 `sync/upstream-2026-08-10`,配合 [`../../../docs/features/upstream-sync-2026-08/7-windows-verification.md`](../../../docs/features/upstream-sync-2026-08/7-windows-verification.md)。
+产物 `dist-deskfox/win-unpacked/DeskFox 本地版.exe`(LOCAL 徽标 / UA `DeskFox本地版/2026.9.1` / soffice + presets 5 项随包)。
+
+| # | 条目 | 结果 | 备注 |
+|---|---|---|---|
+| 8 | 深链(两条路由) | ☑ 通过 | 四条 `Start-Process` 全部正确响应;验后协议已写回正式版 |
+| 9a | 拖文件进聊天框 | ☑ 通过 | 图片走附件、非图片走 `@` 路径引用(正斜杠) |
+| 9b | 文件树内拖动 → 移动文件 | ☑ 通过 | |
+| 11b | 更新器对话框 | ☐ **跳过** | 本地版**原理上验不了**:`UPDATER_ENABLED = isPackaged && CHANNEL !== "dev" && CHANNEL !== "local"`。需 prod/beta 包,属发版前动作 |
+| 4 | 防休眠 | ☑ 通过 | 跨平台同一套 `powerSaveBlocker` |
+
+**结论:Windows 侧人工项除 #11b(前提不满足)外全部通过,无缺陷。**
+
+---
 
 日期:____________  版本:____________  执行人:____________
 

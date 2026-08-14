@@ -14,6 +14,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-verification-checklist.md 
 
 **Windows 端可以合。** 4 个 P0/P1 缺陷已在分支内修完并回归,全部自动化用例绿;
 NSIS 安装包的安装 / 升级 / 卸载已于 2026-08-14 补做完毕(§七),**全部通过,无遗留项**。
+人工验收单(自动化原理上做不到的那几条)亦已由 user 于 2026-08-14 走完,**4 通过 1 跳过 0 缺陷**(§十)。
 
 ## 一、结果总览
 
@@ -28,7 +29,8 @@ NSIS 安装包的安装 / 升级 / 卸载已于 2026-08-14 补做完毕(§七),*
 | P1-3 崩溃恢复 | 3 | 3 | 0 | 0 |
 | P1-3 首启引导 | 3 | 3 | 0 | 0 |
 | P2 通用抽验 + WSL | 5 | 4 | 1 | 0 |
-| **合计** | **55** | **53** | **2** | **0** |
+| 人工验收单(§十) | 5 | 4 | 1 | 0 |
+| **合计** | **60** | **57** | **3** | **0** |
 
 单元测试:`packages/app` `bun run test` → **1008 + 41 pass / 0 fail**(修前 1 fail,见 §二.2)。
 Typecheck:`bun turbo typecheck --filter='!./packages/console/*'` → **29/29 successful**。
@@ -277,3 +279,35 @@ python packages\branding\smoke\win_p1_onboarding.py  # 会重启本地版
 | `b440bf3517` | test:Windows P1 验收脚本(菜单 / 崩溃恢复 / 首启引导) |
 | `64b9ea6db3` | test:Windows 六格式预览脚本 |
 | `b6bb18c3f0` | test:Windows P2 抽验 + flaky 诊断留档 |
+
+## 十、人工验收单(2026-08-14,user 自验)
+
+对应 [`MANUAL-CHECKLIST.md`](../../../packages/branding/smoke/MANUAL-CHECKLIST.md) 剩余 5 条 ——
+**自动化原理上做不到**的那些(跨进程拖放 / 系统级路由 / 需另一档包)。
+执行用 `-Env local` win-unpacked 产物(LOCAL 徽标 / UA `DeskFox本地版/2026.9.1`;
+soffice + presets 5 项随包复验通过;全程 user 正式版 7 进程未受影响)。
+
+| # | 条目 | 结果 |
+|---|---|---|
+| 8 | 深链两条路由(`open-project` / `new-session`,各含可选参数) | ✅ 通过 |
+| 9a | 资源管理器拖文件进聊天框(图片走附件 / 非图片走 `@` 路径引用) | ✅ 通过 |
+| 9b | 文件树内拖动移动文件 | ✅ 通过 |
+| 11b | 更新器完整对话框 | ⏸ **前提不满足** —— 见下 |
+| 4 | 托盘「保持电脑不休眠」重启后保持 | ✅ 通过 |
+
+**#11b 为什么记跳过而不是通过**:`UPDATER_ENABLED = app.isPackaged && CHANNEL !== "dev" && CHANNEL !== "local"`,
+本地版**按设计禁用更新器**,原理上弹不出该对话框。要验必须用 prod / beta 包,属**发版前**动作,
+不构成合 main 的阻塞。(Mac 侧同样未验,两端一致。)
+
+### 一个值得记的 Windows 平台差异:`opencode://` 协议是「后启动者通吃」
+
+`index.ts:361` 的 `app.setAsDefaultProtocolClient("opencode")` **每次启动都无条件执行**,
+Win 上即写 `HKCU\Software\Classes\opencode\shell\open\command`。于是:
+
+- **本地版一启动就把协议从正式版抢走**(实测:注册表值从正式版 exe 变成 `dist-deskfox\win-unpacked\DeskFox 本地版.exe`);
+- 与 macOS 的 LaunchServices 行为不同 —— Win 上验这条**不需要先退正式版**,但**验完必须还回去**,
+  否则用户之后点任何深链都会打开一个测试产物。本轮测完已写回正式版路径并复核。
+
+这**不是本次同步引入的**(基线同样如此),但对**真实用户**同样成立:
+装过预览版 / Beta 并运行过,深链就会指向后启动的那一档。与 §七 那条「装了预览版别退回旧正式版」
+属同类提醒,建议一并写进 release note。
