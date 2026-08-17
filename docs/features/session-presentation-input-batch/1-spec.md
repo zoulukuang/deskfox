@@ -1,6 +1,6 @@
 feat-id: session-presentation-input-batch
-status: spec
-related: ./1-spec.md ./2-plan.md ./3-changelog.md
+status: in-progress
+related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-s2-audit.md
 
 # 会话呈现与输入修复批(REQ-108/109/110/111/112/113/115/116)— 1-spec
 

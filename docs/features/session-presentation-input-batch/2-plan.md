@@ -1,11 +1,12 @@
 feat-id: session-presentation-input-batch
-status: spec
-related: ./1-spec.md ./2-plan.md ./3-changelog.md
+status: in-progress
+related: ./1-spec.md ./2-plan.md ./3-changelog.md ./4-s2-audit.md
 
 # 会话呈现与输入修复批 — 2-plan(实施计划)
 
-> 状态:**spec(待 user 审签 1-spec 后开工)**。锚点均已于 2026-08-17 对 HEAD `d79da924de` 核实(勘误见 1-spec §7)。
-> 开发中的踩坑 / 方案推翻按规范实时追加在本文件末尾「决策轨迹」。
+> 状态:**五批已全部实施完毕**(2026-08-17~18),自动化验证全绿;待 🔒 真机验收 + user 拍板后合 main。
+> 实际改动与验证结果见 `3-changelog.md`,S2 排查清单见 `4-s2-audit.md`。
+> 开发中的踩坑 / 方案推翻实时追加在本文件末尾「决策轨迹」。
 
 ## 1. 分支与 commit 策略
 
@@ -112,3 +113,26 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## 决策轨迹(开发中实时追加)
 
 - 2026-08-17 文档化:由 OPENCODE-PLAN `需求计划/2026-08-14-2.md` 转成本三文档;全锚点核实 + 8 处勘误(1-spec §7)。**暂不开发,待 user 审签。**
+- 2026-08-17 开工(user「开始开发」)。以下为与计划不同的实际走向:
+
+1. **【S4 第一步】用「读码坐实写入路径」替代「打日志实测」**。计划要求先在真跑会话上打日志。实际找到更硬的证据:
+   child store 初始三字段全空 → 两个 `applyDirectoryEvent` 都传 `sessionContent: false` →
+   `event-reducer:124` 把 `SESSION_CONTENT_EVENTS` 整组 early return → bootstrap 中 `input.session` 恒存在只写全局。
+   这是**写入路径被结构性关闭**,强于「某一次观察为空」。推断成立,不需要日志。
+2. **【待钉死项 8 反转】** 计划预期「reconcile 都触发 → 采上游 `session_working`,归档纯函数」。
+   实际发现 `healClearedSessionOrphans` **调用点已丢**(第五处同族回归),防卡死链路有缺口
+   → 走另一条腿:**保留** `deriveSessionWorking`,只换数据源;同时补回调用点。
+3. **【S3 规避了 R4】** 计划预警 session-ui/ui 可能需要 override。实际把命令组文案改为**由 app 侧传入**
+   (app 的 `PluralKey` 是本地 union,i18n 也在 `packages/app`),整条 S3 零 `packages/ui` 改动。
+   最终全批只有 S9 用掉 1 笔 override。
+4. **【e2e 注入点三处不是两处】** 计划待钉死项 11 列了 `mock-server` 与 `timeline-stability/fixture`,
+   实际 `smoke/session-timeline.spec.ts` 自带 `settings.v3` 绕过前者,必须单独种。
+5. **【S7 自引入缺陷,被上游 e2e 抓到】** 连续**失败**的 edit+write 同文件被错并 → 错误卡 10→9 张。
+   修法:合并只认 `completed`。失败是信号不是重复。
+6. **【S5 两次撞墙】** ① 在 `previewTab` 里做收起会打断 v2 双击开永久 tab → 回退该入口,改为让 tooltip
+   与实际可用性对齐;② 快照用 `mousedown` **不够早** —— Kobalte 在 `pointerdown` 就切激活态,
+   导致每次切 tab 都误收面板 → 改捕获阶段 `pointerdown`。
+7. **【i18n 复数族要按 CLDR 补全】** 新增 `*.count.{one,other}` 后 parity 测试要求每个 locale 补齐
+   `zero/two/few/many`,用项目自带 `desktopNativePluralCategories` 生成(一次性脚本,不入仓)。
+8. **【S9 死代码保留而非删除】** `renderMathInText`/`renderMathExpressions` 的 `nativeParser` 是**上游 API 面**,
+   删掉给下次 sync 添冲突 → 保留并标注「它是另一套弱实现,没跟随本次补齐」。
