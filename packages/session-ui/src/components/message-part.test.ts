@@ -61,3 +61,59 @@ describe("groupParts — bash 独立成行(对齐上游)", () => {
     for (const g of groups) expect(g.type).toBe("part")
   })
 })
+
+// FORK: REQ-109 shell 折叠可配置回归 [feat: session-presentation-input-batch] 2026-08-17
+// 两套口径都是合法配置:产品默认 grouped=true(user 要的折叠),e2e fixture 种 false(上游断言口径)。
+// 2026-08-11 那次撤销正是把测试反向改写后无人察觉,故这里把「哪套是产品默认」也锁进断言。
+describe("groupParts · shellGrouped 两套口径", () => {
+  test("不传 options 时与上游逐字一致 —— shell 独立成行", () => {
+    const parts = [gpTool("p1", "bash"), gpTool("p2", "bash"), gpTool("p3", "shell")]
+    expect(groupParts(parts).map((g) => g.type)).toEqual(["part", "part", "part"])
+    expect(groupParts(parts, { shellGrouped: false }).map((g) => g.type)).toEqual(["part", "part", "part"])
+  })
+
+  test("shellGrouped=true:连续 shell 收进一个 command 组", () => {
+    const groups = groupParts(
+      [gpTool("p1", "bash"), gpTool("p2", "bash"), gpTool("p3", "shell"), gpTool("p4", "bash")],
+      { shellGrouped: true },
+    )
+    expect(groups).toHaveLength(1)
+    const group = groups[0]!
+    expect(group.type).toBe("command")
+    expect(group.type === "command" && group.refs.map((ref) => ref.partID)).toEqual(["p1", "p2", "p3", "p4"])
+  })
+
+  test("命令组与探索组互不吞并 —— 各自成组、顺序不变", () => {
+    const groups = groupParts(
+      [gpTool("p1", "read"), gpTool("p2", "grep"), gpTool("p3", "bash"), gpTool("p4", "bash"), gpTool("p5", "list")],
+      { shellGrouped: true },
+    )
+    expect(groups.map((g) => g.type)).toEqual(["context", "command", "context"])
+    expect(groups[0]!.type === "context" && groups[0]!.refs).toHaveLength(2)
+    expect(groups[1]!.type === "command" && groups[1]!.refs).toHaveLength(2)
+    expect(groups[2]!.type === "context" && groups[2]!.refs).toHaveLength(1)
+  })
+
+  test("中间夹了别的工具时断开重新计数", () => {
+    const groups = groupParts([gpTool("p1", "bash"), gpTool("p2", "edit"), gpTool("p3", "bash")], {
+      shellGrouped: true,
+    })
+    expect(groups.map((g) => g.type)).toEqual(["command", "part", "command"])
+  })
+
+  test("单条 shell 也成组(与「已探索」组同口径,不搞特例)", () => {
+    const groups = groupParts([gpTool("p1", "bash")], { shellGrouped: true })
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.type).toBe("command")
+  })
+
+  test("组 key 带类型前缀,两种组不会撞 key", () => {
+    const groups = groupParts([gpTool("p1", "read"), gpTool("p2", "bash")], { shellGrouped: true })
+    expect(groups.map((g) => g.key)).toEqual(["context:p1", "command:p2"])
+  })
+
+  test("非 shell/探索工具在任何口径下都独立成行", () => {
+    const parts = [gpTool("p1", "edit"), gpTool("p2", "write"), gpText("p3")]
+    expect(groupParts(parts, { shellGrouped: true }).map((g) => g.type)).toEqual(["part", "part", "part"])
+  })
+})

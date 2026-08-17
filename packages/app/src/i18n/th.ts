@@ -954,6 +954,12 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.description": "แสดงส่วนเครื่องมือ shell แบบขยายตามค่าเริ่มต้นในไทม์ไลน์",
   "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.title": "Group shell commands", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.description": "Fold consecutive shell commands into a single collapsible group instead of listing each one", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.running": "Running commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "ขยายส่วนเครื่องมือ edit",
   "settings.general.row.editToolPartsExpanded.description":
     "แสดงส่วนเครื่องมือ edit, write และ patch แบบขยายตามค่าเริ่มต้นในไทม์ไลน์",

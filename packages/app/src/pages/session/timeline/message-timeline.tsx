@@ -351,6 +351,8 @@ export function MessageTimeline(props: {
     status: sessionStatus,
     showReasoningSummaries: settings.general.showReasoningSummaries,
     inlineComments: settings.general.newLayoutDesigns,
+    // FORK: REQ-109 [feat: session-presentation-input-batch] 2026-08-17
+    shellToolPartsGrouped: settings.general.shellToolPartsGrouped,
   })
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
@@ -1067,27 +1069,43 @@ export function MessageTimeline(props: {
   }
 
   const renderAssistantPartGroup = (row: Accessor<TimelineRowMap["AssistantPart"]>, onSizeChange?: () => void) => {
-    if (row().group.type === "context") {
+    // FORK: REQ-109 —— "command" 与 "context" 走同一套折叠外壳,但**是平级的独立分组**,
+    //   标题文案由此处传入(「已运行 N 条命令」),不并进「已探索」。
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    const groupType = row().group.type
+    if (groupType === "context" || groupType === "command") {
       const parts = createMemo(() => {
         const group = row().group
-        if (group.type !== "context") return emptyTools
+        if (group.type === "part") return emptyTools
         return group.refs
           .map((ref) => getMsgPart(ref.messageID, ref.partID))
           .filter((part): part is ToolPart => part?.type === "tool")
       })
-      const contextOpenKey = () => `context:${row().group.key}`
+      const contextOpenKey = () => `${groupType}:${row().group.key}`
       const open = createMemo(() => {
         return toolOpen[contextOpenKey()] === true
       })
+      const busy = createMemo(
+        () => workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key,
+      )
+      // FORK: 命令组标题走 app 侧字典(自带复数规则),缺省 undefined = 上游「正在探索/已探索」
+      const labels = createMemo(() =>
+        groupType === "command"
+          ? {
+              activeText: language.t("session.commandGroup.running"),
+              doneText: language.t("session.commandGroup.ran"),
+              summary: language.plural("session.commandGroup.count", parts().length),
+            }
+          : undefined,
+      )
 
       return (
         <ContextToolGroup
           parts={parts()}
           open={open()}
           onOpenChange={(value) => setToolOpen(contextOpenKey(), value)}
-          busy={
-            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
-          }
+          busy={busy()}
+          labels={labels()}
           onSizeChange={onSizeChange}
         />
       )

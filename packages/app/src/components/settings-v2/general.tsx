@@ -359,6 +359,20 @@ export const SettingsGeneralV2: Component<{
         </SettingsRowV2>
         {/* FORK-END */}
 
+        {/* FORK-BEGIN: REQ-109 shell 折叠开关 [feat: session-presentation-input-batch] 2026-08-17 */}
+        <SettingsRowV2
+          title={language.t("settings.general.row.shellToolPartsGrouped.title")}
+          description={language.t("settings.general.row.shellToolPartsGrouped.description")}
+        >
+          <div data-action="settings-feed-shell-tool-parts-grouped">
+            <Switch
+              checked={settings.general.shellToolPartsGrouped()}
+              onChange={(checked) => settings.general.setShellToolPartsGrouped(checked)}
+            />
+          </div>
+        </SettingsRowV2>
+        {/* FORK-END */}
+
         <SettingsRowV2
           title={language.t("settings.general.row.shellToolPartsExpanded.title")}
           description={language.t("settings.general.row.shellToolPartsExpanded.description")}

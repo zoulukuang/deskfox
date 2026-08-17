@@ -991,6 +991,12 @@ export const dict = {
     "Show shell tool parts expanded by default in the timeline",
   "settings.general.row.showSessionProgressBar.title": "Show session progress bar",
   "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running",
+  "settings.general.row.shellToolPartsGrouped.title": "Group shell commands",
+  "settings.general.row.shellToolPartsGrouped.description": "Fold consecutive shell commands into a single collapsible group instead of listing each one",
+  "session.commandGroup.running": "Running commands",
+  "session.commandGroup.ran": "Ran commands",
+  "session.commandGroup.count.one": "{{count}} command",
+  "session.commandGroup.count.other": "{{count}} commands",
   "settings.general.row.editToolPartsExpanded.title": "Expand edit tool parts",
   "settings.general.row.editToolPartsExpanded.description":
     "Show edit, write, and patch tool parts expanded by default in the timeline",

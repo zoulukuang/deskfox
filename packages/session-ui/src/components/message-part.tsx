@@ -960,6 +960,11 @@ export function ContextToolGroup(props: {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   onSizeChange?: () => void
+  // FORK: REQ-109 —— 命令组复用同一套折叠外壳,但**是与「已探索」平级的独立分组**,只换标题文案。
+  //   文案由调用方(app)传入而非在此查 i18n:app 侧字典有自己的 key 与复数规则,
+  //   不必为一行标题去动 packages/ui 的 UiI18nKey 类型。缺省 = 上游「正在探索/已探索 + 计数」。
+  //   [feat: session-presentation-input-batch] 2026-08-17
+  labels?: { activeText: string; doneText: string; summary: string }
 }) {
   const i18n = useI18n()
   const [localOpen, setLocalOpen] = createSignal(false)
@@ -992,8 +997,9 @@ export function ContextToolGroup(props: {
             <span data-slot="context-tool-group-label" class="shrink-0">
               <ToolStatusTitle
                 active={pending()}
-                activeText={i18n.t("ui.sessionTurn.status.gatheringContext")}
-                doneText={i18n.t("ui.sessionTurn.status.gatheredContext")}
+                /* FORK: REQ-109 —— labels 缺省时完全走上游文案 */
+                activeText={props.labels?.activeText ?? i18n.t("ui.sessionTurn.status.gatheringContext")}
+                doneText={props.labels?.doneText ?? i18n.t("ui.sessionTurn.status.gatheredContext")}
                 split={false}
               />
             </span>
@@ -1001,23 +1007,30 @@ export function ContextToolGroup(props: {
               data-slot="context-tool-group-summary"
               class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-text-base"
             >
-              <AnimatedCountList
-                items={[
-                  {
-                    key: "ui.messagePart.context.read",
-                    count: summary().read,
-                  },
-                  {
-                    key: "ui.messagePart.context.search",
-                    count: summary().search,
-                  },
-                  {
-                    key: "ui.messagePart.context.list",
-                    count: summary().list,
-                  },
-                ]}
-                fallback=""
-              />
+              <Show
+                when={props.labels}
+                fallback={
+                  <AnimatedCountList
+                    items={[
+                      {
+                        key: "ui.messagePart.context.read",
+                        count: summary().read,
+                      },
+                      {
+                        key: "ui.messagePart.context.search",
+                        count: summary().search,
+                      },
+                      {
+                        key: "ui.messagePart.context.list",
+                        count: summary().list,
+                      },
+                    ]}
+                    fallback=""
+                  />
+                }
+              >
+                {(labels) => <>{labels().summary}</>}
+              </Show>
             </span>
           </span>
           <Collapsible.Arrow />

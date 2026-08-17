@@ -35,6 +35,8 @@ type PluralKey =
   | "session.question.pending"
   | "session.followupDock.summary"
   | "session.revertDock.summary"
+  // FORK: REQ-109 命令折叠组摘要 [feat: session-presentation-input-batch] 2026-08-17
+  | "session.commandGroup.count"
 type Source = { dict: Record<string, string> }
 
 function cookie(locale: Locale) {

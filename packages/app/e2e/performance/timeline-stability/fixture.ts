@@ -134,6 +134,11 @@ export async function setupTimeline(
           shellToolPartsExpanded: false,
           showReasoningSummaries: false,
           showSessionProgressBar: true,
+          // FORK: REQ-109 —— e2e 基线取**上游口径**(shell 逐条独立成行),让上游那 10+ 条
+          //   shell 族断言零改动全绿;产品默认是折叠(true),两套口径都是合法配置。
+          //   要测折叠的用例显式传 settings: { shellToolPartsGrouped: true } 覆盖(后写胜出)。
+          //   [feat: session-presentation-input-batch] 2026-08-17
+          shellToolPartsGrouped: false,
           ...settings,
         },
       }),

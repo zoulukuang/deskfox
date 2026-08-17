@@ -402,6 +402,20 @@ export const SettingsGeneral: Component = () => {
         </SettingsRow>
         {/* FORK-END */}
 
+        {/* FORK-BEGIN: REQ-109 shell 折叠开关 [feat: session-presentation-input-batch] 2026-08-17 */}
+        <SettingsRow
+          title={language.t("settings.general.row.shellToolPartsGrouped.title")}
+          description={language.t("settings.general.row.shellToolPartsGrouped.description")}
+        >
+          <div data-action="settings-feed-shell-tool-parts-grouped">
+            <Switch
+              checked={settings.general.shellToolPartsGrouped()}
+              onChange={(checked) => settings.general.setShellToolPartsGrouped(checked)}
+            />
+          </div>
+        </SettingsRow>
+        {/* FORK-END */}
+
         <SettingsRow
           title={language.t("settings.general.row.shellToolPartsExpanded.title")}
           description={language.t("settings.general.row.shellToolPartsExpanded.description")}

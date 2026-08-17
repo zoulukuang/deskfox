@@ -365,6 +365,10 @@ async function configureSmokePage(page: Page, directory: string) {
           shellToolPartsExpanded: true,
           showReasoningSummaries: true,
           showSessionProgressBar: true,
+          // FORK: REQ-109 —— 本 spec 自带 settings.v3,绕过 mock-server 的默认种子,故此处单独种
+          //   **上游口径**(shell 逐条独立成行),让下方上游原断言零改动全绿。产品默认是折叠(true)。
+          //   [feat: session-presentation-input-batch] 2026-08-17
+          shellToolPartsGrouped: false,
           // FORK: 本 spec 是上游 v2 时间线/标签页用例;DeskFox 段1-3 默认经典布局,
           //   此处显式开 v2 使上游用例在其目标布局下跑(D1 过渡期,段4 随上游翻默认后可删)2026-08-11
           newLayoutDesigns: true,
