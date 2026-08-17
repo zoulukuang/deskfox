@@ -962,6 +962,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "ពង្រីកផ្នែកឧបករណ៍សែល",
   "settings.general.row.shellToolPartsExpanded.description":
     "បង្ហាញផ្នែកឧបករណ៍សែលដែលបានពង្រីកតាមលំនាំដើមនៅក្នុងបន្ទាត់ពេលវេលា",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "ពង្រីកផ្នែកឧបករណ៍កែសម្រួល",
   "settings.general.row.editToolPartsExpanded.description":
     "បង្ហាញការកែសម្រួល សរសេរ និងផ្នែកឧបករណ៍បំណះដែលបានពង្រីកតាមលំនាំដើមនៅក្នុងបន្ទាត់ពេលវេលា",

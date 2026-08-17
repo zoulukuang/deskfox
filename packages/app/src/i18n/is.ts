@@ -967,6 +967,8 @@ export const dict = {
   "settings.general.row.reasoningSummaries.description": "Birta rökstuðningssamantektir líkana á tímalínunni",
   "settings.general.row.shellToolPartsExpanded.title": "Stækkaðu hluta skeljaverkfæra",
   "settings.general.row.shellToolPartsExpanded.description": "Sýna hluta skelverkfæra stækkað sjálfgefið á tímalínunni",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Stækkaðu breytingaverkfærahluta",
   "settings.general.row.editToolPartsExpanded.description":
     "Sýna breytinga-, skrifa- og plástraverkfæri hluta sjálfgefið stækkað á tímalínunni",

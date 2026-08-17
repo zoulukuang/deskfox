@@ -1047,6 +1047,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Bentangkan bagian alat shell",
   "settings.general.row.shellToolPartsExpanded.description":
     "Tampilkan bagian alat shell yang dibentangkan secara bawaan di linimasa",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Bentangkan bagian alat edit",
   "settings.general.row.editToolPartsExpanded.description":
     "Tampilkan bagian alat edit, tulis, dan patch yang dibentangkan secara bawaan di linimasa",

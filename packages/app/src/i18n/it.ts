@@ -890,6 +890,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Espandi le parti dello strumento Shell",
   "settings.general.row.shellToolPartsExpanded.description":
     "Mostra le parti dello strumento Shell espanse per impostazione predefinita nella sequenza temporale",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Espandi le parti dello strumento di modifica",
   "settings.general.row.editToolPartsExpanded.description":
     "Mostra le parti degli strumenti di modifica, scrittura e patch espanse per impostazione predefinita nella sequenza temporale",

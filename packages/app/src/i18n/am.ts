@@ -944,6 +944,8 @@ export const dict = {
   "settings.general.row.reasoningSummaries.description": "የሞዴል ማመዛዘኛ ማጠቃለያዎችን በጊዜ መስመር አሳይ",
   "settings.general.row.shellToolPartsExpanded.title": "የሼል መሣሪያ ክፍሎችን ዘርጋ",
   "settings.general.row.shellToolPartsExpanded.description": "የሼል መሣሪያ ክፍሎችን በጊዜ መስመር በነባሪነት ያሳዩ",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "የመሳሪያ ክፍሎችን ዘርጋ",
   "settings.general.row.editToolPartsExpanded.description": "በጊዜ መስመር በነባሪነት የተዘረጉትን የመሳሪያ ክፍሎችን አርትዕ፣ ጻፍ እና ጠጋኝ አሳይ",
   "settings.general.row.newInterface.title": "አዲስ አቀማመጥ",

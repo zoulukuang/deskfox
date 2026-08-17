@@ -989,6 +989,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Expand shell tool parts",
   "settings.general.row.shellToolPartsExpanded.description":
     "Show shell tool parts expanded by default in the timeline",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar",
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running",
   "settings.general.row.editToolPartsExpanded.title": "Expand edit tool parts",
   "settings.general.row.editToolPartsExpanded.description":
     "Show edit, write, and patch tool parts expanded by default in the timeline",

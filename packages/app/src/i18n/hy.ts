@@ -973,6 +973,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Ընդարձակել Shell գործիքի մասերը",
   "settings.general.row.shellToolPartsExpanded.description":
     "Ցուցադրել ժամանակացույցում լռելյայնորեն ընդլայնված shell գործիքի մասերը",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Ընդարձակել խմբագրման գործիքի մասերը",
   "settings.general.row.editToolPartsExpanded.description":
     "Ցուցադրել խմբագրման, գրելու և կարկատելու գործիքի մասերը, որոնք լռելյայն ընդլայնվել են ժամանակացույցում",

@@ -976,6 +976,8 @@ export const dict = {
   "settings.general.row.telemetry.locked": "(当前由 OPENCODE_TELEMETRY 环境变量或其他配置文件控制,此开关已禁用。)",
   "settings.general.row.shellToolPartsExpanded.title": "展开 Shell 工具调用",
   "settings.general.row.shellToolPartsExpanded.description": "默认在时间线中展开 Shell 工具调用详情",
+  "settings.general.row.showSessionProgressBar.title": "显示会话进度条",
+  "settings.general.row.showSessionProgressBar.description": "任务执行期间在会话顶部显示动效进度条",
   "settings.general.row.editToolPartsExpanded.title": "展开编辑工具调用",
   "settings.general.row.editToolPartsExpanded.description": "默认在时间线中展开 edit、write 和 patch 工具调用详情",
   "settings.general.row.newInterface.title": "新布局",

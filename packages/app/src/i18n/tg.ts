@@ -972,6 +972,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Қисмҳои shell асбобро васеъ кунед",
   "settings.general.row.shellToolPartsExpanded.description":
     "Дар ҷадвали вақт қисмҳои асбобҳои shell васеъшударо нишон диҳед",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Қисмҳои таҳрири асбобро васеъ кунед",
   "settings.general.row.editToolPartsExpanded.description":
     "Намоиши қисмҳои абзори таҳрир, навиштан ва часбкунӣ, ки ба таври нобаёнӣ дар ҷадвали вақт васеъ карда шудаанд",

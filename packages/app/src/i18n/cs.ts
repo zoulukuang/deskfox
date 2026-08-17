@@ -972,6 +972,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Rozbalte části nástroje shell",
   "settings.general.row.shellToolPartsExpanded.description":
     "Ve výchozím nastavení zobrazit na časové ose rozbalené části nástroje shell",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Rozbalte části nástroje pro úpravy",
   "settings.general.row.editToolPartsExpanded.description":
     "Ve výchozím nastavení zobrazit na časové ose rozbalené části nástroje pro úpravy, zápis a opravy",

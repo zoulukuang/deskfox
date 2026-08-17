@@ -973,6 +973,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Zgjeroni pjesët e veglave të guaskës",
   "settings.general.row.shellToolPartsExpanded.description":
     "Shfaq pjesët e veglës së guaskës të zgjeruara si parazgjedhje në afatin kohor",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Zgjero pjesët e veglave të redaktimit",
   "settings.general.row.editToolPartsExpanded.description":
     "Shfaq pjesët e veglave të modifikimit, shkrimit dhe korrigjimit të zgjeruara si parazgjedhje në afatin kohor",

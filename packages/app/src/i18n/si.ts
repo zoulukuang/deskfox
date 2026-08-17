@@ -962,6 +962,8 @@ export const dict: Record<string, string> = {
   "settings.general.row.shellToolPartsExpanded.title": "ෂෙල් මෙවලම් කොටස් පුළුල් කරන්න",
   "settings.general.row.shellToolPartsExpanded.description":
     "කාලරේඛාව තුළ පෙරනිමියෙන් පුළුල් කළ ෂෙල් මෙවලම් කොටස් පෙන්වන්න",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "සංස්කරණ මෙවලම් කොටස් පුළුල් කරන්න",
   "settings.general.row.editToolPartsExpanded.description":
     "කාලරේඛාව තුළ පෙරනිමියෙන් පුළුල් කරන ලද සංස්කරණය, ලිවීම සහ පැච් මෙවලම් කොටස් පෙන්වන්න",

@@ -966,6 +966,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Kembangkan bahagian alat shell",
   "settings.general.row.shellToolPartsExpanded.description":
     "Papar bahagian alat shell dikembangkan secara lalai dalam garis masa",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Kembangkan bahagian alat suntingan",
   "settings.general.row.editToolPartsExpanded.description":
     "Papar bahagian alat sunting, tulis, dan tampal dikembangkan secara lalai dalam garis masa",

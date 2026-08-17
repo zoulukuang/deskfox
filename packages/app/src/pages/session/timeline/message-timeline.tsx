@@ -81,6 +81,12 @@ import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows
 import { filterVirtualIndexes } from "./virtual-items"
 // FORK: REQ-097 会话内查找(文件随上游迁入 timeline/,相对路径升一级)[feat: in-session-find]
 import { SessionFindBar } from "../find/find-bar"
+// FORK-BEGIN: REQ-108 会话进度条依赖 [feat: session-presentation-input-batch] 2026-08-17
+import { createResizeObserver } from "@solid-primitives/resize-observer"
+import { makeTimer } from "@solid-primitives/timer"
+import { messageAgentColor } from "@/utils/agent"
+import { nextSessionProgressStatus, sessionProgressPace, type SessionProgressStatus } from "./session-progress"
+// FORK-END
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -576,6 +582,32 @@ export function MessageTimeline(props: {
     dismiss: null as "escape" | "outside" | null,
   })
   let more: HTMLButtonElement | undefined
+
+  // FORK-BEGIN: REQ-108 会话进度条 —— 2026-08-11 上游同步(1.17.4→1.18.16)整块丢失,按基准版
+  //   e77443750e `pages/session/message-timeline.tsx` 原样搬回(该文件已被上游重写并搬到本目录,
+  //   故认代码不认行号)。三态 `hidden/showing/hiding` 里 hiding 专供 220ms 淡出 ——
+  //   硬消失和淡出是两种手感,别省。扫动周期随标题栏宽度自适应。
+  //   [feat: session-presentation-input-batch] 2026-08-17
+  let progressHead: HTMLDivElement | undefined
+  const [bar, setBar] = createStore({ ms: sessionProgressPace(640) })
+  const updateProgressMetrics = () => {
+    if (!progressHead || progressHead.clientWidth <= 0) return
+    setBar("ms", sessionProgressPace(progressHead.clientWidth))
+  }
+  createResizeObserver(() => progressHead, updateProgressMetrics)
+
+  const working = createMemo(() => sessionStatus().type !== "idle")
+  const tint = createMemo(() => messageAgentColor(sessionMessages(), sync().data.agent))
+  const [timeoutDone, setTimeoutDone] = createSignal(true)
+  const workingStatus = createMemo<SessionProgressStatus>((previous) =>
+    nextSessionProgressStatus({ previous, working: working(), timeoutDone: timeoutDone() }),
+  )
+  createEffect(() => {
+    if (workingStatus() !== "hiding") return
+    setTimeoutDone(false)
+    makeTimer(() => setTimeoutDone(true), 260, setTimeout)
+  })
+  // FORK-END
 
   const bindListRoot = (root: HTMLDivElement) => {
     if (root === listRoot()) return
@@ -1564,6 +1596,12 @@ export function MessageTimeline(props: {
       >
         <Show when={showHeader()}>
           <div
+            // FORK: REQ-108 会话进度条 —— 挂 ref 供扫动周期按标题栏宽度自适应
+            //   [feat: session-presentation-input-batch] 2026-08-17
+            ref={(el) => {
+              progressHead = el
+              updateProgressMetrics()
+            }}
             data-session-title
             classList={{
               "sticky top-0 z-30": true,
@@ -1579,6 +1617,19 @@ export function MessageTimeline(props: {
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered && !settings.general.newLayoutDesigns(),
             }}
           >
+            {/* FORK-BEGIN: REQ-108 会话进度条 [feat: session-presentation-input-batch] 2026-08-17 */}
+            <Show when={workingStatus() !== "hidden" && settings.general.showSessionProgressBar()}>
+              <div data-component="session-progress" data-state={workingStatus()} aria-hidden="true">
+                <div
+                  data-component="session-progress-bar"
+                  style={{
+                    background: tint() ?? "var(--icon-interactive-base)",
+                    animation: `session-progress-whip ${bar.ms}ms infinite`,
+                  }}
+                />
+              </div>
+            </Show>
+            {/* FORK-END */}
             <div class="h-12 w-full flex items-center justify-between gap-2">
               <div
                 classList={{

@@ -982,6 +982,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "ޝެލް ޓޫލް ބައިތައް ފުޅާކުރުން",
   "settings.general.row.shellToolPartsExpanded.description":
     "ޓައިމްލައިންގައި ޑިފޯލްޓްކޮށް ފުޅާކޮށްފައިވާ ޝެލް ޓޫލް ބައިތައް ދައްކާށެވެ",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "އެޑިޓް ޓޫލްގެ ބައިތައް ފުޅާކުރުން",
   "settings.general.row.editToolPartsExpanded.description":
     "ޓައިމްލައިންގައި ޑިފޯލްޓްކޮށް ފުޅާކޮށްފައިވާ އެޑިޓް، ރައިޓް، އަދި ޕެޗް ޓޫލް ބައިތައް ދައްކާށެވެ",

@@ -979,6 +979,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Shelltoolonderdelen uitvouwen",
   "settings.general.row.shellToolPartsExpanded.description":
     "Toon shelltoolonderdelen standaard uitgevouwen in de tijdlijn",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Bewerkingstoolonderdelen uitvouwen",
   "settings.general.row.editToolPartsExpanded.description":
     "Toon bewerkings-, schrijf- en patchtoolonderdelen standaard uitgevouwen in de tijdlijn",

@@ -982,6 +982,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "shell tool အစိတ်အပိုင်းများကို ချဲ့ပါ။",
   "settings.general.row.shellToolPartsExpanded.description":
     "အချိန်ဇယားတွင် ပုံသေဖြင့် ချဲ့ထားသော shell tool အစိတ်အပိုင်းများကို ပြပါ။",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "တည်းဖြတ်ကိရိယာအစိတ်အပိုင်းများကို ချဲ့ထွင်ပါ။",
   "settings.general.row.editToolPartsExpanded.description":
     "အချိန်ဇယားတွင် ပုံသေဖြင့် ချဲ့ထွင်ထားသော တည်းဖြတ်ခြင်း၊ ရေးသားခြင်းနှင့် ဖာထေးခြင်း ကိရိယာအစိတ်အပိုင်းများကို ပြသပါ။",

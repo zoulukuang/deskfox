@@ -30,6 +30,9 @@ export interface Settings {
     showStatus: boolean
     showTerminal: boolean
     showReasoningSummaries: boolean
+    // FORK: REQ-108 会话进度条开关(默认 true)—— 2026-08-11 上游同步整块丢失,按基准版补回
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    showSessionProgressBar: boolean
     shellToolPartsExpanded: boolean
     editToolPartsExpanded: boolean
     showCustomAgents: boolean
@@ -211,6 +214,8 @@ const defaultSettings: Settings = {
     showStatus: false,
     showTerminal: false,
     showReasoningSummaries: false,
+    // FORK: REQ-108 —— 产品默认开(基准版即默认 true)[feat: session-presentation-input-batch] 2026-08-17
+    showSessionProgressBar: true,
     shellToolPartsExpanded: false,
     editToolPartsExpanded: false,
     showCustomAgents: false,
@@ -423,6 +428,15 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setShowReasoningSummaries(value: boolean) {
           setStore("general", "showReasoningSummaries", value)
         },
+        // FORK-BEGIN: REQ-108 会话进度条 [feat: session-presentation-input-batch] 2026-08-17
+        showSessionProgressBar: withFallback(
+          () => store.general?.showSessionProgressBar,
+          defaultSettings.general.showSessionProgressBar,
+        ),
+        setShowSessionProgressBar(value: boolean) {
+          setStore("general", "showSessionProgressBar", value)
+        },
+        // FORK-END
         shellToolPartsExpanded: withFallback(
           () => store.general?.shellToolPartsExpanded,
           defaultSettings.general.shellToolPartsExpanded,

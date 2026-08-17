@@ -976,6 +976,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Разгънете shell части на инструмента",
   "settings.general.row.shellToolPartsExpanded.description":
     "Показване на shell части от инструмента, разширени по подразбиране във времевата линия",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Разгънете части за редактиране на инструмента",
   "settings.general.row.editToolPartsExpanded.description":
     "Показване на части от инструмента за редактиране, писане и корекция, разширени по подразбиране във времевата линия",

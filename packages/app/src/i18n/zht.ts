@@ -967,6 +967,8 @@ export const dict = {
 
   "settings.general.row.shellToolPartsExpanded.title": "展開 shell 工具區塊",
   "settings.general.row.shellToolPartsExpanded.description": "在時間軸中預設展開 shell 工具區塊",
+  "settings.general.row.showSessionProgressBar.title": "顯示會話進度條",
+  "settings.general.row.showSessionProgressBar.description": "任務執行期間在會話頂部顯示動效進度條",
   "settings.general.row.editToolPartsExpanded.title": "展開 edit 工具區塊",
   "settings.general.row.editToolPartsExpanded.description": "在時間軸中預設展開 edit、write 和 patch 工具區塊",
   "settings.general.row.pinchZoom.title": "捏合縮放",

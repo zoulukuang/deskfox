@@ -972,6 +972,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Izvērst čaulas rīka daļas",
   "settings.general.row.shellToolPartsExpanded.description":
     "Pēc noklusējuma rādīt čaulas rīka daļas izvērstas laika joslā",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Izvērst rediģēšanas rīka daļas",
   "settings.general.row.editToolPartsExpanded.description":
     "Pēc noklusējuma rādīt rediģēšanas, rakstīšanas un labošanas rīka daļas izvērstas laika joslā",

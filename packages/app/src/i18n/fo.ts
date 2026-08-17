@@ -964,6 +964,8 @@ export const dict = {
   "settings.general.row.reasoningSummaries.description": "Vís modellgrundgevingarsamantektir í tíðarlinjuni",
   "settings.general.row.shellToolPartsExpanded.title": "Víðka shell-tólpartar",
   "settings.general.row.shellToolPartsExpanded.description": "Vís shell-tólpartar víðkaðar sum standard í tíðarlinjuni",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Víðka rætta tólpartar",
   "settings.general.row.editToolPartsExpanded.description":
     "Vís rætta, skriva og lappa tólpartar víðkaðir sum standard á tíðarlinjuni",

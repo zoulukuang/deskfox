@@ -977,6 +977,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Proširite dijelove alata školjke",
   "settings.general.row.shellToolPartsExpanded.description":
     "Prikažite dijelove alata ljuske proširene prema zadanim postavkama na vremenskoj traci",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Proširi uređivanje dijelova alata",
   "settings.general.row.editToolPartsExpanded.description":
     "Prikažite dijelove alata za uređivanje, pisanje i zakrpe prema zadanim postavkama na vremenskoj traci",

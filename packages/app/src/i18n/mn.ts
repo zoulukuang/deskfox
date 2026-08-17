@@ -976,6 +976,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "shell хэрэгслийн хэсгүүдийг өргөжүүлэх",
   "settings.general.row.shellToolPartsExpanded.description":
     "Он цагийн хэлхээс дээр анхдагчаар өргөтгөсөн shell хэрэгслийн хэсгүүдийг харуул",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Засварлах хэрэгслийн хэсгүүдийг өргөжүүлэх",
   "settings.general.row.editToolPartsExpanded.description":
     "Он цагийн хэлхээс дээр анхдагчаар өргөтгөсөн засварлах, бичих, засварлах хэрэгслийн хэсгүүдийг харуул",

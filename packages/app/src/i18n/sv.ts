@@ -971,6 +971,8 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Expandera skalverktygsdelar",
   "settings.general.row.shellToolPartsExpanded.description":
     "Visa skalverktygsdelar expanderade som standard på tidslinjen",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Fäll ut delar för redigeringsverktyg",
   "settings.general.row.editToolPartsExpanded.description":
     "Visa delar för redigerings-, skriv- och patchverktyg utfällda som standard i tidslinjen",

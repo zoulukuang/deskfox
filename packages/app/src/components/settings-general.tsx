@@ -388,6 +388,20 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
+        {/* FORK-BEGIN: REQ-108 会话进度条开关 [feat: session-presentation-input-batch] 2026-08-17 */}
+        <SettingsRow
+          title={language.t("settings.general.row.showSessionProgressBar.title")}
+          description={language.t("settings.general.row.showSessionProgressBar.description")}
+        >
+          <div data-action="settings-feed-session-progress-bar">
+            <Switch
+              checked={settings.general.showSessionProgressBar()}
+              onChange={(checked) => settings.general.setShowSessionProgressBar(checked)}
+            />
+          </div>
+        </SettingsRow>
+        {/* FORK-END */}
+
         <SettingsRow
           title={language.t("settings.general.row.shellToolPartsExpanded.title")}
           description={language.t("settings.general.row.shellToolPartsExpanded.description")}
