@@ -971,6 +971,8 @@ export const dict: Record<string, string> = {
   "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "সম্পাদনা টুল অংশ প্রসারিত করুন",
   "settings.general.row.editToolPartsExpanded.description":
     "টাইমলাইনে ডিফল্টরূপে প্রসারিত সম্পাদনা, লিখুন এবং প্যাচ টুল অংশগুলি দেখান৷",

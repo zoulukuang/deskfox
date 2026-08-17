@@ -986,6 +986,9 @@ export const dict = {
   "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.many": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.many": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Amplieu les parts d'eina d'edició",
   "settings.general.row.editToolPartsExpanded.description":
     "Mostra les parts de l'eina d'edició, escriptura i pedaç ampliades de manera predeterminada a la línia de temps",

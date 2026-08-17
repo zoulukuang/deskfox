@@ -117,3 +117,144 @@ describe("groupParts · shellGrouped 两套口径", () => {
     expect(groupParts(parts, { shellGrouped: true }).map((g) => g.type)).toEqual(["part", "part", "part"])
   })
 })
+
+// FORK: REQ-113 时间线噪声治理 [feat: session-presentation-input-batch] 2026-08-17
+function gpEdit(
+  id: string,
+  filePath: string | undefined,
+  tool = "edit",
+  status = "completed",
+): { messageID: string; part: PartType } {
+  return {
+    messageID: "msg_1",
+    part: { id, type: "tool", tool, state: { status, input: { filePath } } } as unknown as PartType,
+  }
+}
+
+describe("groupParts · REQ-113A 连续 invalid 合并", () => {
+  test("连续 invalid 合并成一组(内容逐字相同的纯噪声)", () => {
+    const groups = groupParts([gpTool("p1", "invalid"), gpTool("p2", "invalid"), gpTool("p3", "invalid")])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.type).toBe("invalid")
+    expect(groups[0]!.type === "invalid" && groups[0]!.refs).toHaveLength(3)
+  })
+
+  test("中间夹了别的工具时断开重新计数", () => {
+    const groups = groupParts([
+      gpTool("p1", "invalid"),
+      gpTool("p2", "invalid"),
+      gpText("p3"),
+      gpTool("p4", "invalid"),
+    ])
+    expect(groups.map((g) => g.type)).toEqual(["invalid", "part", "invalid"])
+  })
+
+  test("invalid 不与探索/命令组互相吞并", () => {
+    const groups = groupParts([gpTool("p1", "read"), gpTool("p2", "invalid"), gpTool("p3", "bash")], {
+      shellGrouped: true,
+    })
+    expect(groups.map((g) => g.type)).toEqual(["context", "invalid", "command"])
+  })
+
+  test("单条 invalid 也成组(合并后仍是一行,行为一致)", () => {
+    const groups = groupParts([gpTool("p1", "invalid")])
+    expect(groups[0]!.type).toBe("invalid")
+  })
+})
+
+describe("groupParts · REQ-113B 同文件连续编辑合并(不进折叠组)", () => {
+  test("同文件连续 4 次编辑合成一行 repeat", () => {
+    const groups = groupParts([
+      gpEdit("p1", "a.py"),
+      gpEdit("p2", "a.py"),
+      gpEdit("p3", "a.py"),
+      gpEdit("p4", "a.py"),
+    ])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.type).toBe("repeat")
+    expect(groups[0]!.type === "repeat" && groups[0]!.refs).toHaveLength(4)
+  })
+
+  test("**单次编辑仍是独立 part 行** —— 可见性不降级(本条是 REQ-113B 的分寸所在)", () => {
+    const groups = groupParts([gpEdit("p1", "a.py")])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.type).toBe("part")
+  })
+
+  test("换文件即断开重新计数,绝不错并两个文件", () => {
+    const groups = groupParts([
+      gpEdit("p1", "a.py"),
+      gpEdit("p2", "a.py"),
+      gpEdit("p3", "b.py"),
+      gpEdit("p4", "b.py"),
+    ])
+    expect(groups.map((g) => g.type)).toEqual(["repeat", "repeat"])
+    expect(groups[0]!.type === "repeat" && groups[0]!.refs.map((r) => r.partID)).toEqual(["p1", "p2"])
+    expect(groups[1]!.type === "repeat" && groups[1]!.refs.map((r) => r.partID)).toEqual(["p3", "p4"])
+  })
+
+  test("中间夹了别的工具时断开重新计数(不跨越无关条目错误合并)", () => {
+    const groups = groupParts([gpEdit("p1", "a.py"), gpEdit("p2", "a.py"), gpTool("p3", "bash"), gpEdit("p4", "a.py")])
+    expect(groups.map((g) => g.type)).toEqual(["repeat", "part", "part"])
+  })
+
+  test("edit 与 write 混排同文件也合并(同为写同一个文件)", () => {
+    const groups = groupParts([gpEdit("p1", "a.py", "edit"), gpEdit("p2", "a.py", "write")])
+    expect(groups[0]!.type).toBe("repeat")
+  })
+
+  test("取不到 filePath 的编辑不参与合并 —— 宁可多一行不要错并", () => {
+    const groups = groupParts([gpEdit("p1", undefined), gpEdit("p2", undefined)])
+    expect(groups.map((g) => g.type)).toEqual(["part", "part"])
+  })
+
+  test("失败的编辑绝不合并 —— 失败是信号不是重复,合并会把其中一次失败整个藏掉", () => {
+    // 2026-08-17 被上游 tool-projection e2e 抓到:连续失败的 edit+write 同文件被错并成一行,
+    // 错误卡从 10 张掉到 9 张。此测把这条教训钉死。
+    const groups = groupParts([
+      gpEdit("p1", "a.py", "edit", "error"),
+      gpEdit("p2", "a.py", "write", "error"),
+    ])
+    expect(groups.map((g) => g.type)).toEqual(["part", "part"])
+  })
+
+  test("进行中的编辑也不并 —— 免得把在跑的那次吞进历史行", () => {
+    const groups = groupParts([
+      gpEdit("p1", "a.py", "edit", "completed"),
+      gpEdit("p2", "a.py", "edit", "running"),
+    ])
+    expect(groups.map((g) => g.type)).toEqual(["part", "part"])
+  })
+
+  test("成功编辑串中间夹一次失败 → 断开,失败那条独立可见", () => {
+    const groups = groupParts([
+      gpEdit("p1", "a.py"),
+      gpEdit("p2", "a.py"),
+      gpEdit("p3", "a.py", "edit", "error"),
+      gpEdit("p4", "a.py"),
+      gpEdit("p5", "a.py"),
+    ])
+    expect(groups.map((g) => g.type)).toEqual(["repeat", "part", "repeat"])
+  })
+
+  test("patch 首版不参与合并(用的是 input.files 不是 filePath)", () => {
+    const groups = groupParts([gpEdit("p1", "a.py", "patch"), gpEdit("p2", "a.py", "patch")])
+    expect(groups.map((g) => g.type)).toEqual(["part", "part"])
+  })
+
+  test("混合序列:探索 → 编辑 → 命令 → 无效,四类各自成行不串味", () => {
+    const groups = groupParts(
+      [
+        gpTool("p1", "read"),
+        gpEdit("p2", "a.py"),
+        gpEdit("p3", "a.py"),
+        gpTool("p4", "bash"),
+        gpTool("p5", "bash"),
+        gpTool("p6", "invalid"),
+        gpTool("p7", "invalid"),
+      ],
+      { shellGrouped: true },
+    )
+    expect(groups.map((g) => g.type)).toEqual(["context", "repeat", "command", "invalid"])
+  })
+})

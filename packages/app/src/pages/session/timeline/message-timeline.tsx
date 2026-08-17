@@ -1072,8 +1072,11 @@ export function MessageTimeline(props: {
     // FORK: REQ-109 —— "command" 与 "context" 走同一套折叠外壳,但**是平级的独立分组**,
     //   标题文案由此处传入(「已运行 N 条命令」),不并进「已探索」。
     //   [feat: session-presentation-input-batch] 2026-08-17
+    //   REQ-113A —— "invalid"(模型调了不存在的工具)同为可折叠组:内容逐字相同的纯噪声,
+    //   合并成一行计数、点开可看每条详情。合并不隐藏信号 —— 连续 N 次调不到工具说明 agent
+    //   在空转,合成一行反而比刷屏 N 行更醒目。
     const groupType = row().group.type
-    if (groupType === "context" || groupType === "command") {
+    if (groupType === "context" || groupType === "command" || groupType === "invalid") {
       const parts = createMemo(() => {
         const group = row().group
         if (group.type === "part") return emptyTools
@@ -1088,16 +1091,22 @@ export function MessageTimeline(props: {
       const busy = createMemo(
         () => workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key,
       )
-      // FORK: 命令组标题走 app 侧字典(自带复数规则),缺省 undefined = 上游「正在探索/已探索」
-      const labels = createMemo(() =>
-        groupType === "command"
-          ? {
-              activeText: language.t("session.commandGroup.running"),
-              doneText: language.t("session.commandGroup.ran"),
-              summary: language.plural("session.commandGroup.count", parts().length),
-            }
-          : undefined,
-      )
+      // FORK: 命令组 / 无效调用组的标题走 app 侧字典(自带复数规则),
+      //   缺省 undefined = 上游「正在探索/已探索 + 计数」原样不动
+      const labels = createMemo(() => {
+        if (groupType === "command")
+          return {
+            activeText: language.t("session.commandGroup.running"),
+            doneText: language.t("session.commandGroup.ran"),
+            summary: language.plural("session.commandGroup.count", parts().length),
+          }
+        if (groupType === "invalid") {
+          const text = language.plural("session.invalidGroup.count", parts().length)
+          // 无效调用是终态失败记录,没有"正在进行"的语义,两态同文案
+          return { activeText: text, doneText: text, summary: "" }
+        }
+        return undefined
+      })
 
       return (
         <ContextToolGroup
@@ -1111,15 +1120,29 @@ export function MessageTimeline(props: {
       )
     }
 
-    const message = createMemo(() => {
+    // FORK: REQ-113B —— "repeat"(同文件连续编辑)**不是折叠组**:仍渲染成一张独立的编辑卡,
+    //   只在标题上加 ×N 计数。取**最后一次**编辑的卡片(文件的最新状态最有用),
+    //   「改了哪个文件」这个关键信息原样留在标题里,只是不把同一句话重复说 N 遍。
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    const anchorRef = createMemo(() => {
       const group = row().group
-      if (group.type !== "part") return
-      return messageByID().get(group.ref.messageID)
+      if (group.type === "part") return group.ref
+      if (group.type === "repeat") return group.refs.at(-1)
+      return undefined
+    })
+    const repeatCount = createMemo(() => {
+      const group = row().group
+      return group.type === "repeat" ? group.refs.length : undefined
+    })
+    const message = createMemo(() => {
+      const ref = anchorRef()
+      if (!ref) return
+      return messageByID().get(ref.messageID)
     })
     const part = createMemo(() => {
-      const group = row().group
-      if (group.type !== "part") return
-      return getMsgPart(group.ref.messageID, group.ref.partID)
+      const ref = anchorRef()
+      if (!ref) return
+      return getMsgPart(ref.messageID, ref.partID)
     })
     const defaultOpen = createMemo(() => {
       const item = part()
@@ -1144,6 +1167,8 @@ export function MessageTimeline(props: {
                 deferToolContent
                 virtualizeDiff={false}
                 onContentRendered={onSizeChange}
+                /* FORK: REQ-113B 同文件连续编辑 ×N [feat: session-presentation-input-batch] 2026-08-17 */
+                repeatCount={repeatCount()}
               />
             )}
           </Show>

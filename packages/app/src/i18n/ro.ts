@@ -980,6 +980,9 @@ export const dict = {
   "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.few": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.few": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Extinde părțile de editare",
   "settings.general.row.editToolPartsExpanded.description":
     "Afișează implicit părțile de editare, scriere și patch extinse în cronologie",

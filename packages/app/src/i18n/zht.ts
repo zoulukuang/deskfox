@@ -975,6 +975,8 @@ export const dict = {
   "session.commandGroup.ran": "已執行",
   "session.commandGroup.count.one": "{{count}} 條命令",
   "session.commandGroup.count.other": "{{count}} 條命令",
+  "session.invalidGroup.count.one": "{{count}} 次無效呼叫",
+  "session.invalidGroup.count.other": "{{count}} 次無效呼叫",
   "settings.general.row.editToolPartsExpanded.title": "展開 edit 工具區塊",
   "settings.general.row.editToolPartsExpanded.description": "在時間軸中預設展開 edit、write 和 patch 工具區塊",
   "settings.general.row.pinchZoom.title": "捏合縮放",

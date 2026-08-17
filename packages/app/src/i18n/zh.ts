@@ -984,6 +984,8 @@ export const dict = {
   "session.commandGroup.ran": "已运行",
   "session.commandGroup.count.one": "{{count}} 条命令",
   "session.commandGroup.count.other": "{{count}} 条命令",
+  "session.invalidGroup.count.one": "{{count}} 次无效调用",
+  "session.invalidGroup.count.other": "{{count}} 次无效调用",
   "settings.general.row.editToolPartsExpanded.title": "展开编辑工具调用",
   "settings.general.row.editToolPartsExpanded.description": "默认在时间线中展开 edit、write 和 patch 工具调用详情",
   "settings.general.row.newInterface.title": "新布局",

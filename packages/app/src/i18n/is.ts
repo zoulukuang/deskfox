@@ -975,6 +975,8 @@ export const dict = {
   "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Stækkaðu breytingaverkfærahluta",
   "settings.general.row.editToolPartsExpanded.description":
     "Sýna breytinga-, skrifa- og plástraverkfæri hluta sjálfgefið stækkað á tímalínunni",

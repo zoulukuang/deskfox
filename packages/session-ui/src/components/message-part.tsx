@@ -206,6 +206,8 @@ export interface MessagePartProps {
   showAssistantCopyPartID?: string | null
   turnDurationMs?: number
   useV2Actions?: boolean
+  // FORK: REQ-113B 同文件连续编辑合并计数 [feat: session-presentation-input-batch] 2026-08-17
+  repeatCount?: number
 }
 
 function MessageActionButton(
@@ -1375,6 +1377,8 @@ export function Part(props: MessagePartProps) {
         showAssistantCopyPartID={props.showAssistantCopyPartID}
         turnDurationMs={props.turnDurationMs}
         useV2Actions={props.useV2Actions}
+        /* FORK: REQ-113B 同文件连续编辑 ×N [feat: session-presentation-input-batch] 2026-08-17 */
+        repeatCount={props.repeatCount}
       />
     </Show>
   )
@@ -1396,6 +1400,9 @@ export interface ToolProps {
   onContentRendered?: () => void
   forceOpen?: boolean
   locked?: boolean
+  // FORK: REQ-113B —— 同文件连续编辑合并后的次数(≥2 才传)。只在标题上加一枚 ×N 计数,
+  //   卡片本身照常独立可展开,**不进任何折叠组**。[feat: session-presentation-input-batch] 2026-08-17
+  repeatCount?: number
 }
 
 export type ToolComponent = Component<ToolProps>
@@ -1551,6 +1558,8 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               deferContent={props.deferToolContent}
               virtualizeDiff={props.virtualizeDiff}
               onContentRendered={props.onContentRendered}
+              /* FORK: REQ-113B 同文件连续编辑 ×N [feat: session-presentation-input-batch] 2026-08-17 */
+              repeatCount={props.repeatCount}
             />
           </Match>
         </Switch>
@@ -2147,6 +2156,11 @@ ToolRegistry.register({
                   <Show when={!pending()}>
                     <span data-slot="message-part-title-filename">{filename()}</span>
                   </Show>
+                  {/* FORK: REQ-113B —— 同文件连续编辑合并后的次数。文件名照常在标题上直接可见,
+                      只是不把同一句话重复说 N 遍。[feat: session-presentation-input-batch] 2026-08-17 */}
+                  <Show when={(props.repeatCount ?? 0) > 1}>
+                    <span data-slot="message-part-title-repeat">×{props.repeatCount}</span>
+                  </Show>
                 </div>
                 <Show when={!pending() && props.input.filePath?.includes("/")}>
                   <div data-slot="message-part-path">
@@ -2213,6 +2227,11 @@ ToolRegistry.register({
                   </span>
                   <Show when={!pending()}>
                     <span data-slot="message-part-title-filename">{filename()}</span>
+                  </Show>
+                  {/* FORK: REQ-113B —— 同文件连续编辑合并后的次数。文件名照常在标题上直接可见,
+                      只是不把同一句话重复说 N 遍。[feat: session-presentation-input-batch] 2026-08-17 */}
+                  <Show when={(props.repeatCount ?? 0) > 1}>
+                    <span data-slot="message-part-title-repeat">×{props.repeatCount}</span>
                   </Show>
                 </div>
                 <Show when={!pending() && props.input.filePath?.includes("/")}>

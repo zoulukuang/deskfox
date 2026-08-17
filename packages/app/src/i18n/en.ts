@@ -997,6 +997,8 @@ export const dict = {
   "session.commandGroup.ran": "Ran commands",
   "session.commandGroup.count.one": "{{count}} command",
   "session.commandGroup.count.other": "{{count}} commands",
+  "session.invalidGroup.count.one": "{{count}} invalid call",
+  "session.invalidGroup.count.other": "{{count}} invalid calls",
   "settings.general.row.editToolPartsExpanded.title": "Expand edit tool parts",
   "settings.general.row.editToolPartsExpanded.description":
     "Show edit, write, and patch tool parts expanded by default in the timeline",

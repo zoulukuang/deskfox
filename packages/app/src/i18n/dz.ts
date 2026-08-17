@@ -994,6 +994,8 @@ export const dict: Record<string, string> = {
   "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
   "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "ཞུན་དག་ལག་ཆས་ཆ་ཤས་ཚུ་རྒྱ་བསྐྱེད་འབད།",
   "settings.general.row.editToolPartsExpanded.description":
     "དུས་ཚོད་གྲལ་ཐིག་ནང་སྔོན་སྒྲིག་གིས་རྒྱ་བསྐྱེད་འབད་ཡོད་པའི་ཞུན་དག་དང་འབྲི་ནི་ དེ་ལས་ཐབས་འཕྲུལ་གྱི་ལག་ཆས་ཆ་ཤས་ཚུ་སྟོན།",

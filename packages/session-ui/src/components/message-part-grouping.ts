@@ -19,6 +19,35 @@ export const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
 // FORK: 与 part-default-open.ts 的 shell 判定保持同一口径(bash / shell)
 export const SHELL_GROUP_TOOLS = new Set(["bash", "shell"])
 
+// FORK: REQ-113 时间线噪声治理 —— 两类各按自己的分寸处理,不一刀切:
+//   A. `invalid`(模型调了不存在的工具)= 纯噪声,连内容都逐字相同 → 合并成一行计数、可展开。
+//      合并**不隐藏信号**:连续 N 次调不到工具说明 agent 在空转,合成一行反而比刷屏 N 行更醒目。
+//   B. `edit`/`write` = 有副作用、用户最需要看见的操作 → **绝不收进折叠组**,
+//      只把「同一个文件的连续多次编辑」合成一行 + ×N 计数,文件名原样留在标题上。
+//      合并键 = input.filePath;`patch` 用的是 input.files,首版不做(留后)。
+//   [feat: session-presentation-input-batch] 2026-08-17
+export const EDIT_MERGE_TOOLS = new Set(["edit", "write"])
+
+export function isInvalidTool(part: PartType): part is ToolPart {
+  return part.type === "tool" && part.tool === "invalid"
+}
+
+export function isEditMergeTool(part: PartType): part is ToolPart {
+  return part.type === "tool" && EDIT_MERGE_TOOLS.has(part.tool)
+}
+
+// FORK: 同文件判定 —— 取不到 filePath 就不参与合并(宁可多一行,不要错并两个文件)。
+//   ⚠️ **只合并 completed**:失败/进行中的编辑是信号不是重复,合并会把其中一次失败整个藏掉
+//   (2026-08-17 被上游 tool-projection e2e 抓到 —— 连续失败的 edit+write 同文件被错并成一行,
+//    错误卡从 10 张掉到 9 张)。同理 pending/running 也不并,免得把在跑的那次吞进历史行。
+function editMergeKey(part: PartType): string | undefined {
+  if (!isEditMergeTool(part)) return undefined
+  if (part.state?.status !== "completed") return undefined
+  const input = part.state?.input as Record<string, unknown> | undefined
+  const filePath = input?.filePath
+  return typeof filePath === "string" && filePath ? filePath : undefined
+}
+
 export function isContextGroupTool(part: PartType): part is ToolPart {
   return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
 }
@@ -34,7 +63,11 @@ export type PartRef = {
 }
 
 // FORK: "command" = REQ-109 独立命令组(与 "context" 平级,不是它的子集)
-export type PartGroupRunType = "context" | "command"
+//       "invalid" = REQ-113A 无效调用合并组(同为可折叠组)
+//       "repeat"  = REQ-113B 同文件连续编辑合并行 —— **不是折叠组**,
+//                   渲染成单张编辑卡 + ×N 计数,可见性不降级(见文件头 B 段)
+export type PartGroupRunType = "context" | "command" | "invalid"
+export type PartGroupMergeType = PartGroupRunType | "repeat"
 
 export type PartGroup =
   | {
@@ -44,7 +77,7 @@ export type PartGroup =
     }
   | {
       key: string
-      type: PartGroupRunType
+      type: PartGroupMergeType
       refs: PartRef[]
     }
 
@@ -74,10 +107,14 @@ export function sameGroups(a: readonly PartGroup[] | undefined, b: readonly Part
 
 // FORK: options.shellGrouped —— REQ-109 连续 shell 收进独立命令组。
 //   缺省(undefined/false)= 上游口径:shell 独立成行,分组行为与上游逐字一致。
+//   REQ-113 的 invalid 合并与同文件 edit 合并**无开关、始终生效**:两者都只去重复不降可见性,
+//   没有"想看逐条刷屏"的合理诉求;上游 e2e 断言不涉及连续同类 invalid/edit,不需要种默认。
 export function groupParts(parts: { messageID: string; part: PartType }[], options?: { shellGrouped?: boolean }) {
   const result: PartGroup[] = []
   let start = -1
-  let runType: PartGroupRunType | undefined
+  let runType: PartGroupMergeType | undefined
+  // FORK: REQ-113B —— 当前 edit 合并串锁定的文件;换文件即断开重新计数
+  let runMergeKey: string | undefined
 
   const flush = (end: number) => {
     if (start < 0 || !runType) return
@@ -86,34 +123,46 @@ export function groupParts(parts: { messageID: string; part: PartType }[], optio
     if (!first || !last) {
       start = -1
       runType = undefined
+      runMergeKey = undefined
       return
     }
-    result.push({
-      key: `${runType}:${first.part.id}`,
-      type: runType,
-      refs: parts.slice(start, end + 1).map((item) => ({
-        messageID: item.messageID,
-        partID: item.part.id,
-      })),
-    })
+    const refs = parts.slice(start, end + 1).map((item) => ({
+      messageID: item.messageID,
+      partID: item.part.id,
+    }))
+    // FORK: REQ-113B —— 单次编辑没什么可合并的,原样退回独立 part 行(可见性零降级)
+    if (runType === "repeat" && refs.length === 1) {
+      result.push({
+        key: `part:${first.messageID}:${first.part.id}`,
+        type: "part",
+        ref: refs[0]!,
+      })
+    } else {
+      result.push({ key: `${runType}:${first.part.id}`, type: runType, refs })
+    }
     start = -1
     runType = undefined
+    runMergeKey = undefined
   }
 
-  const runTypeOf = (part: PartType): PartGroupRunType | undefined => {
+  const runTypeOf = (part: PartType): PartGroupMergeType | undefined => {
     if (isContextGroupTool(part)) return "context"
     if (options?.shellGrouped && isShellGroupTool(part)) return "command"
+    if (isInvalidTool(part)) return "invalid"
+    if (editMergeKey(part)) return "repeat"
     return undefined
   }
 
   parts.forEach((item, index) => {
     const type = runTypeOf(item.part)
     if (type) {
-      // FORK: 两种组不互相吞并 —— 探索转命令(或反之)时先收尾上一组
-      if (runType && runType !== type) flush(index - 1)
+      const mergeKey = type === "repeat" ? editMergeKey(item.part) : undefined
+      // FORK: 各类组不互相吞并;edit 合并串还要求**同一个文件**,换文件同样先收尾
+      if (runType && (runType !== type || runMergeKey !== mergeKey)) flush(index - 1)
       if (start < 0) {
         start = index
         runType = type
+        runMergeKey = mergeKey
       }
       return
     }
