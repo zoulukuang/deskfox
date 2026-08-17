@@ -117,17 +117,19 @@ describe("REQ-078 过滤层候选源(2026-08 上游同步回归)", () => {
       return [] // 本端可解的 id 集:这条外来权限不在其中
     })
 
-    let applied: string[] | null | undefined = undefined
+    // 用数组收集而非 `let applied = undefined`:回调内的赋值 TS 的控制流分析看不见,
+    // 变量会被收窄成 undefined,后续 expect 拿不到真实类型(见下一条用例)。
+    const appliedCalls: (string[] | null)[] = []
     const result = await cache.sync("/tmp", signature, (ids) => {
-      applied = ids
+      appliedCalls.push(ids)
     })
 
     expect(result).toBe("skip")
     expect(fetched).toBe(0)
-    expect(applied).toBeUndefined() // apply 从未被调用 → resolvableStore[dir] 保持 undefined
+    expect(appliedCalls).toHaveLength(0) // apply 从未被调用 → resolvableStore[dir] 保持 undefined
 
     // 后果:外来权限被判为「可解」→ 徽标/composer 照常展示 → 点击必 404
-    expect(canResolveWith(applied, "perm_foreign")).toBe(true)
+    expect(canResolveWith(appliedCalls[0], "perm_foreign")).toBe(true)
   })
 
   test("反证:候选源若真有数据,过滤层工作正常(证明失效只源于数据源为空)", async () => {
@@ -141,15 +143,16 @@ describe("REQ-078 过滤层候选源(2026-08 上游同步回归)", () => {
     expect(signature).toBe("perm_foreign")
 
     const cache = createResolvableCache(async () => [])
-    let applied: string[] | null | undefined = undefined
+    const appliedCalls: (string[] | null)[] = []
     const result = await cache.sync("/tmp", signature, (ids) => {
-      applied = ids
+      appliedCalls.push(ids)
     })
 
     expect(result).toBe("fetched")
-    expect(applied).toEqual([])
+    expect(appliedCalls).toHaveLength(1) // apply 被调用了一次
+    expect(appliedCalls[0]).toEqual([])
     // 本端不可解 → 正确地被过滤掉
-    expect(canResolveWith(applied, "perm_foreign")).toBe(false)
+    expect(canResolveWith(appliedCalls[0], "perm_foreign")).toBe(false)
   })
 })
 
