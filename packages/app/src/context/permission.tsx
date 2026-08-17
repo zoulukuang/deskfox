@@ -1,7 +1,7 @@
 import { type Accessor, createEffect, createMemo, createRoot, getOwner, onCleanup, runWithOwner } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 // FORK: REQ-078 方案D 共享过滤层 [feat: permission-filter-concurrency] 2026-08-02
-import { candidateSignature, createResolvableCache } from "./permission-resolvable"
+import { candidateSignature, createResolvableCache, scopePermissionsByDirectory } from "./permission-resolvable"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2/client"
 import { Persist, persisted } from "@/utils/persist"
@@ -443,9 +443,21 @@ function createServerPermissionState(input: { sdk: ServerSDK; sync: ServerSync }
     if (resolvableTracked.has(directory)) return
     resolvableTracked.add(directory)
     runWithOwner(resolvableOwner, () => {
-      const [childStore] = input.sync.child(directory, { bootstrap: false })
       createEffect(() => {
-        const signature = candidateSignature(childStore.permission, (item) => shouldAutoRespond(item, directory))
+        // FORK: REQ-112 —— 候选源从 child store 换成**全局** session store。
+        //   1.18 把 permission 权威源挪到全局后,child 的 permission 恒空(bootstrap 只写全局 +
+        //   permission.asked/replied 在 event-reducer 里被 sessionContent:false 提前 return),
+        //   于是签名恒空 → 从不 fetch → canResolve 恒 true,REQ-078 过滤层整体 fail-open:
+        //   别的 instance(飞书桥等)触发的权限在本端显示幻影徽标,点了必 404。
+        //   全局 store 没有 directory 维度,故经 session.get(id).directory 裁一刀。
+        //   ⚠️ 不动 server-sync 的 sessionContent: false —— 那是上游把 session 内容收归全局的架构决定。
+        //   [feat: session-presentation-input-batch] 2026-08-17
+        const scoped = scopePermissionsByDirectory(
+          input.sync.session.data.permission,
+          directory,
+          (sessionID) => input.sync.session.get(sessionID)?.directory,
+        )
+        const signature = candidateSignature(scoped, (item) => shouldAutoRespond(item, directory))
         void resolvableCache.sync(directory, signature, (ids) => setResolvableStore(directory, ids))
       })
     })

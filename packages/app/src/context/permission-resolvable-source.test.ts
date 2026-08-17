@@ -12,15 +12,21 @@
 // resolvableCache 恒 skip ⇒ resolvableStore[dir] 恒 undefined ⇒ canResolve 恒 true(fail-open),
 // 过滤层等于没有:别的 instance(飞书桥等)触发的权限会在本端显示幻影徽标,点了必 404。
 //
-// 本文件把上述链条钉成可跑的断言。**当前这些用例描述的是 bug 现状**:修复后
-// "child store 收不到 permission 事件" 一条会转红,那正是修好的信号(见文件末尾说明)。
+// 本文件把上述链条钉成可跑的断言。
+//
+// 2026-08-17 REQ-112 已修复(`ensureResolvableTracked` 改读全局 session store + 按 directory 过滤,
+// 见 permission.tsx / permission-resolvable.ts `scopePermissionsByDirectory`)。
+// 下面前两条继续锁「child store 收不到 permission 事件」这一**客观接线事实**(它是根因,不是 bug 本身,
+// 上游架构如此,不该被悄悄改回);第三条改锁**修好后的行为** —— 同一批权限走全局源时签名非空、
+// cache 真去 fetch、外来权限被正确判为不可解。
+// [feat: session-presentation-input-batch]
 
 import { describe, expect, test } from "bun:test"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2/client"
 import { createStore } from "solid-js/store"
 import type { State } from "./global-sync/types"
 import { applyDirectoryEvent } from "./global-sync/event-reducer"
-import { candidateSignature, createResolvableCache } from "./permission-resolvable"
+import { candidateSignature, createResolvableCache, scopePermissionsByDirectory } from "./permission-resolvable"
 
 const permissionRequest = (id: string, sessionID: string) =>
   ({
@@ -93,23 +99,26 @@ describe("REQ-078 过滤层候选源(2026-08 上游同步回归)", () => {
     expect(store.permission["ses_1"]?.map((x) => x.id)).toEqual(["perm_1"])
   })
 
-  test("空候选源 ⇒ 签名空 ⇒ cache 恒 skip ⇒ canResolve 恒 true(过滤层失效)", async () => {
-    const [store, setStore] = createStore(childState())
+  test("修复后:候选源取全局 store ⇒ 签名非空 ⇒ 真去 fetch ⇒ 外来权限被判不可解", async () => {
+    const [childStore, setChildStore] = createStore(childState())
 
-    // 真实事件流:权限来了,但按当前接线只落全局、不落 child
+    // 真实事件流:权限来了,只落全局、不落 child(下面用 childStore 空来对照)
     applyDirectoryEvent({
       event: { type: "permission.asked", properties: permissionRequest("perm_foreign", "ses_1") },
-      store,
-      setStore,
+      store: childStore,
+      setStore: setChildStore,
       push() {},
       directory: "/tmp",
       loadLsp() {},
       sessionContent: false,
     })
+    expect(candidateSignature(childStore.permission, () => false)).toBe("") // 旧源:空 → 这就是 bug
 
-    // ensureResolvableTracked 就是拿这个 store 算签名的
-    const signature = candidateSignature(store.permission, () => false)
-    expect(signature).toBe("")
+    // 新源:全局 session store 的 permission(形状 {[sessionID]: PermissionRequest[]},无 directory 维度)
+    const globalPermission = { ses_1: [permissionRequest("perm_foreign", "ses_1")] }
+    const scoped = scopePermissionsByDirectory(globalPermission, "/tmp", () => "/tmp")
+    const signature = candidateSignature(scoped, () => false)
+    expect(signature).toBe("perm_foreign")
 
     let fetched = 0
     const cache = createResolvableCache(async () => {
@@ -124,12 +133,34 @@ describe("REQ-078 过滤层候选源(2026-08 上游同步回归)", () => {
       appliedCalls.push(ids)
     })
 
-    expect(result).toBe("skip")
-    expect(fetched).toBe(0)
-    expect(appliedCalls).toHaveLength(0) // apply 从未被调用 → resolvableStore[dir] 保持 undefined
+    expect(result).toBe("fetched")
+    expect(fetched).toBe(1)
+    expect(appliedCalls).toEqual([[]])
+    // 过滤层复活:外来权限判为不可解 → 不再显示幻影徽标
+    expect(canResolveWith(appliedCalls[0], "perm_foreign")).toBe(false)
+  })
 
-    // 后果:外来权限被判为「可解」→ 徽标/composer 照常展示 → 点击必 404
-    expect(canResolveWith(appliedCalls[0], "perm_foreign")).toBe(true)
+  test("按 directory 裁切:别的目录的权限不进本目录候选", () => {
+    const permissions = {
+      ses_here: [permissionRequest("perm_here", "ses_here")],
+      ses_there: [permissionRequest("perm_there", "ses_there")],
+    }
+    const directoryOf = (sessionID: string) => (sessionID === "ses_here" ? "/tmp" : "/other")
+
+    const scoped = scopePermissionsByDirectory(permissions, "/tmp", directoryOf)
+    expect(Object.keys(scoped)).toEqual(["ses_here"])
+    expect(candidateSignature(scoped, () => false)).toBe("perm_here")
+  })
+
+  test("session 还没进 store(directory 未知)时保留 —— 不因暂时认不出就退回 fail-open", () => {
+    const permissions = { ses_unknown: [permissionRequest("perm_x", "ses_unknown")] }
+    const scoped = scopePermissionsByDirectory(permissions, "/tmp", () => undefined)
+    expect(candidateSignature(scoped, () => false)).toBe("perm_x")
+  })
+
+  test("空列表不进候选(避免制造无意义签名变动触发多余 fetch)", () => {
+    const scoped = scopePermissionsByDirectory({ ses_1: [], ses_2: undefined }, "/tmp", () => "/tmp")
+    expect(scoped).toEqual({})
   })
 
   test("反证:候选源若真有数据,过滤层工作正常(证明失效只源于数据源为空)", async () => {
@@ -156,8 +187,7 @@ describe("REQ-078 过滤层候选源(2026-08 上游同步回归)", () => {
   })
 })
 
-// 修复指引:把 ensureResolvableTracked 的候选源从 child store 改为全局 session store
-// (即 directory-sync.ts 的 sessionFields Proxy 所指向的 serverSync.session.data.permission,
-// 并按 directory 过滤 session)。改完后第 1 条用例的前提不再成立 —— 那条断言的是
-// 「child store 收不到事件」这一客观事实,可保留;真正该转绿的是第 3 条:
-// 届时签名非空、cache 会 fetch、canResolve 对外来权限返回 false。
+// 原「修复指引」段已于 2026-08-17 落地:候选源改为全局 session store
+// (directory-sync.ts 的 sessionFields Proxy 所指向的 serverSync.session.data.permission),
+// 并经 session.get(id).directory 按目录裁切。见 permission.tsx `ensureResolvableTracked`
+// 与 permission-resolvable.ts `scopePermissionsByDirectory`。

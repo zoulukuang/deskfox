@@ -185,11 +185,19 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
     )
   })
   // FORK: stuck-working-indicator-fix — 判定逻辑抽到 deriveSessionWorking 纯函数 [feat: stuck-working-indicator-fix]
+  //   REQ-110(2026-08-17):数据源从 child store 换成**全局** session store。1.18 把
+  //   session_status / message 的权威源挪到全局(child 的这些字段恒空:bootstrap 只写全局 +
+  //   session.status/message.updated 在 event-reducer 里被 sessionContent:false 提前 return),
+  //   于是判定恒 false —— 代码一行没少、类型全对、marker 全在,图标就是不亮。
+  //   ⚠️ **保留** deriveSessionWorking 而不直接采上游 session_working(只看 status 不看 messages):
+  //   2026-06-12 的 healClearedSessionOrphans(补盖被清会话的末条 assistant 残骸)当前**没有调用点**
+  //   (同批已修复,见 bootstrap.ts),防卡死链路曾出现过缺口,这里不叠加第二个变更面。
+  //   [feat: session-presentation-input-batch]
   const isWorking = createMemo(() =>
     deriveSessionWorking({
       hasPermissions: hasPermissions(),
-      messages: sessionStore.message[props.session.id],
-      status: sessionStore.session_status[props.session.id],
+      messages: serverSync().session.data.message[props.session.id],
+      status: serverSync().session.data.session_status[props.session.id],
     }),
   )
 
