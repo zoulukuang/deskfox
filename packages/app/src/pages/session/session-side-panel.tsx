@@ -1,6 +1,8 @@
 import { For, Match, Show, Switch, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js"
 // FORK: 文件树宽度唯一事实源 [feat: file-tree-width-single-source] 2026-08-13
 import { FILE_TREE_WIDTH_MIN, resolvedFileTreeWidth } from "./file-tree-width"
+// FORK: REQ-111 [feat: session-presentation-input-batch] 2026-08-17
+import { decideTabCollapse, TAB_COLLAPSE_DEFER_MS } from "./session-tab-collapse"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { DragDropProvider as DndKitProvider, PointerSensor } from "@dnd-kit/solid"
@@ -268,18 +270,87 @@ export function SessionSidePanel(props: {
   let fileFilter: HTMLInputElement | undefined
   let tabList: HTMLDivElement | undefined
   const temporaryTab = tabs().preview
+
+  // FORK-BEGIN: REQ-111 点「正在查看的那个」→ 收起预览器(tab 与文件树两条入口共用)
+  //   判定见 session-tab-collapse.ts;临时(preview)tab 要给双击开永久让路,故延后执行、双击时取消。
+  //   [feat: session-presentation-input-batch] 2026-08-17
+  let activeTabAtPress: string | undefined
+  let collapseTimer: ReturnType<typeof setTimeout> | undefined
+  const cancelPendingCollapse = () => {
+    if (collapseTimer === undefined) return
+    clearTimeout(collapseTimer)
+    collapseTimer = undefined
+  }
+  const scheduleCollapse = () => {
+    cancelPendingCollapse()
+    collapseTimer = setTimeout(() => {
+      collapseTimer = undefined
+      view().reviewPanel.close()
+    }, TAB_COLLAPSE_DEFER_MS)
+  }
+  onCleanup(cancelPendingCollapse)
+  // FORK-END
+
   const previewTab = (value: string) => {
     const next = normalizeTab(value)
+    // FORK: REQ-111 —— 这里**不**做「再次点击收起」。试过:v2 里文件树单击 preview / 双击开永久,
+    //   双击的两下都会先经过本函数,任何在此处的提前返回都会打断「双击提升为永久 tab」
+    //   (被上游 file-browser-sidebar-tab-switch e2e 当场抓到)。v2 下的收起入口改由顶部 tab 承担,
+    //   文件树 hover 提示随之只在它真能用的经典布局显示(见下方 viewerOpen 传参)。
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    cancelPendingCollapse()
     tabs().previewTab(next)
     const path = file.pathFromTab(next)
     if (path) void file.load(path)
     openReviewPanel()
     queueMicrotask(() => tabs().setActive(next))
   }
+  // FORK: REQ-111 —— 双击开永久 tab:先取消顶部 tab 那条待执行的收起,再走原路
+  const openPermanentTab = (value: string) => {
+    cancelPendingCollapse()
+    openTab(value)
+  }
+  // FORK: REQ-111 —— 文件树「再次点击可收起预览」的 hover 提示,只在该行为**真的可用**时给。
+  //   toggle 挂在 createOpenSessionFileTab 的 isViewerOpen 上,而它被限定为经典布局
+  //   (v2 双击开永久会先触发单击 preview,toggle 会误判「再次点击」把面板收掉)。
+  //   2026-08-11 sync 后 tooltip 照旧全布局弹出 → v2 下「提示在、功能不在」,本批对齐。
+  //   [feat: session-presentation-input-batch] 2026-08-17
+  const fileTreeCollapseHintOpen = createMemo(
+    () => !settings.general.newLayoutDesigns() && view().reviewPanel.opened(),
+  )
   const openFileBrowser = () => {
     previewTab(SESSION_OPEN_FILE_TAB)
     queueMicrotask(() => fileFilter?.focus())
   }
+
+  // FORK-BEGIN: REQ-111 顶部 tab 入口(经典与 v2 共用同一套判定,不分叉)
+  //   坑:点非激活 tab 时 Kobalte 会先把它切成激活,click 里再读 activeTab 已是新值 → 误收面板。
+  //   故按下时先快照。[feat: session-presentation-input-batch] 2026-08-17
+  const handleTabPress = (tab: string) => {
+    cancelPendingCollapse()
+    activeTabAtPress = activeTab()
+  }
+  const handleTabClick = (tab: string) => {
+    const decision = decideTabCollapse({
+      tab,
+      activeAtPress: activeTabAtPress,
+      viewerOpen: view().reviewPanel.opened(),
+      isTemporary: temporaryTab() === tab,
+      isFileTab: !!file.pathFromTab(normalizeTab(tab)),
+    })
+    if (decision === "ignore") return
+    if (decision === "collapse") {
+      view().reviewPanel.close()
+      return
+    }
+    // defer:临时 tab —— 等过双击窗口再收,双击提升永久 tab 时由 handleTabDoubleClick 取消
+    scheduleCollapse()
+  }
+  const handleTabDoubleClick = (tab: string) => {
+    cancelPendingCollapse()
+    openTab(tab)
+  }
+  // FORK-END
   const activateTab = (value: string) => {
     const next = normalizeTab(value)
     const path = file.pathFromTab(next)
@@ -366,8 +437,19 @@ export function SessionSidePanel(props: {
           "h-full shrink-0": !props.stacked,
           "h-full min-h-0": props.stacked,
           "pointer-events-none": !open(),
+          // FORK-BEGIN: REQ-111 恢复「flex-grow 反向驱动」的开/收动画 [feat: titlebar-icons-rearrange]
+          //   [feat: session-presentation-input-batch] 2026-08-17
+          //   2026-06-13 曾把本面板改为**唯一可伸长项**:宽度完全由聊天区(session.tsx 的
+          //   sessionPanelWidth,自带 360ms width 过渡)反向驱动 —— 聊天区收窄查看区就从左向右展开、
+          //   聊天区变宽查看区就从右向左收起,与文件树/侧边栏手感一致。2026-08-11 sync 时被回退成
+          //   显式 width + transition-[width],正是当年注释里点名的「啪地弹开」的旧做法
+          //   (review 态 width 还取 "auto",width 过渡对 auto 根本跑不起来)。
+          //   ⚠️ stacked(纵向堆叠)布局主轴是列,flex-grow 会去撑**高度** → 那一档保留显式 width。
+          "transition-[flex-grow,flex-basis] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[flex-grow,flex-basis] motion-reduce:transition-none":
+            !props.stacked && !props.size.active() && !props.reviewSnap,
           "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
-            !props.size.active() && !props.reviewSnap,
+            props.stacked && !props.size.active() && !props.reviewSnap,
+          // FORK-END
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
           "flex-1": reviewOpen(),
           // FORK: 经典布局镜像 —— 本面板排到聊天区左侧。原先靠父容器 `md:flex-row-reverse` 实现,
@@ -377,7 +459,13 @@ export function SessionSidePanel(props: {
           //   [feat: mirror-layout-overflow] 2026-08-12
           "md:order-first": !settings.general.newLayoutDesigns(),
         }}
-        style={{ width: panelWidth() }}
+        // FORK: REQ-111 —— 非 stacked 时不再钉显式 width,改由 flex-grow 0↔1 承担开/收,
+        //   实际宽度由聊天区宽度反向决定(见上方 classList 注释)。[feat: session-presentation-input-batch] 2026-08-17
+        style={
+          props.stacked
+            ? { width: panelWidth() }
+            : { "flex-grow": open() ? "1" : "0", "flex-basis": "0px" }
+        }
       >
         <Show when={open()}>
           <div
@@ -507,7 +595,10 @@ export function SessionSidePanel(props: {
                                           tab={tab}
                                           temporary={temporaryTab() === tab}
                                           onTabClose={tabs().close}
-                                          onTabDoubleClick={temporaryTab() === tab ? openTab : undefined}
+                                          onTabDoubleClick={temporaryTab() === tab ? handleTabDoubleClick : undefined}
+                                          // FORK: REQ-111 点当前 tab 收起预览器 2026-08-17
+                                          onTabPress={handleTabPress}
+                                          onTabClick={handleTabClick}
                                           // FORK: 右键「关闭其他标签」[feat: file-tab-close-others] 2026-06-09
                                           //   2026-08-12:上游 merge 冲掉了这个 prop(组件里的菜单项还在,
                                           //   只是没人传 handler → 菜单项整个不渲染),按 user 反馈接回
@@ -726,7 +817,10 @@ export function SessionSidePanel(props: {
                                       index={() => tabs().all().indexOf(tab)}
                                       temporary={temporaryTab() === tab}
                                       onTabClose={tabs().close}
-                                      onTabDoubleClick={temporaryTab() === tab ? openTab : undefined}
+                                      onTabDoubleClick={temporaryTab() === tab ? handleTabDoubleClick : undefined}
+                                      // FORK: REQ-111 点当前 tab 收起预览器 2026-08-17
+                                      onTabPress={handleTabPress}
+                                      onTabClick={handleTabClick}
                                     />
                                   }
                                 >
@@ -855,7 +949,8 @@ export function SessionSidePanel(props: {
                               kinds={kinds()}
                               state={props.fileBrowserState!}
                               onSelect={(path) => previewTab(file.tab(path))}
-                              onSelectPermanent={(path) => openTab(file.tab(path))}
+                              /* FORK: REQ-111 双击开永久 tab 时取消顶部 tab 那条待执行的收起 2026-08-17 */
+                              onSelectPermanent={(path) => openPermanentTab(file.tab(path))}
                               filterRef={(element) => (fileFilter = element)}
                             />
                           </div>
@@ -980,7 +1075,9 @@ export function SessionSidePanel(props: {
                               // FORK: 预览区已开时,给「正在查看的那一行」加收起 hover tooltip(与 toggle 条件一致)
                               //   [feat: filetree-hover-collapse-hint] 2026-06-09
                               //   2026-08-12:两个 prop 都在上游 merge 中被冲掉(组件仍支持,只是没人传)
-                              viewerOpen={view().reviewPanel.opened()}
+                              //   2026-08-17 REQ-111:改用 fileTreeCollapseHintOpen —— 只在 toggle 真能用的
+                              //   经典布局给提示,不让 v2 下出现「提示在、功能不在」
+                              viewerOpen={fileTreeCollapseHintOpen()}
                               onFileClick={(node) => openTab(file.tab(node.path))}
                             />
                           </Match>

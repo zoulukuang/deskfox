@@ -39,6 +39,10 @@ export function SortableTab(props: {
   onTabDoubleClick?: (tab: string) => void
   // FORK: 右键「关闭其他标签」回调,caller 传(关掉除本 tab 外所有已开 tab)[feat: file-tab-close-others] 2026-06-09
   onCloseOthers?: (tab: string) => void
+  // FORK: REQ-111 点顶部当前文件 tab 收起预览器(与 v2 同一套判定)
+  //   [feat: session-presentation-input-batch] 2026-08-17
+  onTabPress?: (tab: string) => void
+  onTabClick?: (tab: string) => void
 }): JSX.Element {
   const file = useFile()
   const language = useLanguage()
@@ -60,7 +64,13 @@ export function SortableTab(props: {
   }
   return (
     <div use:sortable class="h-full flex items-center" classList={{ "opacity-0": sortable.isActiveDraggable }}>
-      <div class="relative">
+      {/* FORK: REQ-111 —— 判定挂 wrapper 靠冒泡接,不塞进 Kobalte.Trigger 的 props
+          [feat: session-presentation-input-batch] 2026-08-17 */}
+      <div
+        class="relative"
+        on:pointerdown={{ handleEvent: () => props.onTabPress?.(props.tab), capture: true }}
+        onClick={() => props.onTabClick?.(props.tab)}
+      >
         <Tabs.Trigger
           value={props.tab}
           onContextMenu={openMenu}
