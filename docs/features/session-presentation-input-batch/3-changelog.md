@@ -109,6 +109,10 @@ retarget 已把卡交接给新会话 scope,清 initial 不丢内容;现有会话
 | ui 单测 | 83 pass / 0 fail |
 | e2e regression + smoke | **138/138 pass**,上游断言零改动 |
 | `check-child-store-reads.sh` 闸 | 零违规命中 |
+| e2e performance 组(`OPENCODE_PERFORMANCE=1`) | 60 pass / **5 fail —— clean tree 同样失败,既有问题非本批引入**(见下) |
+| **GUI · 本批专项 CDP 断言** | **12/12 pass**(真实打包产物 + 真 Electron) |
+| **GUI · smoke.py panels/settings/boot** | **13/13 pass** |
+| **GUI · smoke.py files(文件预览)** | 5 pass / 1 WARN(既有图片渲染告警,非本批范围) |
 
 新增测试:S8 5 条 / S1 10 条 / S3 8 条 / S7 15 条 / S4 8 条 / S6 4 条(复现用例翻成验收) /
 S5 7 条单测 + 2 条 e2e / S9 35 条;另 S3 3 条 e2e、S7 4 条 e2e。
@@ -116,7 +120,27 @@ S5 7 条单测 + 2 条 e2e / S9 35 条;另 S3 3 条 e2e、S7 4 条 e2e。
 **e2e fixture 注入点实为三处**(原计划待钉死项只列了两处):`mock-server.ts` / `timeline-stability/fixture.ts` /
 `smoke/session-timeline.spec.ts` 自带的 `settings.v3`。三处都只种默认值,**断言零改动**。
 
-## 🔒 真机验收清单(未做,需 user 或后续会话在真桌面完成)
+## GUI / 端到端自动化(2026-08-18 已跑)
+
+**跑法**:`OPENCODE_CHANNEL=local` 起真 Electron 加载打包产物(`electron-vite build` 出的 `out/`),
+带 `--remote-debugging-port=9222`,全程 CDP 定点驱动(不用全局鼠标坐标,不会误触别的窗口)。
+local 档独立身份 + `opencode-local.db` 数据隔离,**user 的正式版全程未被触碰**(测前 7 进程、测后仍 7 进程)。
+
+**本批专项断言**(新增 `packages/branding/smoke/req108_batch_gui_check.py`,12/12):
+- S1 进度条四条 CSS 规则(keyframes / 容器 / **淡出态** / bar)确实进了打包产物
+- S9 KaTeX 样式进了产物(公式出图前提)
+- S1「显示会话进度条」、S3「折叠 Shell 命令」两个开关在真设置面板里**渲染出来且默认开**
+- 无全屏渲染崩溃页、无未捕获异常 / console.error
+
+**现成冒烟**(`smoke.py`):panels 5 + settings 6(含飞书桥接页)+ boot reload = 13/13;
+files 文件预览 5 pass / 1 既有 WARN。
+
+⚠️ **副作用记录**:local 实例会加载 user 真实 `~/.opencode` 配置,启动时**把飞书桥也连上了**
+(日志见 `[wss] connected: account=cli_…`)。测试窗口内理论上存在飞书消息路由到测试实例的可能。
+本次测完即刻关停(CDP 端口已确认关闭)。**下次做 GUI 自动化前应先隔离配置目录**,
+这条补进 `reference_deskfox_gui_automation` 的坑位清单。
+
+## 🔒 仍需真机人工确认(自动化覆盖不到:要真跑 LLM 任务才触发)
 
 - [ ] S8:右键「添加到聊天窗口」提评论 → 新会话态发送 → 再开新会话 composer 干净;切项目再确认
 - [ ] S1:真跑 >10s 任务,顶部 2px 条扫动、结束**淡出**;开关关/开即时生效;深浅主题各一次
@@ -141,6 +165,14 @@ S5 7 条单测 + 2 条 e2e / S9 35 条;另 S3 3 条 e2e、S7 4 条 e2e。
 7. **未 push 的 3 笔**(`f40f88d505` / `c86f3efa61` / `d79da924de`)随本批一并处理。
 
 ## 已知问题(非本批引入,建议单开)
+
+- **e2e performance 组 5 条既有失败**(已用 clean tree 对照确认与本批无关):
+  `timeline-stability/adverse.spec.ts` 2 条(shell 状态跨虚拟化保持 / 窄屏来回 resize 行序)、
+  `timeline/` benchmark 3 条(home-tab 导航 / parent hydration / tab 切换)。
+- **桌面打包链路两处环境阻塞**(与代码无关):`prebuild` 要下的
+  `@opencode-ai/cli-darwin-arm64@0.0.0-next-16350` 在 registry 已取不到(本地 `resources/opencode-cli`
+  是 8/14 旧物);`electron-builder --mac --dir` 两次都在下载环节 600s 超时(Electron 本体已缓存)。
+  故本次 GUI 验证走「真 Electron 直接加载 out/」而非 `.app`,renderer/main 产物是同一套。
 
 - `packages/app/src/components/prompt-input/submit.test.ts` **加载即挂**(`Export named 'toaster' not found`),
   clean tree 同样失败 → 该文件当前零覆盖。
