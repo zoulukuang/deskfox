@@ -15,11 +15,21 @@ function tmpDir(tag: string): string {
   return dir
 }
 
+// ⚠ Windows:未 finalize 的 statement 会让 sqlite3_close 返回 BUSY,而 bun 的 close() 把它静默吞掉 →
+//   文件句柄不释放 → 本模块要断言的 renameSync 直接 EBUSY(POSIX 允许改名已打开的文件,Windows 不允许)。
+//   所以此处 statement 必须逐条 finalize,且用 close(true) —— 真有残留就抛出来,不留假绿。
 const bunOpener = (p: string): ReadonlyDb => {
   const db = new Database(p, { readonly: true })
   return {
-    all: (sql: string) => db.query(sql).all() as Array<Record<string, unknown>>,
-    close: () => db.close(),
+    all: (sql: string) => {
+      const stmt = db.prepare(sql)
+      try {
+        return stmt.all() as Array<Record<string, unknown>>
+      } finally {
+        stmt.finalize()
+      }
+    },
+    close: () => db.close(true),
   }
 }
 
@@ -29,7 +39,8 @@ function makeDb(dir: string, ids: string[], name = "opencode.db"): string {
   db.exec("CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)")
   const s = db.prepare("INSERT INTO migration (id, time_completed) VALUES (?, ?)")
   for (const id of ids) s.run(id, 1)
-  db.close()
+  s.finalize()
+  db.close(true)
   return p
 }
 
@@ -70,8 +81,10 @@ describe("checkAndQuarantineAheadDb", () => {
     const p = path.join(dir, "opencode.db")
     const db = new Database(p, { create: true })
     db.exec("CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, name TEXT)")
-    db.prepare("INSERT INTO __drizzle_migrations (name) VALUES (?)").run("0000_legacy")
-    db.close()
+    const legacy = db.prepare("INSERT INTO __drizzle_migrations (name) VALUES (?)")
+    legacy.run("0000_legacy")
+    legacy.finalize()
+    db.close(true)
     const r = checkAndQuarantineAheadDb(p, bunOpener)
     expect(r.quarantined).toBe(false)
     expect(existsSync(p)).toBe(true)

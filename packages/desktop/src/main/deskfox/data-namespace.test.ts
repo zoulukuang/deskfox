@@ -193,11 +193,20 @@ describe("applyDeskfoxDataNamespace (TC-3/4/5)", () => {
 // ── REQ-084① 迁移期污染检测(R8 T4 的 unit 部分)[feat: voice-preclear-batch] 2026-08-18 ──
 
 /** 单测 opener:prod 走 node:sqlite(bun resolve 不了),这里注入 bun:sqlite。 */
+// ⚠ statement 必须逐条 finalize + close(true):Windows 上残留句柄会让后续 renameSync 报 EBUSY,
+//   而 bun 的无参 close() 遇 SQLITE_BUSY 是静默吞掉的(详见 db-schema-startup-check.test.ts 同处注释)。
 const bunOpener = (p: string): ReadonlyDb => {
   const db = new Database(p, { readonly: true })
   return {
-    all: (sql: string) => db.query(sql).all() as Array<Record<string, unknown>>,
-    close: () => db.close(),
+    all: (sql: string) => {
+      const stmt = db.prepare(sql)
+      try {
+        return stmt.all() as Array<Record<string, unknown>>
+      } finally {
+        stmt.finalize()
+      }
+    },
+    close: () => db.close(true),
   }
 }
 
@@ -208,7 +217,8 @@ function seedRealDb(dir: string, name: string, ids: string[]) {
   db.exec("CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)")
   const s = db.prepare("INSERT INTO migration (id, time_completed) VALUES (?, ?)")
   for (const id of ids) s.run(id, 1)
-  db.close()
+  s.finalize()
+  db.close(true)
   return p
 }
 

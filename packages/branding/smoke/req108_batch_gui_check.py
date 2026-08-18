@@ -13,13 +13,15 @@
 # 用法:先让 local 版带 --remote-debugging-port=9222 跑起来,然后
 #   python3 packages/branding/smoke/req108_batch_gui_check.py
 import json
+import os
 import sys
 import time
 import urllib.request
 
 import websocket  # pip install websocket-client
 
-CDP = "127.0.0.1:9222"
+# 端口可配:Win 上 9222 常被别的 Chrome 实例先占住(连上去点的就是别人的页面)。
+CDP = os.environ.get("DESKFOX_CDP", "127.0.0.1:9222")
 
 
 def page_ws():

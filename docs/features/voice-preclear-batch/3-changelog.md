@@ -269,6 +269,9 @@ doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求�
 **判据留给下次**:再撞到即按 hover 时序修(补稳定等待),或按 R5 显式移除并记理由 ——
 不许靠 retry 掩盖。
 
+> **✅ 已收口(2026-08-18,Win 端)**:Win 上复现率更高(单跑 5 次红 1 次),按上面留的判据当场修掉 ——
+> 内层 `expect` 限时 + 每轮重置指针位置,`3c2ebdd359`。详见下方「Windows 侧回验」③。
+
 ## 收口后待办 —— 两条已落地,一条转 Win 端(2026-08-18 user 拍板)
 
 1. ✅ **Logic 清单登记**(user 拍板「收进去」):`db-schema-guard.ts` 已入《自动化测试规范》Logic 清单
@@ -281,11 +284,110 @@ doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求�
    —— ship 命令正本在**项目内** `.claude/commands/ship.md`(该目录已 gitignore,不入仓)。
    已加 **步骤 0.5 上游 schema 漂移检查**(信号制:只报数、脚本恒 exit 0、不阻断发版),
    结果进步骤 10 收尾报告;实跑验证:本地 38 条 / 上游 38 条 → `✅ 上游未领先,无 schema 漂移`。
-3. ⏭ **REQ-068 的 Windows 四模态真机抓 errno**:转 Win 端排期(归档行已记),与 mac 侧无关。
+3. ✅ **REQ-068 的 Windows 四模态真机抓 errno**(2026-08-18 Win 端已完成):原以为要 user 手动插拔 U 盘,
+   实际四模态都能无人值守复现(盘符未映射用空闲盘符、拔盘用 `subst` 建虚拟盘再 `/d` 卸掉)。
+   新脚本 `packages/branding/smoke/req068_path_probe_modes.ts`,实跑 **6/6 通过**。
+   最有价值的一条实测:**四种模态的真实 errno 全是 `ENOENT`** —— 单看 errno 分不出「目录被删」
+   与「整盘离线」,全靠 v2 加固的盘符根可达性二次探测,给那次 code-review 的修法补上了真机证据。
 
-**另记一处覆盖边界**(不单独排期):S1 的真机验收只在 mac 上做过(12/12)。
-`data-namespace.ts` 与检测链路没有任何平台分支(靠 `homedir()` + `path.join`),单测覆盖也充分,
-风险低 —— 建议 Win 端有排期时顺带跑一次真机脚本,不必为它单独开工。
+~~**另记一处覆盖边界**(不单独排期):S1 的真机验收只在 mac 上做过(12/12)。~~
+**✅ 已补(2026-08-18,Win 端)**:`verify-db-schema-guard.sh` 在 Win 上跑出 **12 通过 / 0 失败**,
+与 mac 侧逐条一致;`req084_toast_verify.py` 也已跑通(文件层隔离 + toast + 截图)。
+两个脚本为此做了跨平台改造,见下方「Windows 侧回验」。
+
+## Windows 侧回验(2026-08-18,Win 端执行)
+
+本批在 mac 上交付,Win 端按双端协作 SOP 逐项回验。**不是走过场** —— 查出 3 个 Win 独有缺陷,
+全部在 Win 端修完、当场验证,不留给下次。
+
+### 修掉的 3 个 Win 独有缺陷
+
+**① REQ-084① 单测句柄泄漏(`c52dc2b583`)** —— `db-schema-startup-check.test.ts` 两条隔离用例
+在 Win 上必红(`quarantined` 恒 false)。根因两层叠加:bun:sqlite 未 finalize 的 statement 让
+`sqlite3_close` 返回 SQLITE_BUSY,而 bun 无参 `close()` 把这个失败**静默吞掉** → 文件句柄不释放;
+POSIX 允许改名已打开的文件、Windows 不允许 → `quarantineDb` 的 `renameSync` 直接 EBUSY。
+**产品代码无缺陷**:诊断脚本实测 prod opener(node:sqlite)`close()` 后 `renameSync` 在 Win 上正常
+(未 close 时同样 EBUSY,close 后 OK),红的是测试 harness 的跨平台假设。
+改法:三处 `bunOpener` 即用即 finalize、三处造库 helper 补 `finalize()`,`close()` 一律换 `close(true)`
+—— 句柄真有残留就抛出来,不再静默吞(不留假绿)。
+
+**② 基线 drift 闸 `--check` 恒假红(`1a679037af`)** —— `gen-migration-baseline.mjs --check` 在 Win 上
+必红「生成物与目录不一致」,但重跑生成后 `git diff` 为空。根因:`render()` 永远吐 LF,而生成物被 git
+按 autocrlf checkout 成 CRLF,逐字节比较必然不等(mac 两边都是 LF,永不复现)。改法:比对前归一化行尾。
+同族的单测闸(`db-schema-guard.test.ts` T2)比的是 id 数组,本来就跨平台安全、未受影响。
+
+**③ `review-line-comment.spec.ts:47` flaky 转确定性修复(`3c2ebdd359`)** —— 即 mac 侧收口复查登记的
+那条「低频 flaky,当前不可复现 = 无可改对象」。Win 上复现率更高(单跑 5 次红 1 次),按 mac 侧留下的
+判据「再撞到即按 hover 时序修」执行。两个原因叠加使重试形同虚设:内层 `expect` 不传 timeout 就继承
+默认 10s == `toPass` 的全部预算,第一轮卡住即判负;且 Playwright 对同一坐标重复 `hover()` 不再产生
+mousemove,而 `data-hovered` 靠 mouseenter 驱动。改法:内层限时 1s + 每轮先 `page.mouse.move(0, 0)`
+挪开指针,总预算 10s → 15s。**没有加 retries** —— 是把等待时序修对。
+修后单用例连跑 10 轮 10/10 绿;反向验证(故意把断言属性改错)立刻变红,确认不是假绿。
+
+### 顺带完成的两条 mac 侧遗留
+
+- **真机脚本跨平台化**:`req084_toast_verify.py` 与 `verify-db-schema-guard.sh` 原本硬编码 mac
+  `.app` 路径 / `pkill` / `sqlite3` CLI / `md5 -q`,Win 上根本跑不起来。按元原则「绝对单一」改成
+  **同一份脚本跨平台**(不开 win 双版本):分平台的只有可执行文件路径、杀进程方式、homedir 的 env 名
+  (Win 上 node `os.homedir()` 读 USERPROFILE 不读 HOME);sqlite 与 md5 统一走 python
+  (两端自带、同一行为),顺带去掉对外部 `sqlite3` CLI 的依赖。
+- **sidecar 下载修复的 Win 侧验证**(`8d07ddcd0c`):Win 机器 npmrc 本就指向官方源,不踩 npmmirror
+  那个坑;实跑 `OPENCODE_CHANNEL=local bun run prebuild` 通过,装到
+  `@opencode-ai/cli-windows-x64-baseline@0.0.0-next-16350` 并落 `resources/opencode-cli.exe`。
+
+### Win 侧验收矩阵(全部实跑)
+
+| 项 | 结果 |
+|---|---|
+| `bun run typecheck`(全仓) | **33/33 successful** |
+| app 单测 | **1051 pass / 0 fail**(与 mac 一致) |
+| media-gen 单测 | **140 pass / 0 fail**(与 mac 一致) |
+| adapter-feishu-lark 单测 | **792 pass / 0 fail**(与 mac 一致) |
+| desktop 单测 | **267 pass / 1 fail** —— 修前 3 fail;剩的 1 条是存量 `draft-store` `node:sqlite`(上游引入,mac 侧同样红) |
+| opencode `test/project`+`test/session` | 默认超时 **557 pass / 5 fail** → 放宽到 60s **561 pass / 1 fail**(详见下方「5 条失败的定性」) |
+| Playwright 默认套件 | **142 passed / 0 failed**(`--workers=4`,4.6 分钟,EXIT=0)—— 修 flaky 前是 141/1 |
+| performance 全套 | **61 passed / 4 failed** → 4 条全是 30x CPU 节流下的绝对超时,降到 6x 后 **5/5 通过**(非回归,详见下) |
+| GUI · `req108_batch_gui_check.py`(本批专项) | **11/12 pass**,唯一失败是终端 PTY(见下方「另查出一条既有问题」) |
+| GUI · `smoke.py` 全量 | **22/22 pass / 0 警告 / 0 崩溃**(boot 1 + providers 9 + panels 5 + settings 6 + files 1) |
+| GUI · 文件预览定向验证 | **5/5 pass** —— PDF / docx / xlsx 均渲染出 canvas(走 pdf.js),图片出 img,md 出文本 |
+| 真机 · `verify-db-schema-guard.sh` T4/T5/T6 | **12 通过 / 0 失败**,与 mac 侧 12/12 一致 |
+| 真机 · `req084_toast_verify.py` | 通过 —— 文件层隔离产物 + toast 文案 + 截图三者齐全 |
+| 真机 · REQ-068 Windows 四模态 | **6/6 pass**(见 `stale-path-hardening`) |
+| 冷启动健康检查 | 干净配置目录首启 **CLEAN**;第二次启动复现终端 PTY 问题(见下) |
+
+**opencode 包那 5 条失败的定性**(逐条取证,不是一句"flaky"带过):
+4 条是 **Win 上默认 5s 超时不够**(`instance-bootstrap` ×2 / `glob tool` / `revert-compact`)——
+放宽到 60s 后全绿,`prompt.test.ts` 整文件 44/44、`revert-compact` 8/8。
+剩下 1 条 `snapshot-tool-race` 在 60s 下**仍然红**,查到是**上游测试自己的 POSIX shell 假设**:
+它用 `echo 'x' > D:\path
+ace-test.txt` 造文件,Win 上反斜杠被当转义、单引号不是引号 →
+文件根本没建出来,断言 `fileExists` 必然 false。属上游测试对 Win 的适配缺口,不是 fork 回归,未改上游。
+
+### 另查出一条既有问题(**非本批引入**,如实记录不顺手修)
+
+**重启后旧会话的终端连不上,且没有任何提示**。冷启动健康检查在**全新隔离配置目录**下:
+第一次启动 CLEAN;第二次启动(上次会话开过终端)必现一串 `404` +
+`Failed to update terminal Error: PTY session not found: pty_…`,终端面板空白、无 toast、页面无错误字样。
+
+定性:本批 42 笔 commit **完全没碰 pty/terminal**;报错点 `packages/app/src/context/terminal.tsx:271`
+是**纯上游文件**(零 FORK marker,最近改动全是上游 PR,如 #38463 pty transport)。
+即前端重启后仍持有旧 PTY 记录并去 update,服务端 404 后只 `console.error` 兜底。
+**影响**:不崩溃、不弹红字,但用户重开应用后旧会话的终端是空的且不说明原因。
+**处置**:超出本次「Win 侧回验」范围,且改的是上游文件 —— 只记录,建议单独排期(需 user 拍板)。
+
+### ⚠ 一条给下次的教训:Win 上 e2e 并发要压到 4
+
+首轮按默认 workers(=8,12 核机)跑 Playwright 默认套件,**连锁超时 17+ 条**,且通过用例耗时
+从 11s 一路涨到 1.1m,headless shell 进程堆到 31 个(8 workers 本应 ~8 个)—— 是资源堆积压垮机器,
+**不是回归**。降到 `--workers=4` 后 **141 passed / 1 failed、4.9 分钟**跑完,那 1 条就是上面的 flaky。
+同一台机上并行跑 Playwright + opencode 包测试也会互相毒化(opencode 那轮报出 100+ 条
+`ChildProcess.exitCode (git …)` 与 5s 整超时,单独跑则不复现)。**结论:Win 端跑全套要串行、
+e2e 显式 `--workers=4`。**
+
+**还有一条同源的**:刚打完包**别立刻**跑 e2e。打包产出 231MB exe + 整个 LibreOffice 目录,
+系统随后扫描这批新文件,期间跑同一套 e2e 得到 **10 failed / 20.3 分钟**;等它安静下来再跑,
+同一份代码 **142 passed / 4.6 分钟**。两轮的失败用例集**完全不重叠** —— 失败集每轮都在变、
+耗时数倍膨胀,就是负载问题的指纹,别当回归去查。
 
 ## 回退方法
 

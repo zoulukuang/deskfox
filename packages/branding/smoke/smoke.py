@@ -24,7 +24,9 @@ except Exception:
     pass
 import websocket  # pip install websocket-client
 
-CDP_HOST = "127.0.0.1:9222"
+# CDP 端口可配:Win 上 9222 常被别的 Chrome 实例(或用 CDP 驱动浏览器的脚本)先占住,
+# 此时连上去点的是别人的页面。用 DESKFOX_CDP 指到 DeskFox 实际监听的端口。
+CDP_HOST = os.environ.get("DESKFOX_CDP", "127.0.0.1:9222")
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 

@@ -111,8 +111,12 @@ function main() {
       console.error(`[baseline] ❌ 生成物不存在:${OUT_FILE}`)
       process.exit(1)
     }
+    // 行尾归一化后再比:Win 上 git 按 autocrlf 把生成物 checkout 成 CRLF,而 render() 永远吐 LF ——
+    // 逐字节比会在 Windows 上恒红,把人骗去重跑生成(重跑后 git diff 依旧为空,只会更困惑)。
+    // 本闸要守的是「id 清单有没有漂」,不是行尾字节。
+    const norm = (s) => s.replace(/\r\n/g, "\n")
     const actual = readFileSync(OUT_FILE, "utf8")
-    if (actual !== content) {
+    if (norm(actual) !== norm(content)) {
       console.error("[baseline] ❌ 生成物与 migration 目录实时清单不一致 —— 请重跑 node packages/branding/scripts/gen-migration-baseline.mjs")
       process.exit(1)
     }

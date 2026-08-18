@@ -33,7 +33,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] REQ-068:pre-check 决策单测(missing→skip+forget / unreachable→skip / ok→open / undefined→fail-open)+ `probePath` errno 分类单测
 - [x] REQ-061:三态判定单测(ENOENT→missing / present→不重绑 / 检查出错→保守不重绑)+ 既有重绑回归绿
 - [x] REQ-064:身份迁移后 stale id update 自愈集成测试(旧 id 404 → fromDirectory 重解析现行 id → update 成功)
-- [x] 真机 QA(需 user / 桌面)—— **mac 侧全部验通**:REQ-067 端到端 500→200(2026-07-02,见 `mac-qa-handoff.md` 待办 1);REQ-068 unreachable + REQ-061 offline 不误重绑(2026-07-06 真 U 盘 `diskutil unmount`,errno 实测 `ENOENT`,见 `mac-qa-handoff.md` 待办 2a/2b)。**仍欠 Windows 四模态**(目录删/改名/盘符未映射/U盘拔出)真机抓 errno,转 Win 端排期
+- [x] 真机 QA(需 user / 桌面)—— **mac 侧全部验通**:REQ-067 端到端 500→200(2026-07-02,见 `mac-qa-handoff.md` 待办 1);REQ-068 unreachable + REQ-061 offline 不误重绑(2026-07-06 真 U 盘 `diskutil unmount`,errno 实测 `ENOENT`,见 `mac-qa-handoff.md` 待办 2a/2b)。**Windows 四模态已补验**(2026-08-18,Win 端):目录删 / 改名 / 盘符未映射 / 可移动盘拔出,由 `packages/branding/smoke/req068_path_probe_modes.ts` 真机实测 **6/6 通过**。关键实测结论:**四种模态的真实 errno 全是 `ENOENT`** —— 只看 errno 根本区分不了「目录被删」与「整盘离线」,能分开全靠 v2 加固加的**盘符根可达性**二次探测(若无它,拔盘/未映射会被判 missing → forget 掉合法项目)。这与 mac 侧 REQ-070 实测 `ENOENT`(而非预期的 ENXIO/ETIMEDOUT)同向印证
 
 ## R8 测试用例清单(动工前定,逐条对应上方)
 

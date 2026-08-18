@@ -50,14 +50,20 @@ test("shows a comment button when a line number is hovered", async ({ page }) =>
   await expectAppVisible(lineNumber)
 
   const comment = review.getByRole("button", { name: "Comment", exact: true })
+  // 这段曾是低频 flaky(mac 侧 3 轮 1 红;Win 上 5 跑 1 红)。两个原因叠在一起:
+  //   ① 内层 expect 不传 timeout 就继承 expect 默认的 10s == toPass 的全部预算 —— 第一轮
+  //      卡住就直接判负,toPass 的「重试」名存实亡。内层给 1s,才真的能重试十几轮。
+  //   ② Playwright 对同一坐标重复 hover() 不会再产生 mousemove,而这里的 data-hovered 靠
+  //      mouseenter 驱动 —— 指针已停在目标上时,后续轮次永远等不到它。每轮先把指针挪开。
   await expect(async () => {
+    await page.mouse.move(0, 0)
     await lineNumber.hover()
-    await expect(lineNumber).toHaveAttribute("data-hovered", "")
-    await expect(comment).toHaveCount(1)
-    await expect(comment).toHaveCSS("pointer-events", "auto")
+    await expect(lineNumber).toHaveAttribute("data-hovered", "", { timeout: 1_000 })
+    await expect(comment).toHaveCount(1, { timeout: 1_000 })
+    await expect(comment).toHaveCSS("pointer-events", "auto", { timeout: 1_000 })
     await comment.focus()
-    await expect(comment).toBeFocused()
-  }).toPass({ timeout: 10_000 })
+    await expect(comment).toBeFocused({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
   await comment.press("Enter")
   await expect(review.getByRole("textbox")).toBeVisible()
   await expect(review.locator('[data-slot="line-comment-editor-label"]')).toHaveText("Commenting on line 1")
