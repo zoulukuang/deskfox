@@ -1,2 +1,8 @@
 packages/core/migration/**/snapshot.json linguist-generated
 packages/core/src/database/migration.gen.ts linguist-generated
+
+# FORK: i18n 文件行尾归一化 [feat: voice-preclear-batch] 2026-08-18
+# da/de/no/tr 四个文件混入 CRLF,每次上游同步动 i18n 必整文件冲突,且冲突全是假的
+# (账面 +5732/-4960,git diff -w 实为 +197/-4)。定向到 i18n 目录,不动全仓
+# (全仓 renormalize 会产生一次超大 diff,与上游 merge 的冲突面得不偿失)。
+packages/app/src/i18n/*.ts text eol=lf
