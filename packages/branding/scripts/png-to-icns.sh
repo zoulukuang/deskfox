@@ -40,11 +40,18 @@ trap "rm -rf $(dirname "$ICONSET_DIR")" EXIT
 
 # 按 iconset 命名规范从 ico-source/ 拷文件;source 缺哪档就跳过哪档
 # (.icns 不要求所有档齐全,缺档系统会从最近大档缩;但常用档建议齐全)
+# FORK: 记下缺档,收尾时显式报出来 —— 原实现静默跳过,导致 dev 档少了 512/1024 两个源图
+#   却一路无声:icns 封顶 128×128(8.5KB,prod 是 1024×1024/138KB),Retina 上图标被放大拉糊,
+#   直到 2026-08-18 user 肉眼发现才暴露。静默降级是最难查的一类问题,这里把它变成看得见的。
+#   [feat: dev-channel-icon-lowres] 2026-08-18
+MISSING_SIZES=()
 copy_if_exists() {
     local src="$SRC_DIR/$1"
     local dst="$ICONSET_DIR/$2"
     if [[ -f "$src" ]]; then
         cp "$src" "$dst"
+    else
+        MISSING_SIZES+=("$1")
     fi
 }
 
@@ -63,6 +70,16 @@ copy_if_exists "1024.png" "icon_512x512@2x.png"
 if [[ -z "$(ls -A "$ICONSET_DIR")" ]]; then
     echo "Error: no PNG copied — source dir empty or naming wrong (expected 16.png/32.png/...)" >&2
     exit 1
+fi
+
+# FORK: 缺档显式报警(尤其 512/1024 —— 少了它们 Retina 图标必糊)
+if [[ ${#MISSING_SIZES[@]} -gt 0 ]]; then
+    UNIQUE_MISSING=$(printf '%s\n' "${MISSING_SIZES[@]}" | sort -u | tr '\n' ' ')
+    echo "⚠️  ico-source 缺档: ${UNIQUE_MISSING}(源目录 $SRC_DIR)" >&2
+    if printf '%s\n' "${MISSING_SIZES[@]}" | grep -qE '^(512|1024)\.png$'; then
+        echo "⚠️  缺 512/1024 → 生成的 .icns 分辨率封顶,Retina 上图标会被放大拉糊。" >&2
+        echo "    修法:补齐源图后重跑;dev 档可用 bun packages/branding/scripts/gen-dev-icons.mjs 从矢量源重生成。" >&2
+    fi
 fi
 
 iconutil -c icns "$ICONSET_DIR" -o "$OUT_ICNS"
