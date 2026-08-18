@@ -215,6 +215,25 @@ doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求�
 归档行显式记 **Windows 四模态真机抓 errno 残留、转 Win 端排期**(D4 口径),不阻塞归档。
 `bash scripts/check-index-sync.sh` **全项 OK**(含僵尸 🔄 闸)。
 
+### 收口复查补的一条 · S1 renderer 侧 e2e(2026-08-18)
+
+**怎么发现的**:全批收口后按需求文档逐条回扫(计划的 16 个施工要点 + 1-spec 的 R8 清单),
+发现 S1 的 R8 清单 T1-T7 **全是 unit + 真机脚本,没有一条 e2e** —— 而 S1 是 Medium,
+按 R5 决策 1(v4 起硬门槛)应当有 ≥ 1 条 Phase 1 e2e happy path。
+`packages/app/e2e` 全仓 grep `quarantine` 零命中,坐实缺口:
+「主进程说 db 被隔离了 → 用户真的看见解释」这条链路,此前只有**真机脚本**
+(`branding/smoke/req084_toast_verify.py`,要造超前 db、手动跑)验过。
+真机脚本是验收证据,**不是回归网** —— 它不进 pre-push、不进默认套件,renderer 一旦被改坏没人拦。
+
+**补的东西**:`packages/app/e2e/regression/db-quarantine-toast.spec.ts`(3 条)——
+注入最小 `window.deskfox` 桥让 `DbQuarantineMonitor` 走真实分支(它在 web 模式下会直接 return),
+然后断言:① startup 隔离要说清「已另存备份 + 文件没有被删除 + 具体去哪找」;
+② migrate 期要说清「未迁入 + 账号与配置已正常迁入 + 原文件已保留」;③ 没有通知时**一条都不许弹**。
+
+**做了反向验证(不留假绿)**:故意把注入桥响应的命令名改错 → 两条断言用例立刻变红、
+第三条(无通知不弹)保持绿,符合预期;改回后 3/3 绿。
+这一步是本批 S2 的直接教训 —— `home-tab-navigation` 那条测试当年就是「看着在测、其实什么都没测到」。
+
 ## 全批验收(2026-08-18)
 
 | 项 | 结果 |
@@ -226,7 +245,7 @@ doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求�
 | adapter-feishu-lark 单测 | **792 pass / 0 fail** |
 | opencode `test/project` + `test/session` | **575 pass / 0 fail**(首轮 1 fail,重跑即过 —— 属记忆里那群"压力 flaky",判别要点就是先重跑) |
 | desktop 单测 | 262 pass / **1 fail(存量,见下)** |
-| Playwright 默认套件 | **139 passed** |
+| Playwright 默认套件 | **142 passed**(139 + 本次补的 `db-quarantine-toast.spec.ts` 3 条);收口复查连跑 3 轮 = 141/142、142/142、142/142,见下方 flaky 登记 |
 | performance 全套 | **65 passed × 3 轮** |
 
 **desktop 那 1 fail 是存量、上游引入,不是本批回归**:`src/main/draft-store.test.ts` 加载即挂,
@@ -236,6 +255,29 @@ doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求�
 `git show main:packages/desktop/src/main/draft-store.ts` 可见 main 上同样如此。
 惰性化 import 也救不了(测试要真的调 `createDesktopDraftStore()`,运行时照样需要该模块),
 真修得给 driver 做注入 —— 那是改上游文件 + 改上游测试,超出本批范围,已记入长期记忆备查。
+
+### flaky 登记 · `review-line-comment.spec.ts:47`(默认套件,低频)
+
+收口复查跑默认套件时撞到一次:「shows a comment button when a line number is hovered」红,
+报 hover 后按钮不出现。**随后取证**:单跑该文件 **5/5 绿**;默认套件再连跑两轮 **142/142、142/142**。
+→ 3 轮里 1 次红,**低频 flaky**,不是本批引入的确定性回归(本批改动完全不碰 review 路径,
+只有新增的 3 条 spec 让套件略长)。
+
+按 R5「flaky 48 小时内修或移除」的现实约束:**当前不可复现 = 无可改对象**,先登记不动手。
+**判据留给下次**:再撞到即按 hover 时序修(补稳定等待),或按 R5 显式移除并记理由 ——
+不许靠 retry 掩盖。
+
+## 收口后待办(需 user 拍板 / 转他人)
+
+1. **Logic 清单登记**(本批唯一没走完的治理动作):计划 S1 要求「检测逻辑抽纯函数进 Logic 清单
+   (R5 行覆盖 ≥80%)」。纯函数已抽出,**覆盖率实测达标** ——
+   `db-schema-guard.ts` **100%** / `db-schema-guard-io.ts` 83.9% / `db-schema-startup-check.ts` 94.1% /
+   `db-quarantine-notice.ts`(app 侧)100%。但《自动化测试规范》决策 2 写明**进入 Logic 清单需 user 拍板**,
+   所以清单本身还没动。建议把 `db-schema-guard.ts` 收进清单(它是最该长期守住 80% 的一条:
+   判错就是用户数据被误隔离)。
+2. **`gen-migration-baseline.mjs --check-upstream` 接入发版 SOP**:本机 `~/.claude/commands/ship.md`
+   当前不存在(只有 `.bak`),不擅自改 user 本机文件,待 user 确认接入方式。
+3. **REQ-068 的 Windows 四模态真机抓 errno**:转 Win 端排期(归档行已记),与 mac 侧无关。
 
 ## 回退方法
 
