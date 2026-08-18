@@ -33,7 +33,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] REQ-068:pre-check 决策单测(missing→skip+forget / unreachable→skip / ok→open / undefined→fail-open)+ `probePath` errno 分类单测
 - [x] REQ-061:三态判定单测(ENOENT→missing / present→不重绑 / 检查出错→保守不重绑)+ 既有重绑回归绿
 - [x] REQ-064:身份迁移后 stale id update 自愈集成测试(旧 id 404 → fromDirectory 重解析现行 id → update 成功)
-- [ ] 真机 QA(需 user / 桌面):REQ-068 四模态(目录删/改名/盘符未映射/U盘拔出)冷启动出引导无裸 500;REQ-061 改名重加显示新名 + 网络盘/U盘 offline 不误重绑;REQ-067 mac 端到端 500→200(挂 mac 借机/CI)
+- [x] 真机 QA(需 user / 桌面)—— **mac 侧全部验通**:REQ-067 端到端 500→200(2026-07-02,见 `mac-qa-handoff.md` 待办 1);REQ-068 unreachable + REQ-061 offline 不误重绑(2026-07-06 真 U 盘 `diskutil unmount`,errno 实测 `ENOENT`,见 `mac-qa-handoff.md` 待办 2a/2b)。**仍欠 Windows 四模态**(目录删/改名/盘符未映射/U盘拔出)真机抓 errno,转 Win 端排期
 
 ## R8 测试用例清单(动工前定,逐条对应上方)
 

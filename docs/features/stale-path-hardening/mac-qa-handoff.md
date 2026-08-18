@@ -96,9 +96,15 @@ Windows/NTFS 根本不触发这个 500(详见版本计划「Windows 迁移实测
   - **`.gitignore` 归一 tail 命中验证**:测试项目含 `.gitignore`(`node_modules/` `*.log` `build/`)。小写路径下 `node_modules/` `build/` `debug.log` 均 **`ignored:true`**,与大写规范路径(对照组)**逐条一致** → 证 `ignoreRelativePath` 大小写归一后 `.gitignore` 规则仍精确命中、不泄漏。
   - **实测 RangeError**:真实 `ignore@7` 复现 —— `path.relative("…Deskfox-Plugins","…deskfox-plugins/.git")` = `"../deskfox-plugins/.git"` → `ig.ignores()` 抛 **`RangeError: path should be a path.relative()'d string`**(坐实根因);经 `ignoreRelativePath` 归一为 `".git/"`/`"node_modules/"` + `safeIgnores` 兜底后不再抛。
   - **透明说明**:`.git` 本身返回里 `ignored:false`(显示)——因它未写进 `.gitignore`,`ignore` 库不隐式忽略;小写/大写两路径行为**一致**,与本修复无关(前端文件树另有 `.git` 过滤)。不影响验收。
-- [ ] 待办 2a（REQ-068 unreachable）:结果 = ______;实际 errno = ______;toast 文案 = ______;lastProject 是否保留 = ______
-- [ ] 待办 2b（REQ-061 不误重绑）:结果 = ______;offline 期间 worktree = ______;插回后是否完好 = ______
+- [x] **待办 2a（REQ-068 unreachable）:通过 ✅**(2026-07-06,真实 U 盘 `/Volumes/WININSTALL` + `diskutil unmount`,local 版 CDP;交付批次 [REQ-070](../project-continuity-v2026-8-4/3-changelog.md))
+  - **结果**:probe 判定从 `missing` 走到 `unreachable`;冷启动 **lastProject 不清、projects 列表保留**,弹 unreachable 引导 toast(非裸 500);U 盘重挂后恢复正常 —— 全 PASS。
+  - **实际 errno**:`ENOENT`(macOS `diskutil unmount` 后挂载点整体消失,不是 `ENXIO`/`ETIMEDOUT`);probe 结果携带 `code:"ENOENT"` 供诊断,见 `project-continuity-v2026-8-4/3-changelog.md:121`。
+  - **顺带抓出并修掉的平台盲区**:macOS 上 `path.parse().root` 恒为 `/`,导致外置盘拔出被误判成「系统盘还在 → forget 项目」;修法是新增 `mountRootOf`(`packages/desktop/src/main/fs-probe.ts`),有 bug-repro 单测 A2e/A2f 护住。
+- [x] **待办 2b（REQ-061 不误重绑）:通过 ✅**(同批同场景)
+  - **结果**:offline 期间 git `worktree` **不误重绑**(三态判定走「检查出错 → 保守不重绑」分支),盘插回后项目身份完好、无残留错绑。
 
-> **待办 2（2a+2b）延期**:需物理拔插外置盘/U盘造 unreachable errno,已记入 OPENCODE-PLAN 需求池作为未来待办(见 `需求池/stale-path-mac-物理盘QA.md`),待有可插拔盘时按本文件步骤补验。
+> **待办 2 的实际完成路径**:本文件写下时判断「需物理盘、当下做不了」,遂延期记入 OPENCODE-PLAN `需求池/stale-path-mac-物理盘QA.md`(= REQ-070)。该条**已于 2026-07-06 用真 U 盘做完并归档**,2a/2b 全 PASS。
+> 2026-08-18 前置清障批 S5 回填本段 —— 不是补做,是把早已做完的结果接回它的出处。
+> **仍欠**:Windows 四模态(目录删 / 改名 / 盘符未映射 / U盘拔出)真机抓 errno,转 Win 端排期,与本文件的 mac 交接无关。
 
 填完请把 `3-changelog.md`「待办」段 + 版本计划 `v2026.6.21.md` 对应 ⏳ 项勾掉,并在改动日志补一行 mac QA 通过。
