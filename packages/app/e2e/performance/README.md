@@ -8,6 +8,17 @@
      见 `docs/governance/自动化测试规范.md` §performance 组的归属。
      2026-08-18 [feat: voice-preclear-batch] -->
 
+<!-- FORK: Windows 侧跑法(2026-08-18 Win 端回验实测,第三个坑)——
+     `timeline/session-timeline-benchmark.spec.ts` 那 4 条 streaming 用例在 Win 上按默认参数
+     **必然超时红**:默认 `TIMELINE_CPU_THROTTLE=30` + `TIMELINE_COMPLETION_TIMEOUT_MS=420000`
+     是按 mac 单核性能定的绝对阈值,同样 160 个 delta 在本机 30x 节流下跑不进 7 分钟。
+     **这不是回归**:降到 `TIMELINE_CPU_THROTTLE=6` 后 4 条全过,且指标显示逻辑完全正常
+     (`maxObservedProgressIndex=160`、`pendingDeltas=0`、完成耗时 77-91s)。
+     基准阈值**不要为了让 Win 变绿去改**——固定阈值正是这组的价值所在;Win 侧复跑用:
+       TIMELINE_CPU_THROTTLE=6 bunx playwright test --config e2e/performance/playwright.config.ts          e2e/performance/timeline/session-timeline-benchmark.spec.ts
+     另记:整套在 Win 上约 34 分钟,mac 约 10 分钟,判断"卡住了没"时按这个量级预期。
+     2026-08-18 [feat: voice-preclear-batch] -->
+
 The app's high-volume performance diagnostics live under `packages/app/e2e/performance` and are excluded from normal local and CI Playwright discovery. The benchmark config builds the app and serves the production bundle before running scenarios serially.
 
 Run the suite explicitly from `packages/app`:
