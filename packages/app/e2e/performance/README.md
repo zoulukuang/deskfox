@@ -1,5 +1,13 @@
 # Manual app performance suite
 
+<!-- FORK: DeskFox 侧的归属已钉死 —— 这一组**进发版验收清单、不进 pre-push**。
+     **一定要走 `bun run test:bench`**:裸跑 `playwright test --config e2e/performance/playwright.config.ts`
+     会把 `timeline-stability/fixture.test.ts`(bun 单测)也收进来 → Node ESM loader 抛
+     `Received protocol 'bun:'`,一条用例都跑不起来;过滤 `"\.spec\.ts$"` 挂在 test:bench 脚本上。
+     跑法契约与另外两个坑(e2e 布局基线是经典布局且 URL 形状要跟着换 / 放宽视觉不变量必须先探针实测)
+     见 `docs/governance/自动化测试规范.md` §performance 组的归属。
+     2026-08-18 [feat: voice-preclear-batch] -->
+
 The app's high-volume performance diagnostics live under `packages/app/e2e/performance` and are excluded from normal local and CI Playwright discovery. The benchmark config builds the app and serves the production bundle before running scenarios serially.
 
 Run the suite explicitly from `packages/app`:

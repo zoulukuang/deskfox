@@ -6,7 +6,9 @@ export type VisualInvariant<RegionName extends string = string> =
   | { type: "required"; regions: readonly RegionName[] }
   | { type: "continuous-any"; regions: readonly RegionName[] }
   | { type: "unique"; regions: readonly RegionName[] }
-  | { type: "stable"; regions: readonly RegionName[] }
+  // FORK: `maxRemounts` —— 默认 0(区域全程同一个 DOM 节点)。只在**有实测依据**证明重挂载
+  //   不可感知时才放宽,并在用例处写明依据。2026-08-18 [feat: voice-preclear-batch]
+  | { type: "stable"; regions: readonly RegionName[]; maxRemounts?: number }
   | { type: "fixed"; regions: readonly RegionName[]; tolerance?: number }
   | { type: "opacity"; regions: RegionSet<RegionName>; floor?: number }
   | {
@@ -16,7 +18,10 @@ export type VisualInvariant<RegionName extends string = string> =
       maxReversals?: number
       maxPositionReversals?: number
     }
-  | { type: "continuity"; regions: RegionSet<RegionName> }
+  // FORK: `maxGapFrames` —— 默认 0(挂载后一帧都不许缺席/空白)。与 `stable.maxRemounts` 配套:
+  //   一次真实重建必然同时产生「换节点」和「中间那几帧没有」,只放宽前者会被后者原样拦下。
+  //   同样只在有实测依据时放宽,并在用例处写明。2026-08-18 [feat: voice-preclear-batch]
+  | { type: "continuity"; regions: RegionSet<RegionName>; maxGapFrames?: number }
   | { type: "label-stability"; regions: RegionSet<RegionName> }
   | { type: "flow"; regions: readonly RegionName[]; overlapTolerance?: number }
   | { type: "preserve-bottom-anchor" }

@@ -3,7 +3,20 @@ import { expectSessionTitle } from "../../utils/waits"
 import { mockOpenCodeServer } from "../../utils/mock-server"
 import { benchmark, expect, withBenchmarkPage } from "../benchmark"
 import { fixture } from "./session-timeline-stress.fixture"
-import { installStressSessionTabs, stressSessionHref } from "./timeline-test-helpers"
+import { base64Encode } from "@opencode-ai/core/util/encode"
+import { installStressSessionTabs } from "./timeline-test-helpers"
+
+// FORK: 这条基准测的是「孤儿最新轮的 hydration」—— 纯数据层行为,与界面布局无关,它本来也没装
+//   新布局设置(= 跑在经典布局)。但它 goto 用的是 `stressSessionHref` 生成的**新布局** URL
+//   `/server/<key>/session/<id>`,经典布局路由表里没有这个形状,冷启动会被弹回新会话空页 →
+//   等 session 标题必然超时(REQ-117 A 族真根因,与冷启动耗时无关)。
+//   改用经典布局自己的 `/<dir>/session/<id>`,让 URL 与布局对上。
+//   (试过反向对齐——补装新布局设置——但那样 target 的父消息会落到视口外,hydration 观测条件
+//   `last` 永不满足、整条测试挂到超时;测试意图是数据层,不该被布局差异牵着走。)
+//   2026-08-18 [feat: voice-preclear-batch]
+function legacyStressSessionHref(sessionID: string) {
+  return `/${base64Encode(fixture.directory)}/session/${sessionID}`
+}
 import { measureSessionSwitch, waitForStableTimeline } from "./session-tab-switch-probe"
 
 type ParentHydrationBenchmarkMode = "natural" | "candidate"
@@ -43,15 +56,20 @@ const target = fixture.sessions.find((session) => session.id === fixture.targetI
 const lastID = userID
 const lastAssistant = assistants.at(-1)!
 const lastPart = lastAssistant.parts.at(-1)!
-const lastPartID =
-  lastPart.type === "tool"
-    ? lastPart.id
-    : `${lastAssistant.info.id}:${lastPart.type}:${lastAssistant.parts.filter((part) => part.type === lastPart.type).length - 1}`
+// FORK: 非 tool part 的 `data-timeline-part-id` 早已不是 `<msgID>:<type>:<序号>` 合成键,
+//   而是统一用 part 自己的 id(探针实测:DOM 里挂的是 `prt_parent_hydration_13_0`,
+//   合成键 `msg_parent_hydration_13:text:0` 在页面上根本不存在)。于是 `requiredPartVisible`
+//   恒为 false,measureSessionSwitch 永远等不到稳定态、整条测试挂到超时 —— 这是 A 族第二层根因,
+//   与冷启动耗时同样无关。2026-08-18 [feat: voice-preclear-batch]
+const lastPartID = lastPart.id
 
 benchmark("hydrates an orphaned latest turn after a cold session click", async ({ browser, report }, testInfo) => {
   benchmark.setTimeout(180_000)
   const results = [] as Awaited<ReturnType<typeof trial>>[]
-  for (let run = 0; run < 5; run++) {
+  // FORK: 轮次可调(同 `SESSION_TAB_SWITCH_RUNS` 的做法)—— 调查耗时构成时不必每次都跑满 5 轮。
+  //   2026-08-18 [feat: voice-preclear-batch]
+  const runs = Number(process.env.SESSION_PARENT_HYDRATION_RUNS ?? 5)
+  for (let run = 0; run < runs; run++) {
     results.push(
       await withBenchmarkPage(
         browser,
@@ -132,11 +150,11 @@ async function trial(page: Page, mode: ParentHydrationBenchmarkMode) {
     })
   })
   await installStressSessionTabs(page, { sessionIDs: [fixture.sourceID] })
-  await page.goto(stressSessionHref(fixture.sourceID))
+  await page.goto(legacyStressSessionHref(fixture.sourceID))
   await expectSessionTitle(page, fixture.expected.sourceTitle)
   await waitForStableTimeline(page, fixture.expected.sourceMessageIDs.at(-1)!)
 
-  const href = stressSessionHref(fixture.targetID)
+  const href = legacyStressSessionHref(fixture.targetID)
   await page.evaluate(
     ({ href, title }) => {
       const link = document.createElement("a")

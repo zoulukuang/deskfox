@@ -32,7 +32,7 @@
     "test:e2e:web-share": "playwright test -c playwright.web-share.deskfox.config.ts",
     "test:e2e:report": "playwright show-report e2e/playwright-report",
     "test:stability": "bun test ./e2e/performance/unit/visual-stability.test.ts && playwright test --config e2e/performance/timeline-stability/playwright.config.ts",
-    "test:bench": "bun test ./e2e/performance/unit && playwright test --config e2e/performance/playwright.config.ts"
+    "test:bench": "bun test ./e2e/performance/unit && playwright test --config e2e/performance/playwright.config.ts \"\\.spec\\.ts$\""
   },
   "license": "MIT",
   "devDependencies": {

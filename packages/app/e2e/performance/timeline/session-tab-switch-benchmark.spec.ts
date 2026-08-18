@@ -42,7 +42,7 @@ benchmark(
             await withBenchmarkPage(
               browser,
               `session-tab-switch-v2-${reviewPane}-${mode}-${run}`,
-              (page) => trial(page, mode, { newLayoutDesigns: true, reviewPane }),
+              (page) => trial(page, mode, { reviewPane }),
               testInfo,
             ),
           )
@@ -53,14 +53,15 @@ benchmark(
   },
 )
 
-async function trial(
-  page: Page,
-  mode: "cold" | "hot",
-  options?: { newLayoutDesigns?: boolean; reviewPane?: "closed" | "open" },
-) {
-  const reviewDiffs = options?.newLayoutDesigns ? createReviewDiffs() : undefined
+// FORK: 新布局设置从「只有 review 对比那条装」改成「两条都装」—— `stressSessionHref` 生成的是
+//   新布局的 `/server/<key>/session/<id>`,经典布局的路由表里根本没有这个形状(它走
+//   `/<dir>/session/<id>`),于是冷启动直接被弹回新会话空页、等 session 标题必然超时
+//   (REQ-117 A 族真根因,与冷启动耗时无关)。且本文件切会话点的是 titlebar tabs,那本就是新布局才有的
+//   部件 —— 这条基准从来就只在新布局下成立。2026-08-18 [feat: voice-preclear-batch]
+async function trial(page: Page, mode: "cold" | "hot", options?: { reviewPane?: "closed" | "open" }) {
+  const reviewDiffs = options?.reviewPane ? createReviewDiffs() : undefined
   await mockStressTimeline(page, { vcsDiff: reviewDiffs })
-  if (options?.newLayoutDesigns) await installTimelineSettings(page)
+  await installTimelineSettings(page)
   await installStressSessionTabs(page)
   if (mode === "hot") {
     await page.goto(stressSessionHref(fixture.targetID))
