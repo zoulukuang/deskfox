@@ -107,8 +107,10 @@ desktop 168 pass、app 1051 pass、typecheck 33/33,全 0 fail。
 **与 spec 的出入**:1-spec §3-S1 写「66 个 migration」,实测 `migration.gen.ts` 与目录均为 **38 条**,
 已按实际取数(spec 锁版后只补不改,此处记录)。
 
-**遗留待办**:`gen-migration-baseline.mjs --check-upstream` 尚未接入发版 SOP。
-本机 `~/.claude/commands/ship.md` 当前不存在(只有 `ship.md.bak`),状态待 user 确认后再接。
+**~~遗留待办~~ 已收口**:`gen-migration-baseline.mjs --check-upstream` **已接入发版 SOP**
+(`.claude/commands/ship.md` 步骤 0.5,信号制不阻断)。
+此前写「`~/.claude/commands/ship.md` 不存在」是**找错地方**了 —— ship 命令正本在**项目内**
+`.claude/commands/ship.md`(该目录已 gitignore,不入仓,所以不在用户级目录里)。详见文末待办段。
 
 ### S2 · REQ-117 performance e2e 套件复活(2026-08-18)
 
@@ -267,17 +269,23 @@ doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求�
 **判据留给下次**:再撞到即按 hover 时序修(补稳定等待),或按 R5 显式移除并记理由 ——
 不许靠 retry 掩盖。
 
-## 收口后待办(需 user 拍板 / 转他人)
+## 收口后待办 —— 两条已落地,一条转 Win 端(2026-08-18 user 拍板)
 
-1. **Logic 清单登记**(本批唯一没走完的治理动作):计划 S1 要求「检测逻辑抽纯函数进 Logic 清单
-   (R5 行覆盖 ≥80%)」。纯函数已抽出,**覆盖率实测达标** ——
-   `db-schema-guard.ts` **100%** / `db-schema-guard-io.ts` 83.9% / `db-schema-startup-check.ts` 94.1% /
-   `db-quarantine-notice.ts`(app 侧)100%。但《自动化测试规范》决策 2 写明**进入 Logic 清单需 user 拍板**,
-   所以清单本身还没动。建议把 `db-schema-guard.ts` 收进清单(它是最该长期守住 80% 的一条:
-   判错就是用户数据被误隔离)。
-2. **`gen-migration-baseline.mjs --check-upstream` 接入发版 SOP**:本机 `~/.claude/commands/ship.md`
-   当前不存在(只有 `.bak`),不擅自改 user 本机文件,待 user 确认接入方式。
-3. **REQ-068 的 Windows 四模态真机抓 errno**:转 Win 端排期(归档行已记),与 mac 侧无关。
+1. ✅ **Logic 清单登记**(user 拍板「收进去」):`db-schema-guard.ts` 已入《自动化测试规范》Logic 清单
+   (v8.1),实测行覆盖 **100%**,清单下写明理由 —— 一个纯函数守着「改名挪走用户数据库」这个
+   不可逆动作,判错代价是用户数据被误隔离,且判定规则本身带两个易错边界
+   (只认 `^\d{14}_` 时间戳形态 id / 读不出一律 fail-open)。
+   同族的 `db-schema-guard-io.ts`(83.9%)、`db-schema-startup-check.ts`(94.1%)、
+   `app/src/utils/db-quarantine-notice.ts`(100%)当前也在 80% 以上,但含 IO / 接线,不算纯 logic,不入清单。
+2. ✅ **`--check-upstream` 接入发版 SOP**:此前记「`~/.claude/commands/ship.md` 不存在」是**找错地方了**
+   —— ship 命令正本在**项目内** `.claude/commands/ship.md`(该目录已 gitignore,不入仓)。
+   已加 **步骤 0.5 上游 schema 漂移检查**(信号制:只报数、脚本恒 exit 0、不阻断发版),
+   结果进步骤 10 收尾报告;实跑验证:本地 38 条 / 上游 38 条 → `✅ 上游未领先,无 schema 漂移`。
+3. ⏭ **REQ-068 的 Windows 四模态真机抓 errno**:转 Win 端排期(归档行已记),与 mac 侧无关。
+
+**另记一处覆盖边界**(不单独排期):S1 的真机验收只在 mac 上做过(12/12)。
+`data-namespace.ts` 与检测链路没有任何平台分支(靠 `homedir()` + `path.join`),单测覆盖也充分,
+风险低 —— 建议 Win 端有排期时顺带跑一次真机脚本,不必为它单独开工。
 
 ## 回退方法
 
