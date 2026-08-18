@@ -29,7 +29,10 @@ import { ensureDeskfoxPlugins } from "./deskfox/plugin-install"
 //   [feat: deskfox-data-namespace-isolation] 2026-07-12
 import { applyDeskfoxDataNamespace } from "./deskfox/data-namespace"
 // FORK: 存量库孤儿行清理(上游迁移 20260612174303 撞外键导致 sidecar 起不来)[feat: db-orphan-prune] 2026-08-12
-import { pruneOrphanProjectDirectories } from "./deskfox/db-orphan-prune"
+import { pruneOrphanProjectDirectories, resolveSidecarDbPath } from "./deskfox/db-orphan-prune"
+// FORK: REQ-084① 启动期迁移污染检查(超前 schema db 隔离自愈)[feat: voice-preclear-batch] 2026-08-18
+import { checkAndQuarantineAheadDb } from "./deskfox/db-schema-startup-check"
+import { setDbQuarantineNotice } from "./deskfox/db-quarantine-notice"
 // FORK: local 档配置隔离首启 seed [feat: local-config-isolation] 2026-08-12
 import { seedLocalConfigIfMissing } from "./deskfox/config-dir-resolve"
 import { restorePreventSleep } from "./deskfox/prevent-sleep"
@@ -331,6 +334,20 @@ const main = Effect.gen(function* () {
   const namespaceResult = TEST_ONBOARDING
     ? undefined
     : yield* Effect.promise(() => applyDeskfoxDataNamespace())
+
+  // FORK-BEGIN: REQ-084① 迁移污染检测 —— 必须在 data-namespace 之后(才知道库在哪)、
+  //   orphan-prune 与 sidecar 之前(那两者都会打开这个库;超前库让它们一起崩)。
+  //   判超前 → 挪成 opencode.db.incompatible-<ts>(保留可恢复)→ core 以空库重起 → toast 告知。
+  //   不抛异常;正常库零写入。[feat: voice-preclear-batch] 2026-08-18
+  if (!TEST_ONBOARDING) {
+    const guard = checkAndQuarantineAheadDb(resolveSidecarDbPath(app.isPackaged))
+    if (guard.quarantined) {
+      setDbQuarantineNotice({ kind: "startup", dbNames: guard.dbName ? [guard.dbName] : [], dir: guard.dir })
+    } else if (namespaceResult?.quarantinedDbs?.length) {
+      setDbQuarantineNotice({ kind: "migrate", dbNames: namespaceResult.quarantinedDbs, dir: namespaceResult.dataHome })
+    }
+  }
+  // FORK-END
 
   // FORK: 存量库孤儿行清理 —— 必须在 data-namespace 之后(才知道库在哪)、sidecar 之前(迁移由它跑)。
   //   上游迁移 20260612174303_project_dir_strategy 会因孤儿 project_directory 行撞外键而失败,
