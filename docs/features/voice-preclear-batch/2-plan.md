@@ -67,7 +67,10 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
 
 **commit 1 · 纯逻辑 + 基线生成**(Logic 清单,行覆盖 ≥80%):
 1. `scripts/gen-migration-baseline.mjs`:读 `packages/core/src/database/migration/` 目录名 →
-   生成 `packages/desktop/src/main/deskfox/migration-baseline.generated.ts`(66 id,提交入仓)。
+   生成 `packages/desktop/src/main/deskfox/migration-baseline.generated.ts`(66 id,提交入仓);
+   同脚本实现 `--check-upstream`(拉上游仓 migration 目录清单对比,输出领先条数;网络失败输出
+   「未检查成功」退出码 0 不阻塞)。ship SOP 增补一步跑它(实施时同步改 `~/.deskfox-signing/ship.md`,
+   对应记忆 `preship-upstream-schema-drift-check`)。
 2. `deskfox/db-schema-guard.ts`:`assessJournal(ids, baseline)`(判定规则见 1-spec §3-S1)。
 3. 单测:R8 T1(五类输入)+ T2(drift 闸:生成物 vs 目录实时清单)。
 
@@ -126,3 +129,7 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
 ## 决策轨迹(开发中实时追加)
 
 - 2026-08-18 立项,spec 待审签。
+- 2026-08-18 user 拍板 D1/D2:按推荐(迁移期不迁超前 db + 启动期隔离挪走,含降级边界接受)。
+- 2026-08-18 user 提议「发版前查上游数据库格式变化并做兼容」,讨论后细化为**信号制**:
+  `gen-migration-baseline.mjs --check-upstream` 输出上游领先条数进发版报告,由 user 决定是否排
+  REQ-103 式同步;不当场兼容、不阻断发版。已立记忆 `preship-upstream-schema-drift-check`。

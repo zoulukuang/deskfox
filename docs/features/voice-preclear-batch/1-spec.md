@@ -66,7 +66,7 @@ fork 已随 2026.10.0 把 core 升到 1.18.16,但 REQ-103 §3 写死的强绑定
 | 文件 | 性质 | 内容 |
 |---|---|---|
 | `deskfox/migration-baseline.generated.ts` | 新增(生成物,提交入仓) | `MIGRATION_BASELINE: string[]`(66 个 id) |
-| `scripts/gen-migration-baseline.mjs` | 新增 | 从 `packages/core/src/database/migration/` 目录名生成上面文件 |
+| `scripts/gen-migration-baseline.mjs` | 新增 | 从 `packages/core/src/database/migration/` 目录名生成上面文件;**另带 `--check-upstream` 模式**(2026-08-18 user 提议,细化为信号制拍板):对比上游仓 migration 目录清单 vs fork 基线,输出「上游领先 N 条」,接入发版 SOP 作为「是否该排上游同步」的信号 —— **不是**发现变化就当场兼容/阻断发版(兼容只有升内核一条路,不与发版挤同一窗口;检查失败不阻塞,标注即可) |
 | `deskfox/db-schema-guard.ts` | 新增(Logic 清单) | 纯函数:`assessJournal(ids, baseline)` → `compatible / ahead / unknown` |
 | `deskfox/db-schema-guard-io.ts` | 新增 | IO 壳:`node:sqlite` 只读读 journal(driver 可注入,单测用 `bun:sqlite`)+ 隔离挪档 |
 | `deskfox/data-namespace.ts` | 修改(fork-only 文件) | copy filter 接入迁移期判定 |
@@ -190,8 +190,8 @@ doc 迁 `需求池/已完成/` + `bash scripts/check-index-sync.sh` 全项 OK;**
 
 | # | 决策点 | 推荐 | 备选与理由 |
 |---|---|---|---|
-| D1 | S1 迁移期检测到超前 db 怎么办 | **不迁该 db**(auth/config 照迁,空库起步 + toast 告知) | 仅告警照迁 = 等于没修(污染照样进 ns);拒绝启动 = 过重(auth/config 本可无损保住) |
-| D2 | S1 启动期(历史遗留/存量污染)检测到 ns 内 db 超前怎么办 | **挪走 `opencode.db.incompatible-<ts>`(保留)+ 空库起 + toast** | 仅告警不挪 = sidecar 照崩、无自愈,违背 REQ-084 原语义。⚠ 已知边界:updater `allowDowngrade=true` 下用户被降级/主动降级后,自家新 db 也会判超前触发同一处置 —— 把「静默永久坏」换成「显式隔离、文件可手动恢复」,推荐接受并写进 changelog 已知边界 |
+| D1 | S1 迁移期检测到超前 db 怎么办 | **不迁该 db**(auth/config 照迁,空库起步 + toast 告知)。**✅ 已拍板(2026-08-18 user 同意推荐)** | 仅告警照迁 = 等于没修(污染照样进 ns);拒绝启动 = 过重(auth/config 本可无损保住) |
+| D2 | S1 启动期(历史遗留/存量污染)检测到 ns 内 db 超前怎么办 | **挪走 `opencode.db.incompatible-<ts>`(保留)+ 空库起 + toast**。**✅ 已拍板(2026-08-18 user 同意推荐,含降级边界的接受)** | 仅告警不挪 = sidecar 照崩、无自愈,违背 REQ-084 原语义。⚠ 已知边界:updater `allowDowngrade=true` 下用户被降级/主动降级后,自家新 db 也会判超前触发同一处置 —— 把「静默永久坏」换成「显式隔离、文件可手动恢复」,推荐接受并写进 changelog 已知边界 |
 | D3 | S2 收口后 performance 组与发版验收的关系 | **纳入发版验收清单**(独立串行步骤:`test:bench` + `test:stability`),不进 pre-push | 明确排除 = 回到「谁都不知道它坏着」的现状,白修 |
 | D4 | S5 归档时 Windows 四模态 QA 残留去向 | 归档行记「残留转 Win 端」,不因残留阻归档 | 为 15 分钟文档活保留整条 backlog 占位,正是本条要治的病 |
 
