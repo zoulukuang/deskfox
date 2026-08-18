@@ -345,7 +345,7 @@ mousemove,而 `data-hovered` 靠 mouseenter 驱动。改法:内层限时 1s + �
 | adapter-feishu-lark 单测 | **792 pass / 0 fail**(与 mac 一致) |
 | desktop 单测 | **267 pass / 1 fail** —— 修前 3 fail;剩的 1 条是存量 `draft-store` `node:sqlite`(上游引入,mac 侧同样红) |
 | opencode `test/project`+`test/session` | 默认超时 **557 pass / 5 fail** → 放宽到 60s **561 pass / 1 fail**(详见下方「5 条失败的定性」) |
-| Playwright 默认套件 | **141 passed / 1 failed** → 修掉那条 flaky 后全绿(`--workers=4`,4.9 分钟) |
+| Playwright 默认套件 | **142 passed / 0 failed**(`--workers=4`,4.6 分钟,EXIT=0)—— 修 flaky 前是 141/1 |
 | performance 全套 | **61 passed / 4 failed** → 4 条全是 30x CPU 节流下的绝对超时,降到 6x 后 **5/5 通过**(非回归,详见下) |
 | GUI · `req108_batch_gui_check.py`(本批专项) | **11/12 pass**,唯一失败是终端 PTY(见下方「另查出一条既有问题」) |
 | GUI · `smoke.py` 全量 | **22/22 pass / 0 警告 / 0 崩溃**(boot 1 + providers 9 + panels 5 + settings 6 + files 1) |
@@ -383,6 +383,11 @@ ace-test.txt` 造文件,Win 上反斜杠被当转义、单引号不是引号 →
 同一台机上并行跑 Playwright + opencode 包测试也会互相毒化(opencode 那轮报出 100+ 条
 `ChildProcess.exitCode (git …)` 与 5s 整超时,单独跑则不复现)。**结论:Win 端跑全套要串行、
 e2e 显式 `--workers=4`。**
+
+**还有一条同源的**:刚打完包**别立刻**跑 e2e。打包产出 231MB exe + 整个 LibreOffice 目录,
+系统随后扫描这批新文件,期间跑同一套 e2e 得到 **10 failed / 20.3 分钟**;等它安静下来再跑,
+同一份代码 **142 passed / 4.6 分钟**。两轮的失败用例集**完全不重叠** —— 失败集每轮都在变、
+耗时数倍膨胀,就是负载问题的指纹,别当回归去查。
 
 ## 回退方法
 
