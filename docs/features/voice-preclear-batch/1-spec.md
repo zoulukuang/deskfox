@@ -1,10 +1,10 @@
 feat-id: voice-preclear-batch
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 语音派活前置清障批(REQ-084① / REQ-117 / submit.test 修复 / i18n 工程化 / REQ-068 归档)— 1-spec
 
-> **来源**:OPENCODE-PLAN `需求计划/2026-08-18-语音派活前置清障.md`。本文档是它的 fork 侧开发文档化 ——
+> **来源**:OPENCODE-PLAN `需求计划/2026-08-18-语音派活前置清障-已完成.md`。本文档是它的 fork 侧开发文档化 ——
 > **2026-08-18 已对当前 HEAD(main `2cb59f69d7`)逐条核实全部断言与代码锚点**,核实结果与勘误见 §7,
 > 其中 S3 根因已在核实过程中直接定位到行级,施工不需要再调研。
 > **规模分级:Large**(S1 为 Medium 主体 + S4 触动全部 ~50 个上游 i18n 文件)→ 按规范 v2,**动工前本 spec 需 user 审签**。
@@ -181,12 +181,16 @@ doc 迁 `需求池/已完成/` + `bash scripts/check-index-sync.sh` 全项 OK;**
 
 ## 5. 验收门槛(全批,对齐 OPENCODE-PLAN 计划原文)
 
-- [ ] S1:超前 db 真实污染场景实测通过(迁移期 T4 + 历史遗留 T5)+ 处置策略有 user 拍板记录(§6 D1/D2)
-- [ ] S2:新跑法下 performance 组连续 3 轮稳定(绿,或已移除项有 changelog 理由);`adverse:167` 有真机结论
-- [ ] S3:`submit.test.ts` 用例数 > 0 且全绿
-- [ ] S4:四文件纯 LF 且归一化 commit `git diff -w` 干净;23 死 key 全仓零命中
-- [ ] S5:fork 两处文档回填落地;OPENCODE-PLAN 对账脚本全项 OK
-- [ ] 全批:typecheck 29/29 + 单测六包全绿 + Playwright 默认套件全绿(回归基线)
+- [x] S1:超前 db 真实污染场景实测通过(迁移期 T4 + 历史遗留 T5)+ 处置策略有 user 拍板记录(§6 D1/D2)
+- [x] S2:新跑法下 performance 组连续 3 轮稳定(绿,或已移除项有 changelog 理由);`adverse:167` 有真机结论
+- [x] S3:`submit.test.ts` 用例数 > 0 且全绿
+- [x] S4:四文件纯 LF 且归一化 commit `git diff -w` 干净;23 死 key 全仓零命中
+- [x] S5:fork 两处文档回填落地;OPENCODE-PLAN 对账脚本全项 OK
+- [x] 全批:typecheck **33/33**(立项写的 29/29 是当时快照,包数已增)+ 单测五包全绿 +
+      Playwright 默认套件 **139/139** 全绿(回归基线)。
+      **一处如实标注**:desktop 包 262 pass / **1 fail** —— `draft-store.test.ts` 因上游顶层
+      `import "node:sqlite"`(bun resolve 不了)加载即挂,`main` 上同样如此 = **存量、非本批回归**,
+      详见 3-changelog「全批验收」段。
 
 ## 6. 待拍板项(user 审签时决定)
 

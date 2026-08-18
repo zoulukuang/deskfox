@@ -1,5 +1,5 @@
 feat-id: voice-preclear-batch
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 语音派活前置清障批 — 2-plan(实施计划)
@@ -118,7 +118,7 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
    commit:`docs(features): stale-path-hardening 真机 QA 结论回填(REQ-070 已验通) [feat: voice-preclear-batch]`。
 2. OPENCODE-PLAN(全批完成时,按 §D):REQ-068 行迁 `需求归档.md`(按 D4 记 Win 残留)+
    doc 迁 `需求池/已完成/` + `bash scripts/check-index-sync.sh` 全项 OK + 该仓直接 commit+push(特例授权)。
-3. 同时在 `需求计划/2026-08-18-语音派活前置清障.md` 填「交付记录」。
+3. 同时在 `需求计划/2026-08-18-语音派活前置清障-已完成.md` 填「交付记录」。
 
 ## 7. 收尾
 
@@ -161,4 +161,26 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
     (否则弹「找不到钥匙串」系统框打断跑批)。
 - **遗留**:`--check-upstream` 接入发版 SOP 未做 —— 本机 `~/.claude/commands/ship.md` 当前不存在
   (只有 `ship.md.bak`),不擅自改 user 本机文件,待 user 确认接入方式。
-- **下一步 S2(performance e2e 套件复活)**,预计 0.5-1.5 天 + 机器时间(3 轮全套可后台跑)。
+- 2026-08-18 **S2 完成**。计划与实际的偏差,逐条:
+  - **§5 步骤 1 的并行度假设被自己的实验推翻**:全套 + `workers=1` 跑一轮,A 族三条**仍稳定失败**,
+    且错误是 `element(s) not found` 而不是"等超时"。按 2-plan 预案回到逐条调查 —— 结果六条失败
+    **没有一条**是原定性(冷启动过紧 / 虚拟化竞态),全部是**测试自己的前提过期**。
+  - **多出一层计划里没有的活:套件本身跑不通**。`test:bench` 的 playwright 段因 `testMatch` 未收窄
+    去加载 bun 单测(`fixture.test.ts`)→ Node ESM loader 抛 `Received protocol 'bun:'`;
+    `unit/mock-server.test.ts` 的假 page 缺 `addInitScript` 导致第一步就 exit 1。
+    **也就是说这套脚本此前根本没人跑通过** —— 这比"六条红"更根本,先修它。
+  - **§5 步骤 2「改跑法契约」降级为不必改**:performance 自有 config 本就串行,失败与并行度无关;
+    真正要改的是 `testMatch`。`OPENCODE_PERFORMANCE=1` 混跑口径未动(留作 debug),
+    契约变化写进《自动化测试规范》v8 而非改 config 语义。
+  - **A 族的共同根因是 URL 形状与布局不匹配**:`stressSessionHref` 生成新布局 URL,
+    但两条用例跑在经典布局(e2e 基线)→ 被弹回新会话空页。修法按用例意图分叉:
+    tab-switch 补装新布局(它点的 titlebar tabs 本就是新布局部件);parent-hydration 反向对齐
+    (测的是数据层,改用经典 URL)—— **一开始两条都补装新布局,parent-hydration 因此挂到超时**
+    (父消息落到视口外,`last` 条件永不满足),这是本轮唯一一次走了回头路。
+  - **`adverse:167` 的真机复核做成了真 Electron**:原计划"local 包 + 肉眼 + CDP 截帧",
+    实际用 Playwright 的 Electron 驱动起真主进程 + `BrowserWindow.setSize`,可复现、可量化、
+    不动 user 工作环境。**探针第一版漏了 `seedHistory` 跑出「0 重建」的假绿**,补齐 fixture 后
+    才复现真实行为(17ms 单帧)——记一笔:真机复核必须连 fixture 一起对齐,否则测的是另一个场景。
+  - **flaky 是「粘底跟随」而非负载本身**:负载只是让它更容易踩到。直接写 `scrollTop` 会被下一帧
+    的跟随逻辑拉回底部,修法是先发真实滚轮手势解除粘底、再等滚动真的停下才取基准值。
+- **下一步**:全批验收(typecheck + 六包单测 + Playwright 默认套件)+ 文档收口。

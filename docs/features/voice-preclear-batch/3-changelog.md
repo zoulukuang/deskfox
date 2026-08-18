@@ -1,5 +1,5 @@
 feat-id: voice-preclear-batch
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 语音派活前置清障批 — 3-changelog
@@ -7,7 +7,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 > 施工中(spec 已收口锁版,2026-08-18)。每批 commit 后按规范填:实际改动 / commit hash /
 > 行数 / 影响范围 / 回归测试 / 回退方法。
 >
-> 批次进度:**S3 ✅ / S4a ✅ / S4b ✅ / S1 ✅(6 笔,含真机实测)** → S2 ⬜ → S5 ⬜
+> 批次进度:**S3 ✅ / S4a ✅ / S4b ✅ / S1 ✅(6 笔,含真机实测)/ S2 ✅(3 轮全套 65/65 × 3)/ S5 ✅**
 
 ## 交付记录
 
@@ -109,6 +109,133 @@ desktop 168 pass、app 1051 pass、typecheck 33/33,全 0 fail。
 
 **遗留待办**:`gen-migration-baseline.mjs --check-upstream` 尚未接入发版 SOP。
 本机 `~/.claude/commands/ship.md` 当前不存在(只有 `ship.md.bak`),状态待 user 确认后再接。
+
+### S2 · REQ-117 performance e2e 套件复活(2026-08-18)
+
+**先说结论:六条失败里,原 spec 的定性没有一条成立。** 「冷启动超时」「虚拟化竞态」都是表象,
+真根因是**测试自己的前提过期了**——URL 形状、part id 规则、断言站位、mock 参数,
+以及**整个 `test:bench` 脚本根本跑不起来**。全程没有为了让测试变绿而削弱任何断言。
+
+**0 · 套件本身跑不通(此前无人发现)**
+
+- Playwright 默认 `testMatch` 连 `*.test.ts` 一起收,于是去加载 `timeline-stability/fixture.test.ts`
+  (bun 单测,`import "bun:test"`)→ Node ESM loader 抛 `Received protocol 'bun:'`,
+  **playwright 段一条用例都没跑过**。
+  **修法选择**:最直接的是给 `e2e/performance/playwright.config.ts` 加 `testMatch`,但它命中
+  pre-commit 黑名单的 `*.config.{ts,js,mjs}`(那条规则本意是护构建配置,e2e 测试 config 属误伤),
+  **不值得为它烧 R4 override 配额**(每季 ≤ 2 笔)。改为在 `packages/app/package.json`(白名单内)
+  的 `test:bench` 脚本上加位置参数 `"\.spec\.ts$"` —— 同样只跑 `.spec.ts`,零 override。
+- `e2e/performance/unit/mock-server.test.ts` 的假 `page` 缺 `addInitScript`
+  (2026-08-11 上游同步给 `mock-server.ts` 加了布局基线注入),整文件加载即抛 → `test:bench`
+  第一步就 exit 1。补上 stub。
+
+**A 族 ×3 · 原定性「冷启动时间假设过紧」——推翻**
+
+先按 spec T1 验假设:全套 + `workers=1` 跑一轮,**A 族仍稳定失败**,并行度根因不成立。
+逐条查下去,三条各有各的过期前提:
+
+| 用例 | 真根因 | 修法 |
+|---|---|---|
+| `home-tab-navigation:40` | ① mock 没给 `vcsDiff`,review 面板永远无内容;② 断言等的 `[data-component="session-review"]` 是 **v1** 组件,而该用例强制新布局,该选择器在新布局下永不出现;③ review 面板默认收起,采样恒为「有正文、无 review」——**这条测试其实什么都没测到** | 补 `vcsDiff` mock;选择器换成新布局的 `[data-slot="session-review-v2-diff-scroll"]`;**先进一次 session 把 review 打开**(状态持久化)再回首页冷点进入,「正文先于 review body」才真的有测头 |
+| `session-tab-switch:16` | 用 `stressSessionHref` 生成的是**新布局** URL `/server/<key>/session/<id>`,但这条没装新布局设置 → 跑在经典布局,而经典布局路由表里没有这个形状,冷启动被弹回新会话空页 | 补装 `installTimelineSettings`(本文件切会话点的就是 titlebar tabs,那本就是新布局才有的部件);顺手把 `reviewDiffs` 的开关从 `newLayoutDesigns` 改挂 `reviewPane`,closed/open 两组数据对齐 |
+| `session-parent-hydration:51` | 同上的 URL 形状错配,**外加**第二层:`requiredPartID` 用 `<msgID>:<type>:<序号>` 合成键,而 DOM 上挂的早已是 part 自己的 id → `requiredPartVisible` 恒 false,`measureSessionSwitch` 永远等不到稳定态 | 这条测的是数据层(孤儿轮 hydration),与布局无关 → 改用经典布局自己的 `/<dir>/session/<id>`;`lastPartID` 直接取 `lastPart.id`。(反向对齐——补装新布局——试过:父消息会落到视口外,`last` 条件永不满足) |
+
+**B 族 ×2 · 都靠探针实测定性,不靠推断**
+
+- `adverse:82`(滚离视口应被卸载,实测仍在):探针实测 target 的 `created` 让它排在**列表最底部**,
+  滚到底时它整个躺在视口里(`top:410/bottom:688`,视口 `42-752`)——「滚离视口」这个前提根本没成立,
+  虚拟化其实工作正常(rows 33→28)。把 target 的 `created` 提前到 history 之前,让它真的在顶部,
+  `toHaveCount(0)` 才是在验真实卸载。**断言没削弱,是把它扶正到能生效的位置。**
+- `adverse:167`(resize 往返 shell 重挂载 1 次,期望 0)——**六条里唯一可能护着真产品问题的**:
+  - 先证伪采样假象:visual-stability 自己产出的 trace 显示 shell/context 在 t=320ms→408ms
+    **换了 DOM 节点**(node 1→4 / 2→5),`following`(纯文本)全程不变 → **重建是真的**。
+  - 再量真实代价(同场景两档探针):`cpuRate: 4`(用例设定,CPU 故意降速 4 倍)不可见窗口 **92ms**;
+    `cpuRate: 1`(真实 CPU)**15ms = 单帧@60fps**,缺席帧数两档都是 1。
+  - **真机复核(T3 门槛)**:用 Playwright 的 Electron 驱动起**真 Electron 主进程**,
+    走 `BrowserWindow.setSize` 做真实窗口 1400→430→900→1400 往返(不是 CDP viewport 模拟),
+    同一 fixture:**重建 1 次、不可见窗口 17ms、`following` 全程不变** —— 与浏览器 `cpuRate:1` 的 15ms 吻合。
+    **结论:不闪**(单帧,肉眼不可辨),不修行为。
+    (顺带一条方法论:探针第一版漏了 `seedHistory`,真机跑出「0 重建」的假绿;补上 18 条历史后才复现 ——
+    **虚拟化行为对内容量敏感,真机复核必须连 fixture 一起对齐**。)
+  - 定性:跨 768px 断点时虚拟化列表重新测量行高 → 复杂行重建;**只在用户手动把窗口拖过断点时发生一次**。
+  - 处置:**放宽而非删断言**,并给不变量加了显式的容忍位——`stable.maxRemounts` 与
+    `continuity.maxGapFrames`(默认都是 0,不影响其余用例),本用例设 1 / 2,`following` 仍按 0 严格要求。
+    再多一次就说明重建从「断点切换一次」退化成反复抖动,照样红。
+
+**flaky 收口 · `scroll-interaction.spec.ts:175`**(全套跑时唯一红,单文件跑蒙混过关):
+
+- 现象:`Expected: < 300 / Received: 2975` —— **2975 就是列表底部**。
+- 根因:用例直接写 `scroller.scrollTop = 300` 取"边界位置"基准,但外层此前一直停在底部、
+  **粘底跟随是激活的**,下一帧就把它拉回底部。踩不踩得到取决于时序,机器越忙越容易踩 —— 这就是
+  「同一用例单文件 3/3 过、全套 3/3 败」的来源(与负载相关,与用例内容无关)。
+- 修法:与本目录 `adverse.spec.ts` 的既有做法对齐 —— 先发一次**真实滚轮手势**解除粘底,
+  再等滚动**真的停下**才取基准值(新增 `waitForScrollerSettled`)。
+- **第二层根因(第一版修法没盖住,全套复跑又红一次才暴露)**:停在底部附近时时间线还在懒测量,
+  `scrollHeight` 会继续长 —— 实测基准值 3086、PageUp 之后反而变成 3189,「按 PageUp 应该变小」
+  被内容增长盖过去。所以 ① `waitForScrollerSettled` 改成**位置与内容高度都**连续两帧不变;
+  ② 手势之后明确落到行程中点(离底部足够远),不再停在底部附近取基准。
+- **没有加 retry、没有 skip、没有放宽断言。**
+
+**基建改动**(`e2e/utils/visual-stability/`):`stable` 与 `continuity` 两个不变量从「布尔集合」改成
+「按 invariant 遍历」,以支持 `maxRemounts` / `maxGapFrames`。默认值保持 0 = 行为不变。
+
+**规范收口(D3 落地)**:《自动化测试规范》v8 新增《performance 组的归属》一节 ——
+**进发版验收清单、不进 pre-push**,并把这次踩的三个坑(testMatch 收 `*.test.ts` / e2e 布局基线是经典布局
+且 URL 形状要跟着换 / 放宽不变量必须先探针实测)写死防重蹈;`e2e/performance/README.md` 加一条
+FORK 注释指向该节。
+
+**T2 门槛 · 连续 3 轮全套**(每轮独立留档,不复用上一轮产物):
+
+| 轮次 | 结果 | 用时 |
+|---|---|---|
+| 1 | **65 passed / 0 failed** | 10.3m |
+| 2 | **65 passed / 0 failed** | 9.9m |
+| 3 | **65 passed / 0 failed** | 10.4m |
+
+(接手时的基线是 6 条红 + 脚本跑不通;修复过程中还各出现过一次 `home-tab-navigation`
+与 `scroll-interaction` 的全套红 —— 都不是回退,是同一条 flaky 的第二层根因暴露,已在上面记明。)
+
+### S5 · REQ-068 归档 + stale-path-hardening 回填(2026-08-18)
+
+**fork 侧**(本仓两处,原本被记成"待办 2 延期"):
+
+- `docs/features/stale-path-hardening/mac-qa-handoff.md` 结果回填段:待办 2a(REQ-068 unreachable)/
+  2b(REQ-061 不误重绑)由 `[ ]` 改为**通过 ✅**,写明是 2026-07-06 REQ-070 在真 U 盘
+  `/Volumes/WININSTALL` 上用 `diskutil unmount` 做完的,**实测 errno = `ENOENT`**
+  (macOS 卸载后挂载点整体消失,不是 `ENXIO`/`ETIMEDOUT`),并记下顺带修掉的 macOS
+  `path.parse().root` 恒为 `/` 致误 forget 的平台盲区(`mountRootOf`)。
+- `docs/features/stale-path-hardening/1-spec.md` 的真机 QA 项由 `[ ]` 改为 `[x]`,标注
+  **mac 侧全部验通、仍欠 Windows 四模态**。
+- 这不是补做,是把**早已做完的结果接回它的出处** —— 它一直挂在别的 feat 文档里,
+  于是本条需求在盘点时被反复当成"欠一次拔盘 QA"。
+
+**OPENCODE-PLAN 侧**(按《需求管理规范》§D):REQ-068 行从 `需求总览.md` 剪到 `需求归档.md`
+L5 层(紧邻同族的 REQ-067/070),状态 ✅;详情 doc `git mv` 到 `需求池/已完成/`,
+doc 内 3 条相对链接按深度 1→2 改为 `../../`,inbound 链接(`需求计划/v2026.6.21-已完成.md`)一并修好;
+归档行显式记 **Windows 四模态真机抓 errno 残留、转 Win 端排期**(D4 口径),不阻塞归档。
+`bash scripts/check-index-sync.sh` **全项 OK**(含僵尸 🔄 闸)。
+
+## 全批验收(2026-08-18)
+
+| 项 | 结果 |
+|---|---|
+| `bun run typecheck`(全仓) | **33/33 successful** |
+| `typecheck:e2e`(app,本批改动主要落在这) | **绿** |
+| app 单测 | **1051 pass / 0 fail** |
+| media-gen 单测 | **140 pass / 0 fail** |
+| adapter-feishu-lark 单测 | **792 pass / 0 fail** |
+| opencode `test/project` + `test/session` | **575 pass / 0 fail**(首轮 1 fail,重跑即过 —— 属记忆里那群"压力 flaky",判别要点就是先重跑) |
+| desktop 单测 | 262 pass / **1 fail(存量,见下)** |
+| Playwright 默认套件 | **139 passed** |
+| performance 全套 | **65 passed × 3 轮** |
+
+**desktop 那 1 fail 是存量、上游引入,不是本批回归**:`src/main/draft-store.test.ts` 加载即挂,
+`error: No such built-in module: node:sqlite`。上游 `draft-store.ts`(PR #40207)与
+`drizzle-orm/node-sqlite/driver.js` 都在顶层 import `node:sqlite`,而 **bun 至今 resolve 不了它**
+(Node 22+/Electron 内建);上游用 node 跑、fork 用 bun 跑 → 必挂。
+`git show main:packages/desktop/src/main/draft-store.ts` 可见 main 上同样如此。
+惰性化 import 也救不了(测试要真的调 `createDesktopDraftStore()`,运行时照样需要该模块),
+真修得给 driver 做注入 —— 那是改上游文件 + 改上游测试,超出本批范围,已记入长期记忆备查。
 
 ## 回退方法
 
