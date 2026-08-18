@@ -10,13 +10,18 @@
 隔离:HOME 指向临时目录(不能用 XDG,理由见 verify-db-schema-guard.sh);
      CDP 端口用 9333 避开 user 可能在用的 9222;只 kill "DeskFox 本地版"。
 
+跨平台(2026-08-18 Win 回验时补):产品侧数据路径两端一致(data-namespace.ts 走 homedir() +
+`.local/share/deskfox`,无平台分支),所以只有三处需要分平台 —— 可执行文件路径 / 杀进程方式 /
+homedir 的 env 名(Win 上 node os.homedir() 读 USERPROFILE,不读 HOME)。
+造库改用 python 内置 sqlite3 模块,不再依赖外部 `sqlite3` CLI(Win 上通常没有)。
+
 用法: python3 packages/branding/smoke/req084_toast_verify.py
 """
 import base64
 import json
 import os
 import shutil
-import signal
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -25,10 +30,19 @@ import urllib.request
 
 import websocket  # pip install websocket-client
 
+# Win 控制台默认 GBK,脚本里的 ✅/❌/📸 会让 print 直接抛 UnicodeEncodeError —— 
+# 脚本会死在"报告结果"这一步,比测出来的问题还难查。强制 UTF-8 输出。
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 PORT = 9333
+IS_WIN = sys.platform == "win32"
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
-APP = os.path.join(REPO, "packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app")
-BIN = os.path.join(APP, "Contents/MacOS/DeskFox 本地版")
+if IS_WIN:
+    BIN = os.path.join(REPO, "packages/desktop/dist-deskfox/win-unpacked/DeskFox 本地版.exe")
+else:
+    APP = os.path.join(REPO, "packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app")
+    BIN = os.path.join(APP, "Contents/MacOS/DeskFox 本地版")
 BASELINE = os.path.join(REPO, "packages/desktop/src/main/deskfox/migration-baseline.generated.ts")
 DB_NAME = "opencode-local.db"
 PROBE = "99991231235959_pollution_probe"
@@ -44,15 +58,23 @@ def baseline_ids(n=5):
 
 def make_ahead_db(path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    sql = ["CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL);"]
-    for i in baseline_ids():
-        sql.append(f"INSERT INTO migration VALUES ('{i}', 1);")
-    sql.append(f"INSERT INTO migration VALUES ('{PROBE}', 1);")
-    subprocess.run(["sqlite3", path], input="\n".join(sql), text=True, check=True)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)")
+        for i in baseline_ids() + [PROBE]:
+            conn.execute("INSERT INTO migration VALUES (?, 1)", (i,))
+        conn.commit()
+    finally:
+        conn.close()  # Win 上不关句柄,主进程的隔离改名会 EBUSY
 
 
 def kill_local():
-    subprocess.run(["pkill", "-f", "DeskFox 本地版.app/Contents/"], capture_output=True)
+    """只杀 local 档 —— 正式版/预览版是 user 在用的,绝不能碰(CLAUDE.md 验证约定)。"""
+    if IS_WIN:
+        # 按 exe 名精确杀;正式版叫 DeskFox.exe、预览版叫「DeskFox 预览版.exe」,匹配不到
+        subprocess.run(["taskkill", "/IM", "DeskFox 本地版.exe", "/F", "/T"], capture_output=True)
+    else:
+        subprocess.run(["pkill", "-f", "DeskFox 本地版.app/Contents/"], capture_output=True)
     time.sleep(1)
 
 
@@ -105,7 +127,7 @@ class CDP:
 
 
 def main():
-    if not os.access(BIN, os.X_OK):
+    if not os.path.exists(BIN):
         print(f"❌ 找不到 local 包:{BIN}")
         return 1
 
@@ -115,12 +137,22 @@ def main():
     ns = os.path.join(home, ".local/share/deskfox/opencode")
     os.makedirs(ns, exist_ok=True)
     os.makedirs(os.path.join(home, ".config/deskfox/opencode"), exist_ok=True)
+    if IS_WIN:
+        # Win 必建:USERPROFILE 被指到一个**完全空**的目录时,Electron/Chromium 拿不到
+        # AppData 路径 → 主进程启动即静默退出(无窗口、无 stdout、ExitCode 为 null,极难查)。
+        # 真实用户目录永远有 AppData,所以这纯粹是临时 HOME 构造不完整,不是产品问题。
+        # 2026-08-18 Win 端实测:不建 → proc=0 必现;建了 → 立刻起得来。
+        for sub in ("AppData/Roaming", "AppData/Local"):
+            os.makedirs(os.path.join(home, sub), exist_ok=True)
     make_ahead_db(os.path.join(ns, DB_NAME))
     # marker 已写 = 迁移逻辑不会再跑,只能靠启动期自愈(正是 T5 的「历史遗留」)
     open(os.path.join(ns, ".deskfox-namespace-migrated"), "w").write('{"from":"qa"}')
 
     env = dict(os.environ)
     env["HOME"] = home
+    if IS_WIN:
+        # node 的 os.homedir() 在 Win 上读 USERPROFILE,不看 HOME —— 只设 HOME 会打到真实用户目录
+        env["USERPROFILE"] = home
     env.pop("XDG_DATA_HOME", None)
     env.pop("XDG_CONFIG_HOME", None)
 
@@ -178,7 +210,7 @@ def main():
             rc = 1
     finally:
         try:
-            proc.send_signal(signal.SIGTERM)
+            proc.terminate()  # 跨平台:POSIX 发 SIGTERM,Win 走 TerminateProcess
         except Exception:
             pass
         kill_local()
