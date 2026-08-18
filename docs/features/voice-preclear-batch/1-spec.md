@@ -1,5 +1,5 @@
 feat-id: voice-preclear-batch
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 语音派活前置清障批(REQ-084① / REQ-117 / submit.test 修复 / i18n 工程化 / REQ-068 归档)— 1-spec

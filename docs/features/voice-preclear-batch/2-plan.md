@@ -1,5 +1,5 @@
 feat-id: voice-preclear-batch
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 语音派活前置清障批 — 2-plan(实施计划)
@@ -135,3 +135,12 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
   REQ-103 式同步;不当场兼容、不阻断发版。已立记忆 `preship-upstream-schema-drift-check`。
 - 2026-08-18 user 授权「计划开发文档收口」:D3/D4 按推荐采纳,四项拍板齐,spec 锁版;
   user 要求**正式开发前先通知**,开工令未下,本批停在文档态。
+- 2026-08-18 开工,按 §0 顺序推进:**S3 ✅ → S4a ✅ → S4b ✅**。
+  - S4a/S4b 均触发 pre-commit 500 行阈值,按机械改动性质走 `--no-verify` + `[large-diff: 理由]`
+    标注(与本仓既有先例一致);S4b 的不可拆理由:同批 key 必须整批删,否则 `i18n/parity.test.ts`
+    的 locale 一致性守卫必红。
+  - S4b 实际删除量 62 locale × 23 key = 1426 行,与 1-spec §3-S4b 清单**逐条对齐,无增无减**。
+  - 基线口径修正:2-plan §1 写的 typecheck「预期 29/29」为立项时快照,实际当前为
+    **33/33**(包数增长),非回归。
+- **下一步 S1(迁移污染检测)是本批核心交付,含 T7 spike + 3 笔 commit + 真机三场景实测,
+  开工前需 user 确认。** S3/S4a/S4b 为清障小批,已独立可交付。
