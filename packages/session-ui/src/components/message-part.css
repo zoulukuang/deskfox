@@ -493,6 +493,19 @@
     unicode-bidi: isolate;
   }
 
+  /* FORK: REQ-113B 同文件连续编辑 ×N 计数徽标 —— 不抢文件名的位置(文件名优先省略),
+     视觉上比文件名弱一档,只提示"这行代表多次编辑"。
+     [feat: session-presentation-input-batch] 2026-08-17 */
+  [data-slot="message-part-title-repeat"] {
+    flex-shrink: 0;
+    margin-inline-start: 0.25rem;
+    font-weight: var(--font-weight-regular);
+    font-variant-numeric: tabular-nums;
+    color: var(--v2-text-text-faint, var(--text-weak));
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
   [data-slot="message-part-path"] {
     display: flex;
     flex-grow: 1;

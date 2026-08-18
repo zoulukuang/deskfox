@@ -890,6 +890,18 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Espandi le parti dello strumento Shell",
   "settings.general.row.shellToolPartsExpanded.description":
     "Mostra le parti dello strumento Shell espanse per impostazione predefinita nella sequenza temporale",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.title": "Group shell commands", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.description": "Fold consecutive shell commands into a single collapsible group instead of listing each one", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.running": "Running commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.many": "{{count}} command", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.many": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Espandi le parti dello strumento di modifica",
   "settings.general.row.editToolPartsExpanded.description":
     "Mostra le parti degli strumenti di modifica, scrittura e patch espanse per impostazione predefinita nella sequenza temporale",

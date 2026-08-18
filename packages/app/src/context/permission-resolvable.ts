@@ -26,6 +26,36 @@ export function candidateSignature(
   return ids.sort().join(",")
 }
 
+/**
+ * REQ-112:把**全局** session store 的 permission(形状 `{[sessionID]: PermissionRequest[]}`,
+ * 没有 directory 维度)裁到指定 directory。
+ *
+ * 起因:1.18 把 permission 权威源挪到全局 store 后,过滤层仍读 child store —— 而 child 的
+ * permission 恒空(两条写入路径都被关掉),导致签名恒空、从不 fetch、canResolve 恒 true,
+ * REQ-078 整个过滤层 fail-open。换源必须配一层 session→directory 映射,否则会把别的目录的
+ * 权限也算进候选。
+ *
+ * `directoryOf` 返回 undefined(session 还没进 store,启动期常见)时**保留**该条:
+ * 宁可多触发一次自身可解列表的拉取,也不要让过滤层因为暂时认不出 session 而退回 fail-open ——
+ * 后者正是本次 bug 的形状。多算进来的外来权限随后会被 canResolve 正确滤掉。
+ *
+ * [feat: session-presentation-input-batch] 2026-08-17
+ */
+export function scopePermissionsByDirectory(
+  permissionsBySession: Record<string, PermissionRequest[] | undefined>,
+  directory: string,
+  directoryOf: (sessionID: string) => string | undefined,
+): Record<string, PermissionRequest[] | undefined> {
+  const result: Record<string, PermissionRequest[] | undefined> = {}
+  for (const [sessionID, list] of Object.entries(permissionsBySession)) {
+    if (!list?.length) continue
+    const owner = directoryOf(sessionID)
+    if (owner !== undefined && owner !== directory) continue
+    result[sessionID] = list
+  }
+  return result
+}
+
 export type ResolvableApply = (ids: string[] | null) => void
 
 /**

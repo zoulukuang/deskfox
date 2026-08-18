@@ -30,7 +30,10 @@ import { batch } from "solid-js"
 import { produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { State, VcsCache } from "./types"
 import type { ServerSession } from "../server-session"
-import { applyReconciledSessionStatus, healClearedSessionOrphans } from "./session-status-reconcile"
+// FORK: applyReconciledSessionStatus 已由上游 1.18 重写的 session.status() 对账段接管(清残留 busy),
+//   不再引用;healClearedSessionOrphans 无上游等价物,调用点在本文件下方补回。
+//   [feat: stuck-working-status-reconcile] 2026-08-17
+import { healClearedSessionOrphans } from "./session-status-reconcile"
 import {
   cmp,
   normalizeAgentList,
@@ -395,18 +398,39 @@ export async function bootstrapDirectory(input: {
               return
             }
             const statuses = x.data ?? {}
+            // FORK-BEGIN: 记下被清掉的会话 id,供下方补盖末条 assistant 残骸
+            //   [feat: session-presentation-input-batch] 2026-08-17
+            const cleared: string[] = []
+            // FORK-END
             input.session.set(
               "session_status",
               produce((draft) => {
                 for (const sessionID of Object.keys(draft)) {
                   if (statuses[sessionID]) continue
-                  if (input.session?.get(sessionID)?.directory === input.directory) delete draft[sessionID]
+                  if (input.session?.get(sessionID)?.directory === input.directory) {
+                    cleared.push(sessionID) // FORK
+                    delete draft[sessionID]
+                  }
                 }
               }),
             )
             for (const [sessionID, status] of Object.entries(statuses)) {
               input.session.set("session_status", sessionID, reconcile(status))
             }
+            // FORK-BEGIN: 2026-06-12 stuck-working-status-reconcile 的第 ② 半 —— 补回丢失的调用点。
+            //   上游 1.18 重写本段时接管了第 ① 半(清残留 busy,即上面那段 produce delete),
+            //   但**第 ② 半没有上游等价物**:sidecar 崩溃/重启时,它正在生成的末条 assistant 消息
+            //   没盖 time.completed → 残骸,侧边栏 deriveSessionWorking 仍判 pending 永久转圈
+            //   (后端 heal-interrupted 挂在「消息 GET 时补盖」,重连后前端不重新 GET 已打开会话的消息)。
+            //   重写后本文件只剩一个悬空 import,函数与单测都还在、就是没人调 —— 单测直接调函数所以照常绿,
+            //   属本批「代码在但已失效」族的第五例。数据源随权威源迁到全局 store。
+            //   [feat: stuck-working-status-reconcile][feat: session-presentation-input-batch] 2026-08-17
+            healClearedSessionOrphans(
+              input.session.data as unknown as Pick<State, "message">,
+              input.session.set as unknown as SetStoreFunction<State>,
+              cleared,
+            )
+            // FORK-END
             await Promise.all(
               Object.keys(statuses).map((sessionID) => input.session!.resolve(sessionID).catch(() => undefined)),
             )

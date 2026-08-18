@@ -41,6 +41,8 @@ export namespace Timeline {
     status: SessionStatus["type"],
     inlineComments: boolean,
     projectedUserMessages: UserMessage[],
+    // FORK: REQ-109 [feat: session-presentation-input-batch] 2026-08-17
+    shellGrouped = false,
   ) {
     const turns: { user: UserMessage; assistants: AssistantMessage[] }[] = []
     const turnByUserID = new Map<string, (typeof turns)[number]>()
@@ -93,6 +95,7 @@ export namespace Timeline {
           status,
           turn.user.id === activeMessageID,
           inlineComments,
+          shellGrouped,
         ),
       ),
     }
@@ -108,6 +111,9 @@ export namespace Timeline {
     isActive: boolean,
     // v2 renders comments inside the user message attachments row instead of a strip row
     inlineComments: boolean,
+    // FORK: REQ-109 连续 shell 收进独立命令组(设置项 shellToolPartsGrouped;缺省 = 上游逐条平铺)
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    shellGrouped = false,
   ) {
     const rows: TimelineRow.TimelineRow[] = []
 
@@ -128,21 +134,22 @@ export namespace Timeline {
     const assistantItems =
       interrupted && !compaction
         ? [
-            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex <= interruptedMessageIndex)).map(
-              (group) => ({
-                type: "part" as const,
-                group,
-              }),
-            ),
+            ...groupParts(
+              assistantPartRefs.filter((ref) => ref.messageIndex <= interruptedMessageIndex),
+              { shellGrouped },
+            ).map((group) => ({
+              type: "part" as const,
+              group,
+            })),
             { type: "interrupted" as const },
-            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex > interruptedMessageIndex)).map(
-              (group) => ({
-                type: "part" as const,
-                group,
-              }),
-            ),
+            ...groupParts(assistantPartRefs.filter((ref) => ref.messageIndex > interruptedMessageIndex), {
+              shellGrouped,
+            }).map((group) => ({
+              type: "part" as const,
+              group,
+            })),
           ]
-        : groupParts(assistantPartRefs).map((group) => ({ type: "part" as const, group }))
+        : groupParts(assistantPartRefs, { shellGrouped }).map((group) => ({ type: "part" as const, group }))
     if (previousUserMessage) rows.push(new TimelineRow.TurnGap({ userMessageID: userMessage.id }))
 
     if (comments.length > 0 && !inlineComments)

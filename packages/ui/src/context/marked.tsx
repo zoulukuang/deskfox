@@ -10,6 +10,8 @@ import { createSimpleContext } from "./helper"
 //   (2026-08-11 sync v1.18.16 复核:marked 18 仅修复部分样例(%区间),纯数字区间 4.80~5.05 /
 //    PE 12~15 仍误判 → 保留本扩展,D5「上游已修」判定不成立)
 import { strictDelExtension } from "./marked-del-strict"
+// FORK: REQ-115 katexExtension 单一来源 [feat: session-presentation-input-batch] 2026-08-17
+import { katexExtension } from "./marked-parser"
 import { markedCodeSpanBoundary } from "./marked-code-span"
 import { getSharedHighlighter, ThemeRegistrationResolved } from "@pierre/diffs"
 import { registerOpenCodeTheme } from "./marked-theme-register"
@@ -444,6 +446,13 @@ export const OpenCodeTheme = {
 //   改走共享守卫入口(主题内容与上游抽出版一致)
 registerOpenCodeTheme()
 
+// FORK: REQ-115 存量核查(2026-08-17)—— 本函数与下方 renderMathExpressions **当前无法被触发**:
+//   唯一调用点在 `props.nativeParser` 分支,而该 prop 全仓零传入点。它是上游留的扩展位,
+//   删掉等于砍上游 API 面、给下次 sync 添冲突,故**保留但标注**。
+//   ⚠️ 注意它是**另一套**、比 katexExtension 弱的实现(只认 `$$…$$` 与 `\(…\)`,且在 HTML 串上
+//   做正则替换),**没有**跟随 REQ-115 补齐 `$…$` / `\[…\]`。若将来真启用 nativeParser,
+//   必须先把这里也接到 katexExtension 的规则上,否则又是「只修一半」。
+//   [feat: session-presentation-input-batch]
 function renderMathInText(text: string): string {
   let result = text
 
@@ -476,55 +485,9 @@ function renderMathInText(text: string): string {
   return result
 }
 
-const inlineMathRegex = /^\\\(((?:\\.|[^\\\n])*?)\\\)/
-const blockMathRegex = /^\$\$\n([\s\S]+?)\n\$\$(?:\n|$)/
-
-const katexExtension: MarkedExtension = {
-  extensions: [
-    {
-      name: "inlineKatex",
-      level: "inline",
-      start(src) {
-        const index = src.indexOf("\\(")
-        if (index === -1) return
-        return index
-      },
-      tokenizer(src) {
-        const match = src.match(inlineMathRegex)
-        if (!match) return
-        return {
-          type: "inlineKatex",
-          raw: match[0],
-          text: match[1].trim(),
-          displayMode: false,
-        }
-      },
-      renderer: renderKatexToken,
-    },
-    {
-      name: "blockKatex",
-      level: "block",
-      tokenizer(src) {
-        const match = src.match(blockMathRegex)
-        if (!match) return
-        return {
-          type: "blockKatex",
-          raw: match[0],
-          text: match[1].trim(),
-          displayMode: true,
-        }
-      },
-      renderer: renderKatexToken,
-    },
-  ],
-}
-
-function renderKatexToken(token: Tokens.Generic) {
-  return katex.renderToString(typeof token.text === "string" ? token.text : "", {
-    displayMode: token.displayMode === true,
-    throwOnError: false,
-  })
-}
+// FORK: REQ-115 —— 原先这里有一份与 marked-parser.tsx **逐字相同**的 katexExtension,
+//   两条渲染路径各持一份 → 改一处等于只修一半。收口成单一来源(marked-parser.tsx 导出),
+//   此处仅引用。[feat: session-presentation-input-batch] 2026-08-17
 
 function renderMathExpressions(html: string): string {
   // Split on code/pre/kbd tags to avoid processing their contents

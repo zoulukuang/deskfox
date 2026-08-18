@@ -867,6 +867,16 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "Laajenna shell-työkalun osat",
   "settings.general.row.shellToolPartsExpanded.description":
     "Näytä shell-työkalun osat oletuksena laajennettuina aikajanalla",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.title": "Group shell commands", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.description": "Fold consecutive shell commands into a single collapsible group instead of listing each one", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.running": "Running commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "Laajenna muokkaustyökalun osat",
   "settings.general.row.editToolPartsExpanded.description":
     "Näytä muokkaus-, kirjoitus- ja paikkaustyökalun osat oletusarvoisesti laajennettuina aikajanalla",

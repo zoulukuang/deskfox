@@ -54,7 +54,13 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
   //   newLayoutDesigns: true 即可覆盖(后写胜出)。2026-08-11 [feat: upstream-sync-2026-08]
   await page.addInitScript(() => {
     if (!localStorage.getItem("settings.v3")) {
-      localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: false } }))
+      // FORK: REQ-109 —— shellToolPartsGrouped: false = 上游口径(shell 逐条独立成行),
+      //   让上游 shell 族断言零改动全绿;产品默认是折叠(true)。2026-08-17
+      //   [feat: session-presentation-input-batch]
+      localStorage.setItem(
+        "settings.v3",
+        JSON.stringify({ general: { newLayoutDesigns: false, shellToolPartsGrouped: false } }),
+      )
     }
     // 配套:伪装「已越过 v1.17.19 cutoff 的既有安装」— 否则 layoutUpgrade 一次性迁移(升级跨
     // cutoff / 全新安装)会无视偏好强制 v2,经典布局种子失效

@@ -976,6 +976,16 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.title": "شیل ٹول کے حصے پھیلائیں",
   "settings.general.row.shellToolPartsExpanded.description":
     "ٹائم لائن میں شیل ٹول کے حصے بطور طے شدہ پھیلے ہوئے دکھائیں۔",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.title": "Group shell commands", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.description": "Fold consecutive shell commands into a single collapsible group instead of listing each one", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.running": "Running commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "ترمیمی ٹول کے حصے پھیلائیں",
   "settings.general.row.editToolPartsExpanded.description":
     "ٹائم لائن میں ترمیم، تحریر اور پیچ ٹول کے حصے بطور طے شدہ پھیلے ہوئے دکھائیں۔",

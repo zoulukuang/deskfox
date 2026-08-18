@@ -30,6 +30,12 @@ export interface Settings {
     showStatus: boolean
     showTerminal: boolean
     showReasoningSummaries: boolean
+    // FORK: REQ-108 会话进度条开关(默认 true)—— 2026-08-11 上游同步整块丢失,按基准版补回
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    showSessionProgressBar: boolean
+    // FORK: REQ-109 连续 shell 收进独立「已运行 N 条命令」组(产品默认 true;关掉 = 上游口径逐条平铺)
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    shellToolPartsGrouped: boolean
     shellToolPartsExpanded: boolean
     editToolPartsExpanded: boolean
     showCustomAgents: boolean
@@ -211,6 +217,11 @@ const defaultSettings: Settings = {
     showStatus: false,
     showTerminal: false,
     showReasoningSummaries: false,
+    // FORK: REQ-108 —— 产品默认开(基准版即默认 true)[feat: session-presentation-input-batch] 2026-08-17
+    showSessionProgressBar: true,
+    // FORK: REQ-109 —— 产品默认折叠(user 报「新版把大量 shell 命令都平铺暴露出来了」)
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    shellToolPartsGrouped: true,
     shellToolPartsExpanded: false,
     editToolPartsExpanded: false,
     showCustomAgents: false,
@@ -423,6 +434,24 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         setShowReasoningSummaries(value: boolean) {
           setStore("general", "showReasoningSummaries", value)
         },
+        // FORK-BEGIN: REQ-108 会话进度条 [feat: session-presentation-input-batch] 2026-08-17
+        showSessionProgressBar: withFallback(
+          () => store.general?.showSessionProgressBar,
+          defaultSettings.general.showSessionProgressBar,
+        ),
+        setShowSessionProgressBar(value: boolean) {
+          setStore("general", "showSessionProgressBar", value)
+        },
+        // FORK-END
+        // FORK-BEGIN: REQ-109 shell 折叠 [feat: session-presentation-input-batch] 2026-08-17
+        shellToolPartsGrouped: withFallback(
+          () => store.general?.shellToolPartsGrouped,
+          defaultSettings.general.shellToolPartsGrouped,
+        ),
+        setShellToolPartsGrouped(value: boolean) {
+          setStore("general", "shellToolPartsGrouped", value)
+        },
+        // FORK-END
         shellToolPartsExpanded: withFallback(
           () => store.general?.shellToolPartsExpanded,
           defaultSettings.general.shellToolPartsExpanded,

@@ -986,6 +986,16 @@ export const dict: Record<string, string> = {
   "settings.general.row.shellToolPartsExpanded.title": "Shell ལག་ཆས་ཆ་ཤས་ཚུ་རྒྱ་བསྐྱེད་འབད།",
   "settings.general.row.shellToolPartsExpanded.description":
     "དུས་ཚོད་གྲལ་ཐིག་ནང་སྔོན་སྒྲིག་གིས་རྒྱ་བསྐྱེད་འབད་ཡོད་མི་ Shell ལག་ཆས་ཆ་ཤས་ཚུ་སྟོན།",
+  "settings.general.row.showSessionProgressBar.title": "Show session progress bar", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.showSessionProgressBar.description": "Show an animated progress bar at the top of the session while a task is running", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.title": "Group shell commands", // FORK-i18n-backfill(en 兜底)
+  "settings.general.row.shellToolPartsGrouped.description": "Fold consecutive shell commands into a single collapsible group instead of listing each one", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.running": "Running commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.ran": "Ran commands", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.one": "{{count}} command", // FORK-i18n-backfill(en 兜底)
+  "session.commandGroup.count.other": "{{count}} commands", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.one": "{{count}} invalid call", // FORK-i18n-backfill(en 兜底)
+  "session.invalidGroup.count.other": "{{count}} invalid calls", // FORK-i18n-backfill(en 兜底)
   "settings.general.row.editToolPartsExpanded.title": "ཞུན་དག་ལག་ཆས་ཆ་ཤས་ཚུ་རྒྱ་བསྐྱེད་འབད།",
   "settings.general.row.editToolPartsExpanded.description":
     "དུས་ཚོད་གྲལ་ཐིག་ནང་སྔོན་སྒྲིག་གིས་རྒྱ་བསྐྱེད་འབད་ཡོད་པའི་ཞུན་དག་དང་འབྲི་ནི་ དེ་ལས་ཐབས་འཕྲུལ་གྱི་ལག་ཆས་ཆ་ཤས་ཚུ་སྟོན།",

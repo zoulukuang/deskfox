@@ -14,6 +14,8 @@ export function createTimelineProjection(input: {
   status: Accessor<SessionStatus>
   showReasoningSummaries: Accessor<boolean>
   inlineComments: Accessor<boolean>
+  // FORK: REQ-109 连续 shell 收进独立命令组 [feat: session-presentation-input-batch] 2026-08-17
+  shellToolPartsGrouped?: Accessor<boolean>
 }) {
   const messageByID = createMemo(() => new Map(input.messages().map((message) => [message.id, message] as const)))
   const assistantMessagesByParent = createMemo(() => {
@@ -38,6 +40,8 @@ export function createTimelineProjection(input: {
       input.status().type,
       input.inlineComments(),
       input.userMessages(),
+      // FORK: REQ-109 [feat: session-presentation-input-batch] 2026-08-17
+      input.shellToolPartsGrouped?.() ?? false,
     ),
   )
   const activeMessageID = createMemo(() => projection().activeMessageID)

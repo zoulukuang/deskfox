@@ -345,6 +345,34 @@ export const SettingsGeneralV2: Component<{
           </div>
         </SettingsRowV2>
 
+        {/* FORK-BEGIN: REQ-108 会话进度条开关 [feat: session-presentation-input-batch] 2026-08-17 */}
+        <SettingsRowV2
+          title={language.t("settings.general.row.showSessionProgressBar.title")}
+          description={language.t("settings.general.row.showSessionProgressBar.description")}
+        >
+          <div data-action="settings-feed-session-progress-bar">
+            <Switch
+              checked={settings.general.showSessionProgressBar()}
+              onChange={(checked) => settings.general.setShowSessionProgressBar(checked)}
+            />
+          </div>
+        </SettingsRowV2>
+        {/* FORK-END */}
+
+        {/* FORK-BEGIN: REQ-109 shell 折叠开关 [feat: session-presentation-input-batch] 2026-08-17 */}
+        <SettingsRowV2
+          title={language.t("settings.general.row.shellToolPartsGrouped.title")}
+          description={language.t("settings.general.row.shellToolPartsGrouped.description")}
+        >
+          <div data-action="settings-feed-shell-tool-parts-grouped">
+            <Switch
+              checked={settings.general.shellToolPartsGrouped()}
+              onChange={(checked) => settings.general.setShellToolPartsGrouped(checked)}
+            />
+          </div>
+        </SettingsRowV2>
+        {/* FORK-END */}
+
         <SettingsRowV2
           title={language.t("settings.general.row.shellToolPartsExpanded.title")}
           description={language.t("settings.general.row.shellToolPartsExpanded.description")}

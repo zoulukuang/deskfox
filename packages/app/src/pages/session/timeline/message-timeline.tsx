@@ -81,6 +81,12 @@ import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows
 import { filterVirtualIndexes } from "./virtual-items"
 // FORK: REQ-097 会话内查找(文件随上游迁入 timeline/,相对路径升一级)[feat: in-session-find]
 import { SessionFindBar } from "../find/find-bar"
+// FORK-BEGIN: REQ-108 会话进度条依赖 [feat: session-presentation-input-batch] 2026-08-17
+import { createResizeObserver } from "@solid-primitives/resize-observer"
+import { makeTimer } from "@solid-primitives/timer"
+import { messageAgentColor } from "@/utils/agent"
+import { nextSessionProgressStatus, sessionProgressPace, type SessionProgressStatus } from "./session-progress"
+// FORK-END
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -345,6 +351,8 @@ export function MessageTimeline(props: {
     status: sessionStatus,
     showReasoningSummaries: settings.general.showReasoningSummaries,
     inlineComments: settings.general.newLayoutDesigns,
+    // FORK: REQ-109 [feat: session-presentation-input-batch] 2026-08-17
+    shellToolPartsGrouped: settings.general.shellToolPartsGrouped,
   })
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
@@ -576,6 +584,32 @@ export function MessageTimeline(props: {
     dismiss: null as "escape" | "outside" | null,
   })
   let more: HTMLButtonElement | undefined
+
+  // FORK-BEGIN: REQ-108 会话进度条 —— 2026-08-11 上游同步(1.17.4→1.18.16)整块丢失,按基准版
+  //   e77443750e `pages/session/message-timeline.tsx` 原样搬回(该文件已被上游重写并搬到本目录,
+  //   故认代码不认行号)。三态 `hidden/showing/hiding` 里 hiding 专供 220ms 淡出 ——
+  //   硬消失和淡出是两种手感,别省。扫动周期随标题栏宽度自适应。
+  //   [feat: session-presentation-input-batch] 2026-08-17
+  let progressHead: HTMLDivElement | undefined
+  const [bar, setBar] = createStore({ ms: sessionProgressPace(640) })
+  const updateProgressMetrics = () => {
+    if (!progressHead || progressHead.clientWidth <= 0) return
+    setBar("ms", sessionProgressPace(progressHead.clientWidth))
+  }
+  createResizeObserver(() => progressHead, updateProgressMetrics)
+
+  const working = createMemo(() => sessionStatus().type !== "idle")
+  const tint = createMemo(() => messageAgentColor(sessionMessages(), sync().data.agent))
+  const [timeoutDone, setTimeoutDone] = createSignal(true)
+  const workingStatus = createMemo<SessionProgressStatus>((previous) =>
+    nextSessionProgressStatus({ previous, working: working(), timeoutDone: timeoutDone() }),
+  )
+  createEffect(() => {
+    if (workingStatus() !== "hiding") return
+    setTimeoutDone(false)
+    makeTimer(() => setTimeoutDone(true), 260, setTimeout)
+  })
+  // FORK-END
 
   const bindListRoot = (root: HTMLDivElement) => {
     if (root === listRoot()) return
@@ -1035,17 +1069,43 @@ export function MessageTimeline(props: {
   }
 
   const renderAssistantPartGroup = (row: Accessor<TimelineRowMap["AssistantPart"]>, onSizeChange?: () => void) => {
-    if (row().group.type === "context") {
+    // FORK: REQ-109 —— "command" 与 "context" 走同一套折叠外壳,但**是平级的独立分组**,
+    //   标题文案由此处传入(「已运行 N 条命令」),不并进「已探索」。
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    //   REQ-113A —— "invalid"(模型调了不存在的工具)同为可折叠组:内容逐字相同的纯噪声,
+    //   合并成一行计数、点开可看每条详情。合并不隐藏信号 —— 连续 N 次调不到工具说明 agent
+    //   在空转,合成一行反而比刷屏 N 行更醒目。
+    const groupType = row().group.type
+    if (groupType === "context" || groupType === "command" || groupType === "invalid") {
       const parts = createMemo(() => {
         const group = row().group
-        if (group.type !== "context") return emptyTools
+        if (group.type === "part") return emptyTools
         return group.refs
           .map((ref) => getMsgPart(ref.messageID, ref.partID))
           .filter((part): part is ToolPart => part?.type === "tool")
       })
-      const contextOpenKey = () => `context:${row().group.key}`
+      const contextOpenKey = () => `${groupType}:${row().group.key}`
       const open = createMemo(() => {
         return toolOpen[contextOpenKey()] === true
+      })
+      const busy = createMemo(
+        () => workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key,
+      )
+      // FORK: 命令组 / 无效调用组的标题走 app 侧字典(自带复数规则),
+      //   缺省 undefined = 上游「正在探索/已探索 + 计数」原样不动
+      const labels = createMemo(() => {
+        if (groupType === "command")
+          return {
+            activeText: language.t("session.commandGroup.running"),
+            doneText: language.t("session.commandGroup.ran"),
+            summary: language.plural("session.commandGroup.count", parts().length),
+          }
+        if (groupType === "invalid") {
+          const text = language.plural("session.invalidGroup.count", parts().length)
+          // 无效调用是终态失败记录,没有"正在进行"的语义,两态同文案
+          return { activeText: text, doneText: text, summary: "" }
+        }
+        return undefined
       })
 
       return (
@@ -1053,23 +1113,36 @@ export function MessageTimeline(props: {
           parts={parts()}
           open={open()}
           onOpenChange={(value) => setToolOpen(contextOpenKey(), value)}
-          busy={
-            workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
-          }
+          busy={busy()}
+          labels={labels()}
           onSizeChange={onSizeChange}
         />
       )
     }
 
-    const message = createMemo(() => {
+    // FORK: REQ-113B —— "repeat"(同文件连续编辑)**不是折叠组**:仍渲染成一张独立的编辑卡,
+    //   只在标题上加 ×N 计数。取**最后一次**编辑的卡片(文件的最新状态最有用),
+    //   「改了哪个文件」这个关键信息原样留在标题里,只是不把同一句话重复说 N 遍。
+    //   [feat: session-presentation-input-batch] 2026-08-17
+    const anchorRef = createMemo(() => {
       const group = row().group
-      if (group.type !== "part") return
-      return messageByID().get(group.ref.messageID)
+      if (group.type === "part") return group.ref
+      if (group.type === "repeat") return group.refs.at(-1)
+      return undefined
+    })
+    const repeatCount = createMemo(() => {
+      const group = row().group
+      return group.type === "repeat" ? group.refs.length : undefined
+    })
+    const message = createMemo(() => {
+      const ref = anchorRef()
+      if (!ref) return
+      return messageByID().get(ref.messageID)
     })
     const part = createMemo(() => {
-      const group = row().group
-      if (group.type !== "part") return
-      return getMsgPart(group.ref.messageID, group.ref.partID)
+      const ref = anchorRef()
+      if (!ref) return
+      return getMsgPart(ref.messageID, ref.partID)
     })
     const defaultOpen = createMemo(() => {
       const item = part()
@@ -1094,6 +1167,8 @@ export function MessageTimeline(props: {
                 deferToolContent
                 virtualizeDiff={false}
                 onContentRendered={onSizeChange}
+                /* FORK: REQ-113B 同文件连续编辑 ×N [feat: session-presentation-input-batch] 2026-08-17 */
+                repeatCount={repeatCount()}
               />
             )}
           </Show>
@@ -1564,6 +1639,12 @@ export function MessageTimeline(props: {
       >
         <Show when={showHeader()}>
           <div
+            // FORK: REQ-108 会话进度条 —— 挂 ref 供扫动周期按标题栏宽度自适应
+            //   [feat: session-presentation-input-batch] 2026-08-17
+            ref={(el) => {
+              progressHead = el
+              updateProgressMetrics()
+            }}
             data-session-title
             classList={{
               "sticky top-0 z-30": true,
@@ -1579,6 +1660,19 @@ export function MessageTimeline(props: {
               "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": props.centered && !settings.general.newLayoutDesigns(),
             }}
           >
+            {/* FORK-BEGIN: REQ-108 会话进度条 [feat: session-presentation-input-batch] 2026-08-17 */}
+            <Show when={workingStatus() !== "hidden" && settings.general.showSessionProgressBar()}>
+              <div data-component="session-progress" data-state={workingStatus()} aria-hidden="true">
+                <div
+                  data-component="session-progress-bar"
+                  style={{
+                    background: tint() ?? "var(--icon-interactive-base)",
+                    animation: `session-progress-whip ${bar.ms}ms infinite`,
+                  }}
+                />
+              </div>
+            </Show>
+            {/* FORK-END */}
             <div class="h-12 w-full flex items-center justify-between gap-2">
               <div
                 classList={{
