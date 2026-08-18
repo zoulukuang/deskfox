@@ -142,5 +142,23 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
   - S4b 实际删除量 62 locale × 23 key = 1426 行,与 1-spec §3-S4b 清单**逐条对齐,无增无减**。
   - 基线口径修正:2-plan §1 写的 typecheck「预期 29/29」为立项时快照,实际当前为
     **33/33**(包数增长),非回归。
-- **下一步 S1(迁移污染检测)是本批核心交付,含 T7 spike + 3 笔 commit + 真机三场景实测,
-  开工前需 user 确认。** S3/S4a/S4b 为清障小批,已独立可交付。
+- 2026-08-18 user 下开工令,**S1 完成(6 笔 commit)**。与计划的偏差与原因:
+  - **T7 spike 通过**,`node:sqlite` 路线成立,未触发 better-sqlite3 回退分支。
+  - **commit 数 3 → 6**:pre-commit 500 行阈值拦下,按 P4 拆成"判定逻辑 / IO 壳 / 迁移期 /
+    启动期 / renderer / 验收脚本"六笔,每笔独立可编译可 revert。拆分顺序有硬约束 ——
+    迁移期(产出 `quarantinedDbs` 字段)必须在启动期接线(消费该字段)之前,否则中间态编译不过。
+  - **基线条数 66 → 38**:1-spec 数字与实际不符,按 `migration.gen.ts` 与目录实测取 38。
+  - **`gen-migration-baseline.mjs` 落 `packages/branding/scripts/` 而非根 `scripts/`**:后者是
+    pre-commit 黑名单(仅放行 install-hooks.sh),放进去要烧 R4 override 配额(每季仅 2 笔)。
+    branding/scripts 有 `gen-tray-icons.py` 同构先例(同样生成到 desktop/src/main/deskfox/*.generated.ts)。
+  - **`checkAndQuarantineAheadDb` 的 dbPath 改为调用方注入**:原计划复用
+    `resolveSidecarDbPath`,但它的家 `db-orphan-prune.ts` 顶层 import 了 `node:sqlite`,
+    bun 连 resolve 都做不到 → 引用它单测就整个加载不了。
+  - **`applyDeskfoxDataNamespace` 增可选 opener 形参**:不注入的话 bun 测试环境永远走 fail-open,
+    测不到真实判定行为(首次写完测试即撞,故补此形参)。
+  - **真机验收踩两坑**(详见 3-changelog):隔离必须用 `HOME` 不能用 `XDG_DATA_HOME`
+    (后者触发 same-dir 使整条逻辑被跳过,首轮 6 项误报);必须带 `--use-mock-keychain`
+    (否则弹「找不到钥匙串」系统框打断跑批)。
+- **遗留**:`--check-upstream` 接入发版 SOP 未做 —— 本机 `~/.claude/commands/ship.md` 当前不存在
+  (只有 `ship.md.bak`),不擅自改 user 本机文件,待 user 确认接入方式。
+- **下一步 S2(performance e2e 套件复活)**,预计 0.5-1.5 天 + 机器时间(3 轮全套可后台跑)。
