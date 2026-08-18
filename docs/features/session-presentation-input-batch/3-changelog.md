@@ -186,9 +186,17 @@ CDP 逐帧采样真实窗口,结论**分两种情况**:
 
 ## 已知问题(非本批引入,建议单开)
 
-- **e2e performance 组 5 条既有失败**(已用 clean tree 对照确认与本批无关):
+- **e2e performance 组 6 条既有失败**(2026-08-18 push 前全量复测定案,证据链完整):
   `timeline-stability/adverse.spec.ts` 2 条(shell 状态跨虚拟化保持 / 窄屏来回 resize 行序)、
-  `timeline/` benchmark 3 条(home-tab 导航 / parent hydration / tab 切换)。
+  `timeline/` benchmark 3 条(home-tab 导航 / parent hydration / tab 切换)、
+  `timeline-stability/scroll-interaction.spec.ts:51`(drag-select)。
+  **定案方法**:合并后 main 全套 ×2 与**合并前基线(`2f55e77ff4`)全套 ×1 失败集逐条一致**(均 6 败/59 过/65 全执行);
+  `scroll-interaction.spec.ts` 整个文件对并行负载敏感 —— `:51` 单文件 3/3 过、全套 2/2 败,
+  `:175` 单文件 3/3 败、全套 2/2 过,基线上同样翻转 → **flaky 族,非回归**。
+  ⚠️ 按 R5「flaky 48h 内修或移除」,该文件的时序敏感问题应单开需求处理;
+  当前 performance 组既拦不住真回归也持续制造噪声,不建议作为发版闸。
+  另:此前两次「56/60 passed」的数字差异是 line reporter 摘要被进度条覆盖的**读数问题**,
+  用 `--reporter=list` 复核后 65 条从未漏跑。
 - **桌面打包链路两处环境阻塞**(与代码无关):`prebuild` 要下的
   `@opencode-ai/cli-darwin-arm64@0.0.0-next-16350` 在 registry 已取不到(本地 `resources/opencode-cli`
   是 8/14 旧物);`electron-builder --mac --dir` 两次都在下载环节 600s 超时(Electron 本体已缓存)。
