@@ -14,7 +14,9 @@ export function analyzeVisualObservations<RegionName extends string>(
       invariant.type === "continuous-any",
   )
   const unique = new Set(regions(invariants, "unique"))
-  const stable = new Set(regions(invariants, "stable"))
+  const stable = invariants.filter(
+    (invariant): invariant is Extract<VisualInvariant<RegionName>, { type: "stable" }> => invariant.type === "stable",
+  )
   const fixed = invariants.filter(
     (invariant): invariant is Extract<VisualInvariant<RegionName>, { type: "fixed" }> => invariant.type === "fixed",
   )
@@ -55,9 +57,11 @@ export function analyzeVisualObservations<RegionName extends string>(
       const duplicate = samples.find((sample) => sample.count > 1)
       if (duplicate) issues.push(`${name} appeared ${duplicate.count} times at ${Math.round(duplicate.at)}ms`)
     }
-    if (stable.has(name)) {
+    for (const invariant of stable.filter((invariant) => includes(invariant.regions, name))) {
       const identities = [...new Set(visible.map((sample) => sample.node).filter((node) => node > 0))]
-      if (identities.length > 1) issues.push(`${name} remounted ${identities.length - 1} times`)
+      const remounts = identities.length - 1
+      // FORK: 允许用例按实测依据放宽到 maxRemounts(默认 0)。2026-08-18 [feat: voice-preclear-batch]
+      if (remounts > (invariant.maxRemounts ?? 0)) issues.push(`${name} remounted ${remounts} times`)
     }
     for (const invariant of fixed.filter((invariant) => includes(invariant.regions, name))) {
       const origin = visible[0]
@@ -71,18 +75,20 @@ export function analyzeVisualObservations<RegionName extends string>(
           issues.push(`${name} opacity fell to ${sample.opacity} at ${Math.round(sample.at)}ms`)
       }
     }
-    if (continuity.some((invariant) => includes(invariant.regions, name))) {
+    for (const invariant of continuity.filter((invariant) => includes(invariant.regions, name))) {
+      // FORK: 允许用例按实测依据放宽到 maxGapFrames(默认 0)。2026-08-18 [feat: voice-preclear-batch]
+      const allowed = invariant.maxGapFrames ?? 0
       const firstPresent = samples.findIndex((sample) => sample.present)
       const lastPresent = samples.findLastIndex((sample) => sample.present)
-      if (samples.slice(firstPresent, lastPresent + 1).some((sample) => !sample.present))
-        issues.push(`${name} disappeared between present frames`)
+      const absent = samples.slice(firstPresent, lastPresent + 1).filter((sample) => !sample.present).length
+      if (absent > allowed) issues.push(`${name} disappeared between present frames (${absent} frames)`)
       const firstVisible = samples.findIndex((sample) => sample.visible)
       const lastVisible = samples.findLastIndex((sample) => sample.visible)
-      if (
-        firstVisible >= 0 &&
-        samples.slice(firstVisible, lastVisible + 1).some((sample) => !sample.visible && sample.inViewport)
-      )
-        issues.push(`${name} blanked between visible frames`)
+      const blank =
+        firstVisible >= 0
+          ? samples.slice(firstVisible, lastVisible + 1).filter((sample) => !sample.visible && sample.inViewport).length
+          : 0
+      if (blank > allowed) issues.push(`${name} blanked between visible frames (${blank} frames)`)
     }
     for (const invariant of motion.filter((invariant) => includes(invariant.regions, name))) {
       for (const metric of ["top", "bottom", "width", "height"] as const) {

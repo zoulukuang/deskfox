@@ -63,6 +63,8 @@ import { TabsProvider, useTabs, type DraftTab } from "@/context/tabs"
 import { SDKProvider, useSDK } from "@/context/sdk"
 // FORK: REQ-049 [feat: sidecar-oom-brake] 2026-08-02
 import { SidecarHealthMonitor } from "@/components/sidecar-health-monitor"
+// FORK: REQ-084① 数据库隔离提示 [feat: voice-preclear-batch] 2026-08-18
+import { DbQuarantineMonitor } from "@/components/db-quarantine-monitor"
 import { WslServersProvider } from "@/wsl/context"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
 import LegacyLayout from "@/pages/layout"
@@ -323,6 +325,8 @@ function SharedProviders(props: ParentProps) {
       <BodyDesignClass />
       {/* FORK: REQ-049 sidecar 断连/内存压力提示 [feat: sidecar-oom-brake] 2026-08-02;上游 provider 拆分后留在 server-agnostic 壳(全局健康监控与路由无关)2026-08-11 */}
       <SidecarHealthMonitor />
+      {/* FORK: REQ-084① 超前 schema 数据库被隔离后的一次性告知(同为 server-agnostic 全局提示)[feat: voice-preclear-batch] 2026-08-18 */}
+      <DbQuarantineMonitor />
       <CommandProvider>
         <DesktopCommands />
         <HighlightsProvider>{props.children}</HighlightsProvider>

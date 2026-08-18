@@ -11,6 +11,10 @@ test("applies message latency after a list response gate is released", async () 
       handler = callback
       return Promise.resolve()
     },
+    // FORK: `mockOpenCodeServer` 自 2026-08-11 起会种 e2e 布局基线(`addInitScript`),
+    //   这个假 page 少了该方法就整文件加载即抛、42 个用例连带失联。
+    //   2026-08-18 [feat: voice-preclear-batch]
+    addInitScript: () => Promise.resolve(),
   } as unknown as Page
   await mockOpenCodeServer(page, {
     provider: {},

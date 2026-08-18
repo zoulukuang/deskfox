@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import os from "os"
 import path from "path"
-import { applyDeskfoxDataNamespace, planNamespaceMigration, resolveDeskfoxXdg } from "./data-namespace"
+import { Database } from "bun:sqlite"
+import { applyDeskfoxDataNamespace, detectAheadDbs, planNamespaceMigration, resolveDeskfoxXdg } from "./data-namespace"
+import { MIGRATION_BASELINE } from "./migration-baseline.generated"
+import type { ReadonlyDb } from "./db-schema-guard-io"
 
 function tmpHome(tag: string): string {
   const home = path.join(os.tmpdir(), `deskfox-ns-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
@@ -184,5 +187,127 @@ describe("applyDeskfoxDataNamespace (TC-3/4/5)", () => {
     )
     // 幂等标记
     expect(existsSync(path.join(newData, ".deskfox-namespace-migrated"))).toBe(true)
+  })
+})
+
+// ── REQ-084① 迁移期污染检测(R8 T4 的 unit 部分)[feat: voice-preclear-batch] 2026-08-18 ──
+
+/** 单测 opener:prod 走 node:sqlite(bun resolve 不了),这里注入 bun:sqlite。 */
+const bunOpener = (p: string): ReadonlyDb => {
+  const db = new Database(p, { readonly: true })
+  return {
+    all: (sql: string) => db.query(sql).all() as Array<Record<string, unknown>>,
+    close: () => db.close(),
+  }
+}
+
+/** 在目录里造一个真 sqlite 库,journal 内容由 ids 指定。 */
+function seedRealDb(dir: string, name: string, ids: string[]) {
+  const p = path.join(dir, name)
+  const db = new Database(p, { create: true })
+  db.exec("CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)")
+  const s = db.prepare("INSERT INTO migration (id, time_completed) VALUES (?, ?)")
+  for (const id of ids) s.run(id, 1)
+  db.close()
+  return p
+}
+
+describe("detectAheadDbs (T4 unit)", () => {
+  test("超前库被点名,正常库不被点名", () => {
+    const home = tmpHome("detect-mixed")
+    const data = path.join(home, ".local", "share", "opencode")
+    mkdirSync(data, { recursive: true })
+    seedRealDb(data, "opencode.db", [...MIGRATION_BASELINE.slice(0, 2), "99991231235959_pollution_probe"])
+    seedRealDb(data, "opencode-local.db", MIGRATION_BASELINE.slice(0, 3))
+
+    const got = detectAheadDbs(data, bunOpener)
+    expect(got.names).toEqual(["opencode.db"])
+    expect(got.details[0]).toContain("99991231235959_pollution_probe")
+  })
+
+  test("全部正常 → 空清单(不误伤)", () => {
+    const home = tmpHome("detect-ok")
+    const data = path.join(home, ".local", "share", "opencode")
+    mkdirSync(data, { recursive: true })
+    seedRealDb(data, "opencode.db", MIGRATION_BASELINE)
+    expect(detectAheadDbs(data, bunOpener).names).toEqual([])
+  })
+
+  test("目录不存在 / 无 db → 空清单不抛", () => {
+    expect(detectAheadDbs("/definitely/not/here", bunOpener).names).toEqual([])
+    const home = tmpHome("detect-empty")
+    const data = path.join(home, ".local", "share", "opencode")
+    mkdirSync(data, { recursive: true })
+    expect(detectAheadDbs(data, bunOpener).names).toEqual([])
+  })
+
+  test("损坏 db → 不点名(fail-open,读不出≠超前)", () => {
+    const home = tmpHome("detect-corrupt")
+    const data = path.join(home, ".local", "share", "opencode")
+    mkdirSync(data, { recursive: true })
+    writeFileSync(path.join(data, "opencode.db"), "garbage-not-sqlite")
+    expect(detectAheadDbs(data, bunOpener).names).toEqual([])
+  })
+})
+
+describe("迁移期:超前 db 不迁,其余照迁 (T4 unit,D1 拍板行为)", () => {
+  test("超前 opencode.db 留在旧 ns;auth/config/正常 db 全部迁入,原件无损", async () => {
+    const home = tmpHome("t4-quarantine")
+    const data = path.join(home, ".local", "share", "opencode")
+    const config = path.join(home, ".config", "opencode")
+    mkdirSync(data, { recursive: true })
+    mkdirSync(config, { recursive: true })
+    // 被上游 opencode 迁超前的主库 + 它的 wal
+    seedRealDb(data, "opencode.db", [...MIGRATION_BASELINE.slice(0, 2), "99991231235959_pollution_probe"])
+    writeFileSync(path.join(data, "opencode.db-wal"), "AHEAD-WAL")
+    // 正常的另一档库 + 用户数据
+    seedRealDb(data, "opencode-local.db", MIGRATION_BASELINE.slice(0, 3))
+    writeFileSync(path.join(data, "auth.json"), '{"anthropic":{"key":"K"}}')
+    mkdirSync(path.join(data, "storage", "session"), { recursive: true })
+    writeFileSync(path.join(data, "storage", "session", "s1.json"), "session-data")
+    writeFileSync(path.join(config, "opencode.jsonc"), '{"model":"m"}')
+
+    const env: NodeJS.ProcessEnv = {}
+    const r = await applyDeskfoxDataNamespace(env, home, bunOpener)
+
+    const newData = path.join(home, ".local", "share", "deskfox", "opencode")
+    expect(r.switched).toBe(true)
+    // ① reason 与 quarantinedDbs 如实回报(供启动后 toast)
+    expect(r.reason).toBe("db-quarantined")
+    expect(r.quarantinedDbs).toEqual(["opencode.db"])
+    // ② 超前库及其 wal 都没进新 ns
+    expect(existsSync(path.join(newData, "opencode.db"))).toBe(false)
+    expect(existsSync(path.join(newData, "opencode.db-wal"))).toBe(false)
+    // ③ auth/config/正常库/用户数据照迁 —— D1 的核心:能保的一律保住
+    expect(readFileSync(path.join(newData, "auth.json"), "utf8")).toBe('{"anthropic":{"key":"K"}}')
+    expect(existsSync(path.join(newData, "opencode-local.db"))).toBe(true)
+    expect(readFileSync(path.join(newData, "storage", "session", "s1.json"), "utf8")).toBe("session-data")
+    expect(readFileSync(path.join(home, ".config", "deskfox", "opencode", "opencode.jsonc"), "utf8")).toBe(
+      '{"model":"m"}',
+    )
+    // ④ 旧 ns 原件一字未动(非破坏,用户可自行取回)
+    expect(existsSync(path.join(data, "opencode.db"))).toBe(true)
+    expect(readFileSync(path.join(data, "opencode.db-wal"), "utf8")).toBe("AHEAD-WAL")
+    // ⑤ marker 记下隔离原因
+    const marker = JSON.parse(readFileSync(path.join(newData, ".deskfox-namespace-migrated"), "utf8"))
+    expect(marker.reason).toBe("db-quarantined")
+    expect(marker.quarantinedDbs).toEqual(["opencode.db"])
+  })
+
+  test("回归:全正常库 → 照旧全迁,reason 不变、无 quarantinedDbs", async () => {
+    const home = tmpHome("t4-normal")
+    const data = path.join(home, ".local", "share", "opencode")
+    mkdirSync(data, { recursive: true })
+    seedRealDb(data, "opencode.db", MIGRATION_BASELINE)
+    writeFileSync(path.join(data, "auth.json"), "{}")
+
+    const r = await applyDeskfoxDataNamespace({}, home, bunOpener)
+    const newData = path.join(home, ".local", "share", "deskfox", "opencode")
+
+    expect(r.reason).toBe("migrate-from-opencode")
+    expect(r.quarantinedDbs).toBeUndefined()
+    expect(existsSync(path.join(newData, "opencode.db"))).toBe(true)
+    const marker = JSON.parse(readFileSync(path.join(newData, ".deskfox-namespace-migrated"), "utf8"))
+    expect(marker.reason).toBeUndefined()
   })
 })

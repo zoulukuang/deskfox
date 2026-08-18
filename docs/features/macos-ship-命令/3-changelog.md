@@ -141,3 +141,30 @@ electron-updater 6.8.9 `MacUpdater.filterFilesForArch`:Intel 机会把所有含 
 - 版本号已最新时 `publish.sh` 会 `nothing to do` 直接退出、**跳过部署**,手工改了 index.html 必须 `--force` 才传得上去。
 
 **⑤ 产物目录**:arm64 落 `dist-deskfox/mac-arm64/`、x64 落 `dist-deskfox/mac/`(electron-builder 规则:`appOutDir = "mac" + getArchSuffix`,未设 `defaultArch` 时默认 x64 故 x64 无后缀)。build 脚本此前把两者写反,已修,详见 `docs/features/electron-replatform-macos/3-changelog.md` 的 2026-08-12 follow-up 段。
+
+## follow-up(2026-08-18,新增步骤 0.5 — 上游 schema 漂移检查)[feat: voice-preclear-batch]
+
+本机 `/ship`(`.claude/commands/ship.md`,gitignored 不入仓)已加一步;此处记**知识正本**,供 Win 端对齐。
+
+**做什么**:发版前跑一次
+```bash
+node packages/branding/scripts/gen-migration-baseline.mjs --check-upstream
+```
+输出「本地 core migration N 条 / 上游 M 条 / 是否领先」。结果三选一写进步骤 10 收尾报告:
+`✅ 上游未领先` / `📌 上游领先 N 条 + 条目` / `⚠ 未检查成功`。
+
+**为什么是信号制、不阻断**(2026-08-18 user 拍板):上游领先意味着「同机若装了新版上游 opencode,
+它可能把共享 db 迁到超前 schema」。但**兼容只有升内核一条路**,那是一个独立需求(REQ-103 式同步),
+不该和发版挤同一个窗口;而且 DeskFox 侧已有 **REQ-084① 迁移污染检测**在兜底
+(超前 db 不迁 / 已污染的启动期隔离挪走 + toast 告知)。所以它是**排期信号,不是发版障碍** ——
+脚本恒 `exit 0`,拿不到上游数据也照常发,只在报告里标一句。
+
+**放在步骤 0.5 而不是更靠后**:它是纯读操作、秒级完成,放前置检查区顺手做掉;
+真要领先了,user 在发版开始时就知道,而不是发完才被告知。
+
+**首次实跑**(2026-08-18):本地 38 条 / 上游 38 条 → `✅ 上游未领先,无 schema 漂移`。
+
+**一个找错地方的教训**:此前一度记成「`~/.claude/commands/ship.md` 不存在,只有 `.bak`」,
+据此把这件事挂成了待办。实际 ship 命令正本在**项目内** `.claude/commands/ship.md` ——
+该目录 2026-06-22 起 gitignore(见 `project_claude_commands_gitignored` 记忆),
+所以它**本来就不在用户级目录**。改完 ship.md 记得反向 `cp` 刷新 `~/.deskfox-signing/ship.md.bak`(本次已刷)。

@@ -18,6 +18,11 @@ import { existsSync, readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, join, relative, sep } from "node:path"
 
+// REQ-084① 迁移污染检测 [feat: voice-preclear-batch] 2026-08-18
+import { assessJournal } from "./db-schema-guard"
+import { readJournalIds, type DbOpener } from "./db-schema-guard-io"
+import { MIGRATION_BASELINE } from "./migration-baseline.generated"
+
 // opencode core global.ts 恒在 xdg 根后追加的叶子(const app = "opencode")。不改它,故这里对齐。
 const OPENCODE_LEAF = "opencode"
 // 迁移完成标记(落新 data 目录),保证幂等。
@@ -87,8 +92,11 @@ function hasOpencodeDb(dir: string): boolean {
   }
 }
 
-/** data 目录 copy 过滤:排除顶层 log/bin、*.bak-* 备份、*.db-shm(SQLite 临时,copy db 本体+wal 足够)。 */
-function makeDataCopyFilter(srcRoot: string) {
+/**
+ * data 目录 copy 过滤:排除顶层 log/bin、*.bak-* 备份、*.db-shm(SQLite 临时,copy db 本体+wal 足够)。
+ * `excludeDbs`(REQ-084①):判定为 schema 超前的 db 文件名,连同其 -wal/-shm 一并不迁。
+ */
+function makeDataCopyFilter(srcRoot: string, excludeDbs: ReadonlySet<string> = new Set()) {
   return (src: string): boolean => {
     const rel = relative(srcRoot, src)
     if (!rel) return true // 根目录本身
@@ -97,8 +105,42 @@ function makeDataCopyFilter(srcRoot: string) {
     const base = basename(src)
     if (/\.bak-\d/.test(base)) return false
     if (base.endsWith(".db-shm")) return false
+    // 超前 db 不迁:它对本 fork core 本来就打不开,迁过去只会让新 ns 一起坏(原件留在旧 ns,无损)。
+    if (excludeDbs.size > 0) {
+      const dbName = base.replace(/-(wal|shm)$/, "")
+      if (excludeDbs.has(dbName)) return false
+    }
     return true
   }
+}
+
+/**
+ * REQ-084① 迁移期检测:扫旧 ns 里的 opencode*.db,挑出 schema 超前(本 fork core 打不开)的。
+ * 纯探测 + 只读,绝不改动源文件。任何异常都当"没超前"处理(fail-open),不能因检测本身挡了迁移。
+ */
+export function detectAheadDbs(oldDataDir: string, opener?: DbOpener): { names: string[]; details: string[] } {
+  const names: string[] = []
+  const details: string[] = []
+  if (!existsSync(oldDataDir)) return { names, details }
+  let entries: string[] = []
+  try {
+    entries = readdirSync(oldDataDir).filter((n) => /^opencode.*\.db$/.test(n))
+  } catch {
+    return { names, details }
+  }
+  for (const name of entries) {
+    try {
+      const ids = opener ? readJournalIds(join(oldDataDir, name), opener) : readJournalIds(join(oldDataDir, name))
+      const got = assessJournal(ids, MIGRATION_BASELINE)
+      if (got.verdict === "ahead") {
+        names.push(name)
+        details.push(`${name}(超前 ${got.aheadIds.length} 条,如 ${got.aheadIds[0]})`)
+      }
+    } catch {
+      // 单个库探测失败不影响其余,也不阻断迁移
+    }
+  }
+  return { names, details }
 }
 
 export interface ApplyResult {
@@ -107,6 +149,8 @@ export interface ApplyResult {
   reason: string
   dataHome: string
   configHome: string
+  /** REQ-084①:因 schema 超前而【未迁】的 db 文件名(原件留在旧 ns)。用于启动后 toast 告知。 */
+  quarantinedDbs?: string[]
 }
 
 /**
@@ -116,6 +160,8 @@ export interface ApplyResult {
 export async function applyDeskfoxDataNamespace(
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
+  /** REQ-084① 只读 db opener。prod 省略(用 node:sqlite);单测注入 bun:sqlite —— bun 无法 resolve node:sqlite。 */
+  opener?: DbOpener,
 ): Promise<ApplyResult> {
   const { dataHome, configHome } = resolveDeskfoxXdg(env, home)
   // 旧(隔离前)共享路径 = 原 xdg 默认 + "opencode"。读的是【未被本函数修改前】的 env。
@@ -155,9 +201,17 @@ export async function applyDeskfoxDataNamespace(
   const configTmp = newConfig + ".migrating"
   try {
     log.info(`[data-namespace] 首启迁移开始(非破坏 copy):${oldData} → ${newData}`)
+    // REQ-084①:先探旧 ns 的 db 是否被【另装的上游 opencode】迁成了超前 schema。
+    // 超前 db 不迁(本 fork core 打不开,迁过去等于把新 ns 一起毒死);auth/config/其余照迁。
+    const ahead = detectAheadDbs(oldData, opener)
+    if (ahead.names.length > 0) {
+      log.warn(
+        `[data-namespace] 检测到超前 schema 的数据库,本次不迁(原件保留在 ${oldData}):${ahead.details.join(", ")}`,
+      )
+    }
     await rm(dataTmp, { recursive: true, force: true })
     await rm(configTmp, { recursive: true, force: true })
-    await cp(oldData, dataTmp, { recursive: true, filter: makeDataCopyFilter(oldData) })
+    await cp(oldData, dataTmp, { recursive: true, filter: makeDataCopyFilter(oldData, new Set(ahead.names)) })
     if (existsSync(oldConfig)) {
       await cp(oldConfig, configTmp, { recursive: true })
     }
@@ -172,11 +226,26 @@ export async function applyDeskfoxDataNamespace(
     }
     await writeFile(
       join(newData, MIGRATION_MARKER),
-      JSON.stringify({ from: oldData, at: new Date().toISOString() }, null, 2),
+      JSON.stringify(
+        {
+          from: oldData,
+          at: new Date().toISOString(),
+          // REQ-084①:记下哪些 db 因超前 schema 被留下,便于事后排查"我的会话怎么没了"。
+          ...(ahead.names.length > 0 ? { reason: "db-quarantined", quarantinedDbs: ahead.names } : {}),
+        },
+        null,
+        2,
+      ),
     )
     setEnv()
     log.info(`[data-namespace] 首启迁移完成,已切到 deskfox 命名空间:${newData}(原 ${oldData} 保留)`)
-    return { switched: true, reason: "migrate-from-opencode", dataHome, configHome }
+    return {
+      switched: true,
+      reason: ahead.names.length > 0 ? "db-quarantined" : "migrate-from-opencode",
+      dataHome,
+      configHome,
+      quarantinedDbs: ahead.names.length > 0 ? ahead.names : undefined,
+    }
   } catch (err) {
     // 保守回退:清临时目录,不设 XDG env → 本次仍用旧共享 ns(数据无损),下次启动重试。
     await rm(dataTmp, { recursive: true, force: true }).catch(() => {})

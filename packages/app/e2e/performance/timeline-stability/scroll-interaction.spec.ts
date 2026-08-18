@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import {
   defineVisualRegions,
   reportVisualStability,
@@ -203,7 +203,22 @@ test("does not claim keyboard scrolling owned by a nested scrollable", async ({ 
   expect(await nested.evaluate((element) => element.scrollTop)).toBeLessThan(nestedBefore)
 
   await nested.evaluate((element) => (element.scrollTop = 0))
-  await scroller.evaluate((element) => (element.scrollTop = Math.min(300, element.scrollHeight - element.clientHeight)))
+  // FORK: 直接写 `scrollTop` 会被时间线的「粘底跟随」在下一帧拉回底部 —— 外层此前一直停在底部,
+  //   跟随模式是激活的。踩不踩得到取决于时序,机器越忙越容易踩到,这正是本文件 flaky 的来源
+  //   (全套跑时报 `Expected: < 300 / Received: 2975`,2975 就是底部;单文件跑负载轻则蒙混过关)。
+  //   修法与本目录 `adverse.spec.ts` 已有做法一致:先发一次真实滚轮手势解除粘底,再定位到边界,
+  //   并等它**真的稳住**再取基准值。2026-08-18 [feat: voice-preclear-batch]
+  await scroller.evaluate((element) => {
+    element.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -1_000 }))
+  })
+  await waitForScrollerSettled(page)
+  await scroller.evaluate((element) => {
+    // 粘底已被手势解除,这里再明确落到行程中点:**必须离底部足够远**。停在底部附近时,
+    // 时间线还在懒测量、`scrollHeight` 会继续长(实测基准 3086 → PageUp 后 3189),
+    // 「按 PageUp 应该变小」就会被内容增长盖过去。
+    element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) / 2)
+  })
+  await waitForScrollerSettled(page)
   const boundaryBefore = await scroller.evaluate((element) => element.scrollTop)
   expect(boundaryBefore).toBeGreaterThan(0)
   await nested.press("PageUp")
@@ -337,6 +352,28 @@ function rowPairPlan(
     { type: "label-stability", regions: "all" },
     { type: "flow", regions: ["shell", "following"] },
   ])
+}
+
+// FORK: 等外层滚动条**真的停下来** —— 位置和内容高度**都**连续两帧不变。时间线有粘底跟随,
+//   直接写 `scrollTop` 或发滚轮手势后位置还会再动一两帧;更阴的是 `scrollHeight` 也还在长
+//   (懒测量),只盯位置会拿到一个下一秒就失效的基准值 —— 本文件 flaky 的直接成因。
+//   2026-08-18 [feat: voice-preclear-batch]
+async function waitForScrollerSettled(page: Page) {
+  await page.waitForFunction(() => {
+    const root = [...document.querySelectorAll<HTMLElement>(".scroll-view__viewport")].find((element) =>
+      element.querySelector("[data-timeline-row]"),
+    )
+    if (!root) return false
+    return new Promise<boolean>((resolve) => {
+      const top = root.scrollTop
+      const height = root.scrollHeight
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          resolve(Math.abs(root.scrollTop - top) <= 0.5 && Math.abs(root.scrollHeight - height) <= 0.5),
+        ),
+      )
+    })
+  })
 }
 
 function anchorPlan(regions: Record<"anchor", { selector: string; closest?: string }>) {

@@ -12,6 +12,8 @@ import * as telemetry from "./telemetry"
 import { registerLocalAssetProtocol } from "./local-asset"
 // FORK: native-menu-i18n [feat: native-menu-i18n]
 import { applyContextMenuLanguage } from "./context-menu"
+// REQ-084① 数据库隔离通知(一次性,renderer 就绪后取)[feat: voice-preclear-batch] 2026-08-18
+import { takeDbQuarantineNotice } from "./db-quarantine-notice"
 
 export function registerDeskfoxIpc() {
   // 本地资源协议(localasset://)— app.whenReady 后注册 [feat: electron-replatform]
@@ -46,6 +48,9 @@ export function registerDeskfoxIpc() {
     applyContextMenuLanguage(args.locale)
     return true
   })
+
+  // ── 数据库隔离通知(REQ-084①,取走即清,不重复弹)[feat: voice-preclear-batch] ──
+  h("get_db_quarantine_notice", () => takeDbQuarantineNotice())
 
   // ── 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] ──
   h("get_telemetry_enabled", () => telemetry.getTelemetryStatus())

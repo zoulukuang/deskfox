@@ -137,6 +137,18 @@ beforeAll(async () => {
     showToast: () => 0,
   }))
 
+  // submit.ts 只依赖 @/utils/toast 的 showToast。在这个边界 mock(而非更深的
+  // @opencode-ai/ui/toast),否则 utils/toast.tsx 仍会被真实加载并静态校验它自己的
+  // 依赖(ui/toast 的 toaster + ui/v2/toast-v2 三个导出)—— 上面那个 mock 只提供了
+  // 两个导出,单独跑本文件时整文件加载即挂。全量跑因其它文件已真实加载过 ui/toast
+  // 而侥幸通过,掩盖了这个缺口。
+  mock.module("@/utils/toast", () => ({
+    showToast: () => 0,
+    dismissToast: () => undefined,
+    setV2Toast: () => undefined,
+    ToastRegion: () => null,
+  }))
+
   mock.module("@opencode-ai/core/util/encode", () => ({
     base64Encode: (value: string) => value,
   }))
