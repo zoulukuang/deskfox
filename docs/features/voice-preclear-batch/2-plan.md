@@ -133,3 +133,5 @@ local 包或 `electron -e` 验证主进程 `require("node:sqlite")` 可用、能
 - 2026-08-18 user 提议「发版前查上游数据库格式变化并做兼容」,讨论后细化为**信号制**:
   `gen-migration-baseline.mjs --check-upstream` 输出上游领先条数进发版报告,由 user 决定是否排
   REQ-103 式同步;不当场兼容、不阻断发版。已立记忆 `preship-upstream-schema-drift-check`。
+- 2026-08-18 user 授权「计划开发文档收口」:D3/D4 按推荐采纳,四项拍板齐,spec 锁版;
+  user 要求**正式开发前先通知**,开工令未下,本批停在文档态。
