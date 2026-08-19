@@ -4,7 +4,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实际改动
 
-> commit: `67f70b36d7`(单笔自包含)
+> commit: `52e18ca165`(代码与测试单笔自包含;本行 hash 由紧随其后的 docs 笔回填)
 
 ## 改了什么
 
