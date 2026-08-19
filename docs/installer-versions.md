@@ -15,9 +15,17 @@
 
 
 
-## [macOS] 2026.11.0 - 2026-08-19 12:49
+
+## [macOS] 2026.11.1 - 2026-08-19 13:41
 
 (to be filled: commits / plugin / installer path after ship)
+
+---
+## [macOS] 2026.11.0 — 跳过,从未构建/发布
+
+发版前 code-review(`/ship` 步骤 1)抓出三条问题,user 拍板**先修再发**,版本号顺延到 2026.11.1。
+本号只在 `installer-versions.json` 里存在过十几分钟,**没有任何产物、tag 或 release**。
+(Windows 侧的 2026.11.0 是真实发布,与本条无关 —— 各平台独立号线。)
 
 ---
 ## [Windows] 2026.11.0 - 2026-08-19 09:35
