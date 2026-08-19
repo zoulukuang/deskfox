@@ -16,9 +16,43 @@
 
 
 
-## [macOS] 2026.11.1 - 2026-08-19 13:41
+## [macOS] 2026.11.1 - 2026-08-19
 
-(to be filled: commits / plugin / installer path after ship)
+**主题**:数据库自愈(REQ-084①)+ performance e2e 套件复活(REQ-117)+ 会话呈现与输入修复批
+**首次进 macOS prod**,并含发版前 code-review 抓出的三条修复。与 Win prod 2026.11.0 同批内容
+(mac 因 review 后修复顺延一个 patch 号;各平台独立号线)。
+
+**主要内容**(自 `ship-mac-prod-2026.10.0` 起 62 笔):
+- **REQ-084① 迁移污染检测**:上游 opencode 把共享 db 迁成超前 schema 时,不再把它迁进 DeskFox
+  命名空间;已污染的在启动期隔离挪走(`opencode.db.incompatible-<ts>`,保留可恢复)并以空库启动,
+  弹常驻 toast 告知用户原文件在哪。真机造超前 db 实测 12/12。
+- **REQ-117 performance e2e 套件复活**:六条既有失败全部定位为「测试自身前提过期」而非产品缺陷,
+  外加 `test:bench` 脚本本来就跑不通;3 轮全套 65/65 稳定。
+- **会话呈现与输入修复批**:消息分组(命令组/无效调用组/重复编辑合并)、katex 定界符矩阵、
+  撤回与引用等。
+- **发版前 review 三条修复**:① `\[…\]` / `$$` 块级不再劫持转义方括号与正文(实测会把段落吞进公式块);
+  ② REQ-084① 隔离提示改指**旧**命名空间(原先指向新 ns = 用户按提示找不到文件);
+  ③ migration 基线改 append-only 并集(原「当前目录快照」在上游改名/删迁移时会误隔离用户好库),
+  并更正一条错误的安全论证。
+
+**产物**(双 arch,共享版本号靠文件名区分):
+- `DeskFox-2026.11.1-mac-arm64.dmg` — 397,199,091 bytes,sha256 `9c5bc18aec0e446e…`
+- `DeskFox-2026.11.1-mac-x64.dmg` — 413,233,164 bytes,sha256 `44ec3cb5d2321b06…`
+- 本地路径:`packages/desktop/dist-deskfox/`(arm64 落 `mac-arm64/`,x64 落 `mac/`)
+
+**签名 / 公证**:Developer ID 深签 + `.app` 公证(electron-builder 内联)+ **`.dmg` 容器单独补公证**
+(Electron 盲区,两笔均 Accepted:`210ac30f…` / `73030947…`)+ staple;
+门禁 `spctl -a -t open` 双双 `accepted / source=Notarized Developer ID`。
+
+**分发**:
+- GitHub Release `ship-mac-prod-2026.11.1`(双 dmg,`--latest`)
+- 国内 CDN `https://dl.clawtray.com/DeskFox-2026.11.1-mac-{arm64,x64}.dmg`
+- Gitee release 同 tag(正文嵌国内链接,不传附件)
+- updater 升级源 `https://updates.deskfox.ai/electron/prod/latest-mac.yml`:单本双 arch,
+  `files[]` 4 条(zip/dmg × arm64/x64),**逐条实测 206 可下载**
+- 官网 deskfox.ai:6 条下载链接(Win/Mac-arm64/Mac-x64 × GitHub/国内)全部实测 206
+
+**跳过的号**:2026.11.0(macOS)从未构建/发布,原因见下一条。
 
 ---
 ## [macOS] 2026.11.0 — 跳过,从未构建/发布
