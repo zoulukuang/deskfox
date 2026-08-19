@@ -14,6 +14,12 @@
 
 
 
+
+## [macOS] 2026.11.0 - 2026-08-19 12:49
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [Windows] 2026.11.0 - 2026-08-19 09:35
 
 **主题**:数据库自愈 + 会话呈现与输入修复批**首次进 prod**,并含 Windows 侧完整回验。自
