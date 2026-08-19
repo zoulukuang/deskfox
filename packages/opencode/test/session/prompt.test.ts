@@ -8,8 +8,10 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
+// FORK: REQ-119 [feat: req-119-chat-selection-pseudo-path] 2026-08-19
+import { CHAT_SELECTION_PATH } from "@opencode-ai/core/util/chat-selection"
 import { Agent as AgentSvc } from "../../src/agent/agent"
 import { BackgroundJob } from "@/background/job"
 import { Command } from "../../src/command"
@@ -2136,6 +2138,62 @@ noLLMServer.instance(
       yield* sessions.remove(session.id)
     }),
   { config: cfg },
+)
+
+// FORK: REQ-119 — 聊天引用伪路径 `<chat selection>` 不是文件,后端必须短路:
+// 不读盘、不注入 synthetic Read piece、不推 Session.Event.Error。
+// 前端已在源头不发这条 part,这里守住后端边界(老客户端 / 历史消息重放)。
+// [feat: req-119-chat-selection-pseudo-path] 2026-08-19
+noLLMServer.instance(
+  "chat selection pseudo path is dropped instead of read as a file",
+  () =>
+    Effect.gen(function* () {
+      const { directory: dir } = yield* TestInstance
+      const events = yield* EventV2Bridge.Service
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const session = yield* sessions.create({})
+
+      const errors: unknown[] = []
+      const off = yield* events.listen((event) => {
+        if (event.type !== Session.Event.Error.type) return Effect.void
+        const data = event.data as typeof Session.Event.Error.data.Type
+        if (data.sessionID === session.id && data.error) errors.push(data.error)
+        return Effect.void
+      })
+
+      const pseudo = path.join(dir, CHAT_SELECTION_PATH)
+      const msg = yield* prompt.prompt({
+        sessionID: session.id,
+        agent: "build",
+        noReply: true,
+        parts: [
+          { type: "text", text: "The user is quoting text from earlier in this conversation" },
+          {
+            type: "file",
+            mime: "text/plain",
+            url: pathToFileURL(pseudo).href,
+            filename: CHAT_SELECTION_PATH,
+          },
+        ],
+      })
+      yield* off
+
+      if (msg.info.role !== "user") throw new Error("expected user message")
+
+      const stored = yield* MessageV2.get({ sessionID: session.id, messageID: msg.info.id })
+      const texts = stored.parts.filter((part) => part.type === "text").map((part) => part.text)
+
+      expect(texts.some((text) => text.includes("Called the Read tool"))).toBe(false)
+      expect(texts.some((text) => text.includes("Read tool failed to read"))).toBe(false)
+      expect(stored.parts.some((part) => part.type === "file")).toBe(false)
+      expect(texts).toContain("The user is quoting text from earlier in this conversation")
+      expect(errors).toHaveLength(0)
+
+      yield* sessions.remove(session.id)
+    }),
+  { config: cfg },
+  30_000,
 )
 
 noLLMServer.instance(

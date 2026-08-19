@@ -4,6 +4,7 @@
 // 覆盖 v1 两处:chat(session-turn-list)+ PDF/office(PdfViewer 容器,内含 PDF.js textLayer)。
 // MD viewer 留 v2 跟 CodeMirror 一起做 — 见 1-spec § 范围限定。
 
+import { CHAT_SELECTION_PATH } from "@opencode-ai/core/util/chat-selection"
 import type { SelectionProvider, SelectionResult } from "./provider"
 
 /**
@@ -12,9 +13,11 @@ import type { SelectionProvider, SelectionResult } from "./provider"
  * 与 mdMenu(file-tabs.tsx,handles `data-html-preview` iframe / MD viewer 等)互不重叠 —
  * Host capture 阶段先收到,匹配则 preventDefault;不匹配则继续冒泡到 mdMenu light DOM 处理。
  */
-/** FORK: 聊天区选区的伪路径 —— 它不是真实文件,任何"按 path 打开文件"的路径都必须先排除它,
- *  否则会在文件预览区开出一个空白 tab(user 2026-08-12 反馈)。[feat: 聊天选区-卡片化-换行] */
-export const CHAT_SELECTION_PATH = "<chat selection>"
+/** FORK: 聊天区选区的伪路径 —— 它不是真实文件,任何"按 path 打开文件/读盘"的路径都必须先排除它,
+ *  否则会在文件预览区开出一个空白 tab(user 2026-08-12 反馈),或被后端当真文件去 Read
+ *  (REQ-119)。定义已上提到 @opencode-ai/core 供前后端共享,这里 re-export 保持既有 import 不变。
+ *  [feat: 聊天选区-卡片化-换行] [feat: req-119-chat-selection-pseudo-path] */
+export { CHAT_SELECTION_PATH } from "@opencode-ai/core/util/chat-selection"
 
 export const DOM_PROVIDER_SELECTORS = [
   '[data-slot="session-turn-list"]', // chat 对话区

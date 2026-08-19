@@ -5,6 +5,7 @@ import { encodeFilePath } from "@/context/file/path"
 import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt } from "@/context/prompt"
 import { Identifier } from "@/utils/id"
 import { createCommentMetadata, formatCommentNote } from "@/utils/comment-note"
+import { isChatSelectionPath } from "@opencode-ai/core/util/chat-selection"
 
 type PromptRequestPart = (TextPartInput | FilePartInput | AgentPartInput) & { id: string }
 
@@ -166,6 +167,13 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
       used.add(url)
     }
 
+    // FORK: REQ-119 — 聊天引用的 path 是伪路径(`<chat selection>`,见 core/util/chat-selection),
+    // 不对应任何真实文件。此前仍照发一条 file part,后端 prompt.ts 拿它去 execRead 必然失败,
+    // 于是每次引用都往模型上下文注入一对假的 Read 调用 + 失败结果,并推一条会话 Error 事件。
+    // 引文本身走下面的 text part(formatCommentNote 的 chat 模板 + preview)已完整送达,
+    // file part 对聊天引用零价值 —— 源头不发。2026-08-19
+    const isChatQuote = item.kind === "chat" || isChatSelectionPath(item.path)
+
     const filePart = {
       id: Identifier.ascending("part"),
       type: "file",
@@ -177,7 +185,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
     // FORK: REQ-065 + md-token — 仅"无评论且无可发内容"的纯整文件卡退化为单 filePart;
     // 选区卡(有 commentID + preview)即使无评论也发 {选中文字 preview + 文件 URL(行范围)},
     // 不退化为整文件,避免大 .md 整文件灌进上下文浪费 token、且保证选中文字真正到达模型。2026-06-17
-    if (!comment && !preview) return [filePart]
+    if (!comment && !preview) return isChatQuote ? [] : [filePart]
 
     const mentions = comment
       ? parseCommentMentions(comment).flatMap((path) => {
@@ -218,7 +226,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
           kind: item.kind,
         }),
       } satisfies PromptRequestPart,
-      filePart,
+      ...(isChatQuote ? [] : [filePart]),
       ...mentions,
     ]
   })

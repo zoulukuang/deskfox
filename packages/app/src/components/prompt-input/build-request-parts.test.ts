@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Prompt } from "@/context/prompt"
 import { buildRequestParts } from "./build-request-parts"
+import { CHAT_SELECTION_PATH } from "@opencode-ai/core/util/chat-selection"
 
 describe("buildRequestParts", () => {
   test("builds typed request and optimistic parts without cast path", () => {
@@ -473,5 +474,80 @@ describe("buildRequestParts", () => {
       // Should preserve .. segments (backend normalizes)
       expect(filePart.url).toContain("/..")
     }
+  })
+
+  // FORK: REQ-119 — 聊天引用伪路径不得漏进后端(后端会当真文件去 Read,污染模型上下文)
+  // [feat: req-119-chat-selection-pseudo-path] 2026-08-19
+  test("聊天引用只发引文 text part,不发伪路径 file part", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [
+        {
+          key: "ctx:quote",
+          type: "file",
+          path: CHAT_SELECTION_PATH,
+          kind: "chat",
+          commentID: "quote-abc-1",
+          commentOrigin: "quote",
+          preview: "模型上一轮说的那段话",
+          comment: "这段再展开讲讲",
+        },
+      ],
+      images: [],
+      text: "",
+      messageID: "msg_quote",
+      sessionID: "ses_quote",
+      sessionDirectory: "/repo",
+    })
+
+    expect(result.requestParts.filter((part) => part.type === "file")).toHaveLength(0)
+    expect(result.requestParts.some((part) => part.type === "file" && part.url.includes("chat%20selection"))).toBe(
+      false,
+    )
+
+    const note = result.requestParts.find((part) => part.type === "text" && part.synthetic)
+    expect(note).toBeDefined()
+    if (note?.type === "text") {
+      expect(note.text).toContain("模型上一轮说的那段话")
+      expect((note.metadata?.opencodeComment as { kind?: string } | undefined)?.kind).toBe("chat")
+    }
+  })
+
+  test("无正文无 preview 的聊天引用也不发伪路径 file part", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [{ key: "ctx:empty-quote", type: "file", path: CHAT_SELECTION_PATH, kind: "chat", commentID: "q2" }],
+      images: [],
+      text: "hi",
+      messageID: "msg_quote2",
+      sessionID: "ses_quote2",
+      sessionDirectory: "/repo",
+    })
+
+    expect(result.requestParts.filter((part) => part.type === "file")).toHaveLength(0)
+  })
+
+  test("文件引用照旧发 file part(不被 REQ-119 误伤)", () => {
+    const result = buildRequestParts({
+      prompt: [],
+      context: [
+        {
+          key: "ctx:file",
+          type: "file",
+          path: "src/a.ts",
+          kind: "file",
+          commentID: "c1",
+          preview: "const a = 1",
+          comment: "看这里",
+        },
+      ],
+      images: [],
+      text: "",
+      messageID: "msg_file",
+      sessionID: "ses_file",
+      sessionDirectory: "/repo",
+    })
+
+    expect(result.requestParts.some((part) => part.type === "file" && part.url === "file:///repo/src/a.ts")).toBe(true)
   })
 })

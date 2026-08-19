@@ -30,6 +30,8 @@ import { Config } from "@/config/config"
 import { ConfigMarkdown } from "@/config/markdown"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@opencode-ai/core/util/error"
+// FORK: REQ-119 — 聊天引用伪路径跨端契约 [feat: req-119-chat-selection-pseudo-path] 2026-08-19
+import { isChatSelectionPath } from "@opencode-ai/core/util/chat-selection"
 import { SessionProcessor } from "./processor"
 import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
@@ -808,6 +810,11 @@ const layer = Layer.effect(
             case "file:": {
               yield* Effect.logInfo("file", { mime: part.mime })
               const filepath = fileURLToPath(part.url)
+              // FORK: REQ-119 — 聊天引用的伪路径不是文件,直接丢弃:不读盘、不 logError、
+              // 不 publish Error、不注入 synthetic Read piece。引文本身在同一条消息的 text part 里
+              // 已完整送达。前端(build-request-parts.ts)已在源头不再发这条 part,这里是兜底 ——
+              // 覆盖老客户端与历史消息重放。[feat: req-119-chat-selection-pseudo-path] 2026-08-19
+              if (isChatSelectionPath(filepath)) return []
               const mime = (yield* fsys.isDir(filepath)) ? "application/x-directory" : part.mime
 
               const { read } = yield* registry.named()
