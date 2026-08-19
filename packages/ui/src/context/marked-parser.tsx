@@ -32,8 +32,10 @@ export function createMarkdownParser(highlight: (code: string, language: string)
 export const inlineMathRegex = /^\\\(((?:\\.|[^\\\n])*?)\\\)/
 // `$…$` 起点正则(2026-08-16 已用 bun test 实测:四条真实样例各命中 1 处、三条货币负例命中 0 处)
 export const inlineDollarMathRegex = /^\$(?![\s$])((?:\\.|[^$\\\n])*?)(?<!\s)\$(?!\d)/
-// `\[…\]` 块级:同行或跨行都收
-export const blockBracketMathRegex = /^ {0,3}\\\[([\s\S]+?)\\\](?:\n|$)/
+// `\[…\]` 块级:同行或跨行都收,但**不跨空行** —— 空行是 markdown 的块边界,
+//   `[\s\S]+?` 会让「开头\n\n\[a\n\n中间段\n\n结尾 \]」把中间所有段落吞进一个公式块
+//   (2026-08-19 发版前 review 实测)。display math 内部不会有空行,限制不误伤真公式。
+export const blockBracketMathRegex = /^ {0,3}\\\[((?:[^\n]|\n(?!\s*\n))+?)\\\](?:\n|$)/
 // `$$…$$` 块级:去掉「$$ 后必须立刻换行」的强制,并允许 ≤3 空格缩进(与 markdown 块级惯例一致)
 export const blockMathRegex = /^ {0,3}\$\$\s*([\s\S]+?)\s*\$\$(?:\n|$)/
 
@@ -88,10 +90,19 @@ export const katexExtension: MarkedExtension = {
       // FORK: REQ-115 `\[…\]` 块级(同行 + 跨行)
       name: "blockBracketKatex",
       level: "block",
+      // FORK: `start` 必须只认【行首】的 `\[` —— 2026-08-19 发版前 review 实测:
+      //   无条件 `indexOf("\\[")` 会让 marked 在**任意位置**的 `\[` 处切开段落,
+      //   而 `\[` 在 markdown 里最常见的用途是**转义字面方括号**,不是 LaTeX:
+      //     `路径 C:\[temp\]` → 「路径 C:」+ 一个 KaTeX 块「temp」(方括号没了)
+      //     `参考 \[1\]`      → 「参考」+ 一个 KaTeX 块「1」
+      //   真实的 display math(`\[E = mc^2\]` 独占行 / `\[` 换行 `\]`)一律在行首,
+      //   所以只认行首(允许 ≤3 空格缩进,与 markdown 块级惯例一致)既不误伤转义、也不漏真公式。
+      //   2026-08-19 [feat: ship-2026-11-1-preflight]
       start(src) {
-        const index = src.indexOf("\\[")
-        if (index === -1) return
-        return index
+        const match = src.match(/(^|\n) {0,3}\\\[/)
+        if (!match) return
+        // 命中的是分组 1(行首锚点)之后的位置:`^` 时偏移 0,`\n` 时跳过换行本身
+        return match.index! + match[1].length
       },
       tokenizer(src) {
         const match = src.match(blockBracketMathRegex)
@@ -108,10 +119,12 @@ export const katexExtension: MarkedExtension = {
     {
       name: "blockKatex",
       level: "block",
+      // FORK: 同上,只认行首的 `$$` —— 否则 `在 shell 里 $$ 代表当前进程 pid` 这类正文
+      //   也会被切开段落(tokenizer 随后不匹配,但段落已被劈成两半)。2026-08-19
       start(src) {
-        const index = src.indexOf("$$")
-        if (index === -1) return
-        return index
+        const match = src.match(/(^|\n) {0,3}\$\$/)
+        if (!match) return
+        return match.index! + match[1].length
       },
       tokenizer(src) {
         const match = src.match(blockMathRegex)

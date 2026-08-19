@@ -69,15 +69,35 @@ describe("assessJournal (T1)", () => {
 })
 
 describe("baseline drift 闸 (T2)", () => {
-  test("生成物与 packages/core/src/database/migration/ 目录实时清单完全一致", () => {
+  test("目录里的每一条 migration 都在基线内(基线可为超集 —— append-only)", () => {
     const dir = path.resolve(import.meta.dir, "../../../../core/src/database/migration")
     const actual = readdirSync(dir)
       .filter((n) => n.endsWith(".ts"))
       .map((n) => n.replace(/\.ts$/, ""))
       .sort()
-    // 不一致 = 上游 sync 后忘了重跑 packages/branding/scripts/gen-migration-baseline.mjs。
-    // 后果很实：基线缺条 → 自家正常新库被判 ahead → 被隔离挪走。必须红。
-    expect([...MIGRATION_BASELINE].sort()).toEqual(actual)
+    // 缺条 = 上游 sync 后忘了重跑 packages/branding/scripts/gen-migration-baseline.mjs。
+    // 后果很实:基线缺条 → 自家正常新库被判 ahead → 被隔离挪走。必须红。
+    const missing = actual.filter((id) => !MIGRATION_BASELINE.includes(id))
+    expect(missing).toEqual([])
+  })
+
+  // FORK: 2026-08-19 发版前 review —— 基线从「当前目录快照」改成 append-only 并集。
+  //   上游**改名/删除**一条我们已发布过的迁移时,旧快照会让那条老 id 从基线消失 →
+  //   老用户库里的它变成「基线外时间戳 id」→ 判超前 → 正在用的好库被挪走。
+  //   上游确有改名先例(20260530232709_lovely_romulus → 20260511173437_session-metadata)。
+  //   所以这里**只验单向包含**,基线里多出的历史 id 是故意留的,不算漂移。
+  test("历史 id 即使已从上游目录消失,也必须留在基线里(不因上游改名而误隔离老库)", () => {
+    const dir = path.resolve(import.meta.dir, "../../../../core/src/database/migration")
+    const actual = new Set(
+      readdirSync(dir)
+        .filter((n) => n.endsWith(".ts"))
+        .map((n) => n.replace(/\.ts$/, "")),
+    )
+    // 模拟:老用户库的 journal 里带着一条上游后来删掉的 id。
+    const retired = MIGRATION_BASELINE.filter((id) => !actual.has(id))
+    // 当前上游没删过我们发布过的迁移,所以这里通常是空集 —— 断言的是「就算有,也不判超前」。
+    const journal = [...MIGRATION_BASELINE.slice(0, 3), ...retired]
+    expect(assessJournal(journal, MIGRATION_BASELINE)).toEqual({ verdict: "compatible", aheadIds: [] })
   })
 
   test("基线非空且全为时间戳形态 id", () => {

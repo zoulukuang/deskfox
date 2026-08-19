@@ -115,3 +115,45 @@ describe("katexExtension 单一来源(防「只修一半」)", () => {
     expect(katexExtension.extensions?.length).toBeGreaterThanOrEqual(4)
   })
 })
+
+// FORK: 2026-08-19 发版前 code-review 抓出 —— 块级 `\\[…\\]` / `$$` 的 `start()` 原本无条件
+//   `indexOf`,会在**任意位置**切开段落。而 `\\[` 在 markdown 里最常见的用途是**转义字面方括号**。
+//   实测症状:`路径 C:\\[temp\\]` 渲染成「路径 C:」+ 公式块「temp」;三个段落中间夹一对
+//   `\\[ \\]` 会被整个吞进一个公式块。修法 = start 只认行首 + 块级正则不跨空行。
+//   [feat: ship-2026-11-1-preflight]
+describe("块级定界符只在行首生效(转义方括号零误伤)", () => {
+  for (const [name, parse] of paths) {
+    describe(name, () => {
+      test("Ⓐ 行内的 `\\[…\\]` 是转义方括号,保持字面", async () => {
+        const html = await parse("路径 C:\\[temp\\]")
+        expect(html).not.toContain(KATEX)
+        expect(html).toContain("[temp]")
+      })
+
+      test("Ⓑ 脚注式 `\\[1\\]` 保持字面", async () => {
+        const html = await parse("参考 \\[1\\]")
+        expect(html).not.toContain(KATEX)
+        expect(html).toContain("[1]")
+      })
+
+      test("Ⓒ 跨空行不吞段落", async () => {
+        const html = await parse("开头\n\n\\[a\n\n中间段\n\n结尾 \\]\n\n最后一段")
+        expect(html).not.toContain(KATEX)
+        expect(html).toContain("中间段")
+        expect(html).toContain("最后一段")
+      })
+
+      test("Ⓓ 正文里的 `$$`(shell 变量)不切段落也不渲染", async () => {
+        const html = await parse("在 shell 里 $$ 代表当前进程 pid")
+        expect(html).not.toContain(KATEX)
+        expect(html).toContain("代表当前进程 pid")
+      })
+
+      test("Ⓔ 真 display math 仍渲染:同行 / 跨行 / ≤3 空格缩进 / 段落之后", async () => {
+        for (const src of ["\\[E = mc^2\\]", "\\[\nE = mc^2\n\\]", "  \\[a+b\\]", "如下:\n\n\\[E = mc^2\\]"]) {
+          expect(await parse(src)).toContain(KATEX)
+        }
+      })
+    })
+  }
+})

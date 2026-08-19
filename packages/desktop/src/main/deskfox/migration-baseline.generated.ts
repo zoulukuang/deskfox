@@ -4,7 +4,10 @@
 //   源:packages/core/src/database/migration/(文件名去 .ts)
 //
 // 上游 sync 后若 core 新增了 migration,必须重跑本脚本 —— db-schema-guard.test.ts 的
-// drift 闸(T2)会在不一致时直接红,防止忘记更新导致【自家新库被误判超前】。
+// drift 闸(T2)会在目录里出现基线外 id 时直接红,防止忘记更新导致【自家新库被误判超前】。
+//
+// 本清单是 append-only 并集:**只增不减**。上游删掉/改名的旧 id 也要留着 ——
+// 老用户库的 migration 表里仍有它,从基线拿掉就等于把那些好库判成超前。
 
 /** 本 fork core 已知的全部 migration id(共 38 条)。 */
 export const MIGRATION_BASELINE: string[] = [
