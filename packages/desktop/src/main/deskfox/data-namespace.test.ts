@@ -285,6 +285,11 @@ describe("迁移期:超前 db 不迁,其余照迁 (T4 unit,D1 拍板行为)", ()
     // ① reason 与 quarantinedDbs 如实回报(供启动后 toast)
     expect(r.reason).toBe("db-quarantined")
     expect(r.quarantinedDbs).toEqual(["opencode.db"])
+    // FORK: 2026-08-19 发版前 review —— 未迁的原件留在【旧】ns,toast 文案是「原文件保留在:<dir>」,
+    //   所以这里必须回报旧目录。之前 index.ts 拿 dataHome(新 ns)顶替,等于把用户指向一个
+    //   没有该文件的目录,而这条通知存在的唯一价值就是告诉用户数据在哪。
+    expect(r.quarantinedDir).toBe(path.join(home, ".local", "share", "opencode"))
+    expect(existsSync(path.join(r.quarantinedDir!, "opencode.db"))).toBe(true)
     // ② 超前库及其 wal 都没进新 ns
     expect(existsSync(path.join(newData, "opencode.db"))).toBe(false)
     expect(existsSync(path.join(newData, "opencode.db-wal"))).toBe(false)

@@ -7,8 +7,19 @@
 //
 // 判定依据:core 的迁移 journal = `migration` 表(id TEXT PRIMARY KEY),id 即
 //   `packages/core/src/database/migration/` 下的文件名(去 .ts),形如 `YYYYMMDDHHMMSS_<slug>`。
-//   老库兼容:core `migration.ts` 会把 legacy `__drizzle_migrations.name` seed 进 `migration` 表,
-//   这些 legacy 名【不是】14 位时间戳形态 —— 老库天然带,不是超前信号,必须忽略否则全员误报。
+//   老库兼容:core `migration.ts:55-66` 会把 legacy `__drizzle_migrations.name` **原样** seed 进
+//   `migration` 表。
+//
+//   ⚠ 更正(2026-08-19 发版前 review):本文件原先写着「legacy 名【不是】14 位时间戳形态,
+//     所以形态过滤能挡住它们」—— **这个立论是错的**。drizzle 的 journal name 就是迁移文件名,
+//     而上游迁移文件名一直是 `YYYYMMDDHHMMSS_slug`(例:`20260127222353_familiar_lady_ursula`,
+//     至今仍在 `migration.gen.ts` 里)。今天不误报的真实原因是那些老 id **恰好还在基线里**,
+//     不是被形态过滤挡住的。
+//
+//   所以真正的安全前提是:**基线必须是 append-only 并集,历史 id 永不移除**
+//   (见 `gen-migration-baseline.mjs` 头注释)。否则上游一旦改名/删除一条我们已发布过的迁移,
+//   老用户库里的那个 id 就成了「基线外时间戳 id」→ 判超前 → 正在用的好库被挪走。
+//   形态过滤(只看 `^\d{14}_`)仍然保留,但它的作用是**排除非迁移噪声**,不是老库兼容的依靠。
 //
 // 本文件是纯函数(Logic 清单,行覆盖 ≥80%),不碰 IO;真正读 db 的壳在 db-schema-guard-io.ts。
 

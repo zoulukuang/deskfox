@@ -151,6 +151,13 @@ export interface ApplyResult {
   configHome: string
   /** REQ-084①:因 schema 超前而【未迁】的 db 文件名(原件留在旧 ns)。用于启动后 toast 告知。 */
   quarantinedDbs?: string[]
+  /**
+   * REQ-084①:上面那些未迁 db 的**实际所在目录**(= 旧共享 ns)。
+   * ⚠ 不要拿 `dataHome` 顶替 —— 它是**新**命名空间,而未迁的原件恰恰不在那儿;
+   *   toast 文案是「原文件保留在:<dir>」,传错等于把用户指向一个没有该文件的目录,
+   *   而这条通知存在的唯一价值就是告诉用户数据在哪。2026-08-19 发版前 review 抓出。
+   */
+  quarantinedDir?: string
 }
 
 /**
@@ -245,6 +252,7 @@ export async function applyDeskfoxDataNamespace(
       dataHome,
       configHome,
       quarantinedDbs: ahead.names.length > 0 ? ahead.names : undefined,
+      quarantinedDir: ahead.names.length > 0 ? oldData : undefined,
     }
   } catch (err) {
     // 保守回退:清临时目录,不设 XDG env → 本次仍用旧共享 ns(数据无损),下次启动重试。

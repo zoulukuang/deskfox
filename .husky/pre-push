@@ -38,4 +38,12 @@ echo "[pre-push] fork 包单测 backstop…"
 #   等于没有防回归(mac 2026.9.1 发版实证:arch 映射写反了几个版本无人发现,LO 完整性守卫
 #   因此对 arm64 长期假绿、对 x64 直接中断)。发布脚本一旦回归就是"发出去才知道",必须护住。
 (cd packages/branding && bun test)
+# desktop 主进程:数据命名空间迁移 / REQ-084① 数据库超前检测与隔离 / 托盘 / 看门狗 等。
+#   2026-08-19 发版前 review 补入 —— 此前 packages/desktop **没有 test script**,既不在
+#   `turbo test` 里、也不在本闸内,那 169 条测试写了从不自动跑。其中最要命的是基线 drift 闸:
+#   它是「上游 sync 新增 migration 却忘了重跑生成脚本」的唯一防线,而它跑不到 ——
+#   一旦漏网,发出去的包会把**用户自己正常的新库**判成超前并改名挪走,用户看到的是「历史会话全没了」。
+#   注:src/main/draft-store.test.ts 撞上游顶层 `import "node:sqlite"`(bun 至今 resolve 不了,
+#   见记忆 reference_known_dev_issues #5),属存量、非本仓回归,故按目录跑 deskfox 子集。
+(cd packages/desktop && bun test src/main/deskfox)
 # FORK-END

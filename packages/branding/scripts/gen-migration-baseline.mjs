@@ -6,7 +6,14 @@
 //
 // 用法:
 //   node packages/branding/scripts/gen-migration-baseline.mjs              # 生成/刷新 migration-baseline.generated.ts
-//   node packages/branding/scripts/gen-migration-baseline.mjs --check       # 只校验生成物与目录实时清单一致(单测用,不写文件)
+//   node packages/branding/scripts/gen-migration-baseline.mjs --check       # 只校验目录里的 id 都在基线内(单测用,不写文件)
+//
+// ⚠ 基线是 **append-only 并集**(2026-08-19 发版前 review 改),不是「当前目录快照」。
+//   为什么:判 ahead 的安全前提是「用户跑过的任何一版内核写进 migration 表的 id,都仍在基线里」。
+//   取当前目录快照的话,上游**改名或删除**一条我们已发布过的迁移,那条老 id 就从基线消失 →
+//   老用户库里的它变成「基线外的时间戳 id」→ 判超前 → 正在用的好库被改名挪走。
+//   上游确有改名先例(20260530232709_lovely_romulus → 20260511173437_session-metadata)。
+//   所以生成 = 旧基线 ∪ 当前目录,只增不减;--check 只要求「目录 ⊆ 基线」。
 //   node packages/branding/scripts/gen-migration-baseline.mjs --check-upstream
 //       # 发版前信号:对比 upstream 的 migration 清单,输出「上游领先 N 条」。
 //       # ⚠ 信号制(2026-08-18 user 拍板):只报数、供 user 决定是否排上游同步,
@@ -39,7 +46,10 @@ function render(ids) {
 //   源:${REL_MIGRATION_DIR}/(文件名去 .ts)
 //
 // 上游 sync 后若 core 新增了 migration,必须重跑本脚本 —— db-schema-guard.test.ts 的
-// drift 闸(T2)会在不一致时直接红,防止忘记更新导致【自家新库被误判超前】。
+// drift 闸(T2)会在目录里出现基线外 id 时直接红,防止忘记更新导致【自家新库被误判超前】。
+//
+// 本清单是 append-only 并集:**只增不减**。上游删掉/改名的旧 id 也要留着 ——
+// 老用户库的 migration 表里仍有它,从基线拿掉就等于把那些好库判成超前。
 
 /** 本 fork core 已知的全部 migration id(共 ${ids.length} 条)。 */
 export const MIGRATION_BASELINE: string[] = [
@@ -79,6 +89,22 @@ function readUpstreamIds() {
   return { ids: null, why: "upstream ref 不可读(未 fetch 成功或路径不存在)" }
 }
 
+/** 读现有生成物里已记录的 id(append-only 的「旧」那一半)。文件不存在/读不出 → 空集,不抛。 */
+export function readExistingBaselineIds() {
+  if (!existsSync(OUT_FILE)) return []
+  try {
+    const text = readFileSync(OUT_FILE, "utf8")
+    return [...text.matchAll(/^\s*"([^"]+)",\s*$/gm)].map((m) => m[1])
+  } catch {
+    return []
+  }
+}
+
+/** append-only 并集:旧基线 ∪ 当前目录,排序去重。 */
+export function mergeBaseline(existing, local) {
+  return [...new Set([...existing, ...local])].sort()
+}
+
 function main() {
   const args = process.argv.slice(2)
   const local = readLocalIds()
@@ -104,28 +130,30 @@ function main() {
     process.exit(0)
   }
 
-  const content = render(local)
+  const existing = readExistingBaselineIds()
+  const merged = mergeBaseline(existing, local)
+  const content = render(merged)
 
   if (args.includes("--check")) {
     if (!existsSync(OUT_FILE)) {
       console.error(`[baseline] ❌ 生成物不存在:${OUT_FILE}`)
       process.exit(1)
     }
-    // 行尾归一化后再比:Win 上 git 按 autocrlf 把生成物 checkout 成 CRLF,而 render() 永远吐 LF ——
-    // 逐字节比会在 Windows 上恒红,把人骗去重跑生成(重跑后 git diff 依旧为空,只会更困惑)。
-    // 本闸要守的是「id 清单有没有漂」,不是行尾字节。
-    const norm = (s) => s.replace(/\r\n/g, "\n")
-    const actual = readFileSync(OUT_FILE, "utf8")
-    if (norm(actual) !== norm(content)) {
-      console.error("[baseline] ❌ 生成物与 migration 目录实时清单不一致 —— 请重跑 node packages/branding/scripts/gen-migration-baseline.mjs")
+    // append-only 语义:只要求【目录 ⊆ 基线】。基线里多出的历史 id(上游已删/改名的)是**故意保留**的,
+    // 不算漂移 —— 它们正是老用户库里可能存在的 id,拿掉就会把好库判成超前。
+    const missing = local.filter((id) => !existing.includes(id))
+    if (missing.length > 0) {
+      console.error(`[baseline] ❌ 目录里有 ${missing.length} 条 id 不在基线内 —— 请重跑 node packages/branding/scripts/gen-migration-baseline.mjs`)
+      for (const id of missing) console.error(`           + ${id}`)
       process.exit(1)
     }
-    console.log(`[baseline] ✅ 生成物与目录一致(${local.length} 条)`)
+    console.log(`[baseline] ✅ 目录 ${local.length} 条全部在基线内(基线共 ${existing.length} 条)`)
     process.exit(0)
   }
 
   writeFileSync(OUT_FILE, content)
-  console.log(`[baseline] ✅ 已生成 ${local.length} 条 → ${OUT_FILE}`)
+  const added = merged.length - existing.length
+  console.log(`[baseline] ✅ 已生成 ${merged.length} 条 → ${OUT_FILE}(目录 ${local.length} 条,新增 ${added} 条,历史保留 ${merged.length - local.length} 条)`)
 }
 
 // 允许被单测 import(只取 readLocalIds),直接执行时才跑 main。

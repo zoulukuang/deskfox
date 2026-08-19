@@ -37,4 +37,11 @@ describe("toQuarantineToast", () => {
     expect(toQuarantineToast({ kind: "startup", dbNames: ["a.db"] })?.variant).toBe("default")
     expect(toQuarantineToast({ kind: "migrate", dbNames: ["a.db"] })?.variant).toBe("default")
   })
+
+  // FORK: 2026-08-19 发版前 review —— 这条通知一辈子只弹一次(主进程取走即清),
+  //   内容里带着用户需要复制的恢复路径。走默认 5 秒自动消失 = 去倒杯水回来就再也找不到数据在哪。
+  test("两种场景都常驻不自动消失(一次性通知 + 带恢复路径)", () => {
+    expect(toQuarantineToast({ kind: "startup", dbNames: ["a.db"], dir: "/tmp/x" })?.persistent).toBe(true)
+    expect(toQuarantineToast({ kind: "migrate", dbNames: ["a.db"], dir: "/tmp/x" })?.persistent).toBe(true)
+  })
 })

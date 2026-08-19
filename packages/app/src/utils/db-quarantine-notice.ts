@@ -16,6 +16,12 @@ export interface QuarantineToast {
   variant: "default" | "success" | "error"
   title: string
   description?: string
+  /**
+   * 常驻不自动消失。这条通知**一辈子只弹一次**(主进程取走即清),内容里还带着用户需要
+   * 复制的恢复路径 —— 走默认 5 秒自动消失等于「去倒杯水回来就再也找不到数据在哪」。
+   * 2026-08-19 发版前 review 抓出。
+   */
+  persistent?: boolean
 }
 
 /**
@@ -28,6 +34,7 @@ export function toQuarantineToast(notice: DbQuarantineNotice | null | undefined)
   if (notice.kind === "startup") {
     return {
       variant: "default",
+      persistent: true,
       title: "历史数据与当前版本不兼容,已另存备份",
       description:
         `检测到本机数据库来自更新版本的 OpenCode/DeskFox,当前版本打不开它。` +
@@ -36,6 +43,7 @@ export function toQuarantineToast(notice: DbQuarantineNotice | null | undefined)
   }
   return {
     variant: "default",
+    persistent: true,
     title: "部分历史数据未迁入(与当前版本不兼容)",
     description:
       `迁移到 DeskFox 专属目录时,发现原数据库来自更新版本、当前版本无法打开,因此未迁移它;` +

@@ -344,7 +344,13 @@ const main = Effect.gen(function* () {
     if (guard.quarantined) {
       setDbQuarantineNotice({ kind: "startup", dbNames: guard.dbName ? [guard.dbName] : [], dir: guard.dir })
     } else if (namespaceResult?.quarantinedDbs?.length) {
-      setDbQuarantineNotice({ kind: "migrate", dbNames: namespaceResult.quarantinedDbs, dir: namespaceResult.dataHome })
+      // FORK: dir 必须是**旧** ns —— 未迁的原件留在那儿,不在 dataHome(新 ns)。
+      //   传错等于把用户指向一个没有该文件的目录。2026-08-19 发版前 review 抓出。
+      setDbQuarantineNotice({
+        kind: "migrate",
+        dbNames: namespaceResult.quarantinedDbs,
+        dir: namespaceResult.quarantinedDir,
+      })
     }
   }
   // FORK-END
