@@ -641,6 +641,7 @@ export const dict = {
   "session.revertDock.collapse": "Zurückgesetzte Nachrichten einklappen",
   "session.revertDock.expand": "Zurückgesetzte Nachrichten ausklappen",
   "session.revertDock.restore": "Nachricht wiederherstellen",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Alles entwickeln",
   "session.new.project.new": "Neues Projekt",
   "session.new.project.search": "Projekte durchsuchen",
@@ -1362,4 +1363,5 @@ export const dict = {
     "Auf der neuen Startseite finden Sie alle Ihre Sitzungen und Projekte. Wenn Sie eine Sitzung auswählen, wird sie in einem Tab geöffnet.",
   "help.tabs.persistence": "Wenn Sie die App erneut öffnen, sind Ihre Tabs weiterhin geöffnet.",
   "help.tabs.worktrees":
-    "Das neue Design unterstützt Git-Worktrees noch nicht. Diese Funktion folgt in Kürze. Wenn Sie das bisherige Layout vorerst weiterverwenden möchten, können Sie in den Einstellungen zwischen den Layouts wechseln. Beachten Sie jedoch, dass das neue Layout in einigen Wochen dauerhaft verwendet wird.",} satisfies Partial<Record<Keys, string>>
+    "Das neue Design unterstützt Git-Worktrees noch nicht. Diese Funktion folgt in Kürze. Wenn Sie das bisherige Layout vorerst weiterverwenden möchten, können Sie in den Einstellungen zwischen den Layouts wechseln. Beachten Sie jedoch, dass das neue Layout in einigen Wochen dauerhaft verwendet wird.",
+} satisfies Partial<Record<Keys, string>>

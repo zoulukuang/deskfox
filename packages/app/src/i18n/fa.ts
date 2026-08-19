@@ -753,6 +753,7 @@ export const dict = {
   "session.revertDock.collapse": "کوچک کردن پیام‌های برگشتی",
   "session.revertDock.expand": "گسترش پیام‌های برگشتی",
   "session.revertDock.restore": "بازیابی پیام",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "هر چیزی بساز",
   "session.new.project.new": "پروژه جدید",
   "session.new.project.search": "جستجوی پروژه ها",

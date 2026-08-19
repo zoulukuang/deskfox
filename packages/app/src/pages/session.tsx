@@ -49,7 +49,7 @@ import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { ModelsProvider } from "@/context/models"
 import { useNotification } from "@/context/notification"
-import { PromptProvider, usePrompt } from "@/context/prompt"
+import { PromptProvider, usePrompt, isCommentItem, type FileContextItem } from "@/context/prompt"
 import { usePlatform } from "@/context/platform"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
@@ -118,6 +118,8 @@ import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
+// FORK: REQ-123 — 撤回时还原引用卡片 2026-08-19
+import { extractCommentsFromParts } from "@/utils/prompt-comments"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
@@ -1784,6 +1786,18 @@ export default function Page() {
       attachmentName: language.t("common.attachment"),
     })
 
+  // FORK: REQ-123 — 撤回时把引用卡片一并放回输入框。卡片不在 `Prompt` 文本流里,
+  // 是 `prompt.context` 的另一块状态,`draft()` 带不回来 —— 不还原它,撤回一条带引用的
+  // 消息就等于让用户回去重新选一次文字(纯引用消息更是撤完输入框全空)。2026-08-19
+  const draftComments = (id: string) => extractCommentsFromParts(sync().data.part[id] ?? [])
+
+  // 走 capture() 而不是 prompt.context:后者的 items 带 suspense 包装,且 optimistic 回调里
+  // 形参 `prompt` 会遮蔽外层同名变量
+  const promptContext = () => prompt.capture().context
+
+  // 当前输入框里的引用卡片快照,用于请求失败时与文本流一起回滚
+  const currentComments = () => promptContext().items().filter(isCommentItem) as FileContextItem[]
+
   const line = (id: string) => {
     const text = draft(id)
       .map((part) => (part.type === "image" ? `[image:${part.filename}]` : part.content))
@@ -1948,15 +1962,24 @@ export default function Page() {
       const target = sync()
       const last = target.session.get(input.sessionID)?.revert
       const value = draft(input.messageID)
+      // FORK: REQ-123 — 引用卡片与文本流一起回填/回滚(replaceComments 是整体替换语义)2026-08-19
+      const comments = draftComments(input.messageID)
+      const previousComments = currentComments()
       await runPromptRollbackMutation({
         capturePrompt: prompt.capture,
         optimistic: (prompt) => {
           roll(input.sessionID, { messageID: input.messageID }, target)
           prompt.set(value)
+          promptContext().replaceComments(comments)
         },
         request: () => halt(input.sessionID).then(() => session.revert.stage(input)),
-        complete: () => undefined,
-        rollback: () => roll(input.sessionID, last, target),
+        complete: () => {
+          showToast({ variant: "success", title: language.t("session.revert.restoredToInput") })
+        },
+        rollback: () => {
+          roll(input.sessionID, last, target)
+          promptContext().replaceComments(previousComments)
+        },
         fail,
       })
     },
@@ -1973,6 +1996,9 @@ export default function Page() {
       if (index < 0) return
       const next = userMessages()[index + 1]
       const last = target.session.get(sessionID)?.revert
+      // FORK: REQ-123 — 与 revert 侧对称。少了这一步,撤回→恢复往返后输入框会残留
+      // 一张上一轮回填的重复卡片(replaceComments 只在被调用时才收敛)。2026-08-19
+      const previousComments = currentComments()
 
       await runPromptRollbackMutation({
         capturePrompt: prompt.capture,
@@ -1980,16 +2006,21 @@ export default function Page() {
           roll(sessionID, next ? { messageID: next.id } : undefined, target)
           if (next) {
             promptSession.set(draft(next.id))
+            promptContext().replaceComments(draftComments(next.id))
             return
           }
           promptSession.reset()
+          promptContext().replaceComments([])
         },
         request: () =>
           !next
             ? halt(sessionID).then(() => session.revert.clear({ sessionID }))
             : halt(sessionID).then(() => session.revert.stage({ sessionID, messageID: next.id }).then(() => undefined)),
         complete: () => undefined,
-        rollback: () => roll(sessionID, last, target),
+        rollback: () => {
+          roll(sessionID, last, target)
+          promptContext().replaceComments(previousComments)
+        },
         fail,
       })
     },

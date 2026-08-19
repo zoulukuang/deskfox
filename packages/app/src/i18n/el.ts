@@ -762,6 +762,7 @@ export const dict = {
   "session.revertDock.collapse": "Σύμπτυξη επαναλαμβανόμενων μηνυμάτων",
   "session.revertDock.expand": "Ανάπτυξη επαναλαμβανόμενων μηνυμάτων",
   "session.revertDock.restore": "Επαναφορά μηνύματος",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Δημιουργία οτιδήποτε",
   "session.new.project.new": "Νέο έργο",
   "session.new.project.search": "Αναζήτηση έργων",

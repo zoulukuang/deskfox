@@ -751,6 +751,7 @@ export const dict: Record<string, string> = {
   "session.revertDock.collapse": "පෙරළන ලද පණිවිඩ හකුළන්න",
   "session.revertDock.expand": "පෙරළන ලද පණිවිඩ පුළුල් කරන්න",
   "session.revertDock.restore": "පණිවිඩය ප්‍රතිසාධනය කරන්න",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "ඕනෑම දෙයක් ගොඩනඟන්න",
   "session.new.project.new": "නව ව්යාපෘතිය",
   "session.new.project.search": "ව්යාපෘති සොයන්න",

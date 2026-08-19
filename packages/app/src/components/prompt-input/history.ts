@@ -1,5 +1,5 @@
-import type { Prompt } from "@/context/prompt"
-import type { SelectedLineRange } from "@/context/file"
+import type { FileContextItem, Prompt } from "@/context/prompt"
+import { selectionFromLines, type SelectedLineRange } from "@/context/file"
 
 const DEFAULT_PROMPT: Prompt = [{ type: "text", content: "", start: 0, end: 0 }]
 
@@ -13,6 +13,25 @@ export type PromptHistoryComment = {
   time: number
   origin?: "review" | "file" | "quote"
   preview?: string
+  // FORK: REQ-123 — 缺了它,从 ↑ 历史找回的聊天引用会退化成文件卡片
+  // (UI 显伪路径文件名、LLM 模板走 file 分支)2026-08-19
+  kind?: "chat" | "file"
+}
+
+// FORK: REQ-123 — ↑ 历史条目回填成引用卡片的映射。原先 legacy composer 与 v2 composer
+// 各写了一份等价的内联映射,`kind` 就是两边一起漏掉的(→ 找回的聊天引用退化成文件卡片)。
+// 收口成一处纯函数,顺带可单测。2026-08-19
+export function historyCommentToContextItem(item: PromptHistoryComment): FileContextItem {
+  return {
+    type: "file",
+    path: item.path,
+    selection: selectionFromLines(item.selection),
+    comment: item.comment,
+    commentID: item.id,
+    commentOrigin: item.origin,
+    preview: item.preview,
+    kind: item.kind,
+  }
 }
 
 export type PromptHistoryEntry = {

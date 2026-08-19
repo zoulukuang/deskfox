@@ -762,6 +762,7 @@ export const dict = {
   "session.revertDock.collapse": "ပြန်လှန်ထားသော စာတိုများကို ခေါက်သိမ်းပါ။",
   "session.revertDock.expand": "ပြန်လှန်ထားသော စာတိုများကို ချဲ့ပါ။",
   "session.revertDock.restore": "မက်ဆေ့ဂျ်ကို ပြန်ယူပါ။",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "မည်သည့်အရာကိုမဆို တည်ဆောက်ပါ။",
   "session.new.project.new": "ပရောဂျက်အသစ်",
   "session.new.project.search": "ရှာဖွေရေး ပရောဂျက်များ",

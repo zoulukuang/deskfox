@@ -17,7 +17,7 @@ import { createStore, type SetStoreFunction, type Store } from "solid-js/store"
 // FORK: 聊天输入框焦点跟随 helper [feat: chat-input-focus-follow] 2026-05-21
 import { registerChatInputRef, unregisterChatInputRef } from "@/utils/chat-input-focus"
 import { useLocal } from "@/context/local"
-import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
+import { type SelectedLineRange, useFile } from "@/context/file"
 import {
   ContentPart,
   DEFAULT_PROMPT,
@@ -56,6 +56,8 @@ import { createPromptAttachments } from "./prompt-input/attachments"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
+  // FORK: REQ-123 — 历史 comment → 引用卡片映射(收口)2026-08-19
+  historyCommentToContextItem,
   // FORK: REQ-087 [feat: renderer-snapshot-oom] 2026-08-02
   migrateStoredHistory,
   navigatePromptHistory,
@@ -470,6 +472,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           time: item.commentID ? (byID.get(`${item.path}\n${item.commentID}`)?.time ?? Date.now()) : Date.now(),
           origin: item.commentOrigin,
           preview: item.preview,
+          // FORK: REQ-123 — 带上 kind,历史找回的聊天引用不退化成文件卡片 2026-08-19
+          kind: item.kind,
         } satisfies PromptHistoryComment,
       ]
     })
@@ -485,17 +489,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         time: item.time,
       })),
     )
-    prompt.context.replaceComments(
-      items.map((item) => ({
-        type: "file" as const,
-        path: item.path,
-        selection: selectionFromLines(item.selection),
-        comment: item.comment,
-        commentID: item.id,
-        commentOrigin: item.origin,
-        preview: item.preview,
-      })),
-    )
+    // FORK: REQ-123 — 映射收口到 history.ts(与 v2 composer 共用一份,kind 曾在两边同时漏)2026-08-19
+    prompt.context.replaceComments(items.map(historyCommentToContextItem))
   }
 
   const applyHistoryPrompt = (entry: PromptHistoryEntry, position: "start" | "end") => {

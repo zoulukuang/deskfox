@@ -754,6 +754,7 @@ export const dict = {
   "session.revertDock.collapse": "გაბრუნებული შეტყობინებების ჩაკეცვა",
   "session.revertDock.expand": "გაფართოვებული შეტყობინებების გაფართოება",
   "session.revertDock.restore": "წერილის აღდგენა",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "აშენეთ რამე",
   "session.new.project.new": "ახალი პროექტი",
   "session.new.project.search": "პროექტების ძიება",

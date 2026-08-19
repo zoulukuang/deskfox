@@ -652,6 +652,7 @@ export const dict = {
   "session.revertDock.collapse": "Kutista palautetut viestit",
   "session.revertDock.expand": "Laajenna palautetut viestit",
   "session.revertDock.restore": "Palauta viesti",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Rakenna mitä tahansa",
   "session.new.project.new": "Uusi projekti",
   "session.new.project.search": "Etsi projekteja",

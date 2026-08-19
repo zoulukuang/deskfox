@@ -38,6 +38,7 @@ import { focusChatInput } from "@/utils/chat-input-focus"
 import { repositionMenu } from "@/utils/menu-position"
 import { isImeComposingEvent } from "@/utils/ime"
 import { promptLength } from "@/components/prompt-input/history"
+import { quoteCommentID } from "@/utils/prompt-comments"
 import type { SelectionProvider, SelectionResult } from "./provider"
 
 type MenuMode = "menu" | "input"
@@ -367,11 +368,8 @@ export function ContextMenuHost(props: {
     if (m.sourceKind === "file" || m.sourceKind === "chat") {
       // 空 comment 时给个默认占位,formatCommentNote 才会把 preview 段拼进去(没 comment 它返回空)
       const effectiveComment = c.trim() || "(see selected text)"
-      let hash = 0
-      for (let i = 0; i < m.text.length; i++) {
-        hash = ((hash << 5) - hash + m.text.charCodeAt(i)) | 0
-      }
-      const commentID = `quote-${Math.abs(hash).toString(36)}-${Date.now().toString(36)}`
+      // FORK: REQ-123 — ID 算法收口到 utils/prompt-comments,撤回还原卡片时要用同一套 2026-08-19
+      const commentID = quoteCommentID(m.text, Date.now().toString(36))
       prompt.context.add({
         type: "file",
         path: m.sourcePath,

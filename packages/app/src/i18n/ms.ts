@@ -752,6 +752,7 @@ export const dict = {
   "session.revertDock.collapse": "Runtuhkan mesej dipulangkan semula",
   "session.revertDock.expand": "Kembangkan mesej dipulangkan semula",
   "session.revertDock.restore": "Pulihkan mesej",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Bina apa sahaja",
   "session.new.project.new": "Projek baharu",
   "session.new.project.search": "Cari projek",

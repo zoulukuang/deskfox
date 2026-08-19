@@ -676,6 +676,7 @@ export const dict = {
   "session.revertDock.collapse": "Skjul tilbakestilte meldinger",
   "session.revertDock.expand": "Utvid tilbakestilte meldinger",
   "session.revertDock.restore": "Gjenopprett melding",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
 
   "session.new.title": "Bygg hva som helst",
   "session.new.worktree.main": "Hovedgren",
@@ -1444,4 +1445,5 @@ export const dict = {
   "project.path.missing.title": "Project folder not found", // FORK-i18n-backfill(en 兜底)
   "project.path.missing.description": "“{{directory}}” was deleted, renamed, or moved. Please choose the project folder again.", // FORK-i18n-backfill(en 兜底)
   "project.path.unreachable.title": "Project disk unavailable", // FORK-i18n-backfill(en 兜底)
-  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)} satisfies Partial<Record<Keys, string>>
+  "project.path.unreachable.description": "Can't reach “{{directory}}”. The disk may be disconnected or unmapped (network/USB drive). Reconnect it and try again.", // FORK-i18n-backfill(en 兜底)
+} satisfies Partial<Record<Keys, string>>

@@ -817,6 +817,8 @@ export const dict = {
   "session.revertDock.collapse": "折叠已回滚消息",
   "session.revertDock.expand": "展开已回滚消息",
   "session.revertDock.restore": "恢复消息",
+  // FORK: REQ-123 2026-08-19
+  "session.revert.restoredToInput": "已撤回,内容已回到输入框",
   "session.new.title": "构建任何内容",
   "session.new.project.new": "新建项目",
   "session.new.project.search": "搜索项目",

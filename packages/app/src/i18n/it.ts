@@ -673,6 +673,7 @@ export const dict = {
   "session.revertDock.collapse": "Comprimi i messaggi annullati",
   "session.revertDock.expand": "Espandi i messaggi annullati",
   "session.revertDock.restore": "Ripristina il messaggio",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Crea qualsiasi cosa",
   "session.new.project.new": "Nuovo progetto",
   "session.new.project.search": "Cerca progetti",

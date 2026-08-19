@@ -761,6 +761,7 @@ export const dict = {
   "session.revertDock.collapse": "A visszagörgetett üzenetek összecsukása",
   "session.revertDock.expand": "A visszagörgetett üzenetek kibontása",
   "session.revertDock.restore": "Üzenet visszaállítása",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Építsen bármit",
   "session.new.project.new": "Új projekt",
   "session.new.project.search": "Projektek keresése",

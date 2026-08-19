@@ -813,6 +813,7 @@ export const dict = {
   "session.revertDock.collapse": "收合已還原的訊息",
   "session.revertDock.expand": "展開已還原的訊息",
   "session.revertDock.restore": "還原訊息",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
 
   "session.new.title": "實現任何想法",
   "session.new.project.new": "新專案",
