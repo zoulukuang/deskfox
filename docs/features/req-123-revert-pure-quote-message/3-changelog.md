@@ -1,10 +1,10 @@
 feat-id: req-123-revert-pure-quote-message
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-123 · 实际改动
 
-> commit:`<待回填>`(feat 分支 `feat/req-123-revert-pure-quote-message`)
+> commit:`d6a1aafb0f`(feat 分支 `feat/req-123-revert-pure-quote-message`)
 > 规模:Medium · 净 +206 / −41(其中 i18n 回填 61 行) · **R4 override 0 笔**
 
 ## 一、一句话
@@ -75,7 +75,33 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | `packages/app` `bun run test:unit` | **1069 pass / 0 fail**(138 文件) |
 | `packages/session-ui` `bun test` | **114 pass / 0 fail** |
 | fork 范围 typecheck | **29/29** |
-| 真机 T17-T19(local 档) | `<待补>` |
+| 真机 T17-T19(local 档,CDP 驱动) | **三条全过**,详见下方 §四之二 |
+
+## 四之二、真机验收(2026-08-19,local 档 arm64,CDP 9333)
+
+打 local 包(`OPENCODE_CHANNEL=local` + `electron-builder --mac --dir`)真机跑,**全程未碰 user 正在用的正式版**。
+
+| 用例 | 实测 |
+|---|---|
+| **T17** 纯引用消息撤回 | 选中回复正文 → 右键「添加到聊天窗口」→ 卡片上写问题、输入框不写正文 → 发送。消息动作条**出现**(`user-message-copy-wrapper` 从 1 个变 2 个),里面**只有「撤销此消息」一个按钮、没有复制按钮**(没正文可复制,符合验收标准 1)。点撤回 → 时间线消息消失、引用卡片回到输入框、toast「已撤回,内容已回到输入框」。补一句正文 → 重发成功。 |
+| **T18** 撤回→恢复不留重复卡片 | 回滚坞「恢复消息」后,输入框内容切换成**下一条**消息的内容(正文清空 + 该条的 1 张卡片),卡片数**始终 1 张、无累积**。另用一条更直接的对照:撤回一条**没有引用**的消息 → 卡片数 1 → 0(上一轮回填的卡片被 `replaceComments` 正确清掉),证明四点收敛真的生效。 |
+| **T19** 正文 + 引用一起撤回 | 「补充一句:只要一句话结论」+ 引用卡片一起发出 → 无错误 toast、后端无伪路径报错(REQ-119 联动生效)→ 撤回 → **正文与卡片都回到输入框**。 |
+
+### 真机顺带发现的既有缺陷(本次不修,已回填需求池)
+
+**时间线里的聊天引用卡片显示成文件卡** —— 渲染出「文档图标 + `<chat selection>`」而不是「聊天引用」。
+根因:`MessageComment`(`timeline/rows.ts`)类型只有 `path / comment / selection`,**没有 `kind`**,
+`message-timeline.tsx:1238` 的 CommentStrip 直接 `FileIcon` + `getFilename(comment().path)` 渲染。
+与本次改动无关(未触及该路径),是 chat selection 伪路径漏判的**第四例**
+(前三例:2026-08-12 预览 tab、`keep-legacy-layout` 点开空白预览页、REQ-119 后端 execRead)——
+需求池原文第七节"这条特性缺一次统一收口"再次被印证。
+
+### 真机操作留下的会话状态(如实记录)
+
+验收在 Finance 项目一条真实会话里做的(local 档与 sidecar 共用会话数据)。发出的 2 条测试消息
+(「REQ-123 真机验收:这段什么意思」/「补充一句:只要一句话结论」)**均处于已撤回状态**:
+不进模型上下文,回滚坞显示「2 条已回滚消息」,下次在该会话正常发消息时 `revert.cleanup` 会物理删除。
+原始消息「帮我分析下科创 50 和创业板…」完好未动。
 
 ## 五、回退方法
 
@@ -88,4 +114,5 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 - 纯聊天引用**进不了 prompt 历史**(`historyComments()` 对无 selection 的 item 直接丢弃)——
   需求池原文第五章"↑ 键能找回"对聊天引用不成立;
+- 时间线 CommentStrip 把聊天引用渲染成 `<chat selection>` 文件卡(见 §四之二,伪路径漏判第四例);
 - 回滚坞升级(标题改写 / 「丢弃」按钮 / 预览文字修 `[附件]` 占位)、撤回措辞统一、`session.undo` 快捷键。

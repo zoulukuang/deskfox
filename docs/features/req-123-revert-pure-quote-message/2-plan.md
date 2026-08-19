@@ -1,5 +1,5 @@
 feat-id: req-123-revert-pure-quote-message
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # REQ-123 · 实施计划 + 决策轨迹
@@ -80,4 +80,4 @@ fork 既有做法是非 zh 语言填英文原文 + `// FORK-i18n-backfill(en 兜
 | app `bun run test:unit` | 1069 pass / 0 fail(138 文件) |
 | session-ui `bun test` | 114 pass / 0 fail |
 | fork 范围 typecheck | 29/29 |
-| 真机(T17-T19) | 见 3-changelog |
+| 真机(T17-T19) | local 档真机 CDP 三条全过,见 3-changelog §四 |
