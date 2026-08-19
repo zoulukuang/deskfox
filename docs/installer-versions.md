@@ -14,6 +14,57 @@
 
 
 
+## [Windows] 2026.11.0 - 2026-08-19 09:35
+
+**主题**:数据库自愈 + 会话呈现与输入修复批**首次进 prod**,并含 Windows 侧完整回验。自
+`ship-prod-2026.10.0` 起 **52 commits / 167 文件 / +12636 −7260**(其中 17 笔 feat+fix,
+余为 docs/test)。按功能波次 minor 进位 2026.10.0 → 2026.11.0。
+
+**本次内容**(自 `ship-prod-2026.10.0` 起):
+
+- **数据库自愈(REQ-084①,本批最重要)**:内核版本落后于本机数据库时,过去是**每次启动 sidecar
+  都打不开同一个库、静默永久坏**。现在分两处兜住:① **迁移期检测** —— 首启迁移到 deskfox 命名空间时,
+  超前 schema 的库不迁入(原件保留在旧位置,auth/config/storage 照迁);② **启动期自愈** —— 已在新命名空间
+  内的污染库,启动时改名为 `opencode.db.incompatible-<时间戳>` 挪开、以空库起,**只改名绝不删除**,
+  并在界面上**明确告诉用户去哪找回原文件**。判定读不出一律 fail-open,绝不误伤正常库。
+  ⚠️ 已知设计内行为:若从本版**降级**回旧版,自家新库同样会被判超前而隔离 —— 这是把"静默永久坏"
+  换成"显式隔离、文件可手动恢复"。
+- **会话呈现与输入(REQ-108/109/110/111/112/113/115/116)**:恢复会话进度条(带设置开关,默认开);
+  shell 命令折叠可配置回归,独立成「已运行 N 条命令」组(默认开);时间线噪声治理(invalid 合并计数 +
+  同文件连续编辑 ×N);聊天区 LaTeX 补齐主流定界符;修 v2 下「点击收起预览」点了没反应 + 收起动画
+  被回退成"啪地弹开";修运行中图标不亮 / 权限过滤层 fail-open / 残骸补盖失效(1.18 把权威源挪到
+  全局 store,fork 三处仍读恒空的 child store);修新会话残留已发送的上下文卡导致旧内容被再发一次。
+- **构建与打包**:修 sidecar 下载走国内镜像导致 `prebuild` 恒失败、整条桌面打包链路卡死;
+  dev/local 档图标从矢量源重生成(icns 由 128×128 提到 1024×1024)。
+- **Windows 侧适配回验**(本端新增):修 3 个只在 Win 上出现的缺陷 —— 数据库隔离单测句柄泄漏
+  (Windows 不允许改名已打开的文件)、迁移基线闸因 CRLF 恒假红、一条 hover 测试 flaky
+  (修时序而非加重试);补齐 REQ-068 Windows 四模态真机抓 errno(6/6,实测**四模态真实 errno 全是
+  `ENOENT`**,区分"目录被删"与"整盘离线"全靠盘符根可达性二次探测);两个真机验收脚本跨平台化
+  (Win 首次跑通 12/12,与 mac 一致)。
+- **测试基础设施**:performance e2e 套件复活(六条红全部定位为测试前提过期);清理 23 个零引用死 key;
+  i18n 四个 locale 行尾归一化 LF。
+
+**发版前安全网(Windows 端全部实跑)**:`bun run typecheck` **33/33**;单测 app **1051** /
+media-gen **140** / adapter-feishu-lark **792** / desktop **267**(1 fail 为存量上游
+`draft-store` `node:sqlite`,mac 侧同样);opencode `test/project`+`test/session` **561 pass**
+(@60s 超时,1 fail 是上游测试自身的 POSIX shell 假设,已记入 REQ-107);Playwright 默认套件
+**142 passed / 0 failed**;performance 61 passed(4 条 30x 节流超时为 mac 硬件基准阈值所致,
+降到 6x 后 5/5,非回归);GUI 冒烟 **22/22 零崩溃**;文件预览定向验证 **5/5**(PDF/docx/xlsx 出
+canvas、图片出 img);REQ-084 真机 T4/T5/T6 **12/12** + 隔离 toast 可见性通过;冷启动健康检查
+干净配置目录首启 **CLEAN**。上游 schema 漂移检查:本地 38 条 = 上游 38 条,**无漂移**。
+
+**未修的已知问题(不阻断发版,已进需求台账)**:REQ-121 重启后旧会话终端连不上且无提示
+(`terminal.tsx` 为纯上游文件,本批未碰;不崩溃不报错,但终端面板空白且不说明原因)。
+
+**产物**:
+- `DeskFox-2026.11.0-win-x64.exe` — 339,889,547 bytes
+  sha256 `4ecb71f8c04be5194f85f62d48b3ddbd4eeeb51a6713a8183beef1de06f2a0d1`
+- **installer 路径**:`D:\project\opencode-fork\packages\desktop\dist-deskfox\DeskFox-2026.11.0-win-x64.exe`
+- **国内下载**:https://dl.clawtray.com/DeskFox-2026.11.0-win-x64.exe
+- **Release**:https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.11.0
+
+---
+
 ## [Windows] 2026.10.0 - 2026-08-14 22:25
 
 **主题**:上游同步 v1.17.4 → v1.18.16(`upstream-sync-2026-08`,1365 commits)首次进 prod 的 **Windows 端**,与 8-14 已发的 macOS 2026.10.0 **同批次同版本号**。按功能波次 minor 进位 2026.9.1 → 2026.10.0。
