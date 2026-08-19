@@ -757,6 +757,7 @@ export const dict = {
   "session.revertDock.collapse": "Palos mesazhet e kthyera",
   "session.revertDock.expand": "Zgjero mesazhet e kthyera",
   "session.revertDock.restore": "Rivendos mesazhin",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Ndërtoni ndonjë gjë",
   "session.new.project.new": "Projekt i ri",
   "session.new.project.search": "Kërko projekte",

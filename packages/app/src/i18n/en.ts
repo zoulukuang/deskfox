@@ -755,6 +755,8 @@ export const dict = {
   "session.revertDock.collapse": "Collapse rolled back messages",
   "session.revertDock.expand": "Expand rolled back messages",
   "session.revertDock.restore": "Restore message",
+  // FORK: REQ-123 — 撤回后告诉用户内容去了哪(纯引用消息尤其需要:输入框里只多了一张卡片,不说就像丢了)2026-08-19
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box",
 
   "session.new.title": "Build anything",
   "session.new.project.new": "New project",

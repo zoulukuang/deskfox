@@ -835,6 +835,7 @@ export const dict = {
   "session.revertDock.collapse": "Згорнути скасовані повідомлення",
   "session.revertDock.expand": "Розгорнути скасовані повідомлення",
   "session.revertDock.restore": "Відновити повідомлення",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
 
   "session.new.title": "Створити що завгодно",
   "session.new.project.new": "Новий проєкт",

@@ -67,6 +67,8 @@ import { patchFiles } from "./apply-patch-file"
 import { partDefaultOpen } from "./part-default-open"
 import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
+// FORK: REQ-123 — 用户消息动作条显示判定(fork-only)2026-08-19
+import { shouldShowUserMessageActions } from "./user-message-actions"
 import { readPartText } from "./message-part-text"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 
@@ -1266,7 +1268,15 @@ export function UserMessageDisplay(props: {
         </div>
       </Show>
       <Show when={props.useV2Actions}>{renderAttachments()}</Show>
-      <Show when={text() || (props.useV2Actions && messageComments().length > 0)}>
+      {/* FORK: REQ-123 — 判定移到 user-message-actions.ts(原条件只认正文,没正文的消息连撤回都点不到)2026-08-19 */}
+      <Show
+        when={shouldShowUserMessageActions({
+          hasText: !!text(),
+          canRevert: !!props.actions?.revert,
+          hasInlineComments: messageComments().length > 0,
+          useV2Actions: !!props.useV2Actions,
+        })}
+      >
         <div data-slot="user-message-copy-wrapper">
           <Show when={metaHead() || metaTail()}>
             <span data-slot="user-message-meta-wrap">

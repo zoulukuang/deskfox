@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test"
 import type { Prompt } from "@/context/prompt"
 import {
   canNavigateHistoryAtCursor,
+  // FORK: REQ-123 2026-08-19
+  historyCommentToContextItem,
   migrateStoredHistory,
   clonePromptParts,
   normalizePromptHistoryEntry,
@@ -207,6 +209,50 @@ describe("history image stripping (REQ-087)", () => {
     expect(migrateStoredHistory(null)).toBeNull()
     expect(migrateStoredHistory("junk")).toBe("junk")
     expect(migrateStoredHistory({ nope: 1 })).toEqual({ nope: 1 })
+  })
+})
+// FORK-END
+
+// FORK-BEGIN: REQ-123 — ↑ 历史回填的引用卡片必须保真(kind 曾在 legacy/v2 两处内联映射里同时漏掉,
+// 导致找回的聊天引用退化成显示伪路径文件名的文件卡片)2026-08-19
+describe("historyCommentToContextItem", () => {
+  const base = {
+    id: "quote-abc-1",
+    path: "<chat selection>",
+    selection: { start: 0, end: 0 },
+    comment: "这段什么意思",
+    time: 1,
+  } satisfies PromptHistoryComment
+
+  // T14
+  test("聊天引用回填带 kind,不退化成文件卡片", () => {
+    const item = historyCommentToContextItem({ ...base, origin: "quote", kind: "chat", preview: "引文" })
+    expect(item).toMatchObject({
+      type: "file",
+      path: "<chat selection>",
+      comment: "这段什么意思",
+      commentID: "quote-abc-1",
+      commentOrigin: "quote",
+      preview: "引文",
+      kind: "chat",
+    })
+  })
+
+  test("文件引用与 review 评论的字段照原样传递", () => {
+    expect(historyCommentToContextItem({ ...base, path: "a.md", origin: "file", kind: "file" })).toMatchObject({
+      path: "a.md",
+      commentOrigin: "file",
+      kind: "file",
+    })
+    expect(historyCommentToContextItem({ ...base, path: "a.ts", origin: "review" })).toMatchObject({
+      commentOrigin: "review",
+      kind: undefined,
+    })
+  })
+
+  test("行范围还原成 FileSelection", () => {
+    const item = historyCommentToContextItem({ ...base, path: "a.ts", selection: { start: 3, end: 5 } })
+    expect(item.selection).toMatchObject({ startLine: 3, endLine: 5 })
   })
 })
 // FORK-END

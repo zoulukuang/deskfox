@@ -741,6 +741,7 @@ export const dict = {
   "session.revertDock.collapse": "የተመለሱ መልዕክቶችን ሰብስብ",
   "session.revertDock.expand": "የተጠቀለሉ መልዕክቶችን ዘርጋ",
   "session.revertDock.restore": "መልዕክት እነበረበት መልስ",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "ማንኛውም ነገር ገንባ",
   "session.new.project.new": "አዲስ ፕሮጀክት",
   "session.new.project.search": "የፍለጋ ፕሮጀክቶች",

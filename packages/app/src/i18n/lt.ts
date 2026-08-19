@@ -767,6 +767,7 @@ export const dict = {
   "session.revertDock.collapse": "Sutraukti atšauktus pranešimus",
   "session.revertDock.expand": "Išplėskite atšauktus pranešimus",
   "session.revertDock.restore": "Atkurti pranešimą",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Statyti bet ką",
   "session.new.project.new": "Naujas projektas",
   "session.new.project.search": "Ieškoti projektų",

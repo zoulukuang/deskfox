@@ -757,6 +757,7 @@ export const dict = {
   "session.revertDock.collapse": "Паёмҳои баргардонидашуда",
   "session.revertDock.expand": "Паёмҳои баргардонидашударо васеъ кунед",
   "session.revertDock.restore": "Барқарор кардани паём",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Ҳар чизеро созед",
   "session.new.project.new": "Лоиҳаи нав",
   "session.new.project.search": "Ҷустуҷӯи лоиҳаҳо",

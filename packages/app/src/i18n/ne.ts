@@ -756,6 +756,7 @@ export const dict: Record<string, string> = {
   "session.revertDock.collapse": "रोल्ड ब्याक सन्देशहरू संक्षिप्त गर्नुहोस्",
   "session.revertDock.expand": "घुमाइएको सन्देशहरू विस्तार गर्नुहोस्",
   "session.revertDock.restore": "सन्देश पुनर्स्थापित गर्नुहोस्",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "जे पनि बनाउनुहोस्",
   "session.new.project.new": "नयाँ परियोजना",
   "session.new.project.search": "परियोजनाहरू खोज्नुहोस्",

@@ -760,6 +760,7 @@ export const dict = {
   "session.revertDock.collapse": "Буцаасан мессежүүдийг буулгах",
   "session.revertDock.expand": "Буцаасан мессежүүдийг дэлгэх",
   "session.revertDock.restore": "Зурвасыг сэргээх",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Юу ч барина",
   "session.new.project.new": "Шинэ төсөл",
   "session.new.project.search": "Төсөл хайх",

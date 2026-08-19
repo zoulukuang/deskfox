@@ -760,6 +760,7 @@ export const dict = {
   "session.revertDock.collapse": "Sbalit vrácené zprávy",
   "session.revertDock.expand": "Rozbalte vrácené zprávy",
   "session.revertDock.restore": "Obnovit zprávu",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Postavte cokoliv",
   "session.new.project.new": "Nový projekt",
   "session.new.project.search": "Hledat projekty",

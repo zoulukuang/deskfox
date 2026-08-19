@@ -763,6 +763,7 @@ export const dict = {
   "session.revertDock.collapse": "واپس موڑے سنیہے سمیٹو",
   "session.revertDock.expand": "رول بیک پیغامات نو ودھاؤ",
   "session.revertDock.restore": "سنیہا بحال کرو",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "کجھ وی بناؤ",
   "session.new.project.new": "نواں منصوبہ",
   "session.new.project.search": "منصوبیاں دی تلاش کرو",

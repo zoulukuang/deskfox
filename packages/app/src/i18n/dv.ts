@@ -766,6 +766,7 @@ export const dict = {
   "session.revertDock.collapse": "ކޮލަޕްސް ރޯލް ބެކް މެސެޖުތަކެވެ",
   "session.revertDock.expand": "ރޯލް ބެކް މެސެޖުތައް ފުޅާކުރުން",
   "session.revertDock.restore": "މެސެޖު ރިސްޓޯރ ކުރާށެވެ",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "ކޮންމެ އެއްޗެއް ބިނާކުރާށެވެ",
   "session.new.project.new": "އާ މަޝްރޫއެއް",
   "session.new.project.search": "ޕްރޮޖެކްޓްތައް ހޯދުން",

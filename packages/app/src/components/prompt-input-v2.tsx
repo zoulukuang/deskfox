@@ -10,11 +10,16 @@ import { createEffect, createMemo, on, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
-import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
+import {
+  historyCommentToContextItem,
+  normalizePromptHistoryEntry,
+  promptLength,
+  type PromptHistoryComment,
+} from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
-import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
+import { type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
@@ -182,6 +187,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
           time: item.commentID ? (byID.get(`${item.path}\n${item.commentID}`)?.time ?? Date.now()) : Date.now(),
           origin: item.commentOrigin,
           preview: item.preview,
+          // FORK: REQ-123 — 与 legacy composer 同步:历史找回的聊天引用不退化成文件卡片 2026-08-19
+          kind: item.kind,
         } satisfies PromptHistoryComment,
       ]
     })
@@ -196,17 +203,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
         time: item.time,
       })),
     )
-    prompt.context.replaceComments(
-      items.map((item) => ({
-        type: "file",
-        path: item.path,
-        selection: selectionFromLines(item.selection),
-        comment: item.comment,
-        commentID: item.id,
-        commentOrigin: item.origin,
-        preview: item.preview,
-      })),
-    )
+    // FORK: REQ-123 — 映射收口到 history.ts(与 legacy composer 共用一份)2026-08-19
+    prompt.context.replaceComments(items.map(historyCommentToContextItem))
   }
 
   const accepting = createMemo(() => {

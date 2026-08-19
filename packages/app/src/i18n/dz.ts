@@ -767,6 +767,7 @@ export const dict: Record<string, string> = {
   "session.revertDock.collapse": "ལོག་བཤུད་འབད་ཡོད་པའི་འཕྲིན་དོན་ཚུ་ མར་བསྡམས།",
   "session.revertDock.expand": "ཕྱིར་ལོག་འབད་ཡོད་པའི་འཕྲིན་དོན་ཚུ་རྒྱ་བསྐྱེད་འབད།",
   "session.revertDock.restore": "འཕྲིན་དོན་སླར་གསོ་འབད།",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "ག་ཅི་ཡང་བཟོ་བསྐྲུན།",
   "session.new.project.new": "ལས་འགུལ་གསརཔ།",
   "session.new.project.search": "ལས་གཞི་འཚོལ་ཞིབ།",

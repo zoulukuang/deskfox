@@ -743,6 +743,7 @@ export const dict = {
   "session.revertDock.collapse": "ロールバックされたメッセージを折りたたむ",
   "session.revertDock.expand": "ロールバックされたメッセージを展開",
   "session.revertDock.restore": "メッセージを復元",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "何でも作る",
   "session.new.project.new": "新しいプロジェクト",
   "session.new.project.search": "プロジェクトを検索",

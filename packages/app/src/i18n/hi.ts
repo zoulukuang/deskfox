@@ -764,6 +764,7 @@ export const dict = {
   "session.revertDock.collapse": "रोलबैक संदेशों को संक्षिप्त करें",
   "session.revertDock.expand": "वापस लाये गए संदेशों का विस्तार करें",
   "session.revertDock.restore": "संदेश पुनर्स्थापित करें",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "कुछ भी बनाएँ",
   "session.new.project.new": "नया प्रोजेक्ट",
   "session.new.project.search": "प्रोजेक्ट खोजें",

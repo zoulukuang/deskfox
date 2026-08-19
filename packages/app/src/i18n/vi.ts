@@ -764,6 +764,7 @@ export const dict = {
   "session.revertDock.collapse": "Thu gọn tin nhắn đã hoàn tác",
   "session.revertDock.expand": "Mở rộng tin nhắn đã hoàn tác",
   "session.revertDock.restore": "Khôi phục tin nhắn",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Xây dựng bất cứ thứ gì",
   "session.new.project.new": "Dự án mới",
   "session.new.project.search": "Tìm kiếm dự án",

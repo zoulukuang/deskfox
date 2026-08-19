@@ -749,6 +749,7 @@ export const dict = {
   "session.revertDock.collapse": "ຫຍໍ້ຂໍ້ຄວາມທີ່ມ້ວນຄືນ",
   "session.revertDock.expand": "ຂະຫຍາຍຂໍ້ຄວາມທີ່ມ້ວນຄືນ",
   "session.revertDock.restore": "ຟື້ນຟູຂໍ້ຄວາມ",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "ສ້າງສິ່ງໃດ",
   "session.new.project.new": "ໂຄງການໃໝ່",
   "session.new.project.search": "ໂຄງການຄົ້ນຫາ",

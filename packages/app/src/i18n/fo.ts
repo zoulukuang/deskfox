@@ -754,6 +754,7 @@ export const dict = {
   "session.revertDock.collapse": "Kollaps afturrullað boð",
   "session.revertDock.expand": "Víðka afturrullað boð",
   "session.revertDock.restore": "Endurnýggja boð",
+  "session.revert.restoredToInput": "Reverted — the message is back in the input box", // FORK-i18n-backfill(en 兜底) REQ-123 2026-08-19
   "session.new.title": "Bygg alt",
   "session.new.project.new": "Nýggj verkætlan",
   "session.new.project.search": "Leita verkætlanir",
