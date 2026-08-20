@@ -34,6 +34,8 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 // opencode plugin loader 会把本模块每个 export 当 plugin server 调,裸 helper 会以错误参数被调
 // → fs undefined → "failed to load plugin"。[fix: feishu-plugin-bundle-fs2] 2026-05-27
 import { migrateLegacyWorkspace, applyStaleSessionsCleanup } from "./workspace-migrate"
+// FORK: REQ-102 ACP 子进程门控(语音派活)[feat: voice-dispatch-minimal] 2026-08-21
+import { FEISHU_PLUGIN_ID, shouldSkipInAcp } from "./acp-gate"
 import { readSecret } from "./core/secret-ref"
 import { listAccounts, saveAccount } from "./feishu/account-store"
 import { fetchBotName } from "./feishu/bot-info"
@@ -89,6 +91,11 @@ let chatSessionStore: ChatSessionStore | null = null
 const pipelines = new Map<string, MessagePipeline>()
 
 export const FeishuBridgePlugin = async (input: PluginInput): Promise<Hooks> => {
+  // REQ-102:语音派活的 ACP 子进程会把本插件也加载一遍 → 再开 5 条 WSS 跟主实例抢消息
+  // (本适配器无单实例锁,dedup 文件只是消息级去重)。在这里早返回,连 initBackground 都不进。
+  // [feat: voice-dispatch-minimal] 2026-08-21
+  if (shouldSkipInAcp(FEISHU_PLUGIN_ID, process.env)) return {}
+
   if (!dispatcher) {
     dispatcher = new PromptDispatcher()
   }
