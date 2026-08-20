@@ -40,4 +40,25 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 开发中 note
 
-(施工时追加)
+### S0(2026-08-21 交付)
+
+- 装置四件套 + `launch-env.ts` 三钉死落地,26 单测。施工中实测推翻两条前提 → D-G(宿主)与"版本号不作准入判据",已回填 1-spec §2.1。
+- 探针第一次跑读到的是**旧命名空间**的 auth.json(裸终端没有主进程设的 XDG)—— 正是"验错环境"的具体形态。补 `applyVoiceHarnessXdg()` + 与 `data-namespace.ts` 的源码守卫。
+
+### S1(2026-08-21 交付)
+
+- **wrapper 内核**:`acp-frame.ts`(`isAcpFrame` / `createLineSplitter` / `partitionLines`)+ 17 单测。判据比"能 JSON.parse"更严 —— 只放行 `jsonrpc:"2.0"`,因为插件日志里真有以 `{` 开头的行(REQ-102 §3.5 原话:「任何一行插件输出恰好以 `{` 开头就会炸」)。
+- **wrapper 集成测试**(真 spawn 假宿主,6 例):stdout 只出协议帧 / 噪声改道 stderr / stdin 透传 / 版本核查 / 退出码 / **子命令不重复**。
+  - ⚠️ 施工中抓到的真 bug:qwen launcher 是 `spawnAndProxy(OPENCODE_BIN, ['acp'])`(`scripts/opencode.mjs:63-70`),**它会把 `acp` 当参数传进来**;wrapper 原本又拼了一次默认 `acp` → 宿主会拿到 `acp acp`。已修 + 加回归用例。
+- **门控设计修正**:media-gen 不做 all-or-nothing,改成"保留 tools、不起 server"(理由见 1-spec §4·S1)。
+- **真环境红→绿反证**(隔离 HOME/XDG,门控失效也够不到真飞书配置):
+
+  | 场景 | stdout 噪声 | 飞书 |
+  |---|---|---|
+  | A 默认门控(直连宿主) | 1 行(某库的 legacy build Warning) | **零输出、零初始化** |
+  | B 反证 `DESKFOX_ACP_PLUGINS=*` | 4 行 | 起 server、写 `feishu-plugin-server.json`、扫账号 —— 正是门控要挡的 |
+  | A′ 默认门控 + **经 wrapper**(生产路径) | **0 行** | 同 A |
+
+  真 HOME 的 `feishu-plugin-server.json` / `media-gen-server.json` mtime 均未变,飞书进程数未变。
+- 回归:media-gen 148 / adapter-feishu-lark 796 / desktop 313 全绿;typecheck 3/3。desktop 唯一红是存量的 `draft-store.test.ts`(`node:sqlite`,main 上同样),非本批。
+- 插件 bundle 已用 `packages/branding/scripts/build-{feishu,media-gen}-plugin.sh` 从源码重建(config 指向的是 bundle 不是源码,不重建等于验旧代码)。

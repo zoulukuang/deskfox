@@ -111,7 +111,9 @@ opencode 1.x acp  (本仓源码,进程内)
 | 文件 | 锚点 | 改法 |
 |---|---|---|
 | `packages/adapter-feishu-lark/src/plugin.ts` | `FeishuBridgePlugin` 入口(:91) | 函数体第一行判定,命中 → `return {}`,**不进 `initBackground()`**(它才是起 HTTP server + 5 条 WSS 的地方) |
-| `packages/media-gen/src/index.ts` | `MediaGenPlugin` 入口(:25) | 同上,命中 → `return {}`,不进 `startMediaServer()` |
+| `packages/media-gen/src/index.ts` | `MediaGenPlugin` 入口(:25) | **分两半**(施工时修正):tools 保留、server 不起 —— 见下 |
+
+**media-gen 为什么不是 all-or-nothing**(S1 施工中改的设计):它的 tools 直接调 `generateImage` 等函数,**不经过本地 server**(`server.ts` 的角色是"前端 ↔ 引擎通道",给 DeskFox webview fetch 用);而 server 端口是**固定的 51737**(`server.ts:26`),主实例已占着,子进程再起必然撞端口 + 覆写 `~/.opencode/media-gen-server.json` 这个前端找 server 的发现文件(spike 里那条 "media-gen 端口冲突" 噪声就是它)。所以 ACP 里 **保留 tools(语音才能派「生成一张图」)、跳过 server**,由 `shouldStartMediaServer()` 单独判定。
 
 判定抽成共享纯函数(Logic 清单候选):
 
