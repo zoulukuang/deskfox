@@ -27,9 +27,24 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | **D-C** | 派活目标 = **跟随当前项目 + full 权限** | `OPENCODE_WORKSPACE` = DeskFox 当前窗口项目目录;护栏见 §5·R3 |
 | **D-D** | 后端模型 = **`anthropic/claude-opus-5`,可换** | 写进 `OPENCODE_CONFIG_CONTENT.model`,取值来自 env,换模型不动代码 |
 | **D-E** | stdout 净化 = **外挂 wrapper**,不改 `acp.ts` | `OPENCODE_BIN` 指 fork 自有 wrapper,管道级逐行过滤 |
-| **D-F** | 模型三选(2026-08-21 user 授权「你来选,目标效果最好」) | 见下 §2.1 |
+| **D-F** | 模型三选(2026-08-21 user 授权「你来选,目标效果最好」) | 见下 §2.2 |
+| **D-G** | ACP 宿主 = **本仓 1.x 源码入口 via bun**,不是内置二进制(2026-08-21 user 拍板) | `OPENCODE_BIN` → wrapper → `bun <repo>/packages/opencode/src/index.ts acp`;见下 §2.1 |
 
-### 2.1 模型选型(D-F,依据落在 qwen-audio-agent 1.11.0 的 catalog 与 fork 代码)
+### 2.1 ACP 宿主(D-G)—— 推翻原方案的三条实测
+
+原 S0·钉死① 写的是「`OPENCODE_BIN` = DeskFox 内置 sidecar 绝对路径」。2026-08-21 实测**这个前提不成立**:
+
+| 跑什么 | 结果 |
+|---|---|
+| `packages/desktop/resources/opencode-cli acp` | 是 **opencode2 / v2 世代**(`--help` 自称 "OpenCode 2.0 preview",带 `migrate` v1→v2、`serve` v2 API);隔离 XDG 实测落 **`opencode-next.db`** —— 另一套库 |
+| `bun packages/opencode/src/index.ts acp` | ✅ 正常握手 `protocolVersion:1` / `agentInfo: OpenCode local`;与 app 同为 v1 世代,共用同一个 `opencode.db` |
+| 装好的 `/Applications/DeskFox.app` | Resources 里**没有任何 opencode CLI** —— 生产跑的是 `utilityProcess.fork(sidecar.js)`(`server.ts:77`),不是二进制 |
+
+⇒ 用内置二进制则 D-A 换来的「语音派的活在 DeskFox 会话列表里看得见」直接归零(活落进 `opencode-next.db`,app 读 `opencode.db`)。本批(自用)因此走源码入口;**产品化要另出一个 1.x CLI 二进制随包带**(+构建步骤 +100~150MB 包体),已记进需求计划的定位表。
+
+**连带修正:版本号不能当身份判据。** 三种合法形态各不相同 —— 源码态 `agentInfo.version = "local"`、内置 v2 二进制 `0.0.0-next-16350`、homebrew `1.17.4`。所以身份靠 `resolveAcpHost` 的**路径构造**保证(命令行是我们自己拼的绝对路径,永不退化成 PATH 上的 `opencode`),版本只做告警,唯一硬拦的情形是「干净 semver 且 < 1.18.0」= 真跑到了老 opencode。
+
+### 2.2 模型选型(D-F,依据落在 qwen-audio-agent 1.11.0 的 catalog 与 fork 代码)
 
 | 位置 | 选定 | 依据 | 换法 |
 |---|---|---|---|
@@ -56,12 +71,12 @@ qwenaudio gateway run --backend opencode   (127.0.0.1:3101)
   │       OPENCODE_CONFIG_CONTENT={model, permission} / DASHSCOPE_API_KEY / OPENCODE_PORT=4396
   ▼
 deskfox-acp-wrap.mjs        ← D-E:fork 自有,新文件
-  │  ├─ 校验 sidecar 版本 == fork 版本,不匹配直接退出(防误入 homebrew 1.17.4)
-  │  ├─ spawn(<内置 opencode-cli> acp)
+  │  ├─ resolveAcpHost():路径由我们构造 → 永不退化成 PATH 上的 opencode(那儿是 1.17.4)
+  │  ├─ spawn(bun <repoRoot>/packages/opencode/src/index.ts acp)   ← D-G
   │  ├─ child.stdout 逐行:JSON.parse OK && jsonrpc==="2.0" → 本进程 stdout;其余 → stderr
   │  └─ stdin 原样透传
   ▼
-opencode-cli acp  (fork 1.18.16,进程内)
+opencode 1.x acp  (本仓源码,进程内)
   ├─ 插件加载:feishu → 自门控早返回空 hooks(D-B)
   │             media-gen → 白名单内,正常加载
   └─ 会话落 ~/.local/share/deskfox/opencode/opencode.db,project = 当前项目目录
@@ -84,10 +99,10 @@ opencode-cli acp  (fork 1.18.16,进程内)
   - `README.md` — 跑法 + 已知坑
 - **不再需要 `--pure` shim**(D-B + D-E 落地后它是多余的),装置里不保留这一层
 - **三钉死**(实现落在 wrapper + 启动参数构造模块):
-  1. `OPENCODE_BIN` = 内置 sidecar 绝对路径(打包态 `<app>/Contents/Resources/opencode-cli`,开发态 `packages/desktop/resources/opencode-cli`),**wrapper 启动时校验版本 == fork 版本,不匹配退出并给出明确原因**
+  1. `OPENCODE_BIN` → wrapper → **`bun <repoRoot>/packages/opencode/src/index.ts acp`**(D-G)。仓根来自 `DESKFOX_VOICE_REPO_ROOT`;仓路径缺失或入口文件不存在 → **抛错并禁用语音入口**,不静默降级。身份靠路径构造保证,版本仅告警(唯一硬拦:干净 semver < 1.18.0)
   2. key 读取按 `packages/media-gen/src/auth.ts:14` 既有正确写法运行时读 `XDG_DATA_HOME` 推导 auth.json,**禁止硬编码 `~/.local/share/opencode`**(该路径 2026-07-14 起已过期)
-  3. 三个模型走 env(默认值见 §2.1):`DESKFOX_VOICE_BACKEND_MODEL` / `DESKFOX_VOICE_SMALL_MODEL` / `DESKFOX_VOICE_REALTIME_MODEL`(后者映射到 qwen 侧的 `QWEN_AUDIO_REALTIME_MODEL`)
-- **前端模型 A/B(定终选)**:装置就绪后跑一次 `qwen-audio-3.0-realtime-plus` vs `qwen3.5-omni-plus-realtime` 对照 —— 同一批音频、同一段派活任务,比三项:① 长句 ASR 保真(重点复现「…然后告诉我一共有。」那条尾巴被切的样本)② 打断时延(`playback.clear` 到达时间)③ 派活成功率(`task.accepted` 是否稳定触发)。结论回填本 spec §2.1 并锁死默认值
+  3. 三个模型走 env(默认值见 §2.2):`DESKFOX_VOICE_BACKEND_MODEL` / `DESKFOX_VOICE_SMALL_MODEL` / `DESKFOX_VOICE_REALTIME_MODEL`(后者映射到 qwen 侧的 `QWEN_AUDIO_REALTIME_MODEL`)
+- **前端模型 A/B(定终选)**:装置就绪后跑一次 `qwen-audio-3.0-realtime-plus` vs `qwen3.5-omni-plus-realtime` 对照 —— 同一批音频、同一段派活任务,比三项:① 长句 ASR 保真(重点复现「…然后告诉我一共有。」那条尾巴被切的样本)② 打断时延(`playback.clear` 到达时间)③ 派活成功率(`task.accepted` 是否稳定触发)。结论回填本 spec §2.2 并锁死默认值
 
 ### S1 · 插件自门控 + wrapper(P2)
 
@@ -143,6 +158,7 @@ export function shouldSkipInAcp(pluginId: string, env = process.env): boolean
 | **R2** | **anthropic OAuth token 刷新竞态**。刷新结果经 `Auth.set`(`packages/opencode/src/auth/index.ts:73`)写回 auth.json,**全链路无文件锁**;两个进程同时刷新可能互相冲掉 refresh token → 掉登录 | T13 专项(长挂机 + 语音跑一轮)。真出问题 → 语音侧切 API-key 型 provider(`DESKFOX_VOICE_BACKEND_MODEL=alibaba-cn/qwen3-max`)绕开刷新 |
 | **R3** | 语音可零确认改真代码 / 跑 bash(D-C 全开权限 + ASR 实测有截断:「…然后告诉我一共有。」尾巴丢、「第一件事」→「When事」) | 硬护栏两条进 S2:① `OPENCODE_WORKSPACE` **只允许指向 git 仓库根**,非 git 目录拒绝启动语音(留 git 作最后撤销);② 语音会话起始自动打快照点并记进启动日志 |
 | **R4** | 订阅额度被语音吃掉(D-D 用 oauth,与 user 自己的 Claude Code 同池) | 不做技术处置,`DESKFOX_VOICE_BACKEND_MODEL` 一键切走 |
+| **R5** | **装好的 app 依赖本机源码树**(D-G 的代价):仓被移动/删除/换盘符,语音就不可用 | `resolveAcpHost` 抛错 → 语音入口**禁用 + tooltip 说明原因**(不是点了没反应);产品化路径(编译 1.x CLI 随包带)记在 §3 定位表,不让这条悄悄变成永久形态 |
 
 ---
 
