@@ -22,6 +22,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **2026-08-20 · D-B fork 包自门控**:原计划要改 `packages/opencode/src/plugin/index.ts:179`(全仓唯一插件加载收口点)。核实 `acp.ts:23` 设 `OPENCODE_CLIENT` 早于 `Server.listen`(:25)后,发现在 fork 自有插件入口判定即可达到同等效果,R1 停在第 1 级。放弃的能力:第三方插件仍会在 ACP 子进程加载(自用阶段无第三方插件)。
 - **2026-08-20 · D-E wrapper 而非改 acp.ts**:原复核结论是「进程内覆写 console.* + patch write」。写 spec 时对照 R1 第 1 级重新审视,发现 `OPENCODE_BIN` 本身就是注入点 ⇒ 管道级过滤可完全在新文件完成。附带三个好处:源无关(连 native 写 fd 1 也拦得住)、上游 sync 永不冲突、不改变 `opencode acp` 对其他消费方的行为。**本批因此变成 0 上游内核改动、0 R4 override。**
 - **2026-08-20 · 版本锁定**:qwen-audio-agent 1.7.0 → **1.11.0**(本机现装 1.7.0,npm latest 1.11.0)。理由与回退位见 1-spec §2。
+- **2026-08-21 · D-F 模型三选**(user 授权「你来选,目标效果最好」):后端 `anthropic/claude-opus-5` 保持;**新增 small_model = `alibaba-cn/qwen-flash`** —— `config.ts:77` 说明 small_model 只做标题生成这类杂活,拿 Opus 订阅额度去烧它是纯浪费,而 qwen-flash 输入价是 qwen3-max 的 1/39 且走独立 API key;前端默认锁 `qwen-audio-3.0-realtime-plus`(1.11.0 官方默认 + audio 族配 `smart_turn` 正对症 spike 的尾巴截断 + omni 族的图片输入优势被本版传输层关闭),并在 S0 内做一次真音频 A/B 对 `qwen3.5-omni-plus-realtime` 定终选。顺带作废旧风险:`qwen3-omni-flash-realtime`(疑似 8 轮上限)已不在 1.11.0 catalog 中。
 
 ## 待实测项(施工中填结论)
 
@@ -30,6 +31,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [ ] qwen-audio-agent 1.11.0 相对 1.7.0 的锚点漂移清单
 - [ ] R1:主实例 + 语音同开 `opencode.db` 的实际表现
 - [ ] R2:anthropic OAuth 刷新竞态是否真会掉登录
+- [ ] **前端模型 A/B**:`qwen-audio-3.0-realtime-plus`(smart_turn)vs `qwen3.5-omni-plus-realtime`(semantic_vad)—— ASR 保真 / 打断时延 / 派活成功率三项,结论回填 1-spec §2.1
+- [ ] `small_model = alibaba-cn/qwen-flash` 是否真只吃标题生成这类调用(抽样查 Opus 侧调用量,确认杂活没走主模型)
 
 ## 开发中 note
 

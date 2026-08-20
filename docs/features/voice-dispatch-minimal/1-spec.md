@@ -27,8 +27,21 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | **D-C** | 派活目标 = **跟随当前项目 + full 权限** | `OPENCODE_WORKSPACE` = DeskFox 当前窗口项目目录;护栏见 §5·R3 |
 | **D-D** | 后端模型 = **`anthropic/claude-opus-5`,可换** | 写进 `OPENCODE_CONFIG_CONTENT.model`,取值来自 env,换模型不动代码 |
 | **D-E** | stdout 净化 = **外挂 wrapper**,不改 `acp.ts` | `OPENCODE_BIN` 指 fork 自有 wrapper,管道级逐行过滤 |
+| **D-F** | 模型三选(2026-08-21 user 授权「你来选,目标效果最好」) | 见下 §2.1 |
 
-**我拍的两个小决策(可推翻)**:qwen-audio-agent 锁 **1.11.0**(本机现装 1.7.0;装置反正要重写、1.7.0 那行 patch 在 1.18.16 上已无必要、1.11.0 的 `minimumVersion` 仍是 `'1.18.0'`);前端 realtime 模型锁 **`qwen-audio-3.0-realtime-plus`**(6 轮 spike 唯一真跑过的档;flash 档疑似 8 轮上限未核实,而本批形态就是长时间自用)。
+### 2.1 模型选型(D-F,依据落在 qwen-audio-agent 1.11.0 的 catalog 与 fork 代码)
+
+| 位置 | 选定 | 依据 | 换法 |
+|---|---|---|---|
+| **后端主模型**(真正干活的 agent) | **`anthropic/claude-opus-5`** | 订阅(auth.json `anthropic` = `type: oauth`)可达的最强 agentic 档,已在目录内(`~/.cache/opencode/models.json`)。Fable 5 能力更高但需 API key + 30 天数据留存,**oauth 订阅是否放行未验证,不据此行动** —— 真要上,同一个 env 改一个值即可 | `DESKFOX_VOICE_BACKEND_MODEL` → `OPENCODE_CONFIG_CONTENT.model` |
+| **后端 small_model**(标题生成等杂活) | **`alibaba-cn/qwen-flash`** | `config.ts:77` 明确 small_model 只用于 title generation 这类杂活。让它烧 Opus 订阅额度是纯浪费:qwen-flash $0.022/M 输入(qwen3-max 的 1/39)、1M 上下文、走已有 API key 独立计费。**主模型保持最强、杂活不抢额度** | `DESKFOX_VOICE_SMALL_MODEL` → `OPENCODE_CONFIG_CONTENT.small_model` |
+| **前端 realtime**(听和说) | **`qwen-audio-3.0-realtime-plus`**(默认锁定,S0 内做一次 A/B 定终选,对手 `qwen3.5-omni-plus-realtime`) | 四条:① 1.11.0 官方默认就是它(`realtime-model-catalog.mjs:1`);② 它所在的 audio 族默认转向检测是 **`smart_turn`**,omni 族是 `semantic_vad` —— spike 里「…然后告诉我一共有。」尾巴被切正是转向检测过激,smart_turn 就是冲这个去的;③ omni 族多出来的优势是图片输入,但**本版客户端传输层明确关闭了 JPEG 观察帧与原生视频**(`configuration.zh.md:638-642`),优势本批拿不到;④ 两族都支持 Function Calling(派活前提) | `DESKFOX_VOICE_REALTIME_MODEL` → `QWEN_AUDIO_REALTIME_MODEL` |
+
+**顺带作废一条旧风险**:REQ-102 §4 记的「`qwen3-omni-flash-realtime` 疑似 8 轮对话上限(待核实)」—— 该模型在 1.11.0 catalog 里**已不存在**(被 qwen3.5 系取代),这条不再是本批的变量。
+
+**其余小决策**:qwen-audio-agent 锁 **1.11.0**(user 2026-08-21 无异议)。
+
+**顺带记一个知识点**:1.11.0 有 `QWEN_AUDIO_AGENT_OPENCODE_XDG_CONFIG_HOME`,是「给语音单独指一套 opencode 配置目录」的正规入口 —— **D-A 选了共用,所以我们刻意不设它**;将来若因 R1/R2 要退到隔离,这就是那个开关。
 
 ---
 
@@ -73,7 +86,8 @@ opencode-cli acp  (fork 1.18.16,进程内)
 - **三钉死**(实现落在 wrapper + 启动参数构造模块):
   1. `OPENCODE_BIN` = 内置 sidecar 绝对路径(打包态 `<app>/Contents/Resources/opencode-cli`,开发态 `packages/desktop/resources/opencode-cli`),**wrapper 启动时校验版本 == fork 版本,不匹配退出并给出明确原因**
   2. key 读取按 `packages/media-gen/src/auth.ts:14` 既有正确写法运行时读 `XDG_DATA_HOME` 推导 auth.json,**禁止硬编码 `~/.local/share/opencode`**(该路径 2026-07-14 起已过期)
-  3. 两个模型走 env:`DESKFOX_VOICE_BACKEND_MODEL`(默认 `anthropic/claude-opus-5`)/ `DESKFOX_VOICE_REALTIME_MODEL`(默认 `qwen-audio-3.0-realtime-plus`)
+  3. 三个模型走 env(默认值见 §2.1):`DESKFOX_VOICE_BACKEND_MODEL` / `DESKFOX_VOICE_SMALL_MODEL` / `DESKFOX_VOICE_REALTIME_MODEL`(后者映射到 qwen 侧的 `QWEN_AUDIO_REALTIME_MODEL`)
+- **前端模型 A/B(定终选)**:装置就绪后跑一次 `qwen-audio-3.0-realtime-plus` vs `qwen3.5-omni-plus-realtime` 对照 —— 同一批音频、同一段派活任务,比三项:① 长句 ASR 保真(重点复现「…然后告诉我一共有。」那条尾巴被切的样本)② 打断时延(`playback.clear` 到达时间)③ 派活成功率(`task.accepted` 是否稳定触发)。结论回填本 spec §2.1 并锁死默认值
 
 ### S1 · 插件自门控 + wrapper(P2)
 
