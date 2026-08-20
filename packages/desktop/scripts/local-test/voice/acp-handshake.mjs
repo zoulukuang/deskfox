@@ -26,9 +26,20 @@ const isolate = argv.includes("--isolate")
 // 本文件在 <repo>/packages/desktop/scripts/local-test/voice/ 下,上溯 5 级即仓根
 const repoRoot = arg("--repo", path.resolve(import.meta.dir, "..", "..", "..", "..", ".."))
 
+// --via-wrapper:走 deskfox-acp-wrap.mjs(生产路径),验证管道级过滤真的把噪声挡在 stdout 之外。
+// 不带则直连宿主,量的是【过滤前】的原始噪声基线。
+const viaWrapper = argv.includes("--via-wrapper")
+
 let host
 try {
   host = resolveAcpHost({ repoRoot, env: process.env })
+  if (viaWrapper) {
+    host = {
+      ...host,
+      command: process.execPath,
+      args: [path.resolve(import.meta.dir, "..", "..", "deskfox-acp-wrap.mjs"), "acp"],
+    }
+  }
 } catch (e) {
   console.error(`❌ ${e?.message ?? e}`)
   process.exit(3)
