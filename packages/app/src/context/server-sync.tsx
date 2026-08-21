@@ -640,11 +640,12 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   let unlistenVoice: (() => void) | undefined
   if (isDesktopApp()) {
     void listen("voice-session-changed", () => {
-      // 语音只会写"当前打开的那个项目",但这里不知道是哪个,索性把已打开的都失效一遍 ——
-      // invalidate 只是标记过期,真正的重拉由 query 自己按需触发,代价可以忽略。
-      for (const directory of Object.keys(children.children)) {
-        void queryClient.invalidateQueries(queryOptionsApi.sessions(directoryKey(directory)))
-      }
+      // ⚠️ 必须走 `queue.push` 而不是 `queryClient.invalidateQueries`。
+      // 侧栏的会话列表是 `createMemo(() => sortedRootSessions(workspaceStore, …))` —— 从 **store** 读,
+      // query 只是填充 store 的手段。invalidate 只标记缓存过期,store 纹丝不动,界面就一直是旧的
+      // (2026-08-21 真机:库里、主实例 API 里都有新会话,切项目再切回来也刷不出来)。
+      // `queue.push` 是本文件里其它事件用的同一条路径,它会真的重新加载那个目录并写回 store。
+      for (const directory of Object.keys(children.children)) queue.push(directory)
     })
       .then((fn) => {
         unlistenVoice = fn

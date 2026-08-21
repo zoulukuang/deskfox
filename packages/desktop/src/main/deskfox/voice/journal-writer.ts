@@ -9,7 +9,15 @@
 
 import log from "electron-log/main.js"
 import { GATEWAY_PORT, VOICE_OPENCODE_PORT } from "./launch-config"
-import { journalTitle, pairTurns, pendingTurns, renderTurn, type VoiceTask, type VoiceTimelineItem } from "./voice-journal"
+import {
+  journalKey,
+  journalTitle,
+  pairTurns,
+  pendingWrites,
+  renderTurn,
+  type VoiceTask,
+  type VoiceTimelineItem,
+} from "./voice-journal"
 
 const gateway = (path: string) => `http://127.0.0.1:${GATEWAY_PORT}${path}`
 const host = (path: string) => `http://127.0.0.1:${VOICE_OPENCODE_PORT}${path}`
@@ -115,37 +123,41 @@ export async function syncJournal(input: {
 
   const turns = pairTurns(tasks, timeline)
   if (input.seedOnly) {
-    for (const turn of turns) input.state.written.add(turn.taskId)
+    // 历史任务的请求和结果都算写过 —— 它们属于上一次语音会话
+    for (const turn of turns) {
+      input.state.written.add(journalKey(turn.taskId, "request"))
+      input.state.written.add(journalKey(turn.taskId, "answer"))
+    }
     log.info(`[voice] 语音沟通记录建立基线:忽略 ${turns.length} 条历史任务`)
     return 0
   }
 
-  const fresh = pendingTurns(turns, input.state.written)
+  const fresh = pendingWrites(turns, input.state.written)
   if (fresh.length === 0) return 0
 
   const sessionId = await ensureJournalSession(input.directory, input.state, input.now ?? new Date())
   if (!sessionId) return 0
 
   let written = 0
-  for (const turn of fresh) {
+  for (const { turn, phase } of fresh) {
     try {
       const res = await fetch(
         host(`/session/${sessionId}/message?directory=${encodeURIComponent(input.directory)}`),
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ noReply: true, parts: [{ type: "text", text: renderTurn(turn) }] }),
+          body: JSON.stringify({ noReply: true, parts: [{ type: "text", text: renderTurn(turn, phase) }] }),
           signal: AbortSignal.timeout(10_000),
         },
       )
       if (!res.ok) throw new Error(String(res.status))
-      input.state.written.add(turn.taskId)
+      input.state.written.add(journalKey(turn.taskId, phase))
       written++
     } catch (e) {
       // 这一条没写成就别记进 written,下一轮还会重试
-      log.warn(`[voice] 写语音沟通记录失败 task=${turn.taskId}: ${String(e)}`)
+      log.warn(`[voice] 写语音沟通记录失败 task=${turn.taskId} phase=${phase}: ${String(e)}`)
     }
   }
-  if (written > 0) log.info(`[voice] 语音沟通 session 追加 ${written} 轮`)
+  if (written > 0) log.info(`[voice] 语音沟通 session 追加 ${written} 条`)
   return written
 }

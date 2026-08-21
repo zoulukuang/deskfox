@@ -48,11 +48,14 @@ export interface JournalTurn {
 }
 
 /**
- * 把 tasks 和 timeline 按 taskId 配对成"轮次"。
+ * 把 tasks 和 timeline 按 taskId 配对成"轮次"。**运行中的也收。**
  *
- * 只收**已经有结论**的轮次(completed / failed):还在跑的写进去会是半截,
- * 而且下一轮轮询还会再看到它 —— 那就得处理"更新已写入的消息",而 noReply 只能追加。
- * 等它跑完再写,一次成型。
+ * 2026-08-21 user:「只要发起了,就应该出现在列表里,哪怕是正在运行中的 —— 飞书沟通发起的
+ * 都是立刻出现的」。原来只收 completed/failed(等结论一次成型),代价就是刚说完话时
+ * 列表里什么都不多,看着像没生效。
+ *
+ * 改法不是"先写半截再更新"—— `noReply` 只能追加、改不了已写的消息。而是**拆成两条**:
+ * 请求一条、结果一条(见 `journalPhase`)。交替下来反而更像对话,还顺带解决了可见性。
  */
 export function pairTurns(tasks: readonly VoiceTask[], timeline: readonly VoiceTimelineItem[]): JournalTurn[] {
   const answers = new Map<string, VoiceTimelineItem>()
@@ -69,7 +72,8 @@ export function pairTurns(tasks: readonly VoiceTask[], timeline: readonly VoiceT
     const id = String(task?.id ?? task?.workId ?? "")
     if (!id) continue
     const state = String(task.workState ?? "")
-    if (state !== "completed" && state !== "failed") continue
+    // 取消掉的不记 —— 用户自己撤回的动作,留在记录里只会碍眼
+    if (state === "cancelled" || state === "cancelling") continue
     const objective = String(task.objective ?? "").trim()
     if (!objective) continue
     out.push({
@@ -84,23 +88,50 @@ export function pairTurns(tasks: readonly VoiceTask[], timeline: readonly VoiceT
 }
 
 /**
- * 一轮对话渲染成一条消息。
+ * 一轮拆成两条消息:**请求**(一发起就写)和**结果**(跑完再写)。
  *
- * 刻意做成「请求 + 分隔线 + 回答」而不是塞一堆元数据:这条 session 是给人**读**的,
- * taskId / 耗时那些排查信息在 `voice-gateway.log` 和 `/api/tasks` 里都有,不该占版面。
+ * 为什么不合成一条:`noReply` 只能追加、改不了已写的消息。要做到"发起就可见",
+ * 就只能先把请求写下去,结果作为下一条追加。交替读下来是
+ * 「🎙️ 请求 → 回答 → 🎙️ 请求 → 回答」,反而更像对话。
  */
-export function renderTurn(turn: JournalTurn): string {
-  const head = `🎙️ **${turn.objective}**`
-  if (turn.state === "failed") {
-    return [head, "", "---", "", `⚠️ 这一轮没能完成${turn.answer ? `:${turn.answer}` : ""}`].join("\n")
-  }
-  if (!turn.answer) return [head, "", "---", "", "_(这一轮没有留下文字结果)_"].join("\n")
-  return [head, "", "---", "", turn.answer].join("\n")
+export type JournalPhase = "request" | "answer"
+
+/** 一条待写消息的身份 —— 去重按 `taskId + phase`,请求和结果各写一次 */
+export function journalKey(taskId: string, phase: JournalPhase): string {
+  return `${taskId}:${phase}`
 }
 
-/** 挑出还没写过的轮次。`written` 由调用方跨轮持有 —— 轮询会反复看到同一批已完成任务。 */
-export function pendingTurns(turns: readonly JournalTurn[], written: ReadonlySet<string>): JournalTurn[] {
-  return turns.filter((t) => !written.has(t.taskId))
+/**
+ * 渲染其中一条。
+ *
+ * 刻意不塞元数据:这条 session 是给人**读**的,taskId / 耗时那些排查信息
+ * 在 `voice-gateway.log` 和 `/api/tasks` 里都有,不该占版面。
+ */
+export function renderTurn(turn: JournalTurn, phase: JournalPhase): string {
+  if (phase === "request") return `🎙️ **${turn.objective}**`
+  if (turn.state === "failed") return `⚠️ 这一轮没能完成${turn.answer ? `:${turn.answer}` : ""}`
+  return turn.answer || "_(这一轮没有留下文字结果)_"
+}
+
+export interface PendingWrite {
+  readonly turn: JournalTurn
+  readonly phase: JournalPhase
+}
+
+/**
+ * 挑出还没写过的消息。`written` 由调用方跨轮持有 —— 轮询会反复看到同一批任务。
+ *
+ * 请求**只要任务存在就该写**(包括 running);结果等有结论了才写。
+ * 顺序上请求永远排在自己的结果前面,不会出现"先看到答案再看到问题"。
+ */
+export function pendingWrites(turns: readonly JournalTurn[], written: ReadonlySet<string>): PendingWrite[] {
+  const out: PendingWrite[] = []
+  for (const turn of turns) {
+    if (!written.has(journalKey(turn.taskId, "request"))) out.push({ turn, phase: "request" })
+    const settled = turn.state === "completed" || turn.state === "failed"
+    if (settled && !written.has(journalKey(turn.taskId, "answer"))) out.push({ turn, phase: "answer" })
+  }
+  return out
 }
 
 /** 这条 journal session 的标题。带日期,便于一天多次开语音时区分。 */

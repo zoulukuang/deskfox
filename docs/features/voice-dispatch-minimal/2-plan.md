@@ -427,6 +427,51 @@ user 追问「沟通的 session 按什么方式切分合理」。厘清后发现
 两次派活都复现。空壳也进了 qwen 的 `projects` 记录,所以不是我们这边造的。
 后果:列表里每个任务多出一条空会话。待查是 qwen 的重试还是模型调了两次 `session_start`。
 
+#### 刷新一直没生效:我修错了地方(2026-08-21)
+
+user 反复反馈「发起了却不出现在列表」,切项目再切回来也不出现。逐层取证:
+
+| 层 | 结果 |
+|---|---|
+| 库(opencode-local.db) | ✅ 4 条新 session 都在,parent 空、未归档、project_id 对 |
+| 主实例 server API(4096) | ✅ `/session?directory=…` 把它们都返回了 |
+| renderer | ❌ 列表纹丝不动 |
+
+**根因是我改错了地方**:侧栏的会话列表是
+`createMemo(() => sortedRootSessions(workspaceStore, …))` —— 从 **SolidJS store** 读,
+query 只是填充 store 的手段。我用的 `queryClient.invalidateQueries` 只标记缓存过期,
+**store 纹丝不动**,界面永远是旧的。同文件里其它事件走的是 `queue.push(directory)`
+(真的重新加载那个目录并写回 store),那才是正确路径。已改。
+
+**更要命的是我之前"验证通过"的结论是假的**:我用 CDP 注入 listener 只验证了**事件到达 renderer**
+(收到 2 次),没验证**列表真的更新**。事件确实到了,到了之后什么也没发生。
+教训:验 UI 行为就要验 UI 的最终状态,验到中间层就宣布通过等于没验。
+
+#### 发起就可见:一轮拆两条(2026-08-21 user)
+
+user:「只要发起了就应该出现在列表里,哪怕正在运行中 —— 飞书沟通发起的都是立刻出现的」。
+原实现两处保守:journal session 懒建(等第一条要写时)、`pairTurns` 只收 completed/failed。
+合起来就是"结果出来才落库",刚说完话时列表什么都不多。
+
+改法不是"先写半截再更新"—— `noReply` 只能追加、改不了已写的消息。而是**一轮拆两条**:
+请求(任务一被受理就写)+ 结果(跑完再写),按 `taskId + phase` 去重。
+交替读下来是「🎙️ 请求 → 回答 → 🎙️ 请求 → 回答」,反而更像对话。
+session 仍保持懒建,但触发点从"任务完成"提前到"任务被受理" —— 实测**说完话 5 秒内出现**。
+
+```
+t= 5s  语音沟通 2026-08-21 23:39
+t=15s  调研 SQLite synchronous 各档位取舍
+t=20s  New session(空壳,qwen 重复建的已知问题)
+```
+
+#### ⚠️ 协作事故:在 user 正在用的实例上做验证
+
+本轮多次 `pkill` + 重打包 + 起网关 + 删"测试" session,而 user 同时在用同一个本地版:
+· 删掉了 user 正开着的「语音沟通 22:45」→ 界面报 `Session not found` 404;
+· 起网关时 workspace 指到 `voice-test`,把 user 在 Finance 的语音顶掉过。
+user 记忆里本就有「不在 user 工作环境做 GUI 自动化测试」这条约束,本轮为了快一直在违反。
+后续验证要用独立数据目录(独立 XDG + 独立 db),不碰 user 的 `opencode-local.db`。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有
