@@ -14,6 +14,9 @@ import { registerLocalAssetProtocol } from "./local-asset"
 import { applyContextMenuLanguage } from "./context-menu"
 // REQ-084① 数据库隔离通知(一次性,renderer 就绪后取)[feat: voice-preclear-batch] 2026-08-18
 import { takeDbQuarantineNotice } from "./db-quarantine-notice"
+// REQ-102 语音派活 [feat: voice-dispatch-minimal] 2026-08-21
+import * as voice from "./voice/gateway"
+import { voiceRepoRoot, voiceWrapperPath } from "./voice/paths"
 
 export function registerDeskfoxIpc() {
   // 本地资源协议(localasset://)— app.whenReady 后注册 [feat: electron-replatform]
@@ -51,6 +54,19 @@ export function registerDeskfoxIpc() {
 
   // ── 数据库隔离通知(REQ-084①,取走即清,不重复弹)[feat: voice-preclear-batch] ──
   h("get_db_quarantine_notice", () => takeDbQuarantineNotice())
+
+  // ── 语音派活(REQ-102)[feat: voice-dispatch-minimal] ──
+  // renderer 只拿状态字符串;env 里有 DASHSCOPE key,进程与凭据都留在主进程。
+  h("voice_status", () => voice.getVoiceStatus())
+  h("voice_probe", () => voice.probeAvailability(true))
+  h("voice_start", (args: { workspace?: string }) =>
+    voice.startVoiceGateway({
+      workspace: String(args.workspace ?? ""),
+      repoRoot: voiceRepoRoot(),
+      wrapperPath: voiceWrapperPath(),
+    }),
+  )
+  h("voice_stop", () => voice.stopVoiceGateway())
 
   // ── 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] ──
   h("get_telemetry_enabled", () => telemetry.getTelemetryStatus())
