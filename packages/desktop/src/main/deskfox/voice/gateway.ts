@@ -17,7 +17,7 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { BrowserWindow, shell } from "electron"
 import log from "electron-log/main.js"
-import { acpSessionStatePath, invalidateCoordinatorOnModelChange } from "./coordinator-state"
+import { acpSessionStatePath, invalidateCoordinatorOnStart } from "./coordinator-state"
 import { archiveCoordinator, createJournalState, syncJournal, type JournalState } from "./journal-writer"
 import { startTaskWatch, type TaskWatchHandle } from "./task-watch"
 import { GATEWAY_PORT, binDir, buildGatewayEnv, checkVoiceWorkspace } from "./launch-config"
@@ -330,11 +330,15 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
   const backendModel = String(JSON.parse(env.OPENCODE_CONFIG_CONTENT).model ?? "")
   appendVoiceLog(`--- start workspace=${ws.dir} model=${backendModel} ---`)
 
-  // 换了后端模型就得先把 qwen 的 coordinator session 作废,否则改了 model 是**静默失效**的
-  // (它 resume 老 session,而 opencode 从历史消息恢复模型)。理由详见 coordinator-state.ts。
-  const invalidated = invalidateCoordinatorOnModelChange({ backendModel })
+  // **每次起网关都作废** coordinator session。两个理由(详见 coordinator-state.ts):
+  // ① 换模型时不作废的话,改 model 是静默失效的(它 resume 老 session,opencode 从历史消息恢复模型);
+  // ② 更要紧的是 few-shot 污染 —— 老 coordinator 历史里堆满"自己动手干"的样例,会压过路由引导,
+  //    像样的调研任务也不肯开独立 session(2026-08-21 真机:从 17:51 复用到 22:45 的那条)。
+  const invalidated = invalidateCoordinatorOnStart({ backendModel })
   if (invalidated.invalidated) {
-    const msg = `后端模型 ${invalidated.previousModel || "(首次)"} → ${backendModel},已作废 coordinator session:${invalidated.dropped.join(", ")}`
+    const changed = invalidated.previousModel && invalidated.previousModel !== backendModel
+    const prefix = changed ? `后端模型 ${invalidated.previousModel} → ${backendModel};` : ""
+    const msg = `${prefix}已作废 coordinator session(每次起网关重建,避免历史污染路由判断):${invalidated.dropped.join(", ")}`
     log.info(`[voice] ${msg}`)
     appendVoiceLog(msg)
   }

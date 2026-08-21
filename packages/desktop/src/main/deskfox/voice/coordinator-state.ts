@@ -59,12 +59,28 @@ export interface InvalidateResult {
 }
 
 /**
- * 后端模型变了就作废 coordinator session,并记下这次的模型。
+ * **每次起网关都作废** coordinator session。
+ *
+ * 一开始只在"换模型"时作废,2026-08-21 真机证明不够:coordinator 从 17:51 一路复用到 22:45,
+ * 历史里堆了十几次"自己动手干"的样例 —— 对 LLM 这是强 few-shot 信号,**压过了我们新加的路由引导**。
+ * 表现就是像样的调研任务(全球机器人公司、美国机器人公司)全留在 coordinator 里,不开独立 session。
+ *
+ * 为什么可以放心地作废:
+ *   · coordinator 是**路由器**,不是工作现场 —— 真正的上下文在第三层 project session 里;
+ *   · "继续之前那个" 靠 `sessions_list` / `session_send` **查**出来,不靠它自己的记忆
+ *     (这本来就是 qwen 的设计意图);
+ *   · 沟通记录由我们自己的 journal 维护(voice-journal.ts),**不受 coordinator 生死影响**;
+ *   · 顺带省钱:114 个 part 的历史每轮都要重发。
+ *
+ * 丢的只有"跨网关重启的紧邻指代"(重开语音后说「刚才那个」)。重开语音时本来也不该指望它记得。
+ *
+ * ⚠️ 只在**起网关那一刻**有效:qwen 的 `ensureCoordinatorSession` 内存 Map 优先于这个文件
+ * (`acp-backend-adapter.mjs:346`),网关跑起来之后再删文件是没用的。
  *
  * IO 全部可注入,方便单测;任何一步失败都**只是不作废**(退回原来的行为),
  * 绝不因为读写状态文件出错就让语音起不来。
  */
-export function invalidateCoordinatorOnModelChange(input: {
+export function invalidateCoordinatorOnStart(input: {
   readonly backendModel: string
   readonly env?: NodeJS.ProcessEnv
   readonly home?: string
@@ -91,11 +107,9 @@ export function invalidateCoordinatorOnModelChange(input: {
       } catch {}
     })
 
+  // 模型只用来写日志(「从 X 换成了 Y」),不再作为作废的**条件** —— 现在是每次都作废
   const stampPath = voiceModelStampPath(env, home)
   const previousModel = (read(stampPath) ?? "").trim()
-  if (previousModel === input.backendModel) return { invalidated: false, dropped: [], previousModel }
-
-  // 记下新模型 —— 即使下面作废失败也要记,否则每次启动都会重试删除,反复清掉 coordinator
   write(stampPath, input.backendModel)
 
   const statePath = acpSessionStatePath(env, home)

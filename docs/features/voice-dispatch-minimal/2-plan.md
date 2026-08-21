@@ -392,6 +392,41 @@ journal 内容实测:`🎙️ **整理一份 SQLite PRAGMA foreign_keys 的说�
 ⚠️ **当前取舍**:闲聊(纯问答、没派活)不产生 task,**不会进 journal**。
 覆盖所有有实质内容的轮次,漏掉"现在几点了"这类。要补得连 WS 收 `transcript.final`。
 
+#### coordinator 每次起网关重建(2026-08-21 user 拍板 a+b,b 做不到)
+
+user 追问「沟通的 session 按什么方式切分合理」。厘清后发现这里有**两个** session,切分需求相反:
+
+| | coordinator | 语音沟通 journal |
+|---|---|---|
+| 是什么 | 路由器上下文,决定"这活派不派" | 给人回看的沟通记录 |
+| 长历史 | **有害**(few-shot 污染 + 每轮重发 token) | 有益,越完整越好 |
+| 合理切分 | 越短越好 | 一次开关一条(现状) |
+
+关键:**coordinator 重建 ≠ 沟通记录断开** —— journal 由我们自己维护,不受它生死影响,所以可以放心作废。
+"继续之前那个"也不靠它的记忆,而是 `sessions_list` / `session_send` **查**出来的(qwen 的设计意图)。
+
+**a(每次起网关重建)已做**:`invalidateCoordinatorOnModelChange` → `invalidateCoordinatorOnStart`,
+不再以"模型变了"为条件,模型只用于日志文案。
+
+**b(单次会话内按轮数重建)做不到**,查了源码确认:
+`ensureCoordinatorSession` 里 `this.coordinatorSessions`(**内存 Map**)优先于 `this.registry`(文件)
+—— 网关跑起来之后再删状态文件毫无作用。qwen 有 `discardCoordinatorSession` 但是内部方法,外部触发不了。
+唯一出路是重启网关,而那会断掉 realtime 连接(用户正说话时体验很差),不值得。
+
+**真机验证 a**:起网关日志「已作废 coordinator session(每次起网关重建,避免历史污染路由判断)」;
+随后用日常口吻连派两个调研任务,**都 `task.delegated` 并各自独立成条** ——
+上一轮同样措辞还全留在 coordinator 里,污染确实被清掉了。
+
+**新发现(未修)**:qwen 每次派活会建**两条**第三层 session,一条真干活、一条零内容的空壳:
+
+| session | 标题 | 内容 |
+|---|---|---|
+| ses_fdb1b10ef… | SQLite WAL vs rollback journal 调研 | 真干活 |
+| ses_fdb1adf49… | SQLite WAL vs rollback journal 对比调研 | 空 |
+
+两次派活都复现。空壳也进了 qwen 的 `projects` 记录,所以不是我们这边造的。
+后果:列表里每个任务多出一条空会话。待查是 qwen 的重试还是模型调了两次 `session_start`。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有

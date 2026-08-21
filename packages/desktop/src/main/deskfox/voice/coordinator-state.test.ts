@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test"
 import {
   acpSessionStatePath,
   dropOpencodeCoordinators,
-  invalidateCoordinatorOnModelChange,
+  invalidateCoordinatorOnStart,
   voiceModelStampPath,
 } from "./coordinator-state"
 
@@ -51,7 +51,7 @@ describe("dropOpencodeCoordinators", () => {
   })
 })
 
-describe("invalidateCoordinatorOnModelChange", () => {
+describe("invalidateCoordinatorOnStart", () => {
   const env = { XDG_CONFIG_HOME: "/c", XDG_STATE_HOME: "/s" } as NodeJS.ProcessEnv
   const make = (files: Record<string, string>) => {
     const written: Record<string, string> = {}
@@ -63,11 +63,17 @@ describe("invalidateCoordinatorOnModelChange", () => {
     return { written, readFile: r, writeFile: w }
   }
 
-  test("模型没变 → 什么都不做(别每次启动都清掉 coordinator)", () => {
-    const io = make({ "/s/deskfox/voice-backend-model": "alibaba-cn/qwen3.8-max" })
-    const r = invalidateCoordinatorOnModelChange({ backendModel: "alibaba-cn/qwen3.8-max", env, home: "/h", ...io })
-    expect(r.invalidated).toBe(false)
-    expect(Object.keys(io.written)).toEqual([])
+  // 2026-08-21 真机:只在换模型时作废不够 —— coordinator 从 17:51 复用到 22:45,
+  // 历史里堆满"自己动手干"的样例,压过了路由引导,像样的调研任务也不肯开独立 session。
+  // 改成每次起网关都作废。
+  test("模型没变也照样作废 —— 防的是 few-shot 污染,不只是模型不一致", () => {
+    const io = make({
+      "/s/deskfox/voice-backend-model": "alibaba-cn/qwen3.8-max",
+      "/c/qwaudio/state/acp-sessions.json": JSON.stringify(STATE),
+    })
+    const r = invalidateCoordinatorOnStart({ backendModel: "alibaba-cn/qwen3.8-max", env, home: "/h", ...io })
+    expect(r.invalidated).toBe(true)
+    expect(r.dropped).toEqual(["opencode:user_personal:backend"])
   })
 
   test("模型变了 → 摘掉 opencode coordinator 并记下新模型", () => {
@@ -75,7 +81,7 @@ describe("invalidateCoordinatorOnModelChange", () => {
       "/s/deskfox/voice-backend-model": "claude-code/opus",
       "/c/qwaudio/state/acp-sessions.json": JSON.stringify(STATE),
     })
-    const r = invalidateCoordinatorOnModelChange({ backendModel: "alibaba-cn/qwen3.8-max", env, home: "/h", ...io })
+    const r = invalidateCoordinatorOnStart({ backendModel: "alibaba-cn/qwen3.8-max", env, home: "/h", ...io })
     expect(r.invalidated).toBe(true)
     expect(r.previousModel).toBe("claude-code/opus")
     expect(r.dropped).toEqual(["opencode:user_personal:backend"])
@@ -88,7 +94,7 @@ describe("invalidateCoordinatorOnModelChange", () => {
   // 关键:先记模型再作废。反过来的话,状态文件读失败会让每次启动都重试,coordinator 永远建不起来。
   test("状态文件缺失 / 坏掉 → 不作废,但模型仍要记下(否则每次启动都重试)", () => {
     const missing = make({ "/s/deskfox/voice-backend-model": "claude-code/opus" })
-    const r1 = invalidateCoordinatorOnModelChange({ backendModel: "x/y", env, home: "/h", ...missing })
+    const r1 = invalidateCoordinatorOnStart({ backendModel: "x/y", env, home: "/h", ...missing })
     expect(r1.invalidated).toBe(false)
     expect(missing.written["/s/deskfox/voice-backend-model"]).toBe("x/y")
 
@@ -96,7 +102,7 @@ describe("invalidateCoordinatorOnModelChange", () => {
       "/s/deskfox/voice-backend-model": "claude-code/opus",
       "/c/qwaudio/state/acp-sessions.json": "{ 这不是 json",
     })
-    const r2 = invalidateCoordinatorOnModelChange({ backendModel: "x/y", env, home: "/h", ...broken })
+    const r2 = invalidateCoordinatorOnStart({ backendModel: "x/y", env, home: "/h", ...broken })
     expect(r2.invalidated).toBe(false)
     expect(broken.written["/s/deskfox/voice-backend-model"]).toBe("x/y")
     expect(broken.written["/c/qwaudio/state/acp-sessions.json"]).toBeUndefined() // 坏文件不覆盖,留着给人看
@@ -104,7 +110,7 @@ describe("invalidateCoordinatorOnModelChange", () => {
 
   test("首次运行(没有备忘)→ 作废一次,previousModel 为空", () => {
     const io = make({ "/c/qwaudio/state/acp-sessions.json": JSON.stringify(STATE) })
-    const r = invalidateCoordinatorOnModelChange({ backendModel: "alibaba-cn/qwen3.8-max", env, home: "/h", ...io })
+    const r = invalidateCoordinatorOnStart({ backendModel: "alibaba-cn/qwen3.8-max", env, home: "/h", ...io })
     expect(r.invalidated).toBe(true)
     expect(r.previousModel).toBe("")
   })
