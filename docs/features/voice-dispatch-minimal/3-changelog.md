@@ -18,12 +18,17 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 已知问题
 
-- **`claude-code` provider 拿不到任何 MCP 工具**:它 spawn `claude` CLI 并让 CLI 用自己那套内置工具,
-  opencode 交给它的 71 个工具(含 54 个 MCP)一个都没透传下去。影响**不止语音** —— 任何走
-  `claude-code` 的会话都用不了 MCP(`macro` 同理)。语音侧已用默认模型换成 `alibaba-cn/qwen3.8-max`
-  绕开;plugin 侧的修复(B)待做,plugin 在 `/Volumes/ExtSSD/deskfox-plugins/claude-code/`,**不在本仓**。
-- **第三层 session 标题是英文**:标题由 `small_model`(qwen-flash)生成,没约束语言。
-  中文列表里扎眼,待处理。
+- **`claude-code` provider 拿不到任何 MCP 工具** → 已修(在 plugin 仓,不在本仓)。
+  它 spawn `claude` CLI 并让 CLI 用自己那套内置工具,opencode 交给它的 71 个工具(含 54 个 MCP)
+  一个都没透传下去;影响**不止语音**,任何走 `claude-code` 的会话都用不了 MCP(`macro` 同理)。
+  两侧各修一半:语音默认模型换 `alibaba-cn/qwen3.8-max`(本仓);
+  `/Volumes/ExtSSD/deskfox-plugins/claude-code/` 分支 `feat/mcp-passthrough` commit `4c4c27d`
+  把 opencode 配置里声明的 MCP 透传给 CLI(`--mcp-config`)。
+  **仍未覆盖**:运行时动态注册的 MCP(ACP `session/new` 带进来的那些)只在 opencode 进程内存里,
+  配置文件读不到 —— 要覆盖需在 `session/llm.ts` 的 `_opencode` providerOptions 通道加字段,那要一笔 R4。
+- ~~第三层 session 标题是英文~~ → 已修:`buildVoiceConfigContent` 覆盖 `agent.title.prompt`
+  (`VOICE_TITLE_PROMPT`),硬性要求简体中文。内置那版写的是「跟随用户语言」,但语音链路里首条 prompt
+  是 coordinator 转写过的、常已是英文,跟随等于跟错。
 - **首次起语音可能重试一次**:库还没建好时,qwen 的 backend server(4396)与 ACP 宿主会并发建表撞一次,
   第 2 轮才成(实测总耗时 ~4s,用户无感)。共用主实例的库时库早已建好,不会碰到;
   只有走 `DESKFOX_VOICE_ISOLATE_DB=1` 逃生口首次开新库才会。根治要预热库,本期不做。

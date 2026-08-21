@@ -34,12 +34,43 @@ export const VOICE_OPENCODE_PORT = 4396
  * 而 fork 1.18.16 的 `permission.ts:40` `normalizeInput` 收字符串 —— 2026-08-21 实测无 schema 报错,
  * **1.17.4 时代那行手工 patch 已永久不需要**。
  */
+/**
+ * 会话标题生成 prompt(覆盖 opencode 内置的 `agent/prompt/title.txt`)。
+ *
+ * 内置那版写的是「MUST use the same language as the user message」,但语音链路里**不成立**:
+ * 第三层 session 的首条 prompt 是 coordinator 转写过的目标,常常已经是英文,
+ * 2026-08-21 真机拿到的标题就是 `Count files in voice-test and writ` —— 中文列表里很扎眼。
+ * 这里不跟随、直接硬性要求简体中文。其余约束(单行 / 不解释 / 保留技术词原样)照抄内置版语义。
+ */
+export const VOICE_TITLE_PROMPT = [
+  "你是会话标题生成器,只输出标题本身,不输出任何解释、引号或标点包裹。",
+  "",
+  "硬性要求:",
+  "- **一律使用简体中文**,不管输入是什么语言(这条优先于任何「跟随用户语言」的习惯)",
+  "- 单行,不超过 20 个汉字",
+  "- 写清楚这次要做的**事**,让人事后能靠它找回这段会话",
+  "- 技术名词 / 文件名 / 数字 / 错误码保持原样,不要翻译(如 SQLite、WAL、a.md、500)",
+  "- 不要出现工具名(read / bash / edit 之类)",
+  "- 不要用「分析」「生成」「总结」这类套话开头,直接说事",
+  "- 输入再短也要给出有意义的标题,不要抱怨输入、不要说自己无法生成",
+  "",
+  "示例:",
+  "「统计当前目录有多少个文件」→ 统计目录文件数量",
+  "「查一下 SQLite 的 WAL 是什么缩写」→ SQLite WAL 缩写查询",
+  "「调研 WAL 模式优缺点并写 wal.md」→ 调研 WAL 优缺点写 wal.md",
+  "「线上一直报 500,帮我看看」→ 排查线上 500 报错",
+].join("\n")
+
 export function buildVoiceConfigContent(models: VoiceModels): string {
   return JSON.stringify({
     model: models.backend,
     small_model: models.small,
     permission: "allow",
-    agent: { build: { permission: "allow" } },
+    agent: {
+      build: { permission: "allow" },
+      // 标题走 small_model,不烧主模型额度;prompt 覆盖见 VOICE_TITLE_PROMPT
+      title: { prompt: VOICE_TITLE_PROMPT },
+    },
   })
 }
 

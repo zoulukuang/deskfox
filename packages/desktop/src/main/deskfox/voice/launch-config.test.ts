@@ -24,6 +24,19 @@ describe("buildVoiceConfigContent", () => {
     expect(cfg.provider).toBeUndefined()
   })
 
+  // 2026-08-21 真机:第三层 session 标题出来是英文(`Count files in voice-test and writ`)——
+  // 内置 title prompt 说「跟随用户语言」,但语音链路里首条 prompt 是 coordinator 转写过的、常已是英文。
+  // 这里直接硬性要求简体中文,不跟随。
+  test("覆盖 title agent 的 prompt —— 标题必须是中文", () => {
+    const cfg = JSON.parse(buildVoiceConfigContent(MODELS))
+    expect(typeof cfg.agent.title.prompt).toBe("string")
+    expect(cfg.agent.title.prompt).toContain("简体中文")
+    // 不能只是「跟随用户语言」那种软措辞,否则等于没覆盖
+    expect(cfg.agent.title.prompt).not.toContain("same language")
+    // 覆盖 prompt 不该顺手改掉 build 的权限
+    expect(cfg.agent.build.permission).toBe("allow")
+  })
+
   test("模型写顶层 model(实测:顶层就够,不需要 agent.<name>.model)", () => {
     const cfg = JSON.parse(buildVoiceConfigContent(MODELS))
     expect(cfg.model).toBe("claude-code/opus")
