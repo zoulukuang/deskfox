@@ -15,9 +15,10 @@ import path from "node:path"
 import { spawn, type ChildProcess } from "node:child_process"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { shell } from "electron"
+import { BrowserWindow, shell } from "electron"
 import log from "electron-log/main.js"
 import { invalidateCoordinatorOnModelChange } from "./coordinator-state"
+import { startTaskWatch, type TaskWatchHandle } from "./task-watch"
 import { GATEWAY_PORT, binDir, buildGatewayEnv, checkVoiceWorkspace } from "./launch-config"
 import { resolveAcpHost } from "./launch-env"
 
@@ -138,6 +139,31 @@ let lastError = ""
 let availability: SetupProbe | null = null
 /** health 探通过才算 on —— 进程活着 ≠ 服务可用(2026-08-21 真机:进程在、3101 死,状态却报 on) */
 let healthy = false
+let taskWatch: TaskWatchHandle | null = null
+
+/**
+ * 起「任务变了就让界面重拉会话列表」的轮询。
+ *
+ * 必要性见 task-watch.ts:语音的 ACP 宿主是另一个 opencode 进程,跟主实例共享 db 但
+ * **不共享 event bus** —— 会话写进去了,主实例毫不知情,列表就一直是旧的
+ * (2026-08-21 user 真机反馈的正是这个)。
+ */
+function startSessionListWatch(): void {
+  taskWatch?.stop()
+  taskWatch = startTaskWatch({
+    fetchTasks: async () => {
+      const res = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/api/tasks`, { signal: AbortSignal.timeout(3000) })
+      if (!res.ok) throw new Error(String(res.status))
+      return await res.json()
+    },
+    notify: () => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (!w.isDestroyed()) w.webContents.send("deskfox:voice-session-changed")
+      }
+      log.info("[voice] 任务集合变化 → 通知界面刷新会话列表")
+    },
+  })
+}
 
 /**
  * 语音网关日志落地。electron-log 在打包态没把这些行写到能找到的地方,而 Gateway 起不来时
@@ -329,6 +355,7 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
   }
 
   starting = false
+  if (healthy) startSessionListWatch()
   if (healthy && input.openUi !== false) {
     // Gateway 是无头的:不打开前端,用户点完图标面对的是"什么也没发生"。
     // 它的根路径就是 WebUI(实测 200 / text/html),交给系统浏览器 —— 麦克风授权那套
@@ -385,6 +412,8 @@ export async function stopVoiceGateway(): Promise<VoiceStatus> {
   starting = false
   healthy = false
   lastError = ""
+  taskWatch?.stop()
+  taskWatch = null
   if (!proc) return getVoiceStatus()
   proc.kill("SIGTERM")
   // 给它自己收尾的机会;超时再 SIGKILL,免得 3101/4396 端口留着不放

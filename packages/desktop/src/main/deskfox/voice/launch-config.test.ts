@@ -11,6 +11,8 @@ import {
   checkVoiceWorkspace,
   needsOverseasNetwork,
   resolveVoiceDbEnv,
+  VOICE_ROUTING_INSTRUCTIONS,
+  writeVoiceInstructionsFile,
 } from "./launch-config"
 import { VOICE_MODEL_DEFAULTS } from "./launch-env"
 
@@ -35,6 +37,41 @@ describe("buildVoiceConfigContent", () => {
     expect(cfg.agent.title.prompt).not.toContain("same language")
     // 覆盖 prompt 不该顺手改掉 build 的权限
     expect(cfg.agent.build.permission).toBe("allow")
+  })
+
+  // 2026-08-21 真机:「分析今日A股市场盘面」(9 次 macro 调用 + 完整分析)都被判成「其余任务」
+  // 留在 coordinator 里 —— 阈值偏高,用户不该靠说「新开一个独立任务」这种咒语来触发。
+  test("带 instructions 路径时才注入,且只追加不覆盖", () => {
+    const withPath = JSON.parse(buildVoiceConfigContent(MODELS, "/s/deskfox/voice-routing.md"))
+    expect(withPath.instructions).toEqual(["/s/deskfox/voice-routing.md"])
+
+    // 写文件失败时传空串,这时不能塞一个空数组进去(会盖掉用户自己配的 instructions)
+    const without = JSON.parse(buildVoiceConfigContent(MODELS, ""))
+    expect("instructions" in without).toBe(false)
+    expect("instructions" in JSON.parse(buildVoiceConfigContent(MODELS))).toBe(false)
+  })
+
+  test("路由引导:倾向开新 session,且限定在有 session 工具时才适用", () => {
+    // 第三层 session 读同一份 config,没有这些工具 —— 必须写清适用条件,否则它会照着做无用功
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("session_start")
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("没有就完全忽略")
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("倾向于开")
+    // 不能依赖用户说特定咒语
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("不是用户有没有说")
+  })
+
+  test("writeVoiceInstructionsFile:落到 XDG state 下,写失败返回空串不抛", () => {
+    const written: Record<string, string> = {}
+    const p = writeVoiceInstructionsFile({ XDG_STATE_HOME: "/s" } as NodeJS.ProcessEnv, "/h", (f, c) => {
+      written[f] = c
+    })
+    expect(p).toBe("/s/deskfox/voice-routing.md")
+    expect(written[p]).toBe(VOICE_ROUTING_INSTRUCTIONS)
+
+    const failed = writeVoiceInstructionsFile({ XDG_STATE_HOME: "/s" } as NodeJS.ProcessEnv, "/h", () => {
+      throw new Error("EACCES")
+    })
+    expect(failed).toBe("")
   })
 
   test("模型写顶层 model(实测:顶层就够,不需要 agent.<name>.model)", () => {

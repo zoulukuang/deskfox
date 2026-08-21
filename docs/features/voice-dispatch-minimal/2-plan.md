@@ -289,6 +289,35 @@ InternalError.Algo.DataInspectionFailed: Input text data may contain inappropria
 是 DashScope 的内容审查(涉国际政治 / 军事条款类被拒),不是我们的 bug。这是换国产模型的代价 ——
 B2 落地后可以按话题切模型规避:`DESKFOX_VOICE_BACKEND_MODEL` 一个 env,coordinator 会自动作废重建。
 
+#### 会话列表两件事:派活阈值 + 跨进程刷新(2026-08-21,user 拍板)
+
+user 反馈「刚那次的会话列表里没出现」,并确认 **coordinator 先不隐藏,统一展示**,先把全流程跑通。
+
+**① 提高走第三层的比例**。qwen 的路由阈值偏高:实测「分析今日A股市场盘面」(9 次 macro 调用 +
+完整分析)都被判成「其余任务」留在 coordinator。用户不该靠每次说「新开一个独立任务」这种咒语触发。
+新增 `VOICE_ROUTING_INSTRUCTIONS`,经 `config.instructions` 拼进 system prompt
+(`session/instruction.ts` 支持绝对路径),**不覆盖任何内置 prompt**,只加一段偏好说明:
+拿不准就开新的,判据是这件事本身而不是用户说了什么话。
+写成「你手里有这类工具时才适用」—— 第三层 session 读同一份 config,没这些工具,读到了也不误触发。
+
+**实测**:不说任何咒语,日常口吻「帮我查一下 SQLite 的 PRAGMA journal_mode…整理成一份 journal.md」
+→ `task.delegated`,自动走第三层。
+
+**② 会话列表不刷新**。根因不是 bug 而是架构:语音的 ACP 宿主是**另一个 opencode 进程**,
+跟主实例共享同一个 SQLite 但**各有各的 event bus** —— 会话写进去了,主实例收不到任何 session 事件。
+跨进程共享 db 而不共享事件,这个缺口只能自己补。
+
+新增 `task-watch.ts`:轮询 gateway 的 `/api/tasks`,任务集合指纹一变就
+`webContents.send("deskfox:voice-session-changed")`;renderer 侧(`server-sync.tsx`,FORK 块)
+监听后把已打开目录的 sessions query 全部 invalidate。
+
+为什么轮询而不接 gateway 的 WS:realtime 那条连接**有状态**(voice_client 参与输入仲裁 / 播放回执),
+挂一个纯观察者进去可能干扰真实语音客户端;`/api/tasks` 是无副作用只读 HTTP,几秒一次本地请求可忽略。
+指纹只取「有哪些任务 + 各自状态」,progress 每秒抖动不该让界面闪;首次快照**不算变化**
+(刚起网关会一次性读到历史任务,拿它触发刷新等于每次开语音都无谓抖一下)。
+
+**实测**:CDP 注入监听器 → 派活 → renderer 收到 2 次事件(accepted / completed 各一次)。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有

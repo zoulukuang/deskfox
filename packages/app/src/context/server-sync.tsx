@@ -38,6 +38,8 @@ import type { SolidQueryOptions } from "@tanstack/solid-query"
 import { createRefreshQueue } from "./global-sync/queue"
 import { directoryKey } from "./global-sync/utils"
 import { PathKey } from "@/utils/path-key"
+// FORK: voice-session-refresh — 见下方 onCleanup 附近的 FORK 块 [feat: voice-dispatch-minimal] 2026-08-21
+import { isDesktopApp, listen } from "@/utils/native"
 import { createDirSyncContext } from "./directory-sync"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
@@ -629,6 +631,28 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       },
     })
   })
+
+  // FORK-BEGIN: voice-session-refresh — 语音派活后主动重拉会话列表 [feat: voice-dispatch-minimal] 2026-08-21
+  // 语音的 ACP 宿主是**另一个 opencode 进程**,跟主实例共享同一个 SQLite 但**各有各的 event bus**:
+  // 会话已经写进库了,主实例收不到任何 session 事件,列表就一直停在旧状态
+  // (2026-08-21 user 真机:`分析今日A股市场盘面` 17:51 已在库里,界面里看不到)。
+  // 主进程侧轮询 gateway 的 /api/tasks,集合一变就发这个事件(见 main/deskfox/voice/task-watch.ts)。
+  let unlistenVoice: (() => void) | undefined
+  if (isDesktopApp()) {
+    void listen("voice-session-changed", () => {
+      // 语音只会写"当前打开的那个项目",但这里不知道是哪个,索性把已打开的都失效一遍 ——
+      // invalidate 只是标记过期,真正的重拉由 query 自己按需触发,代价可以忽略。
+      for (const directory of Object.keys(children.children)) {
+        void queryClient.invalidateQueries(queryOptionsApi.sessions(directoryKey(directory)))
+      }
+    })
+      .then((fn) => {
+        unlistenVoice = fn
+      })
+      .catch(() => {})
+  }
+  onCleanup(() => unlistenVoice?.())
+  // FORK-END
 
   onCleanup(unsub)
   onCleanup(() => {

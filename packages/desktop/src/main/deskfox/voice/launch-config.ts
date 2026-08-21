@@ -18,7 +18,8 @@
 //   ③ qwen 侧的 `QWEN_AUDIO_AGENT_BACKEND_MODEL` **不能用来选模型**:它会把值强行拼成
 //      `alibaba-cn/<name>`(`server/src/core/config.mjs:80`),只能选阿里系。我们走 ①。
 
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { delimiter, dirname, join } from "node:path"
 import { DASHSCOPE_PROVIDER_ID, readProviderApiKey, resolveAuthJsonPath, resolveVoiceModels } from "./launch-env"
 import type { VoiceModels } from "./launch-env"
@@ -61,7 +62,46 @@ export const VOICE_TITLE_PROMPT = [
   "「线上一直报 500,帮我看看」→ 排查线上 500 报错",
 ].join("\n")
 
-export function buildVoiceConfigContent(models: VoiceModels): string {
+/**
+ * 派活路由引导 —— 让**像样的活**都独立成一条 session,而不是全堆进 coordinator。
+ *
+ * 起因(2026-08-21 真机):qwen 的路由规则是「新的独立工作 → 建第三层 Session;
+ * 其余任务在协调 Session 中执行」,但它的判定阈值偏高 —— 实测「分析今日A股市场盘面」
+ * (9 次 macro 工具调用、产出完整分析)都被判成「其余」,留在 coordinator 里。
+ * 结果是 coordinator 变成流水账:几十个不相干的任务挤一条,没法读、没法搜,上下文还互相污染。
+ * 用户不该靠每次说「新开一个独立任务」这种咒语来触发。
+ *
+ * 这段经 `config.instructions` 拼进 system prompt(`session/instruction.ts` 支持绝对路径),
+ * **不覆盖任何内置 prompt**,只加一段偏好说明。
+ *
+ * ⚠️ 写成「你手里有这个工具时才适用」——第三层 session 也读同一份 config,
+ * 它没有这些工具,读到了也不会误触发。
+ */
+export const VOICE_ROUTING_INSTRUCTIONS = [
+  "<deskfox-voice-routing>",
+  "以下仅在你手里有 `qwen_audio_agent_*_session_start` / `..._session_send` 这类工具时适用",
+  "(没有就完全忽略这一段)。",
+  "",
+  "判断「要不要为这次请求单独开一条 Session」时,**倾向于开**。判据是这件事本身,",
+  "不是用户有没有说「新开一个任务」这种话 —— 绝大多数用户不会那么说话。",
+  "",
+  "**应该单独开一条**(默认走这条):",
+  "- 需要多步才能完成:查资料 / 调工具 / 读写文件 / 分析后给结论",
+  "- 会产出可交付的东西:文件、报告、一段结论",
+  "- 事后可能会被追问、被回看",
+  "",
+  "**留在协调 Session 里**(少数):",
+  "- 一问一答就完的常识或状态查询(几点了、刚才那个任务好了没)",
+  "- 对已有工作的控制动作(取消、查进度)",
+  "",
+  "拿不准时**开新的**。多一条 Session 只是列表里多一行;混进协调 Session 则会污染后续所有判断,",
+  "而且那条会话会越滚越长、再也拆不开。",
+  "",
+  "用户提到之前做过的事、或要在原来基础上继续时,定位并**续接**那条既有 Session,不要另起。",
+  "</deskfox-voice-routing>",
+].join("\n")
+
+export function buildVoiceConfigContent(models: VoiceModels, instructionsPath?: string): string {
   return JSON.stringify({
     model: models.backend,
     small_model: models.small,
@@ -71,7 +111,31 @@ export function buildVoiceConfigContent(models: VoiceModels): string {
       // 标题走 small_model,不烧主模型额度;prompt 覆盖见 VOICE_TITLE_PROMPT
       title: { prompt: VOICE_TITLE_PROMPT },
     },
+    // merge 语义:这里只**追加**一条路径,用户自己配的 instructions 不受影响
+    ...(instructionsPath ? { instructions: [instructionsPath] } : {}),
   })
+}
+
+/**
+ * 把路由引导落成文件(`config.instructions` 收的是路径不是内容)。
+ * 写失败返回空串 —— 拿不到引导顶多是回到旧的判定阈值,不该让语音起不来。
+ */
+export function writeVoiceInstructionsFile(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+  write: (p: string, c: string) => void = (p, c) => {
+    mkdirSync(dirname(p), { recursive: true })
+    writeFileSync(p, c)
+  },
+): string {
+  const stateHome = env.XDG_STATE_HOME || join(home, ".local", "state")
+  const file = join(stateHome, "deskfox", "voice-routing.md")
+  try {
+    write(file, VOICE_ROUTING_INSTRUCTIONS)
+    return file
+  } catch {
+    return ""
+  }
 }
 
 export type WorkspaceCheck =
@@ -254,7 +318,8 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
     // ── 派活目标(D-C):跟随 DeskFox 当前项目
     OPENCODE_WORKSPACE: input.workspace,
     // ── 模型 + 权限(D-F,merge 进用户配置,只覆盖这几个键)
-    OPENCODE_CONFIG_CONTENT: buildVoiceConfigContent(models),
+    // 路由引导落成文件再由 instructions 引进去(见 VOICE_ROUTING_INSTRUCTIONS)
+    OPENCODE_CONFIG_CONTENT: buildVoiceConfigContent(models, writeVoiceInstructionsFile(base)),
     QWEN_AUDIO_REALTIME_MODEL: models.realtime,
     QWEN_AUDIO_AGENT_BACKEND_PERMISSION_MODE: "full",
     // ── 端口:避开主实例的默认 4096。
