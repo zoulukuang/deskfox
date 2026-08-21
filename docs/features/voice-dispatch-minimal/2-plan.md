@@ -84,3 +84,48 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   真 HOME 的 `feishu-plugin-server.json` / `media-gen-server.json` mtime 均未变,飞书进程数未变。
 - 回归:media-gen 148 / adapter-feishu-lark 796 / desktop 313 全绿;typecheck 3/3。desktop 唯一红是存量的 `draft-store.test.ts`(`node:sqlite`,main 上同样),非本批。
 - 插件 bundle 已用 `packages/branding/scripts/build-{feishu,media-gen}-plugin.sh` 从源码重建(config 指向的是 bundle 不是源码,不重建等于验旧代码)。
+
+### 真机第 2 轮:一个根因解释了全部「起不来」(2026-08-21)
+
+user 真人测试报「点了没反应」后连续修了几处,一路追到**同一个根因**:
+
+`buildGatewayEnv` 返回的是**整份替换**的 spawn env(不继承 `process.env`),却漏了 `HOME` / `XDG_*`。
+于是 Gateway 及它拉起的两个 opencode 进程全部回落到系统默认命名空间 `~/.local/share/opencode/`
+—— 实测语音库真的生成在了那里。此前所有表象都是它的分身:
+
+| 表象 | 实际成因 |
+|---|---|
+| `INSERT INTO __new_project_directory` 迁移失败 | 读到旧命名空间里**别的核心版本**写的 `opencode-local.db`,一开就跑迁移 |
+| `database is locked` | 同上;且 qwen 会起**两个** opencode 进程(4396 backend server + ACP 宿主)并发碰同一个库 |
+| auth 行为诡异 | auth.json 读的是旧命名空间 |
+
+修法 `carryNamespaceEnv()`:`HOME/USER/LOGNAME/SHELL/TMPDIR/LANG` + 四个 `XDG_*` 原样带过去。
+qwen 的 env 白名单(`shared/backend-environment.mjs`)本来就放行这些,一路能穿到 ACP 子进程 —— 前提是 Gateway 自己身上有。
+
+命名空间修好后剩下**首次建库竞态**:全新空库上,4396 的 backend server 和 ACP 宿主并发建表,
+一方 `CREATE TABLE workspace` / `database is locked` 退出。三处配套改动把它变成自愈:
+
+1. **health 判据升级**:`/api/health` 顶层 `ok` 只代表 3101 活着(qwen 源码原话:"Gateway liveness is
+   independent from optional backend readiness")。改为必须 `backend.ok`(或 `code === READY`)——
+   否则会出现「报了已开启、用户说话没人应」这种比报错更糟的半死状态。
+2. **提前认输**:`waitForHealth` 加 `giveUp` 回调,进程输出里一出现建表/锁冲突就立刻结束这一轮,
+   不必干等满 60s(重试其实秒成)。
+3. **等它真退干净**:原来 SIGTERM + 固定睡 3 秒就重来,实测退出用了 3.1 秒 —— 新一轮早 100ms 起来,
+   3101 端口和 gateway 实例租约还被上一轮占着,第 2 轮秒退、白烧一次机会。改为 `terminate()`
+   等 exit(8s 后 SIGKILL)。
+
+**实测(删库模拟首次使用)**:第 1 轮 `database is locked` → 等干净 → 第 2 轮 `acp.initialized`
+→ `attempt=2 health=true`,全程 4 秒;`/api/health` 的 `backend.code = READY`、`directory = ~/voice-test`。
+
+#### D-A 的处置:默认独立库 + 开关
+
+`resolveVoiceDbEnv()` 默认注入 `OPENCODE_DB=opencode-voice.db`(相对名 → core join 到 `Global.Path.data`,
+跟主实例同一个 XDG 目录);`DESKFOX_VOICE_SHARE_DB=1` 切回共用。
+命名空间修好之后共用库**未必不可行**(主实例的库已迁移完毕,不会再触发建表),但本轮没有实证,
+先按「能用 > 能看见」取默认值,D-A 的会话可见性留给 user 拍板复议。
+
+#### 本轮遗留
+
+- **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有
+  `voice_client.connected`、没有 `configured`(WebUI 客户端两条都有)。是装置的握手缺一步,
+  不是产品链路 —— T15 由真人对着真麦克风覆盖,装置待补。
