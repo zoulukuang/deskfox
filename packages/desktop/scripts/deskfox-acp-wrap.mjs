@@ -20,6 +20,7 @@
 // 调试/测试专用:
 //   DESKFOX_ACP_HOST_COMMAND=<cmd> DESKFOX_ACP_HOST_ARGS='a,b' → 用指定命令替代真宿主
 import { spawn } from "node:child_process"
+import path from "node:path"
 import { createLineSplitter, isAcpFrame } from "../src/main/deskfox/voice/acp-frame.ts"
 import { assessAgentVersion, resolveAcpHost } from "../src/main/deskfox/voice/launch-env.ts"
 
@@ -46,7 +47,10 @@ if (overrideCommand) {
   writeErr(`${NOISE_PREFIX}⚠️ 用了 DESKFOX_ACP_HOST_COMMAND 覆盖宿主:${command} ${args.join(" ")}`)
 } else {
   try {
-    const host = resolveAcpHost({ env: process.env })
+    // 本文件住在 <repo>/packages/desktop/scripts/ → 上溯 3 级即仓根。
+    // 自定位而不是依赖 env:qwen 给 ACP 子进程的 env 是白名单过滤的,自定义变量传不进来。
+    const selfRepoRoot = path.resolve(import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname), "..", "..", "..")
+    const host = resolveAcpHost({ env: process.env, fallbackRepoRoot: selfRepoRoot })
     command = host.command
     // 调用方带了子命令(qwen 会带 `acp`)→ 用它;没带 → 用默认的 `acp`
     args = passthrough.length ? [host.entry, ...passthrough] : [...host.args]
@@ -57,8 +61,15 @@ if (overrideCommand) {
   }
 }
 
+// env 归一层:qwen 只放 `OPENCODE_` 前缀过来,所以上游用 `OPENCODE_DESKFOX_*` 传,
+// 到这里翻译回插件代码认识的名字 —— 插件侧因此只需要认一个变量名。
+const forwarded = {}
+if (process.env.OPENCODE_DESKFOX_ACP_PLUGINS && !process.env.DESKFOX_ACP_PLUGINS) {
+  forwarded.DESKFOX_ACP_PLUGINS = process.env.OPENCODE_DESKFOX_ACP_PLUGINS
+}
+
 const child = spawn(command, args, {
-  env: { ...process.env, OPENCODE_CLIENT: "acp" },
+  env: { ...process.env, ...forwarded, OPENCODE_CLIENT: "acp" },
   stdio: ["pipe", "pipe", "pipe"],
 })
 

@@ -58,6 +58,26 @@ describe("① ACP 宿主(D-G:本仓 1.x 源码入口)", () => {
     expect(resolveAcpHost({ repoRoot: "/r", env: {}, exists: allExist }).command).toBe("bun")
   })
 
+  // qwen 会按白名单过滤 ACP 子进程的 env,自定义变量传不进来 → wrapper 用自身位置兜底
+  test("env 没有仓路径时用 fallbackRepoRoot(wrapper 自定位)", () => {
+    const h = resolveAcpHost({ env: {}, fallbackRepoRoot: "/self", exists: allExist })
+    expect(h.repoRoot).toBe("/self")
+  })
+
+  test("env 显式给的优先于自定位(power user 可强制指定别的仓)", () => {
+    const h = resolveAcpHost({ env: { DESKFOX_VOICE_REPO_ROOT: "/env" }, fallbackRepoRoot: "/self", exists: allExist })
+    expect(h.repoRoot).toBe("/env")
+  })
+
+  test("带 OPENCODE_ 前缀的那份也认(它才穿得过 qwen 的 env 白名单)", () => {
+    const h = resolveAcpHost({ env: { OPENCODE_DESKFOX_VOICE_REPO_ROOT: "/prefixed" }, exists: allExist })
+    expect(h.repoRoot).toBe("/prefixed")
+  })
+
+  test("自定位到的目录不是 fork 仓 → 仍然抛错,不硬撑", () => {
+    expect(() => resolveAcpHost({ env: {}, fallbackRepoRoot: "/not-a-repo", exists: () => false })).toThrow()
+  })
+
   test("**永远不会退化成 PATH 上的 opencode**(那儿躺着 1.17.4)", () => {
     const h = resolveAcpHost({ repoRoot: "/r", env: {}, exists: allExist })
     expect(h.command).not.toContain("opencode")

@@ -57,6 +57,14 @@ export const ACP_ENTRY_RELATIVE = join("packages", "opencode", "src", "index.ts"
 export interface AcpHostInput {
   /** fork 仓根绝对路径;缺省读 env `DESKFOX_VOICE_REPO_ROOT` */
   readonly repoRoot?: string
+  /**
+   * env 与显式入参都没有时的兜底(wrapper 用**自身所在位置**推导)。
+   * 为什么需要它:qwen 给 ACP 子进程的 env 是**白名单过滤**的
+   * (`shared/backend-environment.mjs:75`,opencode 后端只放行 `OPENCODE_` 前缀 + 三个具名变量),
+   * 自定义的 `DESKFOX_VOICE_REPO_ROOT` 根本传不到 —— 2026-08-21 真机跑 Gateway 时实测撞到。
+   * wrapper 本身就住在仓里,自定位比任何 env 都可靠。
+   */
+  readonly fallbackRepoRoot?: string
   /** bun 可执行;缺省读 env `DESKFOX_VOICE_BUN` → `$BUN_INSTALL/bin/bun` → PATH 上的 `bun` */
   readonly bunPath?: string
   readonly env?: NodeJS.ProcessEnv
@@ -79,7 +87,9 @@ export interface AcpHost {
 export function resolveAcpHost(input: AcpHostInput = {}): AcpHost {
   const env = input.env ?? process.env
   const exists = input.exists ?? existsSync
-  const repoRoot = String(input.repoRoot ?? env.DESKFOX_VOICE_REPO_ROOT ?? "").trim()
+  const repoRoot =
+    String(input.repoRoot ?? env.DESKFOX_VOICE_REPO_ROOT ?? env.OPENCODE_DESKFOX_VOICE_REPO_ROOT ?? "").trim() ||
+    String(input.fallbackRepoRoot ?? "").trim()
   if (!repoRoot) {
     throw new Error("[voice] 未配置 fork 仓路径(DESKFOX_VOICE_REPO_ROOT);语音派活需要本仓 1.x 源码入口")
   }

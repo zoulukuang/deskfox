@@ -88,6 +88,8 @@ export interface StartInput {
   /** fork 仓根(D-G:ACP 宿主要用) */
   readonly repoRoot: string
   readonly wrapperPath: string
+  /** 与主实例一致的 db 分流(见 launch-config 的同名字段) */
+  readonly disableChannelDb: boolean
 }
 
 /** 探测 qwen-audio-agent 装没装好;结果缓存,`force` 可重探。 */
@@ -146,6 +148,7 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
     wrapperPath: input.wrapperPath,
     env: process.env,
     extraPathDirs,
+    disableChannelDb: input.disableChannelDb,
   })
   for (const w of warnings) log.warn(`[voice] ${w}`)
 

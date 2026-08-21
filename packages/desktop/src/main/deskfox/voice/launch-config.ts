@@ -76,6 +76,17 @@ export interface GatewayEnvInput {
   readonly extraPathDirs?: readonly string[]
   readonly authPath?: string
   readonly exists?: (p: string) => boolean
+  /**
+   * 语音 ACP 该开哪个 db —— **必须与正在跑的 DeskFox 一致**,否则:
+   *   · 会话落到另一个库 ⇒ D-A 换来的「在 DeskFox 里看得见」直接归零;
+   *   · 那个库多半是别的核心版本写的,一开就触发迁移(2026-08-21 真机实测:
+   *     源码态默认落 `opencode-local.db`,迁移 `INSERT INTO __new_project_directory` 直接失败,
+   *     Gateway 起不来 —— 而 app 的启动守卫 orphan-prune / db-schema-guard 只在主进程跑,
+   *     CLI 路径一个都没有)。
+   * 取值抄 `main/server.ts:244` 给 sidecar 的同一条规则:发布渠道 → true(共用 `opencode.db`);
+   * 未打包 / local 档 → false(各自 `opencode-<channel>.db`)。
+   */
+  readonly disableChannelDb: boolean
 }
 
 export interface GatewayEnvResult {
@@ -111,18 +122,32 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
   const env: Record<string, string> = {
     // ── ACP 宿主(D-E/D-G):qwen 把 OPENCODE_BIN 当可执行文件 spawn
     OPENCODE_BIN: input.wrapperPath,
+    // ⚠️ 前缀不是洁癖:qwen 给 ACP 子进程的 env 是白名单过滤的(`backend-environment.mjs:75`),
+    // opencode 后端只放行 `OPENCODE_` 前缀 + 三个具名变量。裸的 DESKFOX_* 传不进去
+    // (2026-08-21 真机实测:wrapper 报"未配置 fork 仓路径")。两个都给:
+    // 不带前缀的给 Gateway 进程自己用,带前缀的才穿得到 ACP 子进程。
     DESKFOX_VOICE_REPO_ROOT: input.repoRoot,
+    OPENCODE_DESKFOX_VOICE_REPO_ROOT: input.repoRoot,
     // ── 派活目标(D-C):跟随 DeskFox 当前项目
     OPENCODE_WORKSPACE: input.workspace,
     // ── 模型 + 权限(D-F,merge 进用户配置,只覆盖这几个键)
     OPENCODE_CONFIG_CONTENT: buildVoiceConfigContent(models),
     QWEN_AUDIO_REALTIME_MODEL: models.realtime,
     QWEN_AUDIO_AGENT_BACKEND_PERMISSION_MODE: "full",
-    // ── 端口:避开主实例的 4096
+    // ── 端口:避开主实例的默认 4096。
+    // ⚠️ 只设 OPENCODE_PORT 不够 —— qwen 的 `applyAddress`(`backend-drivers/opencode.mjs`)
+    // 会按 `OPENCODE_BASE_URL`(默认 http://127.0.0.1:4096)反算并覆盖端口,
+    // 2026-08-21 真机实测:宿主实际 listening 在 4096。两个一起给才压得住。
     OPENCODE_PORT: String(VOICE_OPENCODE_PORT),
+    OPENCODE_BASE_URL: `http://127.0.0.1:${VOICE_OPENCODE_PORT}`,
+    // ── db 分流:与正在跑的 DeskFox 对齐(见 GatewayEnvInput.disableChannelDb)
+    ...(input.disableChannelDb ? { OPENCODE_DISABLE_CHANNEL_DB: "1" } : { OPENCODE_CHANNEL: "local" }),
     PATH: mergedPath,
   }
   if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey
+  // 插件白名单覆盖同理要带前缀才穿得过去;wrapper 会翻译回 DESKFOX_ACP_PLUGINS
+  const pluginsOverride = String(base.DESKFOX_ACP_PLUGINS ?? "").trim()
+  if (pluginsOverride) env.OPENCODE_DESKFOX_ACP_PLUGINS = pluginsOverride
   // 空值不塞:qwen 侧对空串和未设的处理不一样,少一个歧义源
   if (exists(input.wrapperPath) === false) warnings.push(`wrapper 不存在:${input.wrapperPath}`)
 

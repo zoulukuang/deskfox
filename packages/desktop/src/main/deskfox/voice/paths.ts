@@ -7,8 +7,11 @@
 //   ③ 打包态:没有源码树 —— 返回空,语音入口据此禁用并给出原因(R5)
 //
 // 产品化路径(编译 1.x CLI 二进制随包带)落地后,本文件的 ②③ 会被那条替换。
+//
+// ⚠️ 本模块**刻意不 import electron**:测试装置(scripts/local-test/voice/)要 import 这些解析
+// 函数,而在 Electron 之外一 import electron 就炸(data-namespace.ts 那个坑同源)。
+// `app.isPackaged` 由调用方(ipc.ts,它本来就在主进程里)传进来。
 
-import { app } from "electron"
 import { existsSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -38,8 +41,8 @@ export function resolveVoiceRepoRoot(input: {
   return looksLikeForkRepo(guess, exists) ? guess : ""
 }
 
-export function voiceRepoRoot(): string {
-  return resolveVoiceRepoRoot({ packaged: app.isPackaged })
+export function voiceRepoRoot(packaged: boolean): string {
+  return resolveVoiceRepoRoot({ packaged })
 }
 
 /** wrapper 脚本路径 —— 与仓根同源(它就住在仓里)。 */
@@ -47,6 +50,6 @@ export function resolveWrapperPath(repoRoot: string): string {
   return repoRoot ? join(repoRoot, "packages", "desktop", "scripts", "deskfox-acp-wrap.mjs") : ""
 }
 
-export function voiceWrapperPath(): string {
-  return resolveWrapperPath(voiceRepoRoot())
+export function voiceWrapperPath(packaged: boolean): string {
+  return resolveWrapperPath(voiceRepoRoot(packaged))
 }

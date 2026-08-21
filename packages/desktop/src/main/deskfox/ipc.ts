@@ -4,7 +4,7 @@
 // 由 main/index.ts 在 app.whenReady 后调用 registerDeskfoxIpc()。
 // 模块化:文件操作已落地;飞书/托盘/本地资源协议/防休眠/watchdog 后续逐模块补。
 
-import { ipcMain, type IpcMainInvokeEvent } from "electron"
+import { app, ipcMain, type IpcMainInvokeEvent } from "electron"
 import * as fileOps from "./file-ops"
 import * as preventSleep from "./prevent-sleep"
 import * as feishu from "./feishu"
@@ -17,6 +17,7 @@ import { takeDbQuarantineNotice } from "./db-quarantine-notice"
 // REQ-102 语音派活 [feat: voice-dispatch-minimal] 2026-08-21
 import * as voice from "./voice/gateway"
 import { voiceRepoRoot, voiceWrapperPath } from "./voice/paths"
+import { CHANNEL } from "../constants"
 
 export function registerDeskfoxIpc() {
   // 本地资源协议(localasset://)— app.whenReady 后注册 [feat: electron-replatform]
@@ -62,8 +63,10 @@ export function registerDeskfoxIpc() {
   h("voice_start", (args: { workspace?: string }) =>
     voice.startVoiceGateway({
       workspace: String(args.workspace ?? ""),
-      repoRoot: voiceRepoRoot(),
-      wrapperPath: voiceWrapperPath(),
+      repoRoot: voiceRepoRoot(app.isPackaged),
+      wrapperPath: voiceWrapperPath(app.isPackaged),
+      // 与 `main/server.ts:244` 给 sidecar 的规则同源:语音必须和主实例开同一个 db
+      disableChannelDb: app.isPackaged && CHANNEL !== "local",
     }),
   )
   h("voice_stop", () => voice.stopVoiceGateway())
