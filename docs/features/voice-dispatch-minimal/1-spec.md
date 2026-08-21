@@ -25,7 +25,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | **D-A** | 隔离边界 = **共用** DeskFox 数据/配置命名空间 | Gateway 由 Electron 主进程拉起,自然继承 `applyDeskfoxDataNamespace()` 设进 `process.env` 的 XDG(`data-namespace.ts:191`) |
 | **D-B** | 插件隔离 = **fork 包自门控** | 两个 fork 插件入口读 `OPENCODE_CLIENT`,acp 且不在白名单 → 早返回空 hooks |
 | **D-C** | 派活目标 = **跟随当前项目 + full 权限** | `OPENCODE_WORKSPACE` = DeskFox 当前窗口项目目录;护栏见 §5·R3 |
-| **D-D** | 后端模型 = **`anthropic/claude-opus-5`,可换** | 写进 `OPENCODE_CONFIG_CONTENT.model`,取值来自 env,换模型不动代码 |
+| **D-D** | 后端模型可 env 切换 | 写进 `OPENCODE_CONFIG_CONTENT.model`,取值来自 env;**具体档位见 §2.2(2026-08-21 实测后已从 anthropic/claude-opus-5 改为 claude-code/opus)** |
 | **D-E** | stdout 净化 = **外挂 wrapper**,不改 `acp.ts` | `OPENCODE_BIN` 指 fork 自有 wrapper,管道级逐行过滤 |
 | **D-F** | 模型三选(2026-08-21 user 授权「你来选,目标效果最好」) | 见下 §2.2 |
 | **D-G** | ACP 宿主 = **本仓 1.x 源码入口 via bun**,不是内置二进制(2026-08-21 user 拍板) | `OPENCODE_BIN` → wrapper → `bun <repo>/packages/opencode/src/index.ts acp`;见下 §2.1 |
