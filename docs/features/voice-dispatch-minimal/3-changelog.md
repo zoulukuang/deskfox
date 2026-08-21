@@ -23,6 +23,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   留待 user 拍板复议。
 - **首次起语音会重试一次**:全新语音库上,qwen 的 backend server(4396)与 ACP 宿主并发建表必撞一次,
   第 2 轮才成(实测总耗时 ~4s,用户无感)。根治要预热库,本期不做。
+- **Dock / Finder 启动可能没有代理**:GUI 进程不继承 shell 的 `~/.zshenv`,主进程身上没有代理变量时
+  我们也无从 carry,后端 `claude-code/opus` 会以 403 收场。当前靠启动日志里的软警告暴露;
+  彻底解法(从 `session.resolveProxy()` 反推)本期不做。
 - **`voice-e2e.mjs` 装置失效**:连上 WS 后直接灌音频、缺 configure 握手,灌进去无反应。
   产品链路(WebUI + 真麦克风)不受影响,装置待补。
 

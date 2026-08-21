@@ -9,6 +9,7 @@ import {
   buildGatewayEnv,
   buildVoiceConfigContent,
   checkVoiceWorkspace,
+  needsOverseasNetwork,
   resolveVoiceDbEnv,
 } from "./launch-config"
 import { VOICE_MODEL_DEFAULTS } from "./launch-env"
@@ -140,6 +141,53 @@ describe("buildGatewayEnv", () => {
     expect(env.XDG_DATA_HOME).toBe("/h/.local/share/deskfox")
     expect(env.XDG_CONFIG_HOME).toBe("/h/.config/deskfox")
     expect(env.XDG_STATE_HOME).toBe("/h/Library/Application Support/ai.deskfox.app.local")
+  })
+
+  // 2026-08-21 真机第二形态:活派出去了、任务也跑完了,结果是
+  // `Failed to authenticate. API Error: 403 Request not allowed` —— claude-code/opus 会 spawn
+  // claude CLI,这台机器直连 Anthropic 被拒。二分确证:最小 env 复现,只加回代理就恢复。
+  test("代理 / CA 变量一起带过去 —— 否则后端模型直连境外必 403", () => {
+    const { env } = buildGatewayEnv({
+      ...baseInput,
+      env: {
+        PATH: "/usr/bin",
+        HOME: "/h",
+        HTTPS_PROXY: "http://127.0.0.1:7890",
+        https_proxy: "http://127.0.0.1:7890",
+        NO_PROXY: "localhost,127.0.0.1",
+        NODE_EXTRA_CA_CERTS: "/h/ca.pem",
+      } as NodeJS.ProcessEnv,
+    })
+    expect(env.HTTPS_PROXY).toBe("http://127.0.0.1:7890")
+    expect(env.https_proxy).toBe("http://127.0.0.1:7890")
+    expect(env.NO_PROXY).toBe("localhost,127.0.0.1")
+    expect(env.NODE_EXTRA_CA_CERTS).toBe("/h/ca.pem")
+  })
+
+  test("要出海的后端 + 一个代理变量都没有 → 给出可执行的警告(不阻塞)", () => {
+    const r = buildGatewayEnv({ ...baseInput, env: { PATH: "/usr/bin", HOME: "/h" } as NodeJS.ProcessEnv })
+    expect(r.warnings.some((w) => w.includes("403"))).toBe(true)
+
+    // 有代理就别唠叨
+    const withProxy = buildGatewayEnv({
+      ...baseInput,
+      env: { PATH: "/usr/bin", HOME: "/h", HTTPS_PROXY: "http://127.0.0.1:7890" } as NodeJS.ProcessEnv,
+    })
+    expect(withProxy.warnings.some((w) => w.includes("403"))).toBe(false)
+
+    // 国内模型不该被提醒 —— 它本来就不出海
+    const domestic = buildGatewayEnv({
+      ...baseInput,
+      env: { PATH: "/usr/bin", HOME: "/h", DESKFOX_VOICE_BACKEND_MODEL: "alibaba-cn/qwen3-max" } as NodeJS.ProcessEnv,
+    })
+    expect(domestic.warnings.some((w) => w.includes("403"))).toBe(false)
+  })
+
+  test("needsOverseasNetwork 判 provider 前缀,不猜模型名", () => {
+    expect(needsOverseasNetwork("claude-code/opus")).toBe(true)
+    expect(needsOverseasNetwork("anthropic/claude-opus-5")).toBe(true)
+    expect(needsOverseasNetwork("alibaba-cn/qwen3-max")).toBe(false)
+    expect(needsOverseasNetwork("")).toBe(false)
   })
 
   test("没设的命名空间变量不塞空值(空串和未设在下游语义不同)", () => {

@@ -106,13 +106,45 @@ const NAMESPACE_ENV_NAMES = [
   "XDG_STATE_HOME",
 ] as const
 
+/**
+ * 出网相关的宿主环境 —— 同样必须带,理由同上但表现完全不同。
+ *
+ * 2026-08-21 真机:语音派活能派出去、任务也跑完了,结果是
+ * `Failed to authenticate. API Error: 403 Request not allowed` ——
+ * 后端 `claude-code/opus` 会 spawn `claude` CLI,这台机器直连 Anthropic 会被拒,平时靠代理出去。
+ * 二分确证:最小 env 复现 403,**只加回代理就恢复**(换 XDG 无影响)。
+ *
+ * ⚠️ `ALL_PROXY` / `all_proxy` **不在** qwen 的 env 白名单里(`shared/backend-environment.mjs`),
+ * 穿不到 ACP 子进程;带上是给 Gateway 进程自己用的。真正管住 `claude` CLI 的是
+ * `HTTPS_PROXY` / `https_proxy` 那几个。
+ */
+const NETWORK_ENV_NAMES = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "NODE_EXTRA_CA_CERTS",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+] as const
+
 function carryNamespaceEnv(base: NodeJS.ProcessEnv): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const name of NAMESPACE_ENV_NAMES) {
+  for (const name of [...NAMESPACE_ENV_NAMES, ...NETWORK_ENV_NAMES]) {
     const v = base[name]
     if (typeof v === "string" && v.length > 0) out[name] = v
   }
   return out
+}
+
+/** 这个后端模型要不要连境外服务(决定"没代理"该不该提醒;判 provider 前缀,不猜具体模型名) */
+export function needsOverseasNetwork(backendModel: string): boolean {
+  const provider = String(backendModel ?? "").split("/")[0]
+  return ["claude-code", "anthropic", "openai", "google", "github-copilot"].includes(provider)
 }
 
 /** 语音专用库文件名(相对名 → core 会 join 到 `Global.Path.data`,跟主实例同一个 XDG 目录) */
@@ -204,6 +236,16 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
     PATH: mergedPath,
   }
   if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey
+  // 需要出海的后端模型 + 一个代理变量都没有 = 大概率 403。不阻塞(有人本来就直连能通),
+  // 但要在日志里留一句,省掉下一次"任务跑完了却说没权限"的排查。
+  // 注意 DeskFox 从 Dock / Finder 启动时 GUI 进程不继承 shell 的 ~/.zshenv,这里本就可能是空的。
+  if (needsOverseasNetwork(models.backend) && !NETWORK_ENV_NAMES.some((n) => String(base[n] ?? "").trim())) {
+    warnings.push(
+      `后端模型 ${models.backend} 要连境外服务,但没检测到任何代理变量(HTTPS_PROXY 等)——` +
+        `若本机需要代理出海,任务会以「Failed to authenticate. API Error: 403」收场。` +
+        `从终端 open DeskFox 可继承 shell 的代理设置。`,
+    )
+  }
   // 插件白名单覆盖同理要带前缀才穿得过去;wrapper 会翻译回 DESKFOX_ACP_PLUGINS
   const pluginsOverride = String(base.DESKFOX_ACP_PLUGINS ?? "").trim()
   if (pluginsOverride) env.OPENCODE_DESKFOX_ACP_PLUGINS = pluginsOverride

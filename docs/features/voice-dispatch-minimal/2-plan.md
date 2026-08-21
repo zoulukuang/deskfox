@@ -124,6 +124,38 @@ qwen 的 env 白名单(`shared/backend-environment.mjs`)本来就放行这些,�
 命名空间修好之后共用库**未必不可行**(主实例的库已迁移完毕,不会再触发建表),但本轮没有实证,
 先按「能用 > 能看见」取默认值,D-A 的会话可见性留给 user 拍板复议。
 
+#### 同一个洞的第二形态:代理(2026-08-21,user 第 2 次真人测试)
+
+user 报「无法链接 deskfox agent 执行任务」,前端表现是模型说"我无法直接调动本地 Agent"。
+取证发现**活其实派出去了**:`/api/tasks` 里 task 存在、objective 正确、`workState=completed`,
+`summary` 是 `Failed to authenticate. API Error: 403 Request not allowed`——
+模型只是把后端的失败包装成了自己的话。
+
+二分定位(最小 env 起步逐项加回):
+
+| 环境 | 结果 |
+|---|---|
+| ① 最小 env(白名单 ∩ 我们注入的) | `403 Request not allowed` |
+| ② ① + 代理变量 | ✅ 正常回复 |
+| ③ ① + 换回非 deskfox 的 XDG | `403`(与 XDG 无关) |
+
+`claude-code/opus` 会 spawn `claude` CLI,这台机器直连 Anthropic 被拒、平时靠代理出去,
+而我们整份替换 spawn env 时把代理也一并丢了 —— 与 XDG 那条是**同一个洞的两种表现**。
+修法:`NETWORK_ENV_NAMES` 一起 carry(`HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` 大小写两套 +
+`NODE_EXTRA_CA_CERTS` / `SSL_CERT_*`)。注意 `ALL_PROXY` **不在** qwen 白名单里、穿不到 ACP 子进程,
+真正管住 `claude` CLI 的是 `HTTPS_PROXY` / `https_proxy`。
+
+另加一条软警告:后端模型要出海(`needsOverseasNetwork()` 判 provider 前缀)但一个代理变量都没有时,
+在启动日志里点名"会以 403 收场"。不阻塞 —— 有人本来就直连能通。
+
+**验证**:`ps -E` 确认代理已穿到 gateway 与 ACP 宿主;再直接对 ACP 宿主的 opencode server(4396)
+建会话发 prompt,`claude-code/opus` 回了「语音链路通」。配置实测 `model=claude-code/opus`、
+`small_model=alibaba-cn/qwen-flash`、`permission.*=allow`。
+
+⚠️ **遗留风险**:DeskFox 从 Dock / Finder 启动时,GUI 进程**不继承** shell 的 `~/.zshenv`,
+主进程身上可能本来就没有代理变量 —— 那 carry 也无从 carry。彻底解法是从 Electron
+`session.resolveProxy()` 反推,本期不做;当前靠那条软警告暴露。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有
