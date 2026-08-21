@@ -1427,4 +1427,11 @@ export const dict = {
   "help.tabs.persistence": "Dine faner er stadig åbne, når du åbner appen igen.",
   "help.tabs.worktrees":
     "Det nye design understøtter endnu ikke Git Worktrees, men understøttelsen kommer snart. Hvis du foretrækker at fortsætte med det tidligere layout, kan du skifte mellem layoutene under Indstillinger. Bemærk, at det nye layout bliver permanent om nogle få uger.",
+  // FORK-BEGIN: REQ-102 语音派活顶部栏入口 [feat: voice-dispatch-minimal] 2026-08-21
+  "titlebar.voice.off": "Start voice dispatch",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.on": "Voice dispatch is on — click to stop",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.starting": "Starting voice gateway…",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.unavailable": "Voice dispatch unavailable",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.error": "Voice dispatch error — click to retry",  // FORK-i18n-backfill(en 兜底)
+  // FORK-END
 }

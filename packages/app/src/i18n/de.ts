@@ -1364,4 +1364,11 @@ export const dict = {
   "help.tabs.persistence": "Wenn Sie die App erneut öffnen, sind Ihre Tabs weiterhin geöffnet.",
   "help.tabs.worktrees":
     "Das neue Design unterstützt Git-Worktrees noch nicht. Diese Funktion folgt in Kürze. Wenn Sie das bisherige Layout vorerst weiterverwenden möchten, können Sie in den Einstellungen zwischen den Layouts wechseln. Beachten Sie jedoch, dass das neue Layout in einigen Wochen dauerhaft verwendet wird.",
+  // FORK-BEGIN: REQ-102 语音派活顶部栏入口 [feat: voice-dispatch-minimal] 2026-08-21
+  "titlebar.voice.off": "Start voice dispatch",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.on": "Voice dispatch is on — click to stop",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.starting": "Starting voice gateway…",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.unavailable": "Voice dispatch unavailable",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.error": "Voice dispatch error — click to retry",  // FORK-i18n-backfill(en 兜底)
+  // FORK-END
 } satisfies Partial<Record<Keys, string>>

@@ -1444,4 +1444,11 @@ export const dict = {
   "project.path.unreachable.description":
     "无法访问 “{{directory}}”,磁盘可能未连接或未映射(网络盘/U 盘),请重新连接后再试。",
   // FORK-END
+  // FORK-BEGIN: REQ-102 语音派活顶部栏入口 [feat: voice-dispatch-minimal] 2026-08-21
+  "titlebar.voice.off": "开启语音派活",
+  "titlebar.voice.on": "语音派活已开启 —— 点击关闭",
+  "titlebar.voice.starting": "正在启动语音网关…",
+  "titlebar.voice.unavailable": "语音派活不可用",
+  "titlebar.voice.error": "语音派活出错 —— 点击重试",
+  // FORK-END
 } satisfies Partial<Record<Keys, string>>
