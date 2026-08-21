@@ -17,6 +17,7 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { shell } from "electron"
 import log from "electron-log/main.js"
+import { invalidateCoordinatorOnModelChange } from "./coordinator-state"
 import { GATEWAY_PORT, binDir, buildGatewayEnv, checkVoiceWorkspace } from "./launch-config"
 import { resolveAcpHost } from "./launch-env"
 
@@ -265,7 +266,17 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
 
   starting = true
   healthy = false
-  appendVoiceLog(`--- start workspace=${ws.dir} model=${JSON.parse(env.OPENCODE_CONFIG_CONTENT).model} ---`)
+  const backendModel = String(JSON.parse(env.OPENCODE_CONFIG_CONTENT).model ?? "")
+  appendVoiceLog(`--- start workspace=${ws.dir} model=${backendModel} ---`)
+
+  // 换了后端模型就得先把 qwen 的 coordinator session 作废,否则改了 model 是**静默失效**的
+  // (它 resume 老 session,而 opencode 从历史消息恢复模型)。理由详见 coordinator-state.ts。
+  const invalidated = invalidateCoordinatorOnModelChange({ backendModel })
+  if (invalidated.invalidated) {
+    const msg = `后端模型 ${invalidated.previousModel || "(首次)"} → ${backendModel},已作废 coordinator session:${invalidated.dropped.join(", ")}`
+    log.info(`[voice] ${msg}`)
+    appendVoiceLog(msg)
+  }
 
   // 最多试 3 次:见 isRetryableStartFailure —— 与主实例抢同一个 db 的锁是瞬态的
   const MAX_ATTEMPTS = 3

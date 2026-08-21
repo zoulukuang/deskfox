@@ -163,6 +163,86 @@ user 报「无法链接 deskfox agent 执行任务」,前端表现是模型说"�
 主进程身上可能本来就没有代理变量 —— 那 carry 也无从 carry。彻底解法是从 Electron
 `session.resolveProxy()` 反推,本期不做;当前靠那条软警告暴露。
 
+#### provider 工具透传:一个把「三层架构」整个压平的坑(2026-08-21)
+
+user 追问「语音聊天和派的活是两种 session,现在怎么处理的」,顺着查下去挖出了本期最深的一个洞。
+
+**先摆 qwen 的真实架构**(此前理解错了,以为是两层):
+
+| 层 | 是什么 | 落 opencode session |
+|---|---|---|
+| 一 | realtime 语音模型(听/说,调 `spawn_thinking`) | 不落 |
+| 二 | **coordinator session** —— 常驻,做路由判断 + 顺手干轻活 | 落 |
+| 三 | **project session** —— 每个独立工作一条,可 `session_send` 续接 | 落 |
+
+路由规则是 qwen 写死在 `coordinator.mjs:232` 的:新的独立工作 → 建第三层 Session;要继续以前的工作 →
+**定位并续接对应的既有 Session**;其余留在协调 Session 执行。配套五个工具
+(`session_start` / `session_send` / `session_status` / `sessions_list` / `session_cancel`)
+经 MCP 下发给 coordinator。
+
+**但实测第三层从来没起来过**,所有任务都挤在 coordinator 里。逐格打点定位:
+
+| 环节 | 结果 |
+|---|---|
+| qwen 传 MCP descriptor | ✅ tee 抓到帧:`session/resume` 的 `mcpServers` 含 `qwen_audio_agent` + Bearer token |
+| opencode 消费并连接 | ✅ 三次探针(new / resume / 对老 session resume)都主动握手、拉 `tools/list` |
+| `MCP.add` 落地 | ✅ 返回 `qwen_audio_agent: {"status":"connected"}` |
+| `SessionTools.resolve` 最终表 | ✅ 71 个,含全部 5 个第三层工具 |
+| `LLMRequestPrep.prepare` 出口 | ✅ `in=71 out=71 inMcp=54 outMcp=54` —— **一个都没丢** |
+| 模型实际看到 | ❌ |
+
+**根因:`claude-code` provider 不把 opencode 的工具透传给 `claude` CLI**,CLI 用的是它自己那套内置工具。
+对照实验(同一 server / 同一目录 / 同样 71 个工具,只换 provider,问「有没有 macro_ 开头的工具」):
+
+- `alibaba-cn/qwen-flash` → 「有:macro_box_status」
+- `claude-code/opus` → 「没有」
+
+影响面**不止语音**:任何走 `claude-code` 的会话都用不了 MCP 工具(user 的 `macro` 同理)。
+
+**教训**:中途我曾根据「问模型,它说没这个工具」判定工具没挂上 —— 错的。工具明明在表里,模型照样答
+「不存在」。**模型的自述不能当判据**,后面全部改用代码打点 + 帧级抓包。
+
+#### A:默认后端模型换成 `alibaba-cn/qwen3.8-max`
+
+`VOICE_MODEL_DEFAULTS.backend` 从 `claude-code/opus` 换成本机可用清单里最强的一档
+(106 个可用模型中确认存在)。换完立刻解锁第三层。
+
+**连带必须处理的坑**:光改 model 是**静默失效**的 —— qwen 把 coordinator sessionId 持久化在
+`$XDG_CONFIG_HOME/qwaudio/state/acp-sessions.json` 跨重启复用,复用走 `session/resume`,
+而 opencode 的 `resumeSession` 是 `restoreFromMessages(messages).model ?? selectDefaultModel(...)`,
+**优先从历史消息恢复模型**,配置里的 model 根本轮不到。
+新增 fork-only 的 `coordinator-state.ts`:记住上次用的模型,不一致就摘掉那条 coordinator 记录
+(只摘 `opencode:` 前缀,不动别的后端,也不动 `projects` 里的第三层记录)。
+
+**真机验证(本地版 + 真实 gateway)**:
+
+```
+后端模型 (首次) → alibaba-cn/qwen3.8-max,已作废 coordinator session:opencode:user_personal:backend
+```
+
+派一个「新开一个独立的任务」→ `task.delegated` 出现,session 数 +2:
+
+| session | 用过的工具 | 角色 |
+|---|---|---|
+| `ses_fdcf45e6…` | 只有 `qwen_audio_agent_qwen_audio_agent_session_start` | coordinator,纯路由 |
+| `ses_fdcf44230…` | `webfetch` / `bash` / `write`,产出 `wal.md` | 第三层,真干活 |
+
+**交叉追问四轮实测**(同一条 WS 连接,模拟连续语音对话):
+
+```
+session_start   ← A 派活(统计文件数)
+session_start   ← B 派活(查 WAL 缩写)
+session_send    ← A 追问(补每个文件字节数)   ← 续接,未新建
+session_send    ← B 追问(补它解决什么问题)   ← 续接,未新建
+```
+
+session 数只 +2,落盘内容也证明路由方向正确:`a.md` 追加了字节数、`b.md` 追加了 WAL 解决的问题。
+**C 方案(每任务一条 session + 交叉追问)端到端成立。**
+
+附带解决:双前缀命名(`qwen_audio_agent_qwen_audio_agent_session_start`,opencode 的
+`<server>_<tool>` 规则撞上 qwen 的同名前缀)**实测不碍事**,模型自己认得出,不需要改 `catalog.ts`,
+省掉一笔预估中的 R4。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有

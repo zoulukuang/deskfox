@@ -233,7 +233,13 @@ export function readProviderApiKey(
  * - realtime:qwen-audio-agent 1.11.0 官方默认,audio 族配 smart_turn(对症 spike 的尾巴截断)
  */
 export const VOICE_MODEL_DEFAULTS = {
-  backend: "claude-code/opus",
+  // ⚠️ 别改回 `claude-code/*`:2026-08-21 定位到 `claude-code` provider **不把 opencode 的工具
+  // 透传给 claude CLI**(CLI 用自己那套内置工具),后果是**所有 MCP 工具在它手里都不存在**。
+  // 对照实验:同一个 server / 同一个目录 / 同样 71 个工具,问"有没有 macro_ 开头的工具"——
+  // `alibaba-cn/qwen-flash` 答「有:macro_box_status」,`claude-code/opus` 答「没有」。
+  // 而 qwen 的第三层 Session 能力(`qwen_audio_agent_session_start` 等五个)正是走 MCP 下发的,
+  // 用 claude-code 就等于关掉「一个任务一条 session + 交叉追问」。详见 2-plan「provider 工具透传」。
+  backend: "alibaba-cn/qwen3.8-max",
   small: "alibaba-cn/qwen-flash",
   realtime: "qwen-audio-3.0-realtime-plus",
 } as const

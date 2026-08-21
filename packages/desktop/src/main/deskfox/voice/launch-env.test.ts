@@ -193,10 +193,18 @@ describe("②b 测试装置的 XDG 补齐(防「验错环境」)", () => {
 describe("③ 三个模型(D-F)", () => {
   test("默认值 = 定案值", () => {
     expect(resolveVoiceModels({})).toEqual({
-      backend: "claude-code/opus",
+      backend: "alibaba-cn/qwen3.8-max",
       small: "alibaba-cn/qwen-flash",
       realtime: "qwen-audio-3.0-realtime-plus",
     })
+  })
+
+  // 2026-08-21 实测:`claude-code` provider 不把 opencode 的工具透传给 claude CLI,
+  // 它手里**一个 MCP 工具都没有** —— 而 qwen 的第三层 Session 能力正是走 MCP 下发的。
+  // 默认后端一旦回到 claude-code 系,「一个任务一条 session + 交叉追问」直接失效,
+  // 而且是**静默**失效(不报错,只是任务全挤在 coordinator 里)。这条守着别人改回去。
+  test("默认后端不能是 claude-code 系 —— 它拿不到 MCP 工具,第三层会静默失效", () => {
+    expect(VOICE_MODEL_DEFAULTS.backend.startsWith("claude-code/")).toBe(false)
   })
 
   test("三个位置各自可 env 覆盖(换模型不改代码)", () => {
