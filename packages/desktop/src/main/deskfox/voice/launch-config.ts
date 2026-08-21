@@ -236,6 +236,39 @@ function carryNamespaceEnv(base: NodeJS.ProcessEnv): Record<string, string> {
   return out
 }
 
+/**
+ * 静默多久后回到休眠(秒)。**这就是「对话进行中不用重复唤醒」的实现方式** ——
+ * qwen 的 `sleepController` 每次输入都 `recordActivity()` 重置计时,
+ * 所以只要你还在说话就一直活跃,停下超过这个时长才需要再喊一次唤醒词。
+ *
+ * qwen 自己的默认是 `0` = **永不自动休眠**(唤醒一次就一直听),对"不想被日常对话打扰"没用。
+ * 180 秒是个折中:一轮问答的思考间隙不会误休眠,离开工位一会儿回来就得重新唤醒。
+ * `DESKFOX_VOICE_SLEEP_SECONDS` 可调;设 0 退回 qwen 的永不休眠。
+ */
+export const VOICE_SLEEP_SECONDS_DEFAULT = 180
+
+/**
+ * 唤醒词 + 休眠超时。
+ *
+ * ⚠️ 唤醒词文案在 qwen 里是**硬编码**的「你好千问」(`core/config.mjs:490`,没有 env 覆盖),
+ * 实际检测认的是模型目录下的 `keywords.txt`。想换成别的词得同时改 keywords.txt,
+ * 但提示文案仍会说「你好千问」—— 2026-08-21 user 拍板:先沿用「你好千问」,保持文案一致。
+ *
+ * `DESKFOX_VOICE_WAKE_WORD=off` 可整个关掉(退回"一直在听")。
+ */
+export function resolveWakeWordEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const off = String(env.DESKFOX_VOICE_WAKE_WORD ?? "").trim().toLowerCase()
+  if (off === "off" || off === "0" || off === "false") return {}
+  const raw = String(env.DESKFOX_VOICE_SLEEP_SECONDS ?? "").trim()
+  const parsed = raw === "" ? Number.NaN : Number(raw)
+  // 非法值一律回默认,别把 NaN 塞进 env 让 qwen 那边 clamp 成 0(那等于永不休眠,静默失效)
+  const seconds = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : VOICE_SLEEP_SECONDS_DEFAULT
+  return {
+    QWEN_AUDIO_WAKE_WORD_ENABLED: "true",
+    QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS: String(seconds),
+  }
+}
+
 /** 这个后端模型要不要连境外服务(决定"没代理"该不该提醒;判 provider 前缀,不猜具体模型名) */
 export function needsOverseasNetwork(backendModel: string): boolean {
   const provider = String(backendModel ?? "").split("/")[0]
@@ -322,6 +355,12 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
     OPENCODE_CONFIG_CONTENT: buildVoiceConfigContent(models, writeVoiceInstructionsFile(base)),
     QWEN_AUDIO_REALTIME_MODEL: models.realtime,
     QWEN_AUDIO_AGENT_BACKEND_PERMISSION_MODE: "full",
+    // ── 唤醒词:不叫它就不打扰日常对话(user 2026-08-21 提的需求)
+    // qwen 默认 **关**,等于麦克风一开就一直在听。开了之后先进休眠,喊「你好千问」才唤醒;
+    // 唤醒后每次说话都会重置计时,所以一轮对话中间不用重复喊。
+    // 模型(sherpa-onnx KWS)首次用时自动下载;下不下来只会关掉休眠功能并提示,不影响语音本身
+    // (`realtime-gateway.mjs:1670` 的 catch 分支),所以默认开是安全的。
+    ...resolveWakeWordEnv(base),
     // ── 端口:避开主实例的默认 4096。
     // ⚠️ 只设 OPENCODE_PORT 不够 —— qwen 的 `applyAddress`(`backend-drivers/opencode.mjs`)
     // 会按 `OPENCODE_BASE_URL`(默认 http://127.0.0.1:4096)反算并覆盖端口,

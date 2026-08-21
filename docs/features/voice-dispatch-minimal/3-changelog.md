@@ -30,6 +30,12 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - ~~第三层 session 标题是英文~~ → 已修:`buildVoiceConfigContent` 覆盖 `agent.title.prompt`
   (`VOICE_TITLE_PROMPT`),硬性要求简体中文。内置那版写的是「跟随用户语言」,但语音链路里首条 prompt
   是 coordinator 转写过的、常已是英文,跟随等于跟错。
+- **唤醒词模型要手工装一次**:`ensureWakeWordModel` 直连 GitHub 下 32MB,实测下到 19MB 就超时。
+  已用 `curl -C -` 续传装好(sha256 与代码里的常量一致),之后 0ms 复用不再联网。
+  换机器 / 清了 `~/.config/deskfox/qwaudio/models/` 需要重来一次;
+  装的位置是 `models/wake-word/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/`(**要带模型名那层**)。
+- **唤醒词文案改不了**:qwen 把「你好千问」硬编码在 `core/config.mjs:490`,无 env 覆盖。
+  实际检测认 `keywords.txt`,所以换词可行但提示文案会对不上,且改 node_modules 升级即失。
 - **国产模型有内容审查**:`alibaba-cn/*` 走 DashScope,涉国际政治 / 军事条款类话题会被
   `DataInspectionFailed` 拒(实测 4 个任务失败 2 个)。不是 bug,是换模型的代价。
   B2 落地后可按话题切 `DESKFOX_VOICE_BACKEND_MODEL` 规避,coordinator 会自动作废重建。

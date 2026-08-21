@@ -318,6 +318,35 @@ user 反馈「刚那次的会话列表里没出现」,并确认 **coordinator �
 
 **实测**:CDP 注入监听器 → 派活 → renderer 收到 2 次事件(accepted / completed 各一次)。
 
+#### 唤醒词:默认开,"对话中不用重复喊"(2026-08-21 user 需求)
+
+user:「不唤醒的时候不妨碍日常沟通,想跟他沟通的时候才叫」+「对话进行中不需要重复唤醒,
+静默一段时间后才需要」。拍板**沿用「你好千问」**(不换成「小帅」),保持提示文案一致。
+
+qwen 侧的现状:`QWEN_AUDIO_WAKE_WORD_ENABLED` 默认 **false** —— 也就是麦克风一开就一直在听,
+正是 user 想解决的。`sleepTimeoutMs`(来自 `QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS`)默认 **0 = 永不自动休眠**,
+唤醒一次就一直活跃,对"别打扰日常对话"同样没用。两个都要给值。
+
+`resolveWakeWordEnv()`:默认开唤醒词 + 静默 180 秒回休眠。
+「对话中不用重复喊」不需要额外实现 —— qwen 的 `sleepController` 每次输入都 `recordActivity()` 重置计时,
+只要还在说话就一直活跃。`DESKFOX_VOICE_SLEEP_SECONDS` 可调,`DESKFOX_VOICE_WAKE_WORD=off` 整个关掉。
+
+**为什么默认开是安全的**:模型(sherpa-onnx KWS)创建失败会走
+`realtime-gateway.mjs:1670` 的 catch —— `sleepController.disable()` + 发一条「休眠功能未启用:…」,
+**不影响语音本身**。
+
+⚠️ 唤醒词文案在 qwen 里**硬编码**为「你好千问」(`core/config.mjs:490`,无 env 覆盖),
+实际检测认的是模型目录下的 `keywords.txt`。想换词得同时改 keywords.txt,但提示文案仍会说「你好千问」,
+且改 `node_modules` 升级即失 —— 这是 user 选择沿用原词的直接原因。
+
+**模型安装(一次性,已完成)**:qwen 自带的 `ensureWakeWordModel` 走 fetch 直连 GitHub,
+32MB 下到 19MB 就 `The operation timed out`。改用 `curl -C -` 续传下完,
+sha256 与 `WAKE_WORD_MODEL_SHA256` 完全一致。
+装的时候踩了一个坑:`ensureWakeWordModel` 会在配置目录下**再加一层模型名**
+(`resolve(directory, WAKE_WORD_MODEL_NAME)`),直接铺在 `wake-word/` 下它看不见。
+放对位置后 `ensureWakeWordModel` **0ms 直接复用、不再联网**。
+`keywords.txt` 不在归档里(qwen 自己写),内容照抄它的原文 `n ǐ h ǎo q iān w èn @你好千问`。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有

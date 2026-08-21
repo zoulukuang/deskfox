@@ -11,7 +11,9 @@ import {
   checkVoiceWorkspace,
   needsOverseasNetwork,
   resolveVoiceDbEnv,
+  resolveWakeWordEnv,
   VOICE_ROUTING_INSTRUCTIONS,
+  VOICE_SLEEP_SECONDS_DEFAULT,
   writeVoiceInstructionsFile,
 } from "./launch-config"
 import { VOICE_MODEL_DEFAULTS } from "./launch-env"
@@ -266,6 +268,51 @@ describe("buildGatewayEnv", () => {
     expect(env.OPENCODE_DB).toBe(VOICE_DB_FILENAME)
     expect(env.OPENCODE_DISABLE_CHANNEL_DB).toBeUndefined()
     expect(env.OPENCODE_CHANNEL).toBeUndefined()
+  })
+})
+
+// user 2026-08-21:不叫它就别打扰日常对话;但对话进行中不要重复唤醒。
+// 后者靠 sleepController 的 recordActivity 重置计时实现,我们只需要给一个非 0 的超时。
+describe("resolveWakeWordEnv", () => {
+  test("默认开唤醒词,静默超时给非 0 值", () => {
+    const r = resolveWakeWordEnv({})
+    expect(r.QWEN_AUDIO_WAKE_WORD_ENABLED).toBe("true")
+    expect(r.QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS).toBe(String(VOICE_SLEEP_SECONDS_DEFAULT))
+    // qwen 自己的默认是 0 = 永不休眠,等于唤醒一次就一直听 —— 那这个需求就白做了
+    expect(VOICE_SLEEP_SECONDS_DEFAULT).toBeGreaterThan(0)
+  })
+
+  test("超时可调;0 是合法值(退回 qwen 的永不自动休眠)", () => {
+    expect(resolveWakeWordEnv({ DESKFOX_VOICE_SLEEP_SECONDS: "60" }).QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS).toBe("60")
+    expect(resolveWakeWordEnv({ DESKFOX_VOICE_SLEEP_SECONDS: "0" }).QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS).toBe("0")
+  })
+
+  // 非法值不能变成 NaN 传下去 —— qwen 那边会 clamp 成 0,静默失效比报错更难查
+  test("非法超时值回落默认,不传 NaN", () => {
+    for (const bad of ["abc", "-5", ""]) {
+      const v = resolveWakeWordEnv({ DESKFOX_VOICE_SLEEP_SECONDS: bad }).QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS
+      expect(v).toBe(String(VOICE_SLEEP_SECONDS_DEFAULT))
+    }
+  })
+
+  test("DESKFOX_VOICE_WAKE_WORD=off → 一个变量都不注入(退回一直在听)", () => {
+    for (const off of ["off", "0", "false", "OFF"]) {
+      expect(resolveWakeWordEnv({ DESKFOX_VOICE_WAKE_WORD: off })).toEqual({})
+    }
+  })
+
+  test("接进 buildGatewayEnv", () => {
+    const { env } = buildGatewayEnv({
+      workspace: "/repo",
+      repoRoot: "/fork",
+      wrapperPath: "/w",
+      authPath: "/a",
+      exists: () => true,
+      disableChannelDb: true,
+      env: { PATH: "/usr/bin", HOME: "/h" } as NodeJS.ProcessEnv,
+    })
+    expect(env.QWEN_AUDIO_WAKE_WORD_ENABLED).toBe("true")
+    expect(env.QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS).toBe(String(VOICE_SLEEP_SECONDS_DEFAULT))
   })
 })
 
