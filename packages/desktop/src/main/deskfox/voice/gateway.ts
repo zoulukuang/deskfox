@@ -92,17 +92,44 @@ export interface StartInput {
   readonly disableChannelDb: boolean
 }
 
-/** 探测 qwen-audio-agent 装没装好;结果缓存,`force` 可重探。 */
-export async function probeAvailability(force = false): Promise<SetupProbe> {
+export interface ProbeInput {
+  /** wrapper 绝对路径 —— **必须给**,理由见函数注释 */
+  readonly wrapperPath: string
+  readonly extraPathDirs?: readonly string[]
+}
+
+/**
+ * 探测 qwen-audio-agent 装没装好;结果缓存,`force` 可重探。
+ *
+ * 两个坑都是 2026-08-21 真机点按钮才暴露的:
+ *   ① **必须带 `OPENCODE_BIN`**。不带的话 `setup` 会去找 PATH 上"已安装的 opencode",
+ *      在本机那是 homebrew 的 **1.17.4** → `ready:false`;带上 wrapper 则 `source: configured`
+ *      → 跳过版本闸 → ready。
+ *   ② **非零退出也要读 stdout**。`setup` 在 not-ready 时 exit 1,但**照样打完整 JSON**;
+ *      只 catch 不解析就会把"1.17.4 太旧"这种可执行的原因丢掉,退化成一句没用的"命令失败"。
+ */
+export async function probeAvailability(input: ProbeInput, force = false): Promise<SetupProbe> {
   if (availability && !force) return availability
+  const pathDirs = [...(input.extraPathDirs ?? []), ...String(process.env.PATH ?? "").split(":")]
+  const env = {
+    ...process.env,
+    OPENCODE_BIN: input.wrapperPath,
+    PATH: pathDirs.filter(Boolean).join(":"),
+  }
   try {
     const { stdout } = await execFileAsync("qwenaudio", ["setup", "--backend", "opencode", "--json"], {
       timeout: 30_000,
-      env: process.env,
+      env,
     })
     availability = parseSetupJson(stdout)
   } catch (e) {
-    const msg = String((e as { message?: string })?.message ?? e)
+    const err = e as { message?: string; stdout?: string }
+    const stdout = String(err?.stdout ?? "")
+    if (stdout.trim().startsWith("{")) {
+      availability = parseSetupJson(stdout)
+      return availability
+    }
+    const msg = String(err?.message ?? e)
     availability = {
       ready: false,
       issue: /ENOENT|not found/i.test(msg)
@@ -128,9 +155,6 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
     return getVoiceStatus()
   }
 
-  const probe = await probeAvailability()
-  if (!probe.ready) return getVoiceStatus()
-
   // bun 给 wrapper 的 shebang 用;claude CLI 给 claude-code provider 用 —— GUI 进程的 PATH 常常两个都没有
   const extraPathDirs: string[] = []
   try {
@@ -141,6 +165,9 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
     lastError = String((e as { message?: string })?.message ?? e)
     return getVoiceStatus()
   }
+
+  const probe = await probeAvailability({ wrapperPath: input.wrapperPath, extraPathDirs })
+  if (!probe.ready) return getVoiceStatus()
 
   const { env, warnings } = buildGatewayEnv({
     workspace: ws.dir,

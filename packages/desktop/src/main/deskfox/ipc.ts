@@ -59,7 +59,7 @@ export function registerDeskfoxIpc() {
   // ── 语音派活(REQ-102)[feat: voice-dispatch-minimal] ──
   // renderer 只拿状态字符串;env 里有 DASHSCOPE key,进程与凭据都留在主进程。
   h("voice_status", () => voice.getVoiceStatus())
-  h("voice_probe", () => voice.probeAvailability(true))
+  h("voice_probe", () => voice.probeAvailability({ wrapperPath: voiceWrapperPath(app.isPackaged) }, true))
   h("voice_start", (args: { workspace?: string }) =>
     voice.startVoiceGateway({
       workspace: String(args.workspace ?? ""),
