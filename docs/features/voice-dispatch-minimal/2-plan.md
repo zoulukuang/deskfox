@@ -472,6 +472,41 @@ t=20s  New session(空壳,qwen 重复建的已知问题)
 user 记忆里本就有「不在 user 工作环境做 GUI 自动化测试」这条约束,本轮为了快一直在违反。
 后续验证要用独立数据目录(独立 XDG + 独立 db),不碰 user 的 `opencode-local.db`。
 
+#### 刷新的真正根因:三道闸,前两次各只拆了一道(2026-08-22)
+
+侧栏列表要出现新会话,**三件事缺一不可**,逐层真机取证才看全:
+
+| 闸 | 是什么 | 前两次修复 |
+|---|---|---|
+| `sessionMeta` 早退 | `loadSessions` 开头 `if (meta && meta.limit >= retainedLimit) return` —— 语义是"**确保加载过**"而不是"重新加载" | **两次都没碰**,所以后面做什么都白搭 |
+| `fetchQuery` 缓存 | 加载走 `queryClient.fetchQuery`,缓存没过期就返回旧数据 | 第 1 次修了(invalidate) |
+| store 不是 query | 侧栏读 `sortedRootSessions(workspaceStore, …)`,只 invalidate 界面不动 | 第 2 次修了(queue.push) |
+
+最终修法是三件一起做:`sessionMeta.delete(key)` → `invalidateQueries` → `queue.push(directory)`。
+
+**真机验证(CDP 读 DOM,全程零手动操作)**:
+
+```
+t=  8s  语音沟通 2026-08-22 00:33        ← 发起后 8 秒,沟通记录自己出现
+t= 86s  调研 SQLite cache_size 调优方法   ← 任务完成,独立会话自己出现
+        New session                      ← qwen 那个已知空壳
+```
+
+事件命中 2 次(受理 / 完成各一次),两次 DOM 都跟着更新。
+
+**方法论教训(比这个 bug 本身重要)**:前两次我都是"拆掉一道闸 + 验到中间层"就宣布修好 ——
+第一次验"事件到达 renderer"(收到 2 次),第二次连验都没验只跑了 typecheck。
+事件确实到了,到了之后什么也没发生。**验 UI 行为就必须验 UI 的最终状态**,
+验到中间层等于没验。已把三道闸的关系写进代码注释,防止以后只改一处。
+
+#### 另一个坑:网关工作目录只在启动时确定
+
+user 在 Finance 说话,任务却全落到 `voice-test` —— 查日志 `--- start workspace=/Users/openclaw/voice-test ---`。
+`voice_start` 的 workspace 取自**点麦克风那一刻**窗口的 `params.dir`,之后切项目**网关不会跟着切**。
+当前只能"关掉语音 → 确认在目标项目 → 重新点开"。
+候选修法(待 user 定):切项目时自动重启网关(会断语音连接)/ 图标提示"语音绑在 X 项目"/
+只在语音空闲时自动跟随。**未做。**
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有

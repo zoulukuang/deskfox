@@ -640,12 +640,20 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   let unlistenVoice: (() => void) | undefined
   if (isDesktopApp()) {
     void listen("voice-session-changed", () => {
-      // ⚠️ 必须走 `queue.push` 而不是 `queryClient.invalidateQueries`。
-      // 侧栏的会话列表是 `createMemo(() => sortedRootSessions(workspaceStore, …))` —— 从 **store** 读,
-      // query 只是填充 store 的手段。invalidate 只标记缓存过期,store 纹丝不动,界面就一直是旧的
-      // (2026-08-21 真机:库里、主实例 API 里都有新会话,切项目再切回来也刷不出来)。
-      // `queue.push` 是本文件里其它事件用的同一条路径,它会真的重新加载那个目录并写回 store。
-      for (const directory of Object.keys(children.children)) queue.push(directory)
+      // 要让侧栏真的出现新会话,**三件事缺一不可**(2026-08-21 逐层真机取证得出):
+      //   ① `sessionMeta.delete` —— `loadSessions` 开头有 `if (meta && meta.limit >= retainedLimit) return`,
+      //      它的语义是"确保加载过"而非"重新加载";不清这个记号,后面两步都白做;
+      //   ② `invalidateQueries` —— 加载走的是 `queryClient.fetchQuery`,缓存没过期就直接返回旧数据;
+      //   ③ `queue.push` —— 真正触发加载并把结果 reconcile 回 store。
+      //      侧栏读的是 store(`sortedRootSessions(workspaceStore, …)`),不是 query,
+      //      所以只 invalidate 而不 push,界面永远不动。
+      // 我先后只做过 ② 和 ③,两次都以为修好了 —— 都没验到 DOM 就收工,两次都是假的。
+      for (const directory of Object.keys(children.children)) {
+        const key = directoryKey(directory)
+        sessionMeta.delete(key)
+        void queryClient.invalidateQueries(queryOptionsApi.sessions(key))
+        queue.push(directory)
+      }
     })
       .then((fn) => {
         unlistenVoice = fn
