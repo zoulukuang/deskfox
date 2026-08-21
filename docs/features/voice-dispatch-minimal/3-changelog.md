@@ -24,11 +24,15 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   两侧各修一半:语音默认模型换 `alibaba-cn/qwen3.8-max`(本仓);
   `/Volumes/ExtSSD/deskfox-plugins/claude-code/` 分支 `feat/mcp-passthrough` commit `4c4c27d`
   把 opencode 配置里声明的 MCP 透传给 CLI(`--mcp-config`)。
-  **仍未覆盖**:运行时动态注册的 MCP(ACP `session/new` 带进来的那些)只在 opencode 进程内存里,
-  配置文件读不到 —— 要覆盖需在 `session/llm.ts` 的 `_opencode` providerOptions 通道加字段,那要一笔 R4。
+  动态注册的 MCP(ACP `session/new` 带进来的)由 B2 覆盖:wrapper 旁路抄帧 → `DESKFOX_DYNAMIC_MCP_FILE`
+  → plugin 合并。**零上游改动、零 R4**(原以为要改 `session/llm.ts`)。
+  实测 `claude-code/opus` 也能走第三层 session。
 - ~~第三层 session 标题是英文~~ → 已修:`buildVoiceConfigContent` 覆盖 `agent.title.prompt`
   (`VOICE_TITLE_PROMPT`),硬性要求简体中文。内置那版写的是「跟随用户语言」,但语音链路里首条 prompt
   是 coordinator 转写过的、常已是英文,跟随等于跟错。
+- **国产模型有内容审查**:`alibaba-cn/*` 走 DashScope,涉国际政治 / 军事条款类话题会被
+  `DataInspectionFailed` 拒(实测 4 个任务失败 2 个)。不是 bug,是换模型的代价。
+  B2 落地后可按话题切 `DESKFOX_VOICE_BACKEND_MODEL` 规避,coordinator 会自动作废重建。
 - **首次起语音可能重试一次**:库还没建好时,qwen 的 backend server(4396)与 ACP 宿主会并发建表撞一次,
   第 2 轮才成(实测总耗时 ~4s,用户无感)。共用主实例的库时库早已建好,不会碰到;
   只有走 `DESKFOX_VOICE_ISOLATE_DB=1` 逃生口首次开新库才会。根治要预热库,本期不做。

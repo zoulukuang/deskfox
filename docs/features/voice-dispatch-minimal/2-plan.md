@@ -243,6 +243,52 @@ session 数只 +2,落盘内容也证明路由方向正确:`a.md` 追加了字节
 `<server>_<tool>` 规则撞上 qwen 的同名前缀)**实测不碍事**,模型自己认得出,不需要改 `catalog.ts`,
 省掉一笔预估中的 R4。
 
+#### B2:动态 MCP 透传 —— 本来要一笔 R4,最后 0 笔(2026-08-21)
+
+B1(把 opencode **配置文件里声明的** MCP 透传给 claude CLI)只解决一半:qwen 的第三层 Session 工具
+是运行时经 ACP `session/new` / `session/resume` 的 `mcpServers` **动态注册**的,只存在于 opencode
+进程内存里,配置文件读不到。所以切回 `claude-code` 仍然没有第三层。
+
+原计划走 `packages/opencode/src/session/llm.ts` 的 `_opencode` providerOptions 通道 —— 黑名单,一笔 R4。
+**后来发现不必**:wrapper(`deskfox-acp-wrap.mjs`,fork-only)就夹在 qwen 和宿主中间,
+**所有带 `mcpServers` 的帧都从它手里过**。在那儿旁路抄一份、用 env 把路径告诉宿主进程里的 plugin,
+零上游改动拿到同样的东西,还顺带解耦了两个仓。
+
+- fork 侧:新增 `dynamic-mcp.ts`(纯函数:抽帧 / 拍平 headers-env / 快照比对),
+  wrapper 里 `DESKFOX_DYNAMIC_MCP_FILE` 传路径 + 旁路写文件。
+  **只观察不加工** —— stdin 方向先原样转发再解析,异常一律吞掉:抓不到顶多少几个工具,
+  绝不能反过来搞坏 ACP 本身。
+- plugin 侧:`readDynamicMcp()` 读该文件并**后合并**(同名时动态优先,它才带新鲜 token);
+  缓存签名改用动态文件内容 —— qwen 每次 register 换新 token,缓存旧的等于给 CLI 一把过期钥匙。
+
+时序风险已排除:`registration.release()` 只在 adapter **shutdown** 时调,不是每轮 turn 结束;
+`ensureCoordinatorToolRegistration` 对同一 ownerId 复用同一 registration,token 在网关生命周期内稳定。
+
+**真机验证(生产路径,`DESKFOX_VOICE_BACKEND_MODEL=claude-code/opus`)**:
+
+```
+后端模型 alibaba-cn/qwen3.8-max → claude-code/opus,已作废 coordinator session
+task.delegated → task.completed
+```
+
+| session | 工具 | 角色 |
+|---|---|---|
+| `ses_fdc5ca503…` | `qwen_audio_agent_qwen_audio_agent_session_start` | coordinator,纯路由 |
+| `ses_fdc5c7909…` | `bash` / `webfetch` / `write`,产出 `analyze.md` | 第三层,真干活 |
+
+**claude-code 也有第三层了**,两者兼得。
+
+#### 顺带撞到的:国产模型的内容审查
+
+user 用 `alibaba-cn/qwen3.8-max` 跑的 4 个任务里 2 个失败:
+
+```
+InternalError.Algo.DataInspectionFailed: Input text data may contain inappropriate content.
+```
+
+是 DashScope 的内容审查(涉国际政治 / 军事条款类被拒),不是我们的 bug。这是换国产模型的代价 ——
+B2 落地后可以按话题切模型规避:`DESKFOX_VOICE_BACKEND_MODEL` 一个 env,coordinator 会自动作废重建。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有

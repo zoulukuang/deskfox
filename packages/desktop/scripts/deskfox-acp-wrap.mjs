@@ -20,8 +20,11 @@
 // 调试/测试专用:
 //   DESKFOX_ACP_HOST_COMMAND=<cmd> DESKFOX_ACP_HOST_ARGS='a,b' → 用指定命令替代真宿主
 import { spawn } from "node:child_process"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { createLineSplitter, isAcpFrame } from "../src/main/deskfox/voice/acp-frame.ts"
+import { extractMcpServers, mcpSnapshotChanged, normalizeMcpServers } from "../src/main/deskfox/voice/dynamic-mcp.ts"
 import { assessAgentVersion, resolveAcpHost } from "../src/main/deskfox/voice/launch-env.ts"
 
 const NOISE_PREFIX = "[acp-wrap] "
@@ -68,8 +71,23 @@ if (process.env.OPENCODE_DESKFOX_ACP_PLUGINS && !process.env.DESKFOX_ACP_PLUGINS
   forwarded.DESKFOX_ACP_PLUGINS = process.env.OPENCODE_DESKFOX_ACP_PLUGINS
 }
 
+// 动态 MCP 旁路(见 dynamic-mcp.ts):qwen 的第三层 Session 工具是运行时经 ACP 帧注册的,
+// 配置文件里没有,`claude-code` provider 那边就拿不到。这里把路径提前定好用 env 告诉宿主进程,
+// 内容等帧过来再写 —— plugin 每次都按 mtime 重读,拿不到就当没有,不阻塞。
+let dynamicMcpFile = ""
+try {
+  dynamicMcpFile = path.join(mkdtempSync(path.join(tmpdir(), "deskfox-dyn-mcp-")), "dynamic-mcp.json")
+} catch {
+  // 建不了临时目录就不做这个旁路,ACP 本身照常
+}
+
 const child = spawn(command, args, {
-  env: { ...process.env, ...forwarded, OPENCODE_CLIENT: "acp" },
+  env: {
+    ...process.env,
+    ...forwarded,
+    OPENCODE_CLIENT: "acp",
+    ...(dynamicMcpFile ? { DESKFOX_DYNAMIC_MCP_FILE: dynamicMcpFile } : {}),
+  },
   stdio: ["pipe", "pipe", "pipe"],
 })
 
@@ -78,8 +96,30 @@ child.on("error", (e) => {
   process.exit(3)
 })
 
-// stdin 原样透传(ACP 是双向 ndJSON,不许在这个方向上做任何加工)
-process.stdin.pipe(child.stdin)
+// stdin 原样透传(ACP 是双向 ndJSON,不许在这个方向上做任何加工)。
+// 下面这段**只旁路观察**:先原样写给宿主,再拿同一份数据解析,任何异常一律吞掉 ——
+// 抓不到动态 MCP 顶多是 claude-code 那边少几个工具,绝不能反过来搞坏 ACP 本身。
+if (!dynamicMcpFile) {
+  process.stdin.pipe(child.stdin)
+} else {
+  const upSplitter = createLineSplitter()
+  let lastSnapshot = ""
+  process.stdin.on("data", (chunk) => {
+    child.stdin.write(chunk)
+    try {
+      for (const line of upSplitter.push(String(chunk))) {
+        const servers = extractMcpServers(line)
+        if (!servers) continue
+        const normalized = normalizeMcpServers(servers)
+        if (!mcpSnapshotChanged(lastSnapshot, normalized)) continue
+        lastSnapshot = JSON.stringify(normalized)
+        writeFileSync(dynamicMcpFile, JSON.stringify({ mcpServers: normalized }, null, 2))
+        writeErr(`${NOISE_PREFIX}动态 MCP 已捕获 ${Object.keys(normalized).length} 个 → ${dynamicMcpFile}`)
+      }
+    } catch {}
+  })
+  process.stdin.on("end", () => child.stdin.end())
+}
 child.stdin.on("error", () => {}) // 子进程先退时的 EPIPE,不值得吵
 
 // stderr 原样转发,前缀保留子进程原貌以便排查
