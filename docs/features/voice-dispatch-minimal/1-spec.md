@@ -48,7 +48,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 | 位置 | 选定 | 依据 | 换法 |
 |---|---|---|---|
-| **后端主模型**(真正干活的 agent) | **`anthropic/claude-opus-5`** | 订阅(auth.json `anthropic` = `type: oauth`)可达的最强 agentic 档,已在目录内(`~/.cache/opencode/models.json`)。Fable 5 能力更高但需 API key + 30 天数据留存,**oauth 订阅是否放行未验证,不据此行动** —— 真要上,同一个 env 改一个值即可 | `DESKFOX_VOICE_BACKEND_MODEL` → `OPENCODE_CONFIG_CONTENT.model` |
+| **后端主模型**(真正干活的 agent) | **`claude-code/opus`**(2026-08-21 修订,原定 `anthropic/claude-opus-5`) | **S2 施工中实测推翻原选型**:本机 ACP 可用模型清单 = alibaba-cn 106 / opencode 7 / kimi-for-coding 4 / claude-code 4,**anthropic 零** —— auth.json 里那条 anthropic 是 oauth 且 `expires` 停在 2026-02(早过期)。而 `defaultModelFromConfig` 校验不过就静默回落,所以原定值等于没设。改用已配好的 ClaudeCode plugin provider(`cliPath` 指 homebrew 的 `claude`,1M 上下文,实测注入即生效)。换回原生 anthropic 通道:先 `opencode auth login` 再改 env | `DESKFOX_VOICE_BACKEND_MODEL` → `OPENCODE_CONFIG_CONTENT.model` |
 | **后端 small_model**(标题生成等杂活) | **`alibaba-cn/qwen-flash`** | `config.ts:77` 明确 small_model 只用于 title generation 这类杂活。让它烧 Opus 订阅额度是纯浪费:qwen-flash $0.022/M 输入(qwen3-max 的 1/39)、1M 上下文、走已有 API key 独立计费。**主模型保持最强、杂活不抢额度** | `DESKFOX_VOICE_SMALL_MODEL` → `OPENCODE_CONFIG_CONTENT.small_model` |
 | **前端 realtime**(听和说) | **`qwen-audio-3.0-realtime-plus`**(默认锁定,S0 内做一次 A/B 定终选,对手 `qwen3.5-omni-plus-realtime`) | 四条:① 1.11.0 官方默认就是它(`realtime-model-catalog.mjs:1`);② 它所在的 audio 族默认转向检测是 **`smart_turn`**,omni 族是 `semantic_vad` —— spike 里「…然后告诉我一共有。」尾巴被切正是转向检测过激,smart_turn 就是冲这个去的;③ omni 族多出来的优势是图片输入,但**本版客户端传输层明确关闭了 JPEG 观察帧与原生视频**(`configuration.zh.md:638-642`),优势本批拿不到;④ 两族都支持 Function Calling(派活前提) | `DESKFOX_VOICE_REALTIME_MODEL` → `QWEN_AUDIO_REALTIME_MODEL` |
 
@@ -140,7 +140,7 @@ export function shouldSkipInAcp(pluginId: string, env = process.env): boolean
 - 升级并锁定 `qwen-audio-agent@1.11.0`,把 1.7.0 时代的文件锚点全部复核一遍并回填 REQ-102 详情 doc
 - 逐个验证并**拆掉**:① `applyPermissionMode` 那行 patch —— fork 1.18.16 的 `packages/core/src/v1/config/permission.ts:40` `normalizeInput` 把字符串归一成 `{"*": ...}`,而 `agent.ts:38` 用的是同一个 `Info` schema ⇒ agent 层现在接受字符串简写,**patch 已无必要,拆完从全局安装里撤掉**(留着会让下次排查误判);② `OPENCODE_MIN_VERSION` 逃生阀(1.11.0 的 `minimumVersion` 仍是 `'1.18.0'`,我们 1.18.16 天然满足)
 - 启动参数固化成一个 fork 自有模块(不靠人记):`OPENCODE_BIN` / `OPENCODE_WORKSPACE` / `OPENCODE_CONFIG_CONTENT`(含 `model` + `permission`)/ `DASHSCOPE_API_KEY` / `OPENCODE_PORT=4396`
-- **实测 `OPENCODE_CONFIG_CONTENT` 与继承来的 `opencode.jsonc` 是覆盖还是 merge** —— 若全量覆盖,语音会话的 provider 配置会跟主实例不一致,需显式合并后再注入
+- ✅ **已实测(2026-08-21)**:`OPENCODE_CONFIG_CONTENT` 是 **merge 且优先级最高**(`config.ts:468-476` 的 `merge(source, next, "local")`)—— 只声明要覆盖的键即可,配置文件里的 plugin / provider 段照常生效(media-gen 在语音里还在,就靠这个)
 
 ### S3 · 顶部栏语音入口(P2)
 

@@ -32,6 +32,13 @@
 //      字段(`packages/opencode/src/acp/service.ts:752` → `defaultModelFromConfig`)。spike 里
 //      "以为设了模型"其实一直在跑默认的 `opencode/big-pickle`,就是栽在这儿。
 //
+//      ⚠️ 2026-08-21 又踩深一层:`defaultModelFromConfig` 会先校验 `providers[p]?.models[m]`,
+//      **模型不在这台机器可用清单里就静默回落**。本机实测可用清单 = alibaba-cn(106)/
+//      opencode(7)/ kimi-for-coding(4)/ claude-code(4);**anthropic 一个都没有**
+//      —— auth.json 里那条 anthropic 是 oauth 且 `expires` 停在 2026-02,早过期了。
+//      所以后端默认档改成 `claude-code/opus`(经已配好的 ClaudeCode plugin provider,
+//      user 2026-08-21 拍板)。要换回原生 anthropic 通道,先 `opencode auth login` 再改 env。
+//
 // 本模块只做「解析 + 判定」,不 spawn、不写文件;IO 薄壳(读 auth.json / 跑 --version)可注入,
 // 方便单测。真正的进程托管在 S3、config 组装在 S2。
 
@@ -211,12 +218,12 @@ export function readProviderApiKey(
 
 /**
  * D-F 定案(1-spec §2.1)。三个位置各自可用 env 覆盖,**换模型不改代码**。
- * - backend:订阅(oauth)可达的最强 agentic 档
+ * - backend:本机真实可用的最强 agentic 档(见文件头 ③ 的可用清单实测)
  * - small:只干标题生成这类杂活(`packages/core/src/v1/config/config.ts:77`),不该烧订阅额度
  * - realtime:qwen-audio-agent 1.11.0 官方默认,audio 族配 smart_turn(对症 spike 的尾巴截断)
  */
 export const VOICE_MODEL_DEFAULTS = {
-  backend: "anthropic/claude-opus-5",
+  backend: "claude-code/opus",
   small: "alibaba-cn/qwen-flash",
   realtime: "qwen-audio-3.0-realtime-plus",
 } as const

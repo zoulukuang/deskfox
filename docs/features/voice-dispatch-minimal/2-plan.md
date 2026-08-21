@@ -27,6 +27,28 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - **2026-08-21 · D-G ACP 宿主改走本仓 1.x 源码入口**(user 拍板)。S0 施工中实测推翻了原方案「OPENCODE_BIN = 内置 sidecar」的前提:① 装好的 `/Applications/DeskFox.app` 的 Resources 里**没有任何 opencode CLI**(生产是 `utilityProcess.fork(sidecar.js)`,`server.ts:77`);② dev 树那个 `resources/opencode-cli` 是 **opencode2 / v2 世代**,隔离 XDG 实测 acp 落 **`opencode-next.db`** —— 用它则 D-A 的会话可见性归零;③ `bun packages/opencode/src/index.ts acp` 实测握手正常(`protocolVersion:1` / `agentInfo: OpenCode local`)且与 app 共用 `opencode.db`。代价:装好的 app 依赖本机源码树(→ 风险 R5,语音入口据此禁用而非静默失败);产品化路径 = 编译 1.x CLI 二进制随包带。
 - **2026-08-21 · 版本号不再作为准入判据**。三处实测:源码态 `local` / 内置 v2 二进制 `0.0.0-next-16350` / homebrew `1.17.4`。原设计的 fail-closed 版本闸会**误杀正确的宿主**,改为身份靠 `resolveAcpHost` 路径构造保证、版本仅告警(唯一硬拦:干净 semver < 1.18.0)。
 
+### S2(2026-08-21 交付:先减法、再固化)
+
+**减法 —— 两个 1.17.4 时代的绕法都拆掉了(各有实测)**
+
+| 绕法 | 结论 |
+|---|---|
+| qwen `applyPermissionMode` 那行手工 patch | **不再需要**。1.18.16 的 `permission.ts:40` `normalizeInput` 收字符串简写;把 qwen 原样的 `{permission:"allow", agent:{build:{permission:"allow"}}}` 注进去,零 schema 报错 |
+| `OPENCODE_MIN_VERSION` 逃生阀 | **不再需要**。`qwenaudio setup --backend opencode --json` 在设了 `OPENCODE_BIN` 后 `source: "configured"` → 跳过版本闸,`ready: true` / `issues: []` |
+
+**固化 —— `launch-config.ts` + 13 单测**;`buildGatewayEnv()` 一次性拼齐 OPENCODE_BIN / WORKSPACE / CONFIG_CONTENT / DASHSCOPE_API_KEY / 端口 / 权限模式 / PATH 补齐,并带 R3 的 git 仓库根护栏。
+
+**施工中挖出的四条事实(全部实测,直接改了 D-F)**
+
+1. `OPENCODE_CONFIG_CONTENT` 是 **merge 且优先级最高**(`config.ts:468-476` 的 `merge(source, next, "local")`)—— 配置文件里的 plugin / provider 段照常生效,media-gen 在语音里还在就靠这个。**spec 待实测项①结案。**
+2. 注入的 `model` **确实生效**,顶层 `model` 就够;但 `acp/service.ts:785` `defaultModelFromConfig` 会先校验 `providers[p]?.models[m]`,**模型不在本机可用清单里就静默回落**(spike 那个 `opencode/big-pickle` 就是这么来的)。
+3. **本机可用清单实测**:alibaba-cn 106 / opencode 7 / kimi-for-coding 4 / claude-code 4,**anthropic 零** —— auth.json 里那条 anthropic 是 oauth 且 `expires` 停在 2026-02,早过期。⇒ D-F 原定的 `anthropic/claude-opus-5` **在这台机器上拿不到**。
+4. qwen 侧 `QWEN_AUDIO_AGENT_BACKEND_MODEL` **不能用来选模型**:`config.mjs:80` 把值强行拼成 `alibaba-cn/<name>`,只能选阿里系。我们走事实 1/2 的 CONFIG_CONTENT 路径。
+
+⇒ **D-F 修订(user 2026-08-21 拍板)**:后端默认档 `anthropic/claude-opus-5` → **`claude-code/opus`**(经已配好的 ClaudeCode plugin provider,`cliPath` 指 homebrew 的 `claude`,1M 上下文)。要换回原生 anthropic 通道:先 `opencode auth login`,再改 `DESKFOX_VOICE_BACKEND_MODEL`。
+
+**留给 S3 的一条纪律**:跑非隔离 Gateway 前必须先刷新**已安装的插件 bundle**(`~/Library/Application Support/ai.deskfox.app/plugin/…`)—— 那里现在还是没有门控的旧版;app 下次启动会自己刷,手工验证则要先刷再跑,否则等于拿旧代码验门控。
+
 ## 待实测项(施工中填结论)
 
 - [ ] `OPENCODE_CONFIG_CONTENT` 与继承的 `opencode.jsonc` 是覆盖还是 merge

@@ -173,7 +173,7 @@ describe("②b 测试装置的 XDG 补齐(防「验错环境」)", () => {
 describe("③ 三个模型(D-F)", () => {
   test("默认值 = 定案值", () => {
     expect(resolveVoiceModels({})).toEqual({
-      backend: "anthropic/claude-opus-5",
+      backend: "claude-code/opus",
       small: "alibaba-cn/qwen-flash",
       realtime: "qwen-audio-3.0-realtime-plus",
     })
