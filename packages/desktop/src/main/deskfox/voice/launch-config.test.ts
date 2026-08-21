@@ -3,11 +3,13 @@
 import { describe, expect, test } from "bun:test"
 import {
   GATEWAY_PORT,
+  VOICE_DB_FILENAME,
   VOICE_OPENCODE_PORT,
   binDir,
   buildGatewayEnv,
   buildVoiceConfigContent,
   checkVoiceWorkspace,
+  resolveVoiceDbEnv,
 } from "./launch-config"
 import { VOICE_MODEL_DEFAULTS } from "./launch-env"
 
@@ -68,6 +70,7 @@ describe("buildGatewayEnv", () => {
     wrapperPath: "/fork/packages/desktop/scripts/deskfox-acp-wrap.mjs",
     authPath: "/auth.json",
     exists: () => true,
+    disableChannelDb: true,
     env: { PATH: "/usr/bin:/bin", XDG_DATA_HOME: "/h/.local/share/deskfox" } as NodeJS.ProcessEnv,
   }
 
@@ -116,6 +119,68 @@ describe("buildGatewayEnv", () => {
       env: { ...baseInput.env, DESKFOX_VOICE_BACKEND_MODEL: "alibaba-cn/qwen3-max" },
     })
     expect(JSON.parse(env.OPENCODE_CONFIG_CONTENT).model).toBe("alibaba-cn/qwen3-max")
+  })
+
+  // 2026-08-21 真机的总根因:spawn 是整份替换 env,漏带 XDG/HOME → Gateway 及其拉起的
+  // opencode 全部回落 `~/.local/share/opencode`(实测语音库真的生成在那里),
+  // auth / 会话 / db 一起离开 DeskFox 命名空间。这条是 D-A 的地基,必须钉住。
+  test("XDG / HOME 原样带过去 —— 否则整条链掉出 DeskFox 命名空间", () => {
+    const { env } = buildGatewayEnv({
+      ...baseInput,
+      env: {
+        PATH: "/usr/bin",
+        HOME: "/h",
+        USER: "u",
+        XDG_DATA_HOME: "/h/.local/share/deskfox",
+        XDG_CONFIG_HOME: "/h/.config/deskfox",
+        XDG_STATE_HOME: "/h/Library/Application Support/ai.deskfox.app.local",
+      } as NodeJS.ProcessEnv,
+    })
+    expect(env.HOME).toBe("/h")
+    expect(env.XDG_DATA_HOME).toBe("/h/.local/share/deskfox")
+    expect(env.XDG_CONFIG_HOME).toBe("/h/.config/deskfox")
+    expect(env.XDG_STATE_HOME).toBe("/h/Library/Application Support/ai.deskfox.app.local")
+  })
+
+  test("没设的命名空间变量不塞空值(空串和未设在下游语义不同)", () => {
+    const { env } = buildGatewayEnv({ ...baseInput, env: { PATH: "/usr/bin", HOME: "" } as NodeJS.ProcessEnv })
+    expect("HOME" in env).toBe(false)
+    expect("XDG_DATA_HOME" in env).toBe(false)
+  })
+
+  // 2026-08-21 真机:共用库时主实例握着同一个文件,语音起来跑迁移拿不到排他锁
+  // → `database is locked` → 宿主 exit 1。默认改独立库(同条件 3/3 起得来)。
+  test("默认独立库 —— 不碰主实例正在写的那个文件", () => {
+    const { env } = buildGatewayEnv(baseInput)
+    expect(env.OPENCODE_DB).toBe(VOICE_DB_FILENAME)
+    expect(env.OPENCODE_DISABLE_CHANNEL_DB).toBeUndefined()
+    expect(env.OPENCODE_CHANNEL).toBeUndefined()
+  })
+
+  test("DESKFOX_VOICE_SHARE_DB=1 → 切回共用,且按渠道规则对齐主实例开的文件", () => {
+    const shared = { ...baseInput.env, DESKFOX_VOICE_SHARE_DB: "1" }
+    const release = buildGatewayEnv({ ...baseInput, env: shared, disableChannelDb: true }).env
+    expect(release.OPENCODE_DB).toBeUndefined()
+    expect(release.OPENCODE_DISABLE_CHANNEL_DB).toBe("1") // 发布三档共用 opencode.db
+
+    const local = buildGatewayEnv({ ...baseInput, env: shared, disableChannelDb: false }).env
+    expect(local.OPENCODE_DB).toBeUndefined()
+    expect(local.OPENCODE_CHANNEL).toBe("local") // 未打包 / local 档落 opencode-local.db
+  })
+})
+
+describe("resolveVoiceDbEnv", () => {
+  // 相对名而非绝对路径:core 的 `database.path()` 会把相对名 join 到 Global.Path.data,
+  // 天然跟着我们已经设好的 XDG 走,不用在这里重算一遍目录。
+  test("独立库用相对文件名,交给 core 拼目录", () => {
+    expect(VOICE_DB_FILENAME.includes("/")).toBe(false)
+    expect(resolveVoiceDbEnv({}, true)).toEqual({ OPENCODE_DB: VOICE_DB_FILENAME })
+  })
+
+  test("开关只认 1 / true,别的值一律走默认(独立库)", () => {
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_SHARE_DB: "true" }, true).OPENCODE_DB).toBeUndefined()
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_SHARE_DB: "0" }, true).OPENCODE_DB).toBe(VOICE_DB_FILENAME)
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_SHARE_DB: "" }, true).OPENCODE_DB).toBe(VOICE_DB_FILENAME)
   })
 })
 

@@ -21,7 +21,7 @@ export function VoiceDispatchButton(props: { directory?: string }) {
 
   const refresh = async () => {
     try {
-      setStatus(await invoke<VoiceStatus>("voice_status"))
+      setStatus(await invoke<VoiceStatus>("voice_status", { workspace: props.directory ?? "" }))
     } catch {
       // 拿不到状态就保持原样 —— 入口是锦上添花,不该因它报错影响标题栏
     }

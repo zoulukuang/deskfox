@@ -58,7 +58,9 @@ export function registerDeskfoxIpc() {
 
   // ── 语音派活(REQ-102)[feat: voice-dispatch-minimal] ──
   // renderer 只拿状态字符串;env 里有 DASHSCOPE key,进程与凭据都留在主进程。
-  h("voice_status", () => voice.getVoiceStatus())
+  h("voice_status", (args: { workspace?: string }) =>
+    voice.getVoiceStatus(typeof args.workspace === "string" ? args.workspace : undefined),
+  )
   h("voice_probe", () => voice.probeAvailability({ wrapperPath: voiceWrapperPath(app.isPackaged) }, true))
   h("voice_start", (args: { workspace?: string }) =>
     voice.startVoiceGateway({
@@ -70,6 +72,7 @@ export function registerDeskfoxIpc() {
     }),
   )
   h("voice_stop", () => voice.stopVoiceGateway())
+  h("voice_log_path", () => voice.voiceLogPath())
 
   // ── 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] ──
   h("get_telemetry_enabled", () => telemetry.getTelemetryStatus())

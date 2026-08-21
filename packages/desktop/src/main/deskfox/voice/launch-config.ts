@@ -77,16 +77,66 @@ export interface GatewayEnvInput {
   readonly authPath?: string
   readonly exists?: (p: string) => boolean
   /**
-   * 语音 ACP 该开哪个 db —— **必须与正在跑的 DeskFox 一致**,否则:
-   *   · 会话落到另一个库 ⇒ D-A 换来的「在 DeskFox 里看得见」直接归零;
-   *   · 那个库多半是别的核心版本写的,一开就触发迁移(2026-08-21 真机实测:
-   *     源码态默认落 `opencode-local.db`,迁移 `INSERT INTO __new_project_directory` 直接失败,
-   *     Gateway 起不来 —— 而 app 的启动守卫 orphan-prune / db-schema-guard 只在主进程跑,
-   *     CLI 路径一个都没有)。
+   * **只在 `DESKFOX_VOICE_SHARE_DB=1`(共用库)那条路上生效** —— 用来对齐主实例开的是哪个文件。
    * 取值抄 `main/server.ts:244` 给 sidecar 的同一条规则:发布渠道 → true(共用 `opencode.db`);
-   * 未打包 / local 档 → false(各自 `opencode-<channel>.db`)。
+   * 未打包 / local 档 → false(各自 `opencode-<channel>.db`)。对齐不上会有两个后果:
+   * 会话落到另一个库(D-A 的可见性归零)、或那个库是别的核心版本写的一开就触发迁移
+   * (2026-08-21 真机:源码态默认落 `opencode-local.db`,迁移 `INSERT INTO __new_project_directory`
+   * 直接失败 —— app 的 orphan-prune / db-schema-guard 只在主进程跑,CLI 路径一个都没有)。
+   * 默认路径(独立库)不看这个字段,见 {@link resolveVoiceDbEnv}。
    */
   readonly disableChannelDb: boolean
+}
+
+/**
+ * 必须原样带进 spawn env 的"我是谁、我的家在哪"变量。
+ * `HOME` 少了 → `os.homedir()` 回落 passwd,XDG_* 少了 → 回落 `~/.local/share/opencode`,
+ * 两者都会让语音离开 DeskFox 命名空间(auth / 会话 / db 全部错位)。
+ */
+const NAMESPACE_ENV_NAMES = [
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "LANG",
+  "XDG_DATA_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_CACHE_HOME",
+  "XDG_STATE_HOME",
+] as const
+
+function carryNamespaceEnv(base: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const name of NAMESPACE_ENV_NAMES) {
+    const v = base[name]
+    if (typeof v === "string" && v.length > 0) out[name] = v
+  }
+  return out
+}
+
+/** 语音专用库文件名(相对名 → core 会 join 到 `Global.Path.data`,跟主实例同一个 XDG 目录) */
+export const VOICE_DB_FILENAME = "opencode-voice.db"
+
+/**
+ * 语音 ACP 该开哪个库。
+ *
+ * **默认独立库**(`opencode-voice.db`)。D-A 原本想共用主实例的库换「会话在 DeskFox 里看得见」,
+ * 但 2026-08-21 真机把 1-spec §5·R1 的风险打实了:opencode 启动阶段跑迁移要拿排他锁,
+ * 主实例(用户长期开着的正式版 / 本地版)正握着同一个文件 → `database is locked` → 宿主 exit 1
+ * → Gateway 起不来。加了退避重试仍不稳:主实例在跑时基本必失败。
+ * 换独立库后同条件实测 3/3 起得来。**能用 > 能看见**,所以默认让步。
+ *
+ * `DESKFOX_VOICE_SHARE_DB=1` 切回共用(拿会话可见性,代价是可能起不来),留给 D-A 复议。
+ */
+export function resolveVoiceDbEnv(env: NodeJS.ProcessEnv, disableChannelDb: boolean): Record<string, string> {
+  const share = String(env.DESKFOX_VOICE_SHARE_DB ?? "").trim()
+  if (share === "1" || share === "true") {
+    // 共用:抄 `main/server.ts` 给 sidecar 的同一条渠道规则,才落到同一个文件
+    return disableChannelDb ? { OPENCODE_DISABLE_CHANNEL_DB: "1" } : { OPENCODE_CHANNEL: "local" }
+  }
+  // 独立:OPENCODE_DB 在 core 里优先级最高(`database.ts:44`),渠道规则不用再管
+  return { OPENCODE_DB: VOICE_DB_FILENAME }
 }
 
 export interface GatewayEnvResult {
@@ -120,6 +170,15 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
     .join(delimiter)
 
   const env: Record<string, string> = {
+    // ── 命名空间(D-A 的地基,漏了就全盘错位)
+    // 我们是**整份替换** spawn env(不继承 process.env),所以 XDG/HOME 必须显式带过去。
+    // 2026-08-21 真机漏了这段的后果:Gateway 及其拉起的 opencode 全部回落到系统默认
+    // `~/.local/share/opencode/` —— auth.json 读的是旧命名空间(凭据可能过期)、
+    // 会话落到 DeskFox 看不见的库、而且那个库是**别的核心版本**写的,一开就跑迁移,
+    // 于是 `INSERT INTO __new_project_directory` 失败 / `database is locked` 全是这一个根因的表象。
+    // qwen 的 env 白名单(`shared/backend-environment.mjs`)本来就放行 XDG_*/HOME,
+    // 一路能穿到 ACP 子进程 —— 前提是 Gateway 自己身上有。
+    ...carryNamespaceEnv(base),
     // ── ACP 宿主(D-E/D-G):qwen 把 OPENCODE_BIN 当可执行文件 spawn
     OPENCODE_BIN: input.wrapperPath,
     // ⚠️ 前缀不是洁癖:qwen 给 ACP 子进程的 env 是白名单过滤的(`backend-environment.mjs:75`),
@@ -140,8 +199,8 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
     // 2026-08-21 真机实测:宿主实际 listening 在 4096。两个一起给才压得住。
     OPENCODE_PORT: String(VOICE_OPENCODE_PORT),
     OPENCODE_BASE_URL: `http://127.0.0.1:${VOICE_OPENCODE_PORT}`,
-    // ── db 分流:与正在跑的 DeskFox 对齐(见 GatewayEnvInput.disableChannelDb)
-    ...(input.disableChannelDb ? { OPENCODE_DISABLE_CHANNEL_DB: "1" } : { OPENCODE_CHANNEL: "local" }),
+    // ── db:默认独立库,`DESKFOX_VOICE_SHARE_DB=1` 切回共用(见 resolveVoiceDbEnv)
+    ...resolveVoiceDbEnv(base, input.disableChannelDb),
     PATH: mergedPath,
   }
   if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey
