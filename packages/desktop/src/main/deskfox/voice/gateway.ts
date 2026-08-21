@@ -9,7 +9,7 @@
 //
 // 纯逻辑(判定/解析/拼参数)全部抽成可测函数,spawn 与 fetch 走注入,单测不起真进程。
 
-import { appendFileSync, mkdirSync } from "node:fs"
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { spawn, type ChildProcess } from "node:child_process"
@@ -17,7 +17,8 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { BrowserWindow, shell } from "electron"
 import log from "electron-log/main.js"
-import { invalidateCoordinatorOnModelChange } from "./coordinator-state"
+import { acpSessionStatePath, invalidateCoordinatorOnModelChange } from "./coordinator-state"
+import { archiveCoordinator, createJournalState, syncJournal, type JournalState } from "./journal-writer"
 import { startTaskWatch, type TaskWatchHandle } from "./task-watch"
 import { GATEWAY_PORT, binDir, buildGatewayEnv, checkVoiceWorkspace } from "./launch-config"
 import { resolveAcpHost } from "./launch-env"
@@ -140,6 +141,7 @@ let availability: SetupProbe | null = null
 /** health 探通过才算 on —— 进程活着 ≠ 服务可用(2026-08-21 真机:进程在、3101 死,状态却报 on) */
 let healthy = false
 let taskWatch: TaskWatchHandle | null = null
+let journalState: JournalState | null = null
 
 /**
  * 起「任务变了就让界面重拉会话列表」的轮询。
@@ -148,21 +150,54 @@ let taskWatch: TaskWatchHandle | null = null
  * **不共享 event bus** —— 会话写进去了,主实例毫不知情,列表就一直是旧的
  * (2026-08-21 user 真机反馈的正是这个)。
  */
-function startSessionListWatch(): void {
+function startSessionListWatch(directory: string): void {
   taskWatch?.stop()
+  journalState = createJournalState()
   taskWatch = startTaskWatch({
     fetchTasks: async () => {
       const res = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/api/tasks`, { signal: AbortSignal.timeout(3000) })
       if (!res.ok) throw new Error(String(res.status))
       return await res.json()
     },
+    // 首轮把已有任务标记成历史 —— /api/tasks 是跨会话累积的,不这么做新建的「语音沟通」
+    // session 开头会凭空多出上次的几轮对话
+    onPoll: (_payload, first) => {
+      if (!first || !journalState) return
+      void syncJournal({ directory, state: journalState, seedOnly: true })
+    },
     notify: () => {
-      for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send("deskfox:voice-session-changed")
-      }
-      log.info("[voice] 任务集合变化 → 通知界面刷新会话列表")
+      // 先把新完成的轮次写进「语音沟通」session,再让界面刷新 —— 顺序反了会闪一下空列表
+      void (async () => {
+        if (journalState) await syncJournal({ directory, state: journalState })
+        await archiveCurrentCoordinator(directory)
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send("deskfox:voice-session-changed")
+        }
+        log.info("[voice] 任务集合变化 → 已同步语音沟通记录并通知界面刷新")
+      })()
     },
   })
+}
+
+/**
+ * 归档当前的 coordinator session。
+ *
+ * 它的 id 在 qwen 的状态文件里(见 coordinator-state.ts),而且是**跑起来之后**才写进去的,
+ * 所以不能在起网关那一刻读 —— 放在每轮同步里顺手做,读到了就归档一次(内部去重)。
+ */
+async function archiveCurrentCoordinator(directory: string): Promise<void> {
+  if (!journalState) return
+  try {
+    const raw = readFileSync(acpSessionStatePath(), "utf8")
+    const parsed = JSON.parse(raw) as { coordinators?: Record<string, { sessionId?: string }> }
+    for (const [key, value] of Object.entries(parsed?.coordinators ?? {})) {
+      if (!key.startsWith("opencode:")) continue
+      const sessionId = String(value?.sessionId ?? "")
+      if (sessionId) await archiveCoordinator({ directory, sessionId, state: journalState })
+    }
+  } catch {
+    // 状态文件还没写出来是正常的(第一轮之前),下一轮再看
+  }
 }
 
 /**
@@ -355,7 +390,7 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
   }
 
   starting = false
-  if (healthy) startSessionListWatch()
+  if (healthy) startSessionListWatch(ws.dir)
   if (healthy && input.openUi !== false) {
     // Gateway 是无头的:不打开前端,用户点完图标面对的是"什么也没发生"。
     // 它的根路径就是 WebUI(实测 200 / text/html),交给系统浏览器 —— 麦克风授权那套
@@ -414,6 +449,7 @@ export async function stopVoiceGateway(): Promise<VoiceStatus> {
   lastError = ""
   taskWatch?.stop()
   taskWatch = null
+  journalState = null
   if (!proc) return getVoiceStatus()
   proc.kill("SIGTERM")
   // 给它自己收尾的机会;超时再 SIGKILL,免得 3101/4396 端口留着不放

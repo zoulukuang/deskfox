@@ -49,6 +49,13 @@ export interface TaskWatchHandle {
 export function startTaskWatch(input: {
   readonly fetchTasks: () => Promise<unknown>
   readonly notify: () => void
+  /**
+   * 每次成功抓到数据都调,**首轮也调**(`first=true`)。
+   * 与 `notify` 的区别:notify 是"有变化才叫你",onPoll 是"每轮都给你看一眼"。
+   * 语音沟通记录要的是后者 —— 它自己按 taskId 去重,但**必须拿到首轮快照**
+   * 才能把上一次会话遗留的任务标记成历史、不写进这次的记录。
+   */
+  readonly onPoll?: (payload: unknown, first: boolean) => void
   readonly intervalMs?: number
   readonly setInterval?: (fn: () => void, ms: number) => unknown
   readonly clearInterval?: (handle: unknown) => void
@@ -70,6 +77,7 @@ export function startTaskWatch(input: {
       }
       if (stopped) return
       const next = taskSignature(payload)
+      input.onPoll?.(payload, previous === null)
       if (shouldRefresh(previous, next)) input.notify()
       previous = next
     })()

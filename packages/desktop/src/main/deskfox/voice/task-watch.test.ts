@@ -110,6 +110,33 @@ describe("startTaskWatch", () => {
     expect(h.notified.length).toBe(1) // 基线仍是失败前那个,变化照样认得出
   })
 
+  // 语音沟通记录要的是"每轮都看一眼"而不是"有变化才叫我" —— 而且**必须拿到首轮**,
+  // 才能把上次会话遗留的 completed 任务标记成历史、不写进这次的记录
+  test("onPoll 每轮都调,首轮 first=true", async () => {
+    let fn: (() => void) | null = null
+    const calls: boolean[] = []
+    let payload: unknown = tasks(["a", "running"])
+    startTaskWatch({
+      fetchTasks: async () => payload,
+      notify: () => {},
+      onPoll: (_p, first) => calls.push(first),
+      setInterval: (f: () => void) => {
+        fn = f
+        return 1 as unknown
+      },
+      clearInterval: () => {},
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(calls).toEqual([true])
+
+    payload = tasks(["a", "completed"])
+    fn?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(calls).toEqual([true, false])
+  })
+
   test("stop 之后不再通知(停网关时的在飞请求不该再打扰界面)", async () => {
     const h = harness()
     let payload: unknown = tasks(["a", "running"])

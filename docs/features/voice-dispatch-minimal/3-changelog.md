@@ -36,6 +36,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   装的位置是 `models/wake-word/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/`(**要带模型名那层**)。
 - **唤醒词文案改不了**:qwen 把「你好千问」硬编码在 `core/config.mjs:490`,无 env 覆盖。
   实际检测认 `keywords.txt`,所以换词可行但提示文案会对不上,且改 node_modules 升级即失。
+- **闲聊不进语音沟通记录**:纯问答不产生 task,journal 的数据源是 /api/tasks + /api/timeline,
+  所以覆盖不到。要补得连 gateway 的 WS 收 transcript.final(realtime 连接有状态,有干扰风险,故未做)。
 - **国产模型有内容审查**:`alibaba-cn/*` 走 DashScope,涉国际政治 / 军事条款类话题会被
   `DataInspectionFailed` 拒(实测 4 个任务失败 2 个)。不是 bug,是换模型的代价。
   B2 落地后可按话题切 `DESKFOX_VOICE_BACKEND_MODEL` 规避,coordinator 会自动作废重建。

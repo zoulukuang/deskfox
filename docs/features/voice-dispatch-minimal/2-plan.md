@@ -347,6 +347,51 @@ sha256 与 `WAKE_WORD_MODEL_SHA256` 完全一致。
 放对位置后 `ensureWakeWordModel` **0ms 直接复用、不再联网**。
 `keywords.txt` 不在归档里(qwen 自己写),内容照抄它的原文 `n ǐ h ǎo q iān w èn @你好千问`。
 
+#### C:另造一条可读的「语音沟通」session + 归档 coordinator(2026-08-21 user 拍板)
+
+user:「这个 session 展示的内容几乎不可看,能不能向手打会话看齐」。取证统计 coordinator 的 7 轮:
+
+| 内容 | 条数 |
+|---|---|
+| 英文协议 XML 信封(`<qwen_audio_agent_backend_instructions>`,**每轮都发**) | 7 |
+| JSON 协议回复(`{"work_id":…,"state":"completed"}`) | 6 |
+| 人话 | 3 |
+
+它是**机器对机器的协议流水**,靠美化渲染救不回来 —— 那些字节里根本没有可读的对话。
+所以另造一条(user 选 C + 藏 coordinator)。
+
+**数据源**(两个只读 HTTP,不碰 WS):`/api/tasks` 的 `objective`(这一轮要它做什么,
+LLM 已消解指代,比 ASR 原话更完整)+ `/api/timeline` 的 `content`(markdown 回答),按 `taskId` 配对。
+
+**写入**:`POST /session/:id/message` + **`noReply: true`** —— 实测 246ms 返回、不触发模型。
+`PromptPayload = omit(PromptInput.fields, ["sessionID"])`,所以 `noReply` 本来就暴露在 HTTP 上。
+opencode 的 REST 没有"灌入 assistant 消息"的能力,所以一轮往返合成**一条** user 消息;
+UI 上是一个气泡,但 markdown 正常渲染。**没有直接写库** —— 那样能做出真对话气泡,
+但要自己维护 session/message/part 三张表,上游改 schema 就静默写坏。
+
+**藏 coordinator**:`UpdatePayload` 不支持改 parentID,但支持 `time.archived`,
+而 root 判据正是 `!parentID && !time?.archived` —— 归档即消失。用归档不用删除:排查时还翻得到。
+
+**两个首轮陷阱(都是实测撞出来的)**:
+1. `syncJournal` 一开始挂在 `notify` 上,而 notify 只在**变化时**触发 —— 首轮建基线不算变化,
+   于是它从没跑过。给 `startTaskWatch` 加 `onPoll`(每轮都调,首轮 `first=true`)。
+2. `/api/tasks` 是**跨会话累积**的,刚起网关就能看到上次留下的一堆 completed。
+   不处理的话新建的 journal 开头会凭空多出别人的对话 → 首轮 `seedOnly`,只标记不写入。
+
+**真机验证**:列表最终形态正是 user 要的 ——
+
+| 会话 | 状态 |
+|---|---|
+| 语音沟通 2026-08-21 22:09 | 在列表(沟通全貌) |
+| 整理 SQLite 外键说明写 fk.md | 在列表(独立任务) |
+| 分析今日A股市场盘面(coordinator) | **已归档**,从列表消失 |
+
+journal 内容实测:`🎙️ **整理一份 SQLite PRAGMA foreign_keys 的说明…**` + 分隔线 + markdown 回答,
+与手打会话同一种观感。
+
+⚠️ **当前取舍**:闲聊(纯问答、没派活)不产生 task,**不会进 journal**。
+覆盖所有有实质内容的轮次,漏掉"现在几点了"这类。要补得连 WS 收 `transcript.final`。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有
