@@ -18,11 +18,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 已知问题
 
-- **D-A 会话可见性未兑现**:语音默认走独立库 `opencode-voice.db`,会话在 DeskFox 里看不见。
-  `DESKFOX_VOICE_SHARE_DB=1` 可切回共用库。命名空间修好后共用**未必不可行**,但本轮无实证,
-  留待 user 拍板复议。
-- **首次起语音会重试一次**:全新语音库上,qwen 的 backend server(4396)与 ACP 宿主并发建表必撞一次,
-  第 2 轮才成(实测总耗时 ~4s,用户无感)。根治要预热库,本期不做。
+- **首次起语音可能重试一次**:库还没建好时,qwen 的 backend server(4396)与 ACP 宿主会并发建表撞一次,
+  第 2 轮才成(实测总耗时 ~4s,用户无感)。共用主实例的库时库早已建好,不会碰到;
+  只有走 `DESKFOX_VOICE_ISOLATE_DB=1` 逃生口首次开新库才会。根治要预热库,本期不做。
 - **Dock / Finder 启动可能没有代理**:GUI 进程不继承 shell 的 `~/.zshenv`,主进程身上没有代理变量时
   我们也无从 carry,后端 `claude-code/opus` 会以 403 收场。当前靠启动日志里的软警告暴露;
   彻底解法(从 `session.resolveProxy()` 反推)本期不做。

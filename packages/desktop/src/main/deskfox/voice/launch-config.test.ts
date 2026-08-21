@@ -196,24 +196,27 @@ describe("buildGatewayEnv", () => {
     expect("XDG_DATA_HOME" in env).toBe(false)
   })
 
-  // 2026-08-21 真机:共用库时主实例握着同一个文件,语音起来跑迁移拿不到排他锁
-  // → `database is locked` → 宿主 exit 1。默认改独立库(同条件 3/3 起得来)。
-  test("默认独立库 —— 不碰主实例正在写的那个文件", () => {
-    const { env } = buildGatewayEnv(baseInput)
-    expect(env.OPENCODE_DB).toBe(VOICE_DB_FILENAME)
-    expect(env.OPENCODE_DISABLE_CHANNEL_DB).toBeUndefined()
-    expect(env.OPENCODE_CHANNEL).toBeUndefined()
-  })
-
-  test("DESKFOX_VOICE_SHARE_DB=1 → 切回共用,且按渠道规则对齐主实例开的文件", () => {
-    const shared = { ...baseInput.env, DESKFOX_VOICE_SHARE_DB: "1" }
-    const release = buildGatewayEnv({ ...baseInput, env: shared, disableChannelDb: true }).env
+  // D-A 的本意就是共用:语音派的活要在 DeskFox 会话列表里看得见。
+  // 中途曾因反复 database is locked 改过独立库,后查清那批锁是 XDG 漏带导致开错了老库,
+  // 不是"共用"本身的问题 —— 命名空间修好后默认回到共用(2026-08-21 user 拍板)。
+  test("默认共用主实例的库,且按渠道规则对齐它开的那个文件", () => {
+    const release = buildGatewayEnv({ ...baseInput, disableChannelDb: true }).env
     expect(release.OPENCODE_DB).toBeUndefined()
     expect(release.OPENCODE_DISABLE_CHANNEL_DB).toBe("1") // 发布三档共用 opencode.db
 
-    const local = buildGatewayEnv({ ...baseInput, env: shared, disableChannelDb: false }).env
+    const local = buildGatewayEnv({ ...baseInput, disableChannelDb: false }).env
     expect(local.OPENCODE_DB).toBeUndefined()
     expect(local.OPENCODE_CHANNEL).toBe("local") // 未打包 / local 档落 opencode-local.db
+  })
+
+  test("DESKFOX_VOICE_ISOLATE_DB=1 → 逃生口,切独立库(代价:会话在 DeskFox 里看不见)", () => {
+    const { env } = buildGatewayEnv({
+      ...baseInput,
+      env: { ...baseInput.env, DESKFOX_VOICE_ISOLATE_DB: "1" } as NodeJS.ProcessEnv,
+    })
+    expect(env.OPENCODE_DB).toBe(VOICE_DB_FILENAME)
+    expect(env.OPENCODE_DISABLE_CHANNEL_DB).toBeUndefined()
+    expect(env.OPENCODE_CHANNEL).toBeUndefined()
   })
 })
 
@@ -222,13 +225,14 @@ describe("resolveVoiceDbEnv", () => {
   // 天然跟着我们已经设好的 XDG 走,不用在这里重算一遍目录。
   test("独立库用相对文件名,交给 core 拼目录", () => {
     expect(VOICE_DB_FILENAME.includes("/")).toBe(false)
-    expect(resolveVoiceDbEnv({}, true)).toEqual({ OPENCODE_DB: VOICE_DB_FILENAME })
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_ISOLATE_DB: "1" }, true)).toEqual({ OPENCODE_DB: VOICE_DB_FILENAME })
   })
 
-  test("开关只认 1 / true,别的值一律走默认(独立库)", () => {
-    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_SHARE_DB: "true" }, true).OPENCODE_DB).toBeUndefined()
-    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_SHARE_DB: "0" }, true).OPENCODE_DB).toBe(VOICE_DB_FILENAME)
-    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_SHARE_DB: "" }, true).OPENCODE_DB).toBe(VOICE_DB_FILENAME)
+  test("逃生口只认 1 / true,别的值一律走默认(共用)", () => {
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_ISOLATE_DB: "true" }, true).OPENCODE_DB).toBe(VOICE_DB_FILENAME)
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_ISOLATE_DB: "0" }, true).OPENCODE_DB).toBeUndefined()
+    expect(resolveVoiceDbEnv({ DESKFOX_VOICE_ISOLATE_DB: "" }, true).OPENCODE_DB).toBeUndefined()
+    expect(resolveVoiceDbEnv({}, true).OPENCODE_DISABLE_CHANNEL_DB).toBe("1")
   })
 })
 

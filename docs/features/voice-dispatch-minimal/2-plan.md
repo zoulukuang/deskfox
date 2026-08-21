@@ -117,12 +117,19 @@ qwen 的 env 白名单(`shared/backend-environment.mjs`)本来就放行这些,�
 **实测(删库模拟首次使用)**:第 1 轮 `database is locked` → 等干净 → 第 2 轮 `acp.initialized`
 → `attempt=2 health=true`,全程 4 秒;`/api/health` 的 `backend.code = READY`、`directory = ~/voice-test`。
 
-#### D-A 的处置:默认独立库 + 开关
+#### D-A 的处置:一度让步,当天复议后回到共用
 
-`resolveVoiceDbEnv()` 默认注入 `OPENCODE_DB=opencode-voice.db`(相对名 → core join 到 `Global.Path.data`,
-跟主实例同一个 XDG 目录);`DESKFOX_VOICE_SHARE_DB=1` 切回共用。
-命名空间修好之后共用库**未必不可行**(主实例的库已迁移完毕,不会再触发建表),但本轮没有实证,
-先按「能用 > 能看见」取默认值,D-A 的会话可见性留给 user 拍板复议。
+中途因为反复 `database is locked`,`resolveVoiceDbEnv()` 曾把默认改成独立库 `opencode-voice.db`。
+**这个让步后来被证明是误判**:那批锁根本不是「共用」造成的,是 spawn env 漏带 XDG 让语音掉进旧命名空间、
+开到了别的核心版本写的老库、一开就跑迁移。命名空间修好后,共用的是主实例正在用的、
+**迁移早已完成**的库,启动不建表,自然不争排他锁。
+
+2026-08-21 user 拍板「安排的任务要走 DeskFox 通道,并在 session 列表保留会话记录」→ 默认回到共用,
+`DESKFOX_VOICE_ISOLATE_DB=1` 保留为逃生口。
+
+**实测(本地版主实例正在跑、有竞争)**:`attempt=1 health=true` 一次就成、零锁冲突;
+ACP 宿主 env 为 `OPENCODE_CHANNEL=local`,会话确实落进 `opencode-local.db`;
+建会话带 `?directory=` 时 `session.directory` 正确归到 workspace(探针会话已清理)。
 
 #### 同一个洞的第二形态:代理(2026-08-21,user 第 2 次真人测试)
 

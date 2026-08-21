@@ -151,24 +151,25 @@ export function needsOverseasNetwork(backendModel: string): boolean {
 export const VOICE_DB_FILENAME = "opencode-voice.db"
 
 /**
- * 语音 ACP 该开哪个库。
+ * 语音 ACP 该开哪个库 —— **默认共用主实例那个**(D-A 的本意:语音派的活要在 DeskFox 会话列表里看得见)。
  *
- * **默认独立库**(`opencode-voice.db`)。D-A 原本想共用主实例的库换「会话在 DeskFox 里看得见」,
- * 但 2026-08-21 真机把 1-spec §5·R1 的风险打实了:opencode 启动阶段跑迁移要拿排他锁,
- * 主实例(用户长期开着的正式版 / 本地版)正握着同一个文件 → `database is locked` → 宿主 exit 1
- * → Gateway 起不来。加了退避重试仍不稳:主实例在跑时基本必失败。
- * 换独立库后同条件实测 3/3 起得来。**能用 > 能看见**,所以默认让步。
+ * 一段来回值得记住:中途曾因为反复 `database is locked` 默认改成独立库,后来查清
+ * **那批锁根本不是"共用"造成的** —— 是 spawn env 漏带 XDG 让语音掉进旧命名空间,
+ * 开到了别的核心版本写的老库、一开就跑迁移(见 {@link carryNamespaceEnv})。
+ * 命名空间修好后共用的是主实例正在用的、**迁移早已完成**的库,启动不再建表,自然不争排他锁。
+ * 2026-08-21 user 拍板:必须走 DeskFox 通道、保留会话记录 → 默认回到共用。
  *
- * `DESKFOX_VOICE_SHARE_DB=1` 切回共用(拿会话可见性,代价是可能起不来),留给 D-A 复议。
+ * `DESKFOX_VOICE_ISOLATE_DB=1` 切成独立库 `opencode-voice.db`(会话在 DeskFox 里就看不见了),
+ * 留作真撞上库冲突时的逃生口。
  */
 export function resolveVoiceDbEnv(env: NodeJS.ProcessEnv, disableChannelDb: boolean): Record<string, string> {
-  const share = String(env.DESKFOX_VOICE_SHARE_DB ?? "").trim()
-  if (share === "1" || share === "true") {
-    // 共用:抄 `main/server.ts` 给 sidecar 的同一条渠道规则,才落到同一个文件
-    return disableChannelDb ? { OPENCODE_DISABLE_CHANNEL_DB: "1" } : { OPENCODE_CHANNEL: "local" }
+  const isolate = String(env.DESKFOX_VOICE_ISOLATE_DB ?? "").trim()
+  if (isolate === "1" || isolate === "true") {
+    // 独立:OPENCODE_DB 在 core 里优先级最高(`database.ts:44`),渠道规则不用再管
+    return { OPENCODE_DB: VOICE_DB_FILENAME }
   }
-  // 独立:OPENCODE_DB 在 core 里优先级最高(`database.ts:44`),渠道规则不用再管
-  return { OPENCODE_DB: VOICE_DB_FILENAME }
+  // 共用:抄 `main/server.ts` 给 sidecar 的同一条渠道规则,才落到**同一个文件**
+  return disableChannelDb ? { OPENCODE_DISABLE_CHANNEL_DB: "1" } : { OPENCODE_CHANNEL: "local" }
 }
 
 export interface GatewayEnvResult {
