@@ -41,6 +41,8 @@ import type { PromptSession } from "@/context/prompt"
 import "./titlebar.css"
 import { newTabTooltipKeybind } from "./command-tooltip-keybind"
 import { normalizeSessionInfo } from "@/utils/session"
+// FORK: REQ-102 语音派活入口(fork-only 组件)[feat: voice-dispatch-minimal] 2026-08-21
+import { VoiceDispatchButton } from "./voice-dispatch-button"
 
 const legacyTitlebarHeight = 40
 const v2TitlebarHeight = 36
@@ -518,6 +520,12 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                           <Icon size="small" name="terminal" />
                         </Button>
                       </TooltipKeybind>
+                    </Show>
+                    {/* FORK: REQ-102 语音派活入口 —— 与终端图标同组;组件自带 desktop-only 与
+                        状态判定,没开项目时不显示(语音要往真实项目里派活)
+                        [feat: voice-dispatch-minimal] 2026-08-21 */}
+                    <Show when={params.dir}>
+                      <VoiceDispatchButton directory={params.dir} />
                     </Show>
                     {/* FORK: 徽标跟终端图标同组、紧挨左侧工具组 portal(fork 位置);
                         debugTools 从上游那处并过来 —— 段3 merge 时上游在外层又加了一个
