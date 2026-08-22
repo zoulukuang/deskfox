@@ -18,7 +18,13 @@ import { promisify } from "node:util"
 import { BrowserWindow, shell } from "electron"
 import log from "electron-log/main.js"
 import { acpSessionStatePath, invalidateCoordinatorOnStart } from "./coordinator-state"
-import { archiveCoordinator, createJournalState, syncJournal, type JournalState } from "./journal-writer"
+import {
+  archiveCoordinator,
+  archiveTransitSessions,
+  createJournalState,
+  syncJournal,
+  type JournalState,
+} from "./journal-writer"
 import { startTaskWatch, type TaskWatchHandle } from "./task-watch"
 import { GATEWAY_PORT, binDir, buildGatewayEnv, checkVoiceWorkspace } from "./launch-config"
 import { resolveAcpHost } from "./launch-env"
@@ -170,6 +176,7 @@ function startSessionListWatch(directory: string): void {
       void (async () => {
         if (journalState) await syncJournal({ directory, state: journalState })
         await archiveCurrentCoordinator(directory)
+        await archiveProjectTransits(directory)
         for (const w of BrowserWindow.getAllWindows()) {
           if (!w.isDestroyed()) w.webContents.send("deskfox:voice-session-changed")
         }
@@ -177,6 +184,22 @@ function startSessionListWatch(directory: string): void {
       })()
     },
   })
+}
+
+/**
+ * 归档"中转站"第三层 session。qwen 会把它建的每条 project session 记在同一个状态文件的
+ * `projects` 段里,拿它当清单逐条判定(判据见 voice-journal.ts 的 isTransitSession)。
+ */
+async function archiveProjectTransits(directory: string): Promise<void> {
+  if (!journalState) return
+  try {
+    const raw = readFileSync(acpSessionStatePath(), "utf8")
+    const parsed = JSON.parse(raw) as { projects?: Record<string, { sessionId?: string }> }
+    const ids = Object.values(parsed?.projects ?? {})
+      .map((v) => String(v?.sessionId ?? ""))
+      .filter(Boolean)
+    if (ids.length) await archiveTransitSessions({ directory, sessionIds: ids, state: journalState })
+  } catch {}
 }
 
 /**

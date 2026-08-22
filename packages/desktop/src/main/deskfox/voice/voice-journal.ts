@@ -134,6 +134,33 @@ export function pendingWrites(turns: readonly JournalTurn[], written: ReadonlySe
   return out
 }
 
+/**
+ * 这条 session 是不是"中转站"—— 只把活往下派了一层,自己没留下任何给人看的东西。
+ *
+ * 2026-08-22 真机:同一件事出现 2~3 条 session,其中 9 part 那条的输入是纯任务目标、
+ * 工具只有一个 `qwen_audio_agent_*_session_start`;0 part 那条更干脆,什么都没有。
+ * 用户看到的就是"同一件事重复了好几遍"。
+ *
+ * 为什么不在源头拦:
+ *   · MCP 是**按 directory 注册**的(`sdk.mcp.add({directory,…})`),同目录所有 session
+ *     都能看到那套 session 工具 —— 没法只给协调者;
+ *   · 想用 agent 级 permission 禁掉执行者的 session 工具也不行 —— qwen 的 `applyPermissionMode`
+ *     会把相关 agent 的 permission **强制覆盖成 `allow`**,我们写的 deny 会被冲掉;
+ *   · 只剩 prompt 约束,而 prompt 是软的(引导已把 3 层压到 2 层,但压不到 0)。
+ * 所以改在结果侧治理:这种 session 没有任何阅读价值,归档掉即可,不删除(排查时还翻得到)。
+ *
+ * 判据刻意保守 —— **宁可漏归档,也不能把真干活的藏起来**:
+ *   · 一条实质文本都没有(纯中转 / 空壳);
+ *   · 且调用过的工具要么没有,要么只有 session 系列。
+ */
+export function isTransitSession(input: {
+  readonly toolNames: readonly string[]
+  readonly hasSubstantiveText: boolean
+}): boolean {
+  if (input.hasSubstantiveText) return false
+  return input.toolNames.every((name) => /qwen_audio_agent.*_session/i.test(name))
+}
+
 /** 这条 journal session 的标题。带日期,便于一天多次开语音时区分。 */
 export function journalTitle(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0")

@@ -1,7 +1,7 @@
 // [fork-only] REQ-102 语音派活 — 语音沟通记录单测 [feat: voice-dispatch-minimal] 2026-08-21
 // 对应 2-plan「C:另造可读的语音沟通 session」。样本字段取自真实的 /api/tasks 与 /api/timeline。
 import { describe, expect, test } from "bun:test"
-import { journalKey, journalTitle, pairTurns, pendingWrites, renderTurn } from "./voice-journal"
+import { isTransitSession, journalKey, journalTitle, pairTurns, pendingWrites, renderTurn } from "./voice-journal"
 
 const TASKS = [
   { id: "w1", objective: "查询宇树科技当前的主营业务收入情况", workState: "completed", createdAt: 200 },
@@ -105,6 +105,41 @@ describe("pendingWrites", () => {
 
   test("journalKey 把两个阶段分开,不会互相顶掉", () => {
     expect(journalKey("w1", "request")).not.toBe(journalKey("w1", "answer"))
+  })
+})
+
+// 2026-08-22 真机:同一件事出现 2~3 条 session,其中一条只调了 session_start、没留下任何内容,
+// 还有一条 0 part 的纯空壳。源头拦不住(MCP 按 directory 注册,执行者也拿得到 session 工具;
+// 想用 agent permission 禁掉又会被 qwen 的 applyPermissionMode 覆盖成 allow),只能结果侧治理。
+describe("isTransitSession", () => {
+  test("只调了 session_start、没有实质文本 → 是中转站", () => {
+    const r = isTransitSession({
+      toolNames: ["qwen_audio_agent_qwen_audio_agent_session_start"],
+      hasSubstantiveText: false,
+    })
+    expect(r).toBe(true)
+  })
+
+  test("什么都没有的空壳也算", () => {
+    expect(isTransitSession({ toolNames: [], hasSubstantiveText: false })).toBe(true)
+  })
+
+  // 判据刻意保守:宁可漏归档,也不能把真干活的藏起来
+  test("有实质产出 → 一律不动,哪怕它也派过活", () => {
+    const r = isTransitSession({
+      toolNames: ["qwen_audio_agent_qwen_audio_agent_session_start"],
+      hasSubstantiveText: true,
+    })
+    expect(r).toBe(false)
+  })
+
+  test("用过真工具 → 不算中转,哪怕文本还没产出", () => {
+    expect(isTransitSession({ toolNames: ["macro_realtime_quote", "write"], hasSubstantiveText: false })).toBe(false)
+    const mixed = isTransitSession({
+      toolNames: ["qwen_audio_agent_qwen_audio_agent_session_start", "webfetch"],
+      hasSubstantiveText: false,
+    })
+    expect(mixed).toBe(false)
   })
 })
 

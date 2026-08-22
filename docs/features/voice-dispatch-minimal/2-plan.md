@@ -531,6 +531,37 @@ user 发现同一件事出来 3 个 session。取证:三条的首条 prompt 几�
 
 DOM 实读列表正好两条。递归消失;`New session` 空壳这轮也没再出现 —— 它八成本来就是递归的中间产物。
 
+#### 递归治不了源头,改在结果侧归档中转站(2026-08-22)
+
+上一笔用 prompt 加了「你是谁」的判据,把 3 层压到 2 层,但**压不到 0** ——
+真机复查:9 part 那条输入是纯任务目标(没有信封)、按引导该是执行者,却还是调了 `session_start`。
+
+**源头拦不住的两条硬约束**:
+· MCP 是**按 directory 注册**的(`sdk.mcp.add({directory,…})`),同目录所有 session 都拿得到
+  那套 session 工具 —— 没法只给协调者;
+· 想用 agent 级 permission 禁掉执行者的 session 工具也不行 —— qwen 的 `applyPermissionMode`
+  会把 `configuredAgent` 与 `OPENCODE_TASK_AGENT` 两个 agent 的 permission **强制覆盖成 `allow`**,
+  我们写的 deny 会被冲掉。
+
+所以改**结果侧治理**:`isTransitSession` 判定「没有任何实质文本产出 + 用过的工具只有 session 系列」,
+命中就归档(不删除)。判据刻意保守 —— **有任何实质产出就绝不动它**,宁可漏归档也不能把真干活的藏起来。
+顺带把 0 part 的 `New session` 空壳一并收掉(它本来就是递归的中间产物)。
+
+**真机验证(连派三轮)**:
+
+| session | part | 状态 |
+|---|---|---|
+| 调研 SQLite STRICT 表特性并生成指南文档 | 38 | 在列表 |
+| 调研 WITHOUT ROWID 表适用场景并生成技术文档 | 135 | 在列表 |
+| 调研 SQLite 触发器使用场景与性能影响 | 92 | 在列表 |
+| 语音沟通 2026-08-22 11:28 | 5 | 在列表 |
+| (coordinator) | 55 | 已归档 |
+
+三轮 = 3 条任务 + 1 条沟通记录,无重复、无中转、无空壳。
+
+**遗留(未修)**:某几轮 coordinator 自己干了没派活,而 coordinator 会被归档 ——
+等于那部分工作只在 journal 里留了结果,没有独立会话可点进去看过程。属于路由阈值没压到位。
+
 #### 本轮遗留
 
 - **`voice-e2e.mjs` 灌音频无反应**:装置连上 WS 后直接灌音频,没发 configure;日志里只有
