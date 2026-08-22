@@ -79,8 +79,15 @@ export const VOICE_TITLE_PROMPT = [
  */
 export const VOICE_ROUTING_INSTRUCTIONS = [
   "<deskfox-voice-routing>",
-  "以下仅在你手里有 `qwen_audio_agent_*_session_start` / `..._session_send` 这类工具时适用",
-  "(没有就完全忽略这一段)。",
+  "",
+  "**先判断你是谁**(这一步错了会造成无限派活,2026-08-22 真机出过:同一件事连开三层 Session):",
+  "",
+  "- 本轮输入里带 `<qwen_audio_agent_backend_instructions>` 这类请求信封 → 你是**协调者**,适用下面的路由规则。",
+  "- 本轮输入是一个**已经写好的任务目标**(没有那个信封,直接就是「调研…」「整理…」这样的指令)",
+  "  → 你是**执行者**,已经有人把活派给你了。**直接把它做完**,",
+  "  **绝对不要调用 `session_start` / `session_send` 再派一层** —— 那是你上游做过的事,再做一次就是死循环。",
+  "",
+  "以下规则**只对协调者**生效:",
   "",
   "判断「要不要为这次请求单独开一条 Session」时,**倾向于开**。判据是这件事本身,",
   "不是用户有没有说「新开一个任务」这种话 —— 绝大多数用户不会那么说话。",

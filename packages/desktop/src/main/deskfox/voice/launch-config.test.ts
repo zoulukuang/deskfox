@@ -53,13 +53,22 @@ describe("buildVoiceConfigContent", () => {
     expect("instructions" in JSON.parse(buildVoiceConfigContent(MODELS))).toBe(false)
   })
 
-  test("路由引导:倾向开新 session,且限定在有 session 工具时才适用", () => {
-    // 第三层 session 读同一份 config,没有这些工具 —— 必须写清适用条件,否则它会照着做无用功
+  test("路由引导:倾向开新 session,判据是事情本身而不是用户说了什么咒语", () => {
     expect(VOICE_ROUTING_INSTRUCTIONS).toContain("session_start")
-    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("没有就完全忽略")
     expect(VOICE_ROUTING_INSTRUCTIONS).toContain("倾向于开")
-    // 不能依赖用户说特定咒语
     expect(VOICE_ROUTING_INSTRUCTIONS).toContain("不是用户有没有说")
+  })
+
+  // 2026-08-22 真机事故:同一件事连开三层 Session,三条的首条 prompt 几乎一样、三条都调了
+  // session_start。根因是 `config.instructions` 是**全局**的,第三层 session 也读到了这段引导;
+  // 原文写「没有这些工具就忽略」,但 MCP 是 session 级注册,新建的 project session **同样有**
+  // 那套工具 —— 于是执行者也去派活,递归下去。必须给一个"我是谁"的硬判据。
+  test("必须能区分协调者与执行者,否则会无限派活", () => {
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("qwen_audio_agent_backend_instructions")
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("执行者")
+    expect(VOICE_ROUTING_INSTRUCTIONS).toContain("绝对不要调用")
+    // 判据不能是"你有没有这个工具"——执行者也有
+    expect(VOICE_ROUTING_INSTRUCTIONS).not.toContain("没有就完全忽略")
   })
 
   test("writeVoiceInstructionsFile:落到 XDG state 下,写失败返回空串不抛", () => {
