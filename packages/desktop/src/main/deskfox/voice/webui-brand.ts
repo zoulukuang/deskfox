@@ -97,6 +97,12 @@ export function applyWebuiBrand(input: {
   readonly home?: string
 }): BrandResult {
   const env = input.env ?? process.env
+  // 逃生开关:品牌化是"锦上添花",一旦它把界面搞坏(2026-08-22 就出过自激卡死),
+  // 用户必须能一键退回原版而不是干等修复。off 时连资源都不装。
+  const off = String(env.DESKFOX_VOICE_BRAND ?? "").trim().toLowerCase()
+  if (off === "off" || off === "0" || off === "false") {
+    return { installed: false, injected: false, note: "已按 DESKFOX_VOICE_BRAND 关闭品牌化" }
+  }
   const home = input.home ?? homedir()
   const src = brandSourceDir(input.repoRoot)
   const dst = brandSkinDir(env, home)

@@ -88,4 +88,36 @@ describe("语音 WebUI 品牌化注入", () => {
   test("补一行自己的副标题(顶掉被隐藏的 REALTIME VOICE)", () => {
     expect(text(".deskfox-subtitle")).toBe("DeskFox · 语音助手")
   })
+
+  // 2026-08-22 真机把页面跑挂过:「1 个页面无响应」。原因是自激 —— SPA 持续改 DOM,
+  // observer 每次都全量扫描,而扫描里的修改又是新 mutation,越滚越快。
+  // 这里模拟 SPA 反复改 DOM,断言脚本**不会重复施加**(幂等)也不会让节点数膨胀。
+  test("SPA 持续改 DOM 时不重复插入、节点数不膨胀", async () => {
+    const before = document.querySelectorAll("*").length
+
+    for (let i = 0; i < 5; i++) {
+      const noise = document.createElement("div")
+      noise.textContent = `SPA 自己的更新 ${i}`
+      document.querySelector("main")?.appendChild(noise)
+      await new Promise((r) => setTimeout(r, 60))
+    }
+    await new Promise((r) => setTimeout(r, 600)) // 跨过防抖窗口
+
+    // 副标题只能有一条 —— 反复运行插出好几条就是幂等破了
+    expect(document.querySelectorAll(".deskfox-subtitle").length).toBe(1)
+    // 只多了我们自己塞的 5 个 noise,脚本没有额外增殖
+    expect(document.querySelectorAll("*").length).toBe(before + 5)
+    // 品牌文案在多轮之后依然稳定
+    expect(text(".name")).toBe("小狐狸投研助手")
+    expect(text("h1")).toBe("小狐狸投研")
+  })
+
+  // 隐藏逻辑误伤骨架 = 整页白屏,比不品牌化糟得多
+  test("绝不隐藏页面骨架", () => {
+    for (const sel of ["#root", "main", "header"]) {
+      const el = document.querySelector(sel) as HTMLElement | null
+      expect(el).not.toBeNull()
+      expect(el!.style.display).not.toBe("none")
+    }
+  })
 })

@@ -1,7 +1,14 @@
 // [fork-only] REQ-102 语音 WebUI 品牌化单测 [feat: voice-dispatch-minimal] 2026-08-22
 // 注入 index.html 是本方案唯一动 node_modules 的地方,幂等性必须钉死 —— 每次起网关都会跑一遍。
 import { describe, expect, test } from "bun:test"
-import { BRAND_MARKER, brandSkinDir, brandSourceDir, injectBrandTags, resolveWebuiIndex } from "./webui-brand"
+import {
+  applyWebuiBrand,
+  BRAND_MARKER,
+  brandSkinDir,
+  brandSourceDir,
+  injectBrandTags,
+  resolveWebuiIndex,
+} from "./webui-brand"
 
 // qwen-audio-agent 1.11.0 的真实 index.html(web/dist/index.html)
 const REAL_HTML = `<!doctype html>
@@ -46,6 +53,23 @@ describe("injectBrandTags", () => {
   test("没有 </head> / 空输入 → 原样返回,不瞎插", () => {
     expect(injectBrandTags("<html><body>x</body></html>")).toBe("<html><body>x</body></html>")
     expect(injectBrandTags("")).toBe("")
+  })
+})
+
+// 品牌化是锦上添花,一旦它把界面搞坏(2026-08-22 的自激卡死),用户必须能一键退回原版
+describe("逃生开关", () => {
+  test("DESKFOX_VOICE_BRAND=off → 连资源都不装", () => {
+    for (const value of ["off", "0", "false", "OFF"]) {
+      const r = applyWebuiBrand({
+        repoRoot: "/repo",
+        webuiIndexPath: "/nope/index.html",
+        env: { DESKFOX_VOICE_BRAND: value } as NodeJS.ProcessEnv,
+        home: "/h",
+      })
+      expect(r.installed).toBe(false)
+      expect(r.injected).toBe(false)
+      expect(r.note).toContain("关闭")
+    }
   })
 })
 

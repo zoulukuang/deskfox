@@ -35,16 +35,20 @@
 
   const isLeaf = (el) => el.children.length === 0
 
+  /** 绝不能隐藏的骨架 —— 误伤一个就是整页空白(2026-08-22 真机出过白屏) */
+  const NEVER_HIDE = new Set(["HTML", "BODY", "MAIN", "HEADER", "SECTION"])
+  const isSkeleton = (el) => NEVER_HIDE.has(el.tagName) || el.id === "root" || el.closest("#root") === el
+
   /** 往上找到"值得整块隐藏"的那层 —— 只跨极小的包装层,免得把半个页面藏了 */
   const hideTarget = (el) => {
     let node = el
     for (let i = 0; i < 2 && node.parentElement; i++) {
       const parent = node.parentElement
-      // 父节点还塞着别的内容就停手,只隐藏当前这块
-      if (parent.children.length > 1) break
+      // 父节点还塞着别的内容、或者本身是页面骨架,就停手
+      if (parent.children.length > 1 || isSkeleton(parent)) break
       node = parent
     }
-    return node
+    return isSkeleton(node) ? el : node
   }
 
   function applyOnce() {
@@ -95,16 +99,40 @@
     }
   }
 
+  // ⚠️ 2026-08-22 真机把页面跑挂过("1 个页面无响应")。原因是**自激循环**:
+  // SPA 本身在持续改 DOM,observer 每次都触发一次 `body *` 全量扫描;
+  // 而扫描里的修改(隐藏/插节点)又是新的 mutation,再触发下一轮 —— 越滚越快直到卡死。
+  // 三道闸一起上:防抖合并、施加期间断开 observer、以及施加本身的幂等(dataset 标记)。
+  const THROTTLE_MS = 400
+  let observer = null
+  let scheduled = false
+
+  const connect = () => observer?.observe(document.documentElement, { childList: true, subtree: true })
+
   const run = () => {
+    // 自己改 DOM 的这段时间不听,否则必然自激
+    observer?.disconnect()
     try {
       applyOnce()
     } catch {
       // 品牌化失败不该让语音界面挂掉
+    } finally {
+      connect()
     }
   }
 
+  const schedule = () => {
+    if (scheduled) return
+    scheduled = true
+    setTimeout(() => {
+      scheduled = false
+      run()
+    }, THROTTLE_MS)
+  }
+
   run()
-  new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true })
-  // SPA 首屏可能晚于 observer 注册,补几拍
-  for (const delay of [100, 300, 800, 2000]) setTimeout(run, delay)
+  observer = new MutationObserver(schedule)
+  connect()
+  // SPA 首屏可能晚于 observer 注册,补几拍(仍走防抖,不会叠加)
+  for (const delay of [100, 300, 800, 2000]) setTimeout(schedule, delay)
 })()
