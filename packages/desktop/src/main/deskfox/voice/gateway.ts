@@ -9,7 +9,7 @@
 //
 // 纯逻辑(判定/解析/拼参数)全部抽成可测函数,spawn 与 fetch 走注入,单测不起真进程。
 
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
+import { appendFileSync, mkdirSync, readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { spawn, type ChildProcess } from "node:child_process"
@@ -28,6 +28,7 @@ import {
 import { startTaskWatch, type TaskWatchHandle } from "./task-watch"
 import { GATEWAY_PORT, binDir, buildGatewayEnv, checkVoiceWorkspace } from "./launch-config"
 import { resolveAcpHost } from "./launch-env"
+import { applyWebuiBrand, resolveWebuiIndex } from "./webui-brand"
 
 const execFileAsync = promisify(execFile)
 
@@ -347,6 +348,21 @@ export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus>
     disableChannelDb: input.disableChannelDb,
   })
   for (const w of warnings) log.warn(`[voice] ${w}`)
+
+  // 品牌化 WebUI(见 webui-brand.ts):每次起网关都做一次,qwen 升级覆盖了 index.html 也能自动补回。
+  // 失败只记一行,绝不挡住语音 —— 没品牌的界面也是能用的界面。
+  try {
+    // ⚠️ `which` 给的是 homebrew 的**符号链接**(bin/qwenaudio → ../lib/node_modules/…),
+    // 不解引用就会往 `homebrew/web/dist` 找,永远找不到(2026-08-22 实测踩过)。
+    const qwenPath = realpathSync((await execFileAsync("which", ["qwenaudio"])).stdout.trim())
+    if (qwenPath) {
+      const brand = applyWebuiBrand({ repoRoot: input.repoRoot, webuiIndexPath: resolveWebuiIndex(qwenPath) })
+      log.info(`[voice] WebUI 品牌化:${brand.note}`)
+      appendVoiceLog(`WebUI 品牌化:${brand.note}`)
+    }
+  } catch (e) {
+    log.warn(`[voice] WebUI 品牌化跳过:${String(e)}`)
+  }
 
   starting = true
   healthy = false
