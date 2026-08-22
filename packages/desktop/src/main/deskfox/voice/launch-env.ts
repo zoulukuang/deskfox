@@ -233,13 +233,18 @@ export function readProviderApiKey(
  * - realtime:qwen-audio-agent 1.11.0 官方默认,audio 族配 smart_turn(对症 spike 的尾巴截断)
  */
 export const VOICE_MODEL_DEFAULTS = {
-  // ⚠️ 别改回 `claude-code/*`:2026-08-21 定位到 `claude-code` provider **不把 opencode 的工具
-  // 透传给 claude CLI**(CLI 用自己那套内置工具),后果是**所有 MCP 工具在它手里都不存在**。
-  // 对照实验:同一个 server / 同一个目录 / 同样 71 个工具,问"有没有 macro_ 开头的工具"——
-  // `alibaba-cn/qwen-flash` 答「有:macro_box_status」,`claude-code/opus` 答「没有」。
-  // 而 qwen 的第三层 Session 能力(`qwen_audio_agent_session_start` 等五个)正是走 MCP 下发的,
-  // 用 claude-code 就等于关掉「一个任务一条 session + 交叉追问」。详见 2-plan「provider 工具透传」。
-  backend: "alibaba-cn/qwen3.8-max",
+  // 2026-08-22 user 拍板换回 Opus。**换回的前提已经补齐**:
+  // 2026-08-21 之所以逃到国产模型,是因为 `claude-code` provider 不把 opencode 的工具透传给
+  // claude CLI —— 所有 MCP 工具在它手里都不存在,连带 qwen 的第三层 Session 能力(那五个工具
+  // 走 MCP 下发)一起没了。现在 plugin 侧已修(deskfox-plugins/claude-code 的 B1+B2:
+  // 静态 MCP 走 `--mcp-config`、动态注册的经 wrapper 旁路文件合并),claude-code 能拿到全部工具。
+  //
+  // ⚠️ 代价一:**要代理**。claude CLI 直连 Anthropic 会 403,而 DeskFox 从 Dock/Finder 启动时
+  //   GUI 进程不继承 shell 的代理变量 —— 那种情况下任务会以
+  //   `Failed to authenticate. API Error: 403` 收场(`needsOverseasNetwork` 会在启动日志里预警)。
+  // ⚠️ 代价二:走 Claude 订阅额度,不再是国产直连的 API 计费。
+  // 换回国产:`DESKFOX_VOICE_BACKEND_MODEL=alibaba-cn/qwen3.8-max`,coordinator 会自动作废重建。
+  backend: "claude-code/opus",
   small: "alibaba-cn/qwen-flash",
   realtime: "qwen-audio-3.0-realtime-plus",
 } as const

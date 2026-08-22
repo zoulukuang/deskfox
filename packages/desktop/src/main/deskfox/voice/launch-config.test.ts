@@ -226,20 +226,23 @@ describe("buildGatewayEnv", () => {
   })
 
   test("要出海的后端 + 一个代理变量都没有 → 给出可执行的警告(不阻塞)", () => {
-    // 默认后端已经是国产直连,所以这里要**显式**切到出海模型才测得到这条警告
-    const oversea = { PATH: "/usr/bin", HOME: "/h", DESKFOX_VOICE_BACKEND_MODEL: "claude-code/opus" }
-    const r = buildGatewayEnv({ ...baseInput, env: oversea as NodeJS.ProcessEnv })
+    // 默认后端(claude-code/opus)本身就要出海,所以裸 env 就该报警 ——
+    // 这正是 2026-08-22 换回 Opus 后最容易踩的坑:从 Dock 启动的 GUI 进程没有代理变量
+    const r = buildGatewayEnv({ ...baseInput, env: { PATH: "/usr/bin", HOME: "/h" } as NodeJS.ProcessEnv })
     expect(r.warnings.some((w) => w.includes("403"))).toBe(true)
 
     // 有代理就别唠叨
     const withProxy = buildGatewayEnv({
       ...baseInput,
-      env: { ...oversea, HTTPS_PROXY: "http://127.0.0.1:7890" } as NodeJS.ProcessEnv,
+      env: { PATH: "/usr/bin", HOME: "/h", HTTPS_PROXY: "http://127.0.0.1:7890" } as NodeJS.ProcessEnv,
     })
     expect(withProxy.warnings.some((w) => w.includes("403"))).toBe(false)
 
-    // 默认(国产直连)不该被提醒 —— 它本来就不出海
-    const domestic = buildGatewayEnv({ ...baseInput, env: { PATH: "/usr/bin", HOME: "/h" } as NodeJS.ProcessEnv })
+    // 显式切回国产直连 → 不该被提醒
+    const domestic = buildGatewayEnv({
+      ...baseInput,
+      env: { PATH: "/usr/bin", HOME: "/h", DESKFOX_VOICE_BACKEND_MODEL: "alibaba-cn/qwen3.8-max" } as NodeJS.ProcessEnv,
+    })
     expect(domestic.warnings.some((w) => w.includes("403"))).toBe(false)
   })
 

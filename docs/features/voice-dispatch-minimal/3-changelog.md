@@ -38,6 +38,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
   实际检测认 `keywords.txt`,所以换词可行但提示文案会对不上,且改 node_modules 升级即失。
 - **闲聊不进语音沟通记录**:纯问答不产生 task,journal 的数据源是 /api/tasks + /api/timeline,
   所以覆盖不到。要补得连 gateway 的 WS 收 transcript.final(realtime 连接有状态,有干扰风险,故未做)。
+- **默认后端 2026-08-22 换回 `claude-code/opus`**(user 拍板)。前提是 plugin 侧 B1+B2 已让
+  claude-code 能拿到全部 MCP 工具(含第三层 Session 能力),实测第三层照常建起。
+  两个代价:① **必须有代理**,从 Dock 启动的 GUI 进程没有代理变量 → 任务会全部 403;
+  ② 走 Claude 订阅额度。切回国产:`DESKFOX_VOICE_BACKEND_MODEL=alibaba-cn/qwen3.8-max`。
 - **国产模型有内容审查**:`alibaba-cn/*` 走 DashScope,涉国际政治 / 军事条款类话题会被
   `DataInspectionFailed` 拒(实测 4 个任务失败 2 个)。不是 bug,是换模型的代价。
   B2 落地后可按话题切 `DESKFOX_VOICE_BACKEND_MODEL` 规避,coordinator 会自动作废重建。
