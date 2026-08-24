@@ -79,3 +79,18 @@ export function resolveWrapperPath(repoRoot: string): string {
 export function voiceWrapperPath(packaged: boolean): string {
   return resolveWrapperPath(voiceRepoRoot(packaged))
 }
+
+/**
+ * 语音桥脚本路径(voice-acp-bridge)。与 wrapper 同样住在仓里。
+ *
+ * ⚠️ 它同时是 `ACP_COMMAND` 的值,而 `qwenaudio setup --backend acp` 的 ready 判据就是
+ * 「这个路径存在且可执行」(`backend-setup.mjs:354-397`)—— 所以路径算错的表现是
+ * 语音按钮直接禁用并说"命令不可用",而不是点了没反应。
+ */
+export function resolveBridgePath(repoRoot: string): string {
+  return repoRoot ? join(repoRoot, "packages", "desktop", "scripts", "deskfox-voice-bridge.mjs") : ""
+}
+
+export function voiceBridgePath(packaged: boolean): string {
+  return resolveBridgePath(voiceRepoRoot(packaged))
+}

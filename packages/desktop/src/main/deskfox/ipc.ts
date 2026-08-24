@@ -16,7 +16,9 @@ import { applyContextMenuLanguage } from "./context-menu"
 import { takeDbQuarantineNotice } from "./db-quarantine-notice"
 // REQ-102 语音派活 [feat: voice-dispatch-minimal] 2026-08-21
 import * as voice from "./voice/gateway"
-import { voiceRepoRoot, voiceWrapperPath } from "./voice/paths"
+import { voiceBridgePath, voiceRepoRoot, voiceWrapperPath } from "./voice/paths"
+// REQ-102 语音架构重构 [feat: voice-acp-bridge] 2026-08-24
+import { writeActiveProject } from "./voice/active-project"
 import { CHANNEL } from "../constants"
 
 export function registerDeskfoxIpc() {
@@ -58,19 +60,32 @@ export function registerDeskfoxIpc() {
 
   // ── 语音派活(REQ-102)[feat: voice-dispatch-minimal] ──
   // renderer 只拿状态字符串;env 里有 DASHSCOPE key,进程与凭据都留在主进程。
-  h("voice_status", (args: { workspace?: string }) =>
-    voice.getVoiceStatus(typeof args.workspace === "string" ? args.workspace : undefined),
+  h("voice_status", (args: { workspace?: string }) => {
+    const workspace = typeof args.workspace === "string" ? args.workspace : undefined
+    // [feat: voice-acp-bridge] 顺手记下"用户此刻打开的项目",语音桥据此决定新任务落哪儿。
+    //   renderer 本来就每 5 秒调一次这个 handler 并带当前目录,所以**零新增 IPC** 就拿到了
+    //   跟随能力 —— 旧链路的痛点是网关工作目录启动时钉死、切项目不跟随(1-spec §3.5)。
+    if (workspace) writeActiveProject(workspace)
+    return voice.getVoiceStatus(workspace)
+  })
+  h("voice_probe", () =>
+    voice.probeAvailability(
+      { wrapperPath: voiceWrapperPath(app.isPackaged), bridgePath: voiceBridgePath(app.isPackaged) },
+      true,
+    ),
   )
-  h("voice_probe", () => voice.probeAvailability({ wrapperPath: voiceWrapperPath(app.isPackaged) }, true))
-  h("voice_start", (args: { workspace?: string }) =>
-    voice.startVoiceGateway({
-      workspace: String(args.workspace ?? ""),
+  h("voice_start", (args: { workspace?: string }) => {
+    const workspace = String(args.workspace ?? "")
+    if (workspace) writeActiveProject(workspace)
+    return voice.startVoiceGateway({
+      workspace,
       repoRoot: voiceRepoRoot(app.isPackaged),
       wrapperPath: voiceWrapperPath(app.isPackaged),
+      bridgePath: voiceBridgePath(app.isPackaged),
       // 与 `main/server.ts:244` 给 sidecar 的规则同源:语音必须和主实例开同一个 db
       disableChannelDb: app.isPackaged && CHANNEL !== "local",
-    }),
-  )
+    })
+  })
   h("voice_stop", () => voice.stopVoiceGateway())
   h("voice_log_path", () => voice.voiceLogPath())
 

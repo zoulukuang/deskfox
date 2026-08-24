@@ -23,6 +23,9 @@ import { homedir } from "node:os"
 import { delimiter, dirname, join } from "node:path"
 import { DASHSCOPE_PROVIDER_ID, readProviderApiKey, resolveAuthJsonPath, resolveVoiceModels } from "./launch-env"
 import type { VoiceModels } from "./launch-env"
+// voice-acp-bridge:新链路要的两样 —— 桥的 Basic 头、跟随当前项目的状态文件路径
+import { activeProjectPath } from "./active-project"
+import { basicAuthHeader } from "./bridge/env"
 
 /** Gateway 默认端口(qwen `shared/backend-catalog.mjs`)。 */
 export const GATEWAY_PORT = 3101
@@ -402,4 +405,126 @@ export function buildGatewayEnv(input: GatewayEnvInput): GatewayEnvResult {
 export function binDir(execPath: string | undefined): string | undefined {
   const p = String(execPath ?? "").trim()
   return p ? dirname(p) : undefined
+}
+
+// ═══════════════════════════ ACP 桥模式(voice-acp-bridge)═══════════════════════════
+//
+// 上面那套是 voice-dispatch-minimal 的「两套 opencode」形态:qwen 自己 spawn 一个 opencode
+// (`--backend opencode` + OPENCODE_BIN 指向 wrapper),与 DeskFox 的 sidecar 只共享 SQLite 文件。
+// 由此长出的整片补丁(env carry / stdout 净化 wrapper / DB 渠道分流 / 跨进程强刷列表 / journal 归档)
+// 每一条都是这一个结构问题的表象。
+//
+// 下面是 voice-acp-bridge 的形态:qwen 走**通用 acp backend**,`ACP_COMMAND` 指向我们自己的桥,
+// 桥直接对 DeskFox sidecar 说 HTTP。于是语音派出的 session **就是 sidecar 建的**,
+// 与手敲的完全同源 —— 上面那些补丁在这条链路上一个都不需要。
+//
+// 两套代码并存到验收结束(1-spec §6):`DESKFOX_VOICE_LEGACY_BACKEND=1` 整体退回旧链路。
+
+/** 语音沟通(coordinator)session 落哪儿 —— 与用户项目分开,是递归防护的地基(1-spec §3.1)。 */
+export function voiceCoordinatorDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
+  const override = String(env.DESKFOX_VOICE_DIR ?? "").trim()
+  if (override) return override
+  const dataHome = env.XDG_DATA_HOME || join(home, ".local", "share")
+  return join(dataHome, "deskfox", "voice-workspace")
+}
+
+/** 走新链路还是旧链路。默认新;出问题时一个 env 退回去,不用改代码重打包。 */
+export function useAcpBridge(env: NodeJS.ProcessEnv = process.env): boolean {
+  const legacy = String(env.DESKFOX_VOICE_LEGACY_BACKEND ?? "").trim().toLowerCase()
+  return !(legacy === "1" || legacy === "true")
+}
+
+export interface AcpGatewayEnvInput {
+  /** DeskFox 当前窗口的项目目录(给 ACP_WORKSPACE 兜底用;真正的目标目录由桥运行时决定) */
+  readonly workspace: string
+  /** 桥脚本的绝对路径 —— qwen 把它当可执行文件 spawn */
+  readonly bridgePath: string
+  /** sidecar 连接信息;拿不到就起不来(桥没法凭空找到随机端口 + 随机密码) */
+  readonly server: { readonly url: string; readonly username: string; readonly password: string } | null
+  readonly env?: NodeJS.ProcessEnv
+  readonly extraPathDirs?: readonly string[]
+  readonly authPath?: string
+  readonly exists?: (p: string) => boolean
+}
+
+/**
+ * 构造 ACP 桥模式的 Gateway env。
+ *
+ * ⚠️ **凭据只进 env,不落盘、不进命令行**(开源仓隐私红线;命令行还会出现在 `ps` 里)。
+ *
+ * ⚠️ 桥能收到的变量走 qwen 的前缀白名单,**只有 `ACP_` 过得去**
+ * (`backend-catalog.mjs:342`)。裸的 `DESKFOX_*` / `OPENCODE_*` 会静默消失 ——
+ * 静默,所以必须靠命名规范防住,不是靠记性。
+ */
+export function buildAcpGatewayEnv(input: AcpGatewayEnvInput): GatewayEnvResult {
+  const base = input.env ?? process.env
+  const exists = input.exists ?? existsSync
+  const models = resolveVoiceModels(base)
+  const warnings: string[] = []
+
+  const authPath = input.authPath ?? resolveAuthJsonPath(base)
+  const dashscopeKey = readProviderApiKey(DASHSCOPE_PROVIDER_ID, authPath)
+  if (!dashscopeKey) {
+    warnings.push(`没读到 ${DASHSCOPE_PROVIDER_ID} 的 API key(${authPath}) —— 语音前端起不来,先在设置里连接阿里供应商`)
+  }
+  if (!input.server) {
+    warnings.push("拿不到 DeskFox sidecar 的地址/密码(它还没就绪?)—— 语音桥无法连回 DeskFox")
+  }
+  if (!exists(input.bridgePath)) warnings.push(`语音桥脚本不存在:${input.bridgePath}`)
+
+  const pathDirs = [...(input.extraPathDirs ?? []), ...String(base.PATH ?? "").split(delimiter)]
+  const seen = new Set<string>()
+  const mergedPath = pathDirs
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0 && !seen.has(p) && (seen.add(p), true))
+    .join(delimiter)
+
+  const voiceDir = voiceCoordinatorDir(base)
+
+  const env: Record<string, string> = {
+    // Gateway 进程自己的运行环境。注意这些**不会**穿到桥里(桥只收 ACP_*),
+    // 桥要的东西一律走下面的 ACP_DESKFOX_*。
+    ...carryNamespaceEnv(base),
+    QWEN_AUDIO_REALTIME_MODEL: models.realtime,
+    ...resolveWakeWordEnv(base),
+    PATH: mergedPath,
+
+    // ── qwen 约定的两个 ──
+    ACP_COMMAND: input.bridgePath,
+    ACP_WORKSPACE: input.workspace,
+    // 桌面端显示用;不设就是 "ACP Agent",在用户面前太不像话
+    ACP_LABEL: "DeskFox",
+
+    // ── 桥自己的配置 ──
+    ACP_DESKFOX_SERVER_URL: input.server?.url ?? "",
+    ACP_DESKFOX_SERVER_AUTH: input.server
+      ? basicAuthHeader(input.server.username || "opencode", input.server.password)
+      : "",
+    ACP_DESKFOX_VOICE_DIR: voiceDir,
+    ACP_DESKFOX_ACTIVE_PROJECT_FILE: activeProjectPath(base),
+    ACP_DESKFOX_LOG_FILE: voiceBridgeLogPath(base),
+  }
+  if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey
+
+  // ⚠️ **不设** `QWEN_AUDIO_AGENT_BACKEND_PERMISSION_MODE=full`。通用 acp backend 的
+  // `supportsFullPermission: false`,CLI 层会直接拒绝启动(`cli/src/arguments.mjs:265-276`)。
+  // 这不构成限制:ACP 的权限请求是**桥主动发起**的,桥对语音派活场景根本不发,
+  // 等价于全放行且没有确认打扰;真正的权限边界由 sidecar 自己的 agent 配置管(1-spec §3.6)。
+
+  // ⚠️ 也**不设** `OPENCODE_CONFIG_CONTENT` 那套模型注入。第三层 session 由 sidecar 创建,
+  // 用的就是 DeskFox 当前绑定的模型 —— 这正是"与手敲 session 无差别"(R2/R3)的含义。
+
+  if (needsOverseasNetwork(models.backend) && !NETWORK_ENV_NAMES.some((n) => String(base[n] ?? "").trim())) {
+    warnings.push(
+      `DeskFox 当前绑定的模型可能要连境外服务,但没检测到任何代理变量(HTTPS_PROXY 等)。` +
+        `从终端 open DeskFox 可继承 shell 的代理设置。`,
+    )
+  }
+  return { env, warnings }
+}
+
+/** 桥自己的日志(与网关日志分开,一眼能分清是谁在说话)。 */
+export function voiceBridgeLogPath(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
+  const stateHome = env.XDG_STATE_HOME || join(home, ".local", "state")
+  return join(stateHome, "deskfox", "voice-bridge.log")
 }
