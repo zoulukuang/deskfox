@@ -54,7 +54,7 @@ describe("语音 WebUI 品牌化注入", () => {
   })
 
   test("主标题换成 user 定的 slogan", () => {
-    expect(text("h1")).toBe("小狐狸投研")
+    expect(text("h1")).toBe("小狐狸 Ai 投资研究员")
   })
 
   test("页面标题也换 —— 浏览器标签页上就是品牌", () => {
@@ -109,7 +109,7 @@ describe("语音 WebUI 品牌化注入", () => {
     expect(document.querySelectorAll("*").length).toBe(before + 5)
     // 品牌文案在多轮之后依然稳定
     expect(text(".name")).toBe("小狐狸投研助手")
-    expect(text("h1")).toBe("小狐狸投研")
+    expect(text("h1")).toBe("小狐狸 Ai 投资研究员")
   })
 
   // 隐藏逻辑误伤骨架 = 整页白屏,比不品牌化糟得多

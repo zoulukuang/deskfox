@@ -12,7 +12,7 @@
 ;(() => {
   const BRAND = "小狐狸投研助手"
   const SUBTITLE = "DeskFox · 语音助手"
-  const SLOGAN = "小狐狸投研"
+  const SLOGAN = "小狐狸 Ai 投资研究员"
   const LOGO = "/skins/deskfox/logo.png"
 
   /** 整段隐藏:这些是给开发者看的技术标识,对使用者没有决策价值 */
