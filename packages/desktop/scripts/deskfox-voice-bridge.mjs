@@ -41,7 +41,10 @@ try {
   process.exit(1)
 }
 
-log(`启动 pid=${process.pid} sidecar=${config.serverUrl} voiceDir=${config.voiceDir}`)
+log(
+  `启动 pid=${process.pid} sidecar=${config.serverUrl} voiceDir=${config.voiceDir} ` +
+    `coordinator模型=${config.coordinatorModel ? `${config.coordinatorModel.providerID}/${config.coordinatorModel.modelID}` : "(跟随绑定)"}`,
+)
 
 const sidecar = createSidecarClient({
   baseUrl: config.serverUrl,
@@ -52,6 +55,7 @@ const sidecar = createSidecarClient({
 const bridge = createBridge({
   sidecar,
   voiceDir: config.voiceDir,
+  coordinatorModel: config.coordinatorModel,
   readActiveProject: () => (config.activeProjectFile ? readActiveProject(config.activeProjectFile) : ""),
   write: (line) => process.stdout.write(`${line}\n`),
   log,

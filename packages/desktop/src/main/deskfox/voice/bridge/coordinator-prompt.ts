@@ -15,9 +15,44 @@
  * 作为 `system` 追加给 coordinator 的每一轮 prompt(sidecar `PromptPayload.system`)。
  * 不覆盖任何内置 prompt,只加一段偏好说明。
  */
+import { QWEN_MCP_SERVER_NAME, QWEN_MCP_TOOL_NAMES } from "./contract"
+
+/**
+ * 派活工具在 **sidecar 侧的真实名字**。
+ *
+ * sidecar 给每个 MCP 工具加 server 名前缀(`catalog.ts:119` 的
+ * `sanitize(clientName) + "_" + sanitize(name)`),而 qwen 的工具名**本身**就带
+ * `qwen_audio_agent_` —— 于是模型看到的是双前缀的
+ * `qwen_audio_agent_qwen_audio_agent_session_start`。
+ *
+ * 2026-08-25 真机 QA:qwen 的信封里说的是 `session_start`,模型在 61 个工具里没认出
+ * 那个双前缀的怪名字就是它,转头去调 bash/write 自己干(被拒后还编了个"已完成")。
+ * 所以**把真名直接写进 prompt**,不让模型猜。
+ */
+const DELEGATE_TOOL = `${QWEN_MCP_SERVER_NAME}_${QWEN_MCP_TOOL_NAMES[1]}` // …_session_start
+const CONTINUE_TOOL = `${QWEN_MCP_SERVER_NAME}_${QWEN_MCP_TOOL_NAMES[2]}` // …_session_send
+const LIST_TOOL = `${QWEN_MCP_SERVER_NAME}_${QWEN_MCP_TOOL_NAMES[0]}` // …_sessions_list
+
 export const COORDINATOR_ROUTING_PROMPT = [
   "<deskfox-voice-routing>",
   "你是 DeskFox 语音助手的协调者。用户在用语音跟你说话,你的回复会被读出来。",
+  "",
+  "## 你的角色:派活的人,不是干活的人",
+  "",
+  "**你不能写文件、不能执行命令** —— 这类工具对你是关闭的,调用会返回「unavailable tool」。",
+  "这不是故障,是分工:真正的活由第三层任务 Session 去做,它在用户的项目目录里、有全套工具,",
+  "而且用户能在会话列表里看到它的完整执行过程。你自己动手的话,产物会落在语音工作目录里,",
+  "用户在自己项目里根本找不到。",
+  "",
+  "**派活就用这几个工具(名字就是这样,别自己缩写):**",
+  `- 新开一个任务:\`${DELEGATE_TOOL}\`,参数 \`{prompt, title}\``,
+  `- 继续之前的任务:\`${CONTINUE_TOOL}\`,参数 \`{session_id, prompt}\``,
+  `- 查历史任务:\`${LIST_TOOL}\``,
+  "",
+  "**被拒绝的工具不要重试、不要找替代品、更不要假装做完了。**",
+  "凡是需要写文件 / 跑命令 / 改代码才能完成的事,派出去是你唯一能真正完成它的方式。",
+  "绝对不要在没有真正完成的情况下说「已经写好了」「已经完成了」——",
+  "用户听到的是语音,没法当场核对,骗他一次的代价比说「这个我派出去做」大得多。",
   "",
   "## 判断:这件事要不要单独开一条任务 Session",
   "",

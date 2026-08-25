@@ -108,11 +108,22 @@ export function createSidecarClient(options: SidecarClientOptions) {
       directory: string,
       sessionID: string,
       parts: readonly PromptPart[],
-      system?: string,
+      options?: {
+        system?: string
+        model?: { providerID: string; modelID: string } | null
+        /** 工具开关;`false` 会被 sidecar 翻成 permission deny(`prompt.ts:1068`) */
+        tools?: Record<string, boolean>
+      },
     ): Promise<void> {
       await call(`/session/${encodeURIComponent(sessionID)}/prompt_async`, directory, {
         method: "POST",
-        body: JSON.stringify({ parts, ...(system ? { system } : {}) }),
+        body: JSON.stringify({
+          parts,
+          ...(options?.system ? { system: options.system } : {}),
+          // 不传 model = 跟随 session 绑定的模型,第三层走的就是这条(R2/R3 同源)
+          ...(options?.model ? { model: options.model } : {}),
+          ...(options?.tools ? { tools: options.tools } : {}),
+        }),
       })
     },
 

@@ -190,12 +190,14 @@ describe("②b 测试装置的 XDG 补齐(防「验错环境」)", () => {
   })
 })
 
-describe("③ 三个模型(D-F)", () => {
+// 原名「三个模型(D-F)」;voice-acp-bridge 加了第 4 档 coordinator(见下方 A/B 那条用例)
+describe("③ 四个模型(D-F + coordinator)", () => {
   test("默认值 = 定案值", () => {
     expect(resolveVoiceModels({})).toEqual({
       backend: "claude-code/opus",
       small: "alibaba-cn/qwen-flash",
       realtime: "qwen-audio-3.0-realtime-plus",
+      coordinator: "alibaba-cn/qwen3.8-max",
     })
   })
 
@@ -208,18 +210,34 @@ describe("③ 三个模型(D-F)", () => {
     expect(VOICE_MODEL_DEFAULTS.small).not.toBe(VOICE_MODEL_DEFAULTS.backend)
   })
 
-  test("三个位置各自可 env 覆盖(换模型不改代码)", () => {
+  test("四个位置各自可 env 覆盖(换模型不改代码)", () => {
     expect(
       resolveVoiceModels({
         DESKFOX_VOICE_BACKEND_MODEL: "alibaba-cn/qwen3-max",
         DESKFOX_VOICE_SMALL_MODEL: "anthropic/claude-haiku-4-5",
         DESKFOX_VOICE_REALTIME_MODEL: "qwen3.5-omni-plus-realtime",
+        DESKFOX_VOICE_COORDINATOR_MODEL: "alibaba-cn/qwen3.5-plus",
       }),
     ).toEqual({
       backend: "alibaba-cn/qwen3-max",
       small: "anthropic/claude-haiku-4-5",
       realtime: "qwen3.5-omni-plus-realtime",
+      coordinator: "alibaba-cn/qwen3.5-plus",
     })
+  })
+
+  // ★ 2026-08-25 真机 A/B(voice-acp-bridge):同一份 prompt,coordinator 跑 claude-code/opus
+  //   一次都不派活(看不见 MCP 工具),换成阿里档第一次就正确派活。
+  //   上面那条注释说的「plugin B1+B2 修好后前提消失」只对**旧链路**成立 ——
+  //   那个修法依赖 `deskfox-acp-wrap.mjs` 的旁路文件合并,而新链路根本没有 wrapper。
+  //   所以 coordinator 这一档必须避开 claude-code 系,且**不跟 backend 同值**。
+  test("coordinator 档避开 claude-code 系,且与 backend 解耦", () => {
+    expect(VOICE_MODEL_DEFAULTS.coordinator.startsWith("claude-code/")).toBe(false)
+    expect(VOICE_MODEL_DEFAULTS.coordinator).not.toBe(VOICE_MODEL_DEFAULTS.backend)
+    // 改 backend 不该连带改 coordinator
+    expect(resolveVoiceModels({ DESKFOX_VOICE_BACKEND_MODEL: "claude-code/opus" }).coordinator).toBe(
+      VOICE_MODEL_DEFAULTS.coordinator,
+    )
   })
 
   test("空串 / 纯空白视为未设,回落默认", () => {

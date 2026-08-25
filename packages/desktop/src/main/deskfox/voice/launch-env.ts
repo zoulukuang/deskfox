@@ -247,6 +247,25 @@ export const VOICE_MODEL_DEFAULTS = {
   backend: "claude-code/opus",
   small: "alibaba-cn/qwen-flash",
   realtime: "qwen-audio-3.0-realtime-plus",
+  /**
+   * voice-acp-bridge 的 coordinator(路由 + 整理播报)档,**刻意不跟 backend 同一个值**。
+   *
+   * 2026-08-25 真机 QA 的 A/B 实测:coordinator 跑 `claude-code/opus` 时**一次都没派过活** ——
+   * 它看不见 MCP 工具,只能自己调 bash/write(被禁后甚至编出「已经写好了」);
+   * 同一份 prompt 换成本档,**第一次就正确派活**,第三层 session 落在用户项目里。
+   *
+   * 根因是老坑复发:`claude-code` provider 把活转给 claude CLI,而 opencode 动态注册的 MCP
+   * 传不过去。旧链路靠 `deskfox-acp-wrap.mjs` 的旁路文件合并绕开,而新链路**没有 wrapper**
+   * (那正是本次重构消除掉的补丁之一),于是这条老路在新架构上不成立。
+   *
+   * 选阿里档还有两个顺带好处,都对路由这种轻任务有利:直连不需要代理(claude CLI 要代理,
+   * 没有就 403)、延迟与费用都更低 —— 1-spec §3.1 说的"路由是轻任务,可降级小模型"。
+   * 第三层任务**不受影响**,照旧跟随 DeskFox 绑定模型(R2/R3 同源)。
+   *
+   * ⚠️ 换这一档时必须挑**大上下文**的:coordinator 每轮要吞 qwen 那个 ~4.6k 字的请求信封,
+   * 小模型会直接 400(`Range of input length should be [1, 13000]`)。
+   */
+  coordinator: "alibaba-cn/qwen3.8-max",
 } as const
 
 /** qwen-audio-agent 1.11.0 `shared/realtime-model-catalog.mjs` 的四个档案。 */
@@ -269,6 +288,8 @@ export interface VoiceModels {
   readonly backend: string
   readonly small: string
   readonly realtime: string
+  /** voice-acp-bridge 的 coordinator 档;见 VOICE_MODEL_DEFAULTS.coordinator 的注释 */
+  readonly coordinator: string
 }
 
 export function resolveVoiceModels(env: NodeJS.ProcessEnv = process.env): VoiceModels {
@@ -280,5 +301,6 @@ export function resolveVoiceModels(env: NodeJS.ProcessEnv = process.env): VoiceM
     backend: pick(env.DESKFOX_VOICE_BACKEND_MODEL, VOICE_MODEL_DEFAULTS.backend),
     small: pick(env.DESKFOX_VOICE_SMALL_MODEL, VOICE_MODEL_DEFAULTS.small),
     realtime: pick(env.DESKFOX_VOICE_REALTIME_MODEL, VOICE_MODEL_DEFAULTS.realtime),
+    coordinator: pick(env.DESKFOX_VOICE_COORDINATOR_MODEL, VOICE_MODEL_DEFAULTS.coordinator),
   }
 }

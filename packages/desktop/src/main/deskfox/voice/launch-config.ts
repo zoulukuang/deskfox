@@ -424,8 +424,11 @@ export function binDir(execPath: string | undefined): string | undefined {
 export function voiceCoordinatorDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
   const override = String(env.DESKFOX_VOICE_DIR ?? "").trim()
   if (override) return override
-  const dataHome = env.XDG_DATA_HOME || join(home, ".local", "share")
-  return join(dataHome, "deskfox", "voice-workspace")
+  // ⚠️ `XDG_DATA_HOME` 在主进程里**已经是 deskfox 命名空间**(`applyDeskfoxDataNamespace` 设成
+  // `~/.local/share/deskfox`),再拼一层 "deskfox" 会出 `deskfox/deskfox/voice-workspace`
+  // ——2026-08-24 真机 QA 看到的就是这个。回落值补上那一层,与 launch-env 的 deskfoxXdgDefaults 对齐。
+  const dataHome = env.XDG_DATA_HOME || join(home, ".local", "share", "deskfox")
+  return join(dataHome, "voice-workspace")
 }
 
 /** 走新链路还是旧链路。默认新;出问题时一个 env 退回去,不用改代码重打包。 */
@@ -503,6 +506,13 @@ export function buildAcpGatewayEnv(input: AcpGatewayEnvInput): GatewayEnvResult 
     ACP_DESKFOX_VOICE_DIR: voiceDir,
     ACP_DESKFOX_ACTIVE_PROJECT_FILE: activeProjectPath(base),
     ACP_DESKFOX_LOG_FILE: voiceBridgeLogPath(base),
+    // coordinator 的路由模型,**单独一档、不跟随绑定模型也不跟 backend 同值**。两条真机教训:
+    //   ① 跟随绑定模型时,绑了小上下文模型就直接 400(信封 ~4.6k 字);
+    //   ② 用 `claude-code/*` 时 coordinator **看不见 MCP 工具、一次都不会派活**
+    //      —— claude CLI 拿不到 opencode 动态注册的 MCP,旧链路靠 wrapper 旁路绕开,
+    //      而新链路没有 wrapper。详见 VOICE_MODEL_DEFAULTS.coordinator 的注释。
+    // `DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖;第三层任务仍跟随绑定模型,同源性不受影响。
+    ACP_DESKFOX_COORDINATOR_MODEL: models.coordinator,
   }
   if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey
 

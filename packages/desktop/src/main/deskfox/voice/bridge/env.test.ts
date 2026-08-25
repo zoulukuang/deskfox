@@ -3,7 +3,7 @@
 // 要求(1-spec §7):缺 ACP_DESKFOX_SERVER_URL / AUTH 时**启动失败且报人话**,不静默跑偏。
 // 静默跑偏的表现是用户说完话、等半天、什么都没发生 —— 那种故障最难查。
 import { describe, expect, test } from "bun:test"
-import { basicAuthHeader, readBridgeConfig } from "./env"
+import { basicAuthHeader, parseModelRef, readBridgeConfig } from "./env"
 
 const full = {
   ACP_DESKFOX_SERVER_URL: "http://127.0.0.1:53412",
@@ -80,5 +80,37 @@ describe("basicAuthHeader", () => {
 
   test("密码含非 ASCII 也不炸(randomUUID 不会,但别让它成为惊喜)", () => {
     expect(basicAuthHeader("opencode", "密码🦊")).toStartWith("Basic ")
+  })
+})
+
+describe("parseModelRef — coordinator 路由模型", () => {
+  test("provider/model 正常解析", () => {
+    expect(parseModelRef("claude-code/opus")).toEqual({ providerID: "claude-code", modelID: "opus" })
+  })
+
+  test("modelID 自身带斜杠时只在第一个斜杠处切", () => {
+    expect(parseModelRef("openrouter/anthropic/claude-opus")).toEqual({
+      providerID: "openrouter",
+      modelID: "anthropic/claude-opus",
+    })
+  })
+
+  // 配错不该让语音起不来:回落成「跟随绑定模型」
+  test("形状不对一律 null(不猜)", () => {
+    for (const bad of ["", "   ", "没有斜杠", "/开头就是斜杠", "结尾是斜杠/"]) {
+      expect(parseModelRef(bad)).toBeNull()
+    }
+  })
+})
+
+describe("readBridgeConfig 的 coordinatorModel", () => {
+  test("配了就解析出来", () => {
+    const c = readBridgeConfig({ ...full, ACP_DESKFOX_COORDINATOR_MODEL: "claude-code/opus" })
+    expect(c.coordinatorModel).toEqual({ providerID: "claude-code", modelID: "opus" })
+  })
+
+  test("没配 / 配错 → null,退化成跟随 DeskFox 绑定模型", () => {
+    expect(readBridgeConfig(full).coordinatorModel).toBeNull()
+    expect(readBridgeConfig({ ...full, ACP_DESKFOX_COORDINATOR_MODEL: "乱写" }).coordinatorModel).toBeNull()
   })
 })

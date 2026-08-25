@@ -17,7 +17,7 @@ interface Harness {
   emit(directory: string, event: SidecarEvent): void
   calls: {
     created: { directory: string; title?: string }[]
-    prompts: { directory: string; sessionID: string; text: string }[]
+    prompts: { directory: string; sessionID: string; text: string; system?: string; model?: unknown; tools?: unknown }[]
     aborts: { directory: string; sessionID: string }[]
     mcp: { directory: string; name: string }[]
   }
@@ -29,7 +29,9 @@ interface Harness {
   updates(): any[]
 }
 
-function harness(opts: { activeProject?: string; failPrompt?: string; sessionIds?: string[] } = {}): Harness {
+function harness(
+  opts: { activeProject?: string; failPrompt?: string; sessionIds?: string[]; coordinatorModel?: any } = {},
+): Harness {
   const out: any[] = []
   const logs: string[] = []
   const listeners = new Map<string, ((e: SidecarEvent) => void)[]>()
@@ -44,8 +46,20 @@ function harness(opts: { activeProject?: string; failPrompt?: string; sessionIds
       calls.created.push({ directory, title: input?.title })
       return { id: ids.shift() ?? `ses_${++seq}` }
     },
-    async promptAsync(directory: string, sessionID: string, parts: readonly { text: string }[]) {
-      calls.prompts.push({ directory, sessionID, text: parts.map((p) => p.text).join("") })
+    async promptAsync(
+      directory: string,
+      sessionID: string,
+      parts: readonly { text: string }[],
+      options?: { system?: string; model?: unknown; tools?: unknown },
+    ) {
+      calls.prompts.push({
+        directory,
+        sessionID,
+        text: parts.map((p) => p.text).join(""),
+        system: options?.system,
+        model: options?.model ?? null,
+        tools: options?.tools,
+      })
       if (opts.failPrompt) throw new Error(opts.failPrompt)
     },
     async abort(directory: string, sessionID: string) {
@@ -69,6 +83,7 @@ function harness(opts: { activeProject?: string; failPrompt?: string; sessionIds
     sidecar,
     voiceDir: VOICE_DIR,
     readActiveProject: () => opts.activeProject ?? "",
+    coordinatorModel: opts.coordinatorModel ?? null,
     write: (line) => out.push(JSON.parse(line)),
     log: (m) => logs.push(m),
   })
@@ -204,7 +219,7 @@ describe("session/prompt — 一轮任务的完整生命周期", () => {
     const sid = await newSession(h)
     h.send({ jsonrpc: "2.0", id: 1, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "统计文件数" }] } })
     await tick()
-    expect(h.calls.prompts[0]).toEqual({ directory: "/proj", sessionID: "ses_a", text: "统计文件数" })
+    expect(h.calls.prompts[0]).toMatchObject({ directory: "/proj", sessionID: "ses_a", text: "统计文件数" })
     expect(h.responseTo(1)).toBeUndefined() // 还没回:第三层可能挂几分钟
 
     h.emit("/proj", textFor("ses_a", "一共"))
@@ -285,6 +300,69 @@ describe("session/prompt — 一轮任务的完整生命周期", () => {
     expect(h.responseTo(1)).toBeUndefined()
     h.emit("/proj", idleFor("ses_a"))
     expect(h.responseTo(1)).toBeDefined()
+  })
+
+  // ★ 2026-08-24 真机 QA:coordinator 跟随绑定模型时,4.6k 字信封把小上下文模型打 400,
+  //   整条语音哑掉。coordinator 必须能单独指定模型,第三层则**不能**被指定(否则破坏同源)。
+  test("coordinator 用指定的路由模型,第三层不指定(跟随 DeskFox 绑定)", async () => {
+    const model = { providerID: "claude-code", modelID: "opus" }
+    const h = harness({ activeProject: "/proj", coordinatorModel: model })
+
+    h.send({ jsonrpc: "2.0", id: 10, method: "session/new", params: { cwd: "/p", mcpServers: [QWEN_HTTP] } })
+    await tick()
+    const coordId = h.responseTo(10).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 11, method: "session/prompt", params: { sessionId: coordId, prompt: [{ type: "text", text: "路由轮" }] } })
+    await tick()
+
+    h.send({ jsonrpc: "2.0", id: 20, method: "session/new", params: { cwd: "/p", mcpServers: [] } })
+    await tick()
+    const taskId = h.responseTo(20).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 21, method: "session/prompt", params: { sessionId: taskId, prompt: [{ type: "text", text: "干活" }] } })
+    await tick()
+
+    const coordPrompt = h.calls.prompts.find((p) => p.sessionID === coordId)!
+    const taskPrompt = h.calls.prompts.find((p) => p.sessionID === taskId)!
+    expect(coordPrompt.model).toEqual(model)
+    expect(taskPrompt.model).toBeNull()
+    // 路由引导同理:只给 coordinator
+    expect(coordPrompt.system).toContain("deskfox-voice-routing")
+    expect(taskPrompt.system).toBeUndefined()
+  })
+
+  // ★ 2026-08-24 真机 QA:coordinator 手里有 write/bash,就直接把活自己干了 ——
+  //   第三层 session 一条没建,产物落在语音目录。靠 prompt 说服不牢,得把路堵死。
+  test("coordinator 的写/执行工具被禁,第三层不受任何限制", async () => {
+    const h = harness({ activeProject: "/proj" })
+
+    h.send({ jsonrpc: "2.0", id: 10, method: "session/new", params: { cwd: "/p", mcpServers: [QWEN_HTTP] } })
+    await tick()
+    const coordId = h.responseTo(10).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 11, method: "session/prompt", params: { sessionId: coordId, prompt: [{ type: "text", text: "路由轮" }] } })
+    await tick()
+
+    h.send({ jsonrpc: "2.0", id: 20, method: "session/new", params: { cwd: "/p", mcpServers: [] } })
+    await tick()
+    const taskId = h.responseTo(20).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 21, method: "session/prompt", params: { sessionId: taskId, prompt: [{ type: "text", text: "干活" }] } })
+    await tick()
+
+    const coordTools = h.calls.prompts.find((p) => p.sessionID === coordId)!.tools as Record<string, boolean>
+    expect(coordTools).toEqual({ bash: false, edit: false, write: false, patch: false })
+    // 只读保留:一问一答的轻量查询本来就该留在协调 session 里回答
+    expect(coordTools.read).toBeUndefined()
+    expect(coordTools.grep).toBeUndefined()
+    // 第三层是真正干活的,一个都不能禁
+    expect(h.calls.prompts.find((p) => p.sessionID === taskId)!.tools).toBeUndefined()
+  })
+
+  test("没配 coordinator 模型时不传 model 字段(退化成跟随绑定,不是传 null 进去)", async () => {
+    const h = harness({ activeProject: "/proj" })
+    h.send({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/p", mcpServers: [QWEN_HTTP] } })
+    await tick()
+    const sid = h.responseTo(1).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 2, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "x" }] } })
+    await tick()
+    expect(h.calls.prompts[0].model).toBeNull()
   })
 
   test("轮次判别写进日志(排查时能一眼看出认没认出信封)", async () => {

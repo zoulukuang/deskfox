@@ -107,6 +107,20 @@ export const ENV_ACP_WORKSPACE = "ACP_WORKSPACE"
 export const ENV_SERVER_URL = "ACP_DESKFOX_SERVER_URL"
 export const ENV_SERVER_AUTH = "ACP_DESKFOX_SERVER_AUTH"
 export const ENV_VOICE_DIR = "ACP_DESKFOX_VOICE_DIR"
+/**
+ * coordinator 的路由模型,形如 `provider/model`;空则跟随 DeskFox 绑定的模型。
+ *
+ * 为什么 coordinator 要单独配一档(2026-08-24 真机 QA 打出来的):
+ * **它的输入天然很大** —— qwen 每轮都会包一个 ~4.6k 字的请求信封(backend_instructions +
+ * 协调协议 + 用户偏好/记忆/最近语音上下文),再加 opencode 自己的 system prompt。
+ * 跟随绑定模型时,只要用户绑的是小上下文模型就直接 400:
+ *   `InternalError.Algo.InvalidParameter: Range of input length should be [1, 13000]`
+ * ——语音链路整个哑掉,而用户完全不知道为什么。
+ *
+ * 第三层任务**不受此约束**(它拿到的是一句干净的任务文本),继续跟随绑定模型,
+ * 「与手敲 session 无差别」(1-spec R2/R3)因此不受影响。
+ */
+export const ENV_COORDINATOR_MODEL = "ACP_DESKFOX_COORDINATOR_MODEL"
 export const ENV_ACTIVE_PROJECT_FILE = "ACP_DESKFOX_ACTIVE_PROJECT_FILE"
 export const ENV_LOG_FILE = "ACP_DESKFOX_LOG_FILE"
 
@@ -129,7 +143,14 @@ export function assertContractSelfConsistent(): void {
       problems.push(`必填参数表引用了未知工具 ${tool}`)
     }
   }
-  for (const name of [ENV_SERVER_URL, ENV_SERVER_AUTH, ENV_VOICE_DIR, ENV_ACTIVE_PROJECT_FILE, ENV_LOG_FILE]) {
+  for (const name of [
+    ENV_SERVER_URL,
+    ENV_SERVER_AUTH,
+    ENV_VOICE_DIR,
+    ENV_ACTIVE_PROJECT_FILE,
+    ENV_LOG_FILE,
+    ENV_COORDINATOR_MODEL,
+  ]) {
     if (!name.startsWith(ACP_ENV_PREFIX)) problems.push(`${name} 不是 ${ACP_ENV_PREFIX} 前缀,穿不过 qwen 的 env 白名单`)
   }
   if (problems.length) throw new Error(`[voice-bridge] 契约自检失败:\n- ${problems.join("\n- ")}`)
