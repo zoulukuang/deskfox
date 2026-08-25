@@ -45,6 +45,7 @@ describe("buildAcpGatewayEnv", () => {
       "ACP_DESKFOX_ACTIVE_PROJECT_FILE",
       "ACP_DESKFOX_LOG_FILE",
       "ACP_DESKFOX_COORDINATOR_MODEL",
+      "ACP_DESKFOX_TASK_MODEL",
     ]) {
       expect(env[k]).toBeTruthy()
       expect(k.startsWith("ACP_")).toBe(true)
@@ -82,6 +83,24 @@ describe("buildAcpGatewayEnv", () => {
       },
     })
     expect(env.ACP_DESKFOX_COORDINATOR_MODEL).toBe("alibaba-cn/qwen3.5-plus")
+  })
+
+  // user 2026-08-25 拍板:干活那层固定 Opus 5
+  test("第三层任务档注入 Opus,与 coordinator 档是两个不同的值", () => {
+    const { env } = build()
+    expect(env.ACP_DESKFOX_TASK_MODEL).toBe("claude-code/opus")
+    expect(env.ACP_DESKFOX_TASK_MODEL).not.toBe(env.ACP_DESKFOX_COORDINATOR_MODEL)
+  })
+
+  test("第三层可经 DESKFOX_VOICE_TASK_MODEL 覆盖", () => {
+    const { env } = build({
+      env: {
+        XDG_DATA_HOME: "/home/u/.local/share/deskfox",
+        PATH: "/usr/bin",
+        DESKFOX_VOICE_TASK_MODEL: "alibaba-cn/qwen3.8-max",
+      },
+    })
+    expect(env.ACP_DESKFOX_TASK_MODEL).toBe("alibaba-cn/qwen3.8-max")
   })
 
   test("凭据只进 env,不落命令行(ps 里看得见的地方一律没有密码)", () => {

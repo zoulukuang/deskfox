@@ -266,6 +266,23 @@ export const VOICE_MODEL_DEFAULTS = {
    * 小模型会直接 400(`Range of input length should be [1, 13000]`)。
    */
   coordinator: "alibaba-cn/qwen3.8-max",
+  /**
+   * 第三层任务(真正干活的那层)档 —— user 2026-08-25 拍板:**固定用 Opus 5**,
+   * 不再跟随 DeskFox 绑定模型。
+   *
+   * 为什么从"跟随绑定"改成钉死:跟随绑定在**全新环境下会挑到荒唐的模型** ——
+   * 真机实撞 `alibaba-cn/tongyi-intent-detect-v3`(意图识别小模型),任务 100% 失败,
+   * 而语音场景里用户看不见也换不了模型,只听到一句"失败了"。
+   * 钉死强模型符合 1-spec R2「复杂任务交给更强模型」的本意。
+   *
+   * 本机 `claude-code` provider 的 `opus` 档即当前 Opus 代际(实测可用清单:
+   * opus / sonnet / haiku / fable;原生 `anthropic` 那条是 oauth 且已过期,不可用)。
+   *
+   * ⚠️ 代价:claude CLI 直连 Anthropic 会 403,**需要代理**。DeskFox 从 Dock/Finder 启动时
+   * GUI 进程不继承 shell 的代理变量 —— `needsOverseasNetwork` 会在启动日志里预警。
+   * 想换回国产直连:`DESKFOX_VOICE_TASK_MODEL=alibaba-cn/qwen3.8-max`。
+   */
+  task: "claude-code/opus",
 } as const
 
 /** qwen-audio-agent 1.11.0 `shared/realtime-model-catalog.mjs` 的四个档案。 */
@@ -290,6 +307,8 @@ export interface VoiceModels {
   readonly realtime: string
   /** voice-acp-bridge 的 coordinator 档;见 VOICE_MODEL_DEFAULTS.coordinator 的注释 */
   readonly coordinator: string
+  /** voice-acp-bridge 的第三层任务档;见 VOICE_MODEL_DEFAULTS.task 的注释 */
+  readonly task: string
 }
 
 export function resolveVoiceModels(env: NodeJS.ProcessEnv = process.env): VoiceModels {
@@ -302,5 +321,6 @@ export function resolveVoiceModels(env: NodeJS.ProcessEnv = process.env): VoiceM
     small: pick(env.DESKFOX_VOICE_SMALL_MODEL, VOICE_MODEL_DEFAULTS.small),
     realtime: pick(env.DESKFOX_VOICE_REALTIME_MODEL, VOICE_MODEL_DEFAULTS.realtime),
     coordinator: pick(env.DESKFOX_VOICE_COORDINATOR_MODEL, VOICE_MODEL_DEFAULTS.coordinator),
+    task: pick(env.DESKFOX_VOICE_TASK_MODEL, VOICE_MODEL_DEFAULTS.task),
   }
 }

@@ -198,6 +198,7 @@ describe("③ 四个模型(D-F + coordinator)", () => {
       small: "alibaba-cn/qwen-flash",
       realtime: "qwen-audio-3.0-realtime-plus",
       coordinator: "alibaba-cn/qwen3.8-max",
+      task: "claude-code/opus",
     })
   })
 
@@ -210,19 +211,21 @@ describe("③ 四个模型(D-F + coordinator)", () => {
     expect(VOICE_MODEL_DEFAULTS.small).not.toBe(VOICE_MODEL_DEFAULTS.backend)
   })
 
-  test("四个位置各自可 env 覆盖(换模型不改代码)", () => {
+  test("五个位置各自可 env 覆盖(换模型不改代码)", () => {
     expect(
       resolveVoiceModels({
         DESKFOX_VOICE_BACKEND_MODEL: "alibaba-cn/qwen3-max",
         DESKFOX_VOICE_SMALL_MODEL: "anthropic/claude-haiku-4-5",
         DESKFOX_VOICE_REALTIME_MODEL: "qwen3.5-omni-plus-realtime",
         DESKFOX_VOICE_COORDINATOR_MODEL: "alibaba-cn/qwen3.5-plus",
+        DESKFOX_VOICE_TASK_MODEL: "anthropic/claude-opus-5",
       }),
     ).toEqual({
       backend: "alibaba-cn/qwen3-max",
       small: "anthropic/claude-haiku-4-5",
       realtime: "qwen3.5-omni-plus-realtime",
       coordinator: "alibaba-cn/qwen3.5-plus",
+      task: "anthropic/claude-opus-5",
     })
   })
 
@@ -254,5 +257,24 @@ describe("③ 四个模型(D-F + coordinator)", () => {
 
   test("默认 realtime 必须在白名单内(防以后改默认值改出个哑档)", () => {
     expect(isKnownRealtimeModel(VOICE_MODEL_DEFAULTS.realtime)).toBe(true)
+  })
+})
+
+// user 2026-08-25 拍板:干活那层固定用 Opus 5,不再跟随绑定模型
+// (跟随绑定在全新环境下会挑到 tongyi-intent-detect-v3 这种意图识别档,任务 100% 失败)
+describe("第三层任务档", () => {
+  test("默认钉死 Opus,且与 coordinator 档分开", () => {
+    expect(VOICE_MODEL_DEFAULTS.task).toBe("claude-code/opus")
+    expect(VOICE_MODEL_DEFAULTS.task).not.toBe(VOICE_MODEL_DEFAULTS.coordinator)
+  })
+
+  test("coordinator 仍避开 claude-code(它看不见动态注册的 MCP,派不出活)", () => {
+    expect(VOICE_MODEL_DEFAULTS.coordinator.startsWith("claude-code/")).toBe(false)
+  })
+
+  test("可经 DESKFOX_VOICE_TASK_MODEL 换回国产直连(claude CLI 要代理)", () => {
+    expect(resolveVoiceModels({ DESKFOX_VOICE_TASK_MODEL: "alibaba-cn/qwen3.8-max" }).task).toBe(
+      "alibaba-cn/qwen3.8-max",
+    )
   })
 })
