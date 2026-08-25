@@ -45,11 +45,12 @@ describe("buildAcpGatewayEnv", () => {
       "ACP_DESKFOX_ACTIVE_PROJECT_FILE",
       "ACP_DESKFOX_LOG_FILE",
       "ACP_DESKFOX_COORDINATOR_MODEL",
-      "ACP_DESKFOX_TASK_MODEL",
     ]) {
       expect(env[k]).toBeTruthy()
       expect(k.startsWith("ACP_")).toBe(true)
     }
+    // TASK_MODEL 有意为空(= 跟随绑定),只校验前缀
+    expect(env.ACP_DESKFOX_TASK_MODEL).toBeDefined()
     expect(env.ACP_COMMAND).toBe("/repo/packages/desktop/scripts/deskfox-voice-bridge.mjs")
     expect(env.ACP_WORKSPACE).toBe("/proj")
   })
@@ -85,11 +86,9 @@ describe("buildAcpGatewayEnv", () => {
     expect(env.ACP_DESKFOX_COORDINATOR_MODEL).toBe("alibaba-cn/qwen3.5-plus")
   })
 
-  // user 2026-08-25 拍板:干活那层固定 Opus 5
-  test("第三层任务档注入 Opus,与 coordinator 档是两个不同的值", () => {
-    const { env } = build()
-    expect(env.ACP_DESKFOX_TASK_MODEL).toBe("claude-code/opus")
-    expect(env.ACP_DESKFOX_TASK_MODEL).not.toBe(env.ACP_DESKFOX_COORDINATOR_MODEL)
+  // ★ 架构原则:模型配置走 DeskFox 通路,语音链路不另配一套
+  test("第三层默认不指定模型(空 = 跟随 DeskFox 绑定的那个)", () => {
+    expect(build().env.ACP_DESKFOX_TASK_MODEL).toBe("")
   })
 
   test("第三层可经 DESKFOX_VOICE_TASK_MODEL 覆盖", () => {

@@ -267,22 +267,20 @@ export const VOICE_MODEL_DEFAULTS = {
    */
   coordinator: "alibaba-cn/qwen3.8-max",
   /**
-   * 第三层任务(真正干活的那层)档 —— user 2026-08-25 拍板:**固定用 Opus 5**,
-   * 不再跟随 DeskFox 绑定模型。
+   * 第三层任务(真正干活的那层)档 —— **默认空 = 跟随 DeskFox 绑定的模型**。
    *
-   * 为什么从"跟随绑定"改成钉死:跟随绑定在**全新环境下会挑到荒唐的模型** ——
-   * 真机实撞 `alibaba-cn/tongyi-intent-detect-v3`(意图识别小模型),任务 100% 失败,
-   * 而语音场景里用户看不见也换不了模型,只听到一句"失败了"。
-   * 钉死强模型符合 1-spec R2「复杂任务交给更强模型」的本意。
+   * 这是本架构的立身之本:语音派出的 session 就是 sidecar 建的,**模型配置也走 DeskFox 通路**
+   * (user 2026-08-25 纠正)。用户在界面上换模型,语音任务跟着换 —— 这才是
+   * 1-spec R3「与手敲 session 无差别」。在语音链路里另配一套模型,等于又造了一条平行通路,
+   * 正是本次重构要消除的东西。
    *
-   * 本机 `claude-code` provider 的 `opus` 档即当前 Opus 代际(实测可用清单:
-   * opus / sonnet / haiku / fable;原生 `anthropic` 那条是 oauth 且已过期,不可用)。
+   * 曾短暂钉死过 `claude-code/opus`,起因是 local 测试包(全新隔离 DB、没绑过模型)
+   * 被 opencode 默认档挑中了 `tongyi-intent-detect-v3`。那是**测试环境没绑模型**的问题,
+   * 拿改架构默认值去解,方向错了 —— 已回退。绑模型是 DeskFox 本来就该做的事。
    *
-   * ⚠️ 代价:claude CLI 直连 Anthropic 会 403,**需要代理**。DeskFox 从 Dock/Finder 启动时
-   * GUI 进程不继承 shell 的代理变量 —— `needsOverseasNetwork` 会在启动日志里预警。
-   * 想换回国产直连:`DESKFOX_VOICE_TASK_MODEL=alibaba-cn/qwen3.8-max`。
+   * `DESKFOX_VOICE_TASK_MODEL` 仍留作逃生口(排查 / 临时压测某个模型),但**默认不用**。
    */
-  task: "claude-code/opus",
+  task: "",
 } as const
 
 /** qwen-audio-agent 1.11.0 `shared/realtime-model-catalog.mjs` 的四个档案。 */
@@ -321,6 +319,7 @@ export function resolveVoiceModels(env: NodeJS.ProcessEnv = process.env): VoiceM
     small: pick(env.DESKFOX_VOICE_SMALL_MODEL, VOICE_MODEL_DEFAULTS.small),
     realtime: pick(env.DESKFOX_VOICE_REALTIME_MODEL, VOICE_MODEL_DEFAULTS.realtime),
     coordinator: pick(env.DESKFOX_VOICE_COORDINATOR_MODEL, VOICE_MODEL_DEFAULTS.coordinator),
-    task: pick(env.DESKFOX_VOICE_TASK_MODEL, VOICE_MODEL_DEFAULTS.task),
+    // 空串是**有意义的默认值**(= 跟随 DeskFox 绑定模型),不是"未配置",所以不走 pick 的回落
+    task: String(env.DESKFOX_VOICE_TASK_MODEL ?? "").trim() || VOICE_MODEL_DEFAULTS.task,
   }
 }

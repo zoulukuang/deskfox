@@ -252,29 +252,57 @@ user 自己在 local 包上试了几轮,**任务全部失败**。查桥日志:�
    → 加 `humanizeSidecarError`:上下文超限 / 认证 / 代理 / 限流 / 网络各给一句能照做的话,
    认不出的保留原文但截短;**原始错误仍进日志**,排查时找得回来。
 
-### D17. 干活那层钉死 Opus 5(user 拍板)
+### D17. ~~干活那层钉死 Opus 5~~ → **已回退**(user 纠正架构方向)
 
-D16 给第三层留了 `DESKFOX_VOICE_TASK_MODEL` 出口,但**默认仍是跟随绑定模型**。
-user 2026-08-25 拍板:干脆钉死 Opus 5。
+一度把第三层模型钉死成 `claude-code/opus`,起因是 D16 那个 local 包挑到意图识别档的问题。
+user 当天就纠正了方向:
 
-理由站得住:跟随绑定在全新环境下会挑到荒唐的模型(D16 实撞的意图识别档),
-而语音场景里用户**看不见也换不了**模型,只听到一句"失败了"。
-钉死强模型正是 1-spec R2「复杂任务交给更强模型」的本意 ——
-R3 要的"与手敲 session 无差别"指的是**可见性、状态流转、执行过程**,不是模型对象必须同一个。
+> 我们新设定的这个架构就是都走 DeskFox 的通路。配置的模型应该也是走 DeskFox 的通路吧,
+> 包括干活的 Claude 的模型。
 
-本机的 Opus 5 可用形态是 `claude-code/opus`(claude-code provider 实测四档
-opus/sonnet/haiku/fable;原生 `anthropic` 是 oauth 且已过期,不可用)。
+这个纠正是对的,而且指出的是**方法上的错**:local 包任务全失败的根因是
+「**测试包没绑过模型**」,正确的解法是去绑模型,而我却去改了架构的默认值 ——
+等于在语音链路里又造了一条平行的模型配置通路,**而消除平行通路正是本次重构的全部意义**。
+副作用同样真实:用户在 DeskFox 界面上换了模型,语音任务却还用着 env 里写死的那个,
+这与 R3「与手敲 session 无差别」直接冲突。
 
-⚠️ 代价:claude CLI 直连 Anthropic 会 403,**需要代理**;从 Dock/Finder 启动的 GUI 进程
-不继承 shell 代理变量(`needsOverseasNetwork` 会预警)。想换回国产直连:
-`DESKFOX_VOICE_TASK_MODEL=alibaba-cn/qwen3.8-max`。
+已回退:`VOICE_MODEL_DEFAULTS.task = ""`(空 = 跟随 DeskFox 绑定的模型),
+`DESKFOX_VOICE_TASK_MODEL` 仅作排查用的逃生口,默认不用。
 
-**coordinator 那档仍然避开 claude-code 系**(D15:它要看得见动态注册的 MCP 才能派活)。
-两档现在是两个不同的值,各有各的理由,单测钉死了这一点。
+顺带澄清一个之前没查实就下的结论:第三层用 `claude-code/*` **完全没问题**。
+plugin 源码(`deskfox-plugins/claude-code/src/mcp-config.ts` 文件头注释)说得很清楚 ——
+它把 opencode 配置里的**静态** MCP 转成 CLI 的 `--mcp-config`,claude CLI 用得上;
+用不上的只有**运行时动态注册**的那批。第三层要的是内置工具(read/write/bash)+ 静态 MCP,
+两样都在。真机也验过:第三层跑 opus 时 `bash`×2 + `write` 全部完成。
 
-真机复验:第三层 session 的模型确认为 `{"id":"opus","providerID":"claude-code"}`,
-工具调用 bash×2 + write 全部完成 —— **claude-code 档的内置工具可用**
-(它拿不到的只是**动态注册**的 MCP,而第三层本来就刻意不给)。
+### D18. coordinator 是唯一还没走通 DeskFox 通路的地方(待 user 定夺)
+
+按 D17 的原则,coordinator 也该跟随 DeskFox 绑定模型。**但它做不到**,原因不在我们:
+
+派活工具(`qwen_audio_agent_*`)是 qwen 在 `session/new` 时下发、由桥**运行时动态注册**给
+sidecar 的。而 `claude-code` provider 把活转给 claude CLI,plugin 只能透传静态 MCP ——
+它自己的注释写着「**不覆盖运行时动态注册的 MCP**…要覆盖需要 opencode 侧开一条
+providerOptions 通道,另议」。
+
+后果很硬:**user 的正式版绑的就是 `claude-code/opus`**,coordinator 若跟随绑定,
+就一个派活工具都看不见 → 语音永远派不出活(A/B 已实测,而且失败形态很坏:
+它会转头自己动手,被禁工具后编造「已经完成」)。
+
+三条路:
+
+| 方案 | 代价 |
+|---|---|
+| A. coordinator 保留独立档(现状,`alibaba-cn/qwen3.8-max`) | 它不跟随 DeskFox 绑定 —— 架构上留一个特例 |
+| B. coordinator 也跟随绑定 | user 绑 claude-code 时语音完全不能派活,**不可接受** |
+| C. 根治:让动态 MCP 也能传给 claude CLI | 要改 plugin + 很可能要动 opencode 侧(黑名单),跨仓,工作量大 |
+
+倾向 A,理由不只是"没别的办法":coordinator 不是用户的工作会话,它是语音链路的**内部路由器**
+——只判断要不要派活、把结果整理成一句播报,不干活、不产出、不碰文件。
+1-spec §3.1 本来也写着「coordinator 路由模型**可配**…路由是轻任务,可降级小模型省延迟/费用」。
+真正跟"用户绑的模型"有关的是干活那层,而那层已经跟随了。
+
+C 记为将来的清理项,与"删旧链路代码"那期一起考虑。
+
 ## 三、踩坑记录
 
 ### P1. 集成测试装置:server 用 `stdio: "pipe"` 却不读 → 服务卡死

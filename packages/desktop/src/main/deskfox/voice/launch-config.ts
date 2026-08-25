@@ -513,11 +513,9 @@ export function buildAcpGatewayEnv(input: AcpGatewayEnvInput): GatewayEnvResult 
     //      而新链路没有 wrapper。详见 VOICE_MODEL_DEFAULTS.coordinator 的注释。
     // `DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖;第三层任务仍跟随绑定模型,同源性不受影响。
     ACP_DESKFOX_COORDINATOR_MODEL: models.coordinator,
-    // 第三层任务的模型:**钉死强模型档**(user 2026-08-25 拍板 Opus 5),
-    // 不再跟随 DeskFox 绑定 —— 跟随绑定在全新环境下会挑到荒唐的模型
-    // (真机撞到过 `tongyi-intent-detect-v3` 意图识别档,任务 100% 失败),
-    // 而语音场景里用户看不见也换不了。详见 VOICE_MODEL_DEFAULTS.task。
-    // `DESKFOX_VOICE_TASK_MODEL` 可覆盖。
+    // 第三层任务的模型:**默认空 = 跟随 DeskFox 绑定的模型**。
+    // 模型配置和 session 一样走 DeskFox 通路 —— 在语音链路里另配一套,
+    // 等于又造一条平行通路,正是本次重构要消除的东西。详见 VOICE_MODEL_DEFAULTS.task。
     ACP_DESKFOX_TASK_MODEL: models.task,
   }
   if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey

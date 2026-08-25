@@ -198,7 +198,7 @@ describe("③ 四个模型(D-F + coordinator)", () => {
       small: "alibaba-cn/qwen-flash",
       realtime: "qwen-audio-3.0-realtime-plus",
       coordinator: "alibaba-cn/qwen3.8-max",
-      task: "claude-code/opus",
+      task: "",
     })
   })
 
@@ -260,12 +260,11 @@ describe("③ 四个模型(D-F + coordinator)", () => {
   })
 })
 
-// user 2026-08-25 拍板:干活那层固定用 Opus 5,不再跟随绑定模型
-// (跟随绑定在全新环境下会挑到 tongyi-intent-detect-v3 这种意图识别档,任务 100% 失败)
+// 架构原则(user 2026-08-25 纠正):模型配置和 session 一样走 DeskFox 通路。
+// 曾短暂钉死过 claude-code/opus,那是拿改架构默认值去解"测试包没绑模型"的问题,已回退。
 describe("第三层任务档", () => {
-  test("默认钉死 Opus,且与 coordinator 档分开", () => {
-    expect(VOICE_MODEL_DEFAULTS.task).toBe("claude-code/opus")
-    expect(VOICE_MODEL_DEFAULTS.task).not.toBe(VOICE_MODEL_DEFAULTS.coordinator)
+  test("默认空 = 跟随 DeskFox 绑定的模型(不在语音链路里另配一套)", () => {
+    expect(VOICE_MODEL_DEFAULTS.task).toBe("")
   })
 
   test("coordinator 仍避开 claude-code(它看不见动态注册的 MCP,派不出活)", () => {
