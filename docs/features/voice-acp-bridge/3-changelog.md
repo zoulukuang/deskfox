@@ -249,6 +249,34 @@ voice 单测 **342 pass / 0 fail**(新增 31 条);集成 **8 pass**;desktop type
 **仍待定夺**:coordinator 是唯一还没走通 DeskFox 通路的地方 —— 它需要动态注册的派活工具,
 claude-code 档结构上拿不到。三个方案见 2-plan 的 D18。
 
+## 第 4 笔:模型走 DeskFox 通路 + coordinator 认得用户项目(2026-08-25)
+
+user 定案两条分工(2-plan D18):**干活那层跟随 DeskFox 里选的模型;分派那层独立配置**。
+落地时又打出两个缺陷,都在 2-plan 的 D19 / D20:
+
+**① 「跟随 DeskFox」不能靠"不传 model"。** sidecar 在没有显式模型时走 `defaultModelIDs`
+(`provider.ts:1098`)—— **每个 provider 按模型名排序取第一个**,纯任意
+(`tongyi-intent-detect-v3` 就是这么被选中的)。也就是说之前所谓的"跟随绑定"名义上跟随、
+实际没跟。新增 `sidecar.recentModel(directory)` 读**该目录最近一条 session 的模型**
+—— 用户在界面上选的模型记在他建的每条 session 上,这是对当前选择最忠实的代理。
+优先级:显式配置 > 最近实际用过的 > 不指定(兜底)。
+
+**② coordinator 把自己的目录当成了"当前项目"。** 它的 cwd 是 voice 独立目录(递归防护的代价),
+于是派活时把 `~/.local/share/deskfox/voice-workspace` 写进了任务文本,
+第三层虽然建在用户项目里却照着绝对路径写 —— **每一层单独看都对,错的是层间传递的那段文字**。
+路由 prompt 改成每轮现算并注入当前项目路径 + 明令不写绝对路径。
+
+真机复验(默认配置,无任何 env):
+
+| 验收点 | 结果 |
+|---|---|
+| 干活层跟随 | ✅ 日志 `第三层跟随该项目最近使用的模型:claude-code/opus`;DB 确认 session 模型为 opus |
+| 分派层独立 | ✅ coordinator 用 `alibaba-cn/qwen3.8-max` |
+| 派活文本无绝对路径 | ✅「统计**当前项目**里有多少个文件,写进**项目根目录**的 count.md」 |
+| **产物落在用户项目** | ✅ `~/deskfox-voice-qa/count.md`;语音工作区干净 |
+
+回归:voice 单测 **362 pass / 0 fail**、集成 8 pass、typecheck 29/29。
+
 ### 完整闭环复验(2026-08-25,第三层配 `alibaba-cn/qwen3.8-max`)
 
 修完 ⑤ 之后,**说话到产物落地的整条链路第一次真正跑通**:

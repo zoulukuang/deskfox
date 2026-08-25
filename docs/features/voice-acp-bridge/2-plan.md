@@ -275,33 +275,84 @@ plugin 源码(`deskfox-plugins/claude-code/src/mcp-config.ts` 文件头注释)�
 用不上的只有**运行时动态注册**的那批。第三层要的是内置工具(read/write/bash)+ 静态 MCP,
 两样都在。真机也验过:第三层跑 opus 时 `bash`×2 + `write` 全部完成。
 
-### D18. coordinator 是唯一还没走通 DeskFox 通路的地方(待 user 定夺)
+### D18. 两层模型各归各的:干活跟随 DeskFox,分派独立配置(user 定案)
 
-按 D17 的原则,coordinator 也该跟随 DeskFox 绑定模型。**但它做不到**,原因不在我们:
+user 2026-08-25 定案:
 
-派活工具(`qwen_audio_agent_*`)是 qwen 在 `session/new` 时下发、由桥**运行时动态注册**给
-sidecar 的。而 `claude-code` provider 把活转给 claude CLI,plugin 只能透传静态 MCP ——
-它自己的注释写着「**不覆盖运行时动态注册的 MCP**…要覆盖需要 opencode 侧开一条
-providerOptions 通道,另议」。
+> 干活的模型应该是 DeskFox 里已经配置好可以选的模型,都可以选,未来干活模型也应该能从
+> DeskFox 配置的里面任意选才对。
+> 做任务分派的模型可以单独配置,不必须与干活的模型一致,而且它本身就应该是独立配置的。
 
-后果很硬:**user 的正式版绑的就是 `claude-code/opus`**,coordinator 若跟随绑定,
-就一个派活工具都看不见 → 语音永远派不出活(A/B 已实测,而且失败形态很坏:
-它会转头自己动手,被禁工具后编造「已经完成」)。
+于是两层各归各的,**不再是一个特例,而是一条明确的分工**:
 
-三条路:
+| 层 | 模型来源 | 为什么 |
+|---|---|---|
+| 第三层(干活) | **跟随 DeskFox 里选的模型** | 它就是用户的工作会话,R2/R3 要的同源性正在这里 |
+| coordinator(分派) | **独立配置** | 它是语音链路的内部路由器,不干活不产出;而且它有两条硬约束,见下 |
 
-| 方案 | 代价 |
-|---|---|
-| A. coordinator 保留独立档(现状,`alibaba-cn/qwen3.8-max`) | 它不跟随 DeskFox 绑定 —— 架构上留一个特例 |
-| B. coordinator 也跟随绑定 | user 绑 claude-code 时语音完全不能派活,**不可接受** |
-| C. 根治:让动态 MCP 也能传给 claude CLI | 要改 plugin + 很可能要动 opencode 侧(黑名单),跨仓,工作量大 |
+coordinator 必须独立配置的两条硬约束(都实测过,不是设计偏好):
 
-倾向 A,理由不只是"没别的办法":coordinator 不是用户的工作会话,它是语音链路的**内部路由器**
-——只判断要不要派活、把结果整理成一句播报,不干活、不产出、不碰文件。
-1-spec §3.1 本来也写着「coordinator 路由模型**可配**…路由是轻任务,可降级小模型省延迟/费用」。
-真正跟"用户绑的模型"有关的是干活那层,而那层已经跟随了。
+1. **它在独立目录,没有用户的模型历史可继承** —— voice-workspace 是我们自己建的,
+   用户从没在那儿开过会话。"跟随"在这里无从跟起,只会落到 sidecar 的任意默认档。
+2. **它需要动态注册的派活工具,而 `claude-code/*` 拿不到** ——
+   plugin 只透传静态 MCP(其源码注释明说不覆盖运行时动态注册的那批)。
+   user 正式版绑的正是 `claude-code/opus`,若跟随绑定就等于永远派不出活;
+   A/B 实测的失败形态还很坏:它会转头自己动手,被禁工具后编造「已经完成」。
 
-C 记为将来的清理项,与"删旧链路代码"那期一起考虑。
+当前实现:`VOICE_MODEL_DEFAULTS.coordinator = "alibaba-cn/qwen3.8-max"`,
+`DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖。
+
+**遗留**:现在只能经 env 配。DeskFox 面向非编码用户,理想形态是做进设置界面
+(和"语音"相关设置放一起)。记为后续 UI 项,不在本期。
+
+### D19. 「跟随 DeskFox 选的模型」不能靠"不传 model"
+
+实现 D18 上半条时发现一个洞:**桥建 session 时不指定模型,拿到的并不是用户在界面上选的那个**。
+
+sidecar 在没有显式模型时走 `defaultModelIDs`(`provider.ts:1098`):
+
+```ts
+mapValues(providers, (item) => sort(Object.values(item.models))[0].id)
+```
+
+—— **每个 provider 按模型名排序取第一个**,纯任意。真机实撞的
+`alibaba-cn/tongyi-intent-detect-v3` 就是这么来的(alibaba-cn 有 106 个模型)。
+也就是说 D16/D17 里我说的"跟随绑定模型",在代码层面其实是"跟随一个任意默认档",
+**名义上跟随、实际上没跟**。
+
+用户在界面上选的模型记在他建的每条 session 上(`session.model`),所以最忠实的代理是
+**该目录最近一条 session 的模型**。桥新增 `sidecar.recentModel(directory)` 读它:
+
+优先级:显式配置(`ACP_DESKFOX_TASK_MODEL`,排查用) > 该项目最近实际用过的 > 不指定(兜底)。
+
+于是"在 DeskFox 里换个模型,下一次语音派活就跟着换"真的成立了 —— 不用重启语音,
+也不用在语音链路里另配一套。兜底那条只在"全新项目 + 从没建过会话"时走到,
+那种情况下用户自己手敲也会撞上同一个默认档。
+
+### D20. coordinator 不知道用户项目在哪,会把自己的目录写进任务文本
+
+D19 落地后再跑,第三层 session **建对了目录**(用户项目),模型也**跟对了**(claude-code/opus),
+`write` 也报 completed —— 但 `count.md` 还是没出现在用户项目里。
+
+查 write 的 `filePath` 才看清:它写去了 `~/.local/share/deskfox/voice-workspace/count.md`。
+再看 coordinator 派出的任务文本:
+
+> 统计项目目录 `/Users/openclaw/.local/share/deskfox/voice-workspace` 里一共有多少个文件…
+> 然后把结果写入该项目根目录下的 count.md
+
+**coordinator 把自己的 cwd 当成了"当前项目"。** 它的 cwd 是 voice 独立目录 ——
+那正是递归防护(§3.1)刻意安排的,代价就是它对用户真实项目一无所知。
+第三层虽然建在正确目录里,但任务文本给了绝对路径,它老老实实照做。
+
+这个 bug 很隐蔽:**每一层单独看都是对的**(目录对、模型对、工具调用成功),
+错的是层与层之间传递的那段文字。
+
+修法:coordinator 的路由 prompt 改成**每轮现算**(`buildCoordinatorPrompt(activeProject)`),
+把用户当前项目路径写进去,并明令「**不要在任务里写绝对路径**,接活的会话已经在那个目录里运行了」。
+现算而不是缓存,是因为用户随时可能切项目。
+
+真机复验:派活文本变成「统计**当前项目**里有多少个文件,写进**项目根目录**的 count.md」,
+产物正确落在用户项目里,语音工作区干净。
 
 ## 三、踩坑记录
 
