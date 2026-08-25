@@ -14,6 +14,12 @@
 //   · **同一 session 并发 prompt 不会 409**:第二个请求会 join 第一个的 fiber,两条 user message
 //     都写进去,却只有**一次** `session.idle`。按"一发一等"配对必然错配 ⇒ 调用侧自己串行化。
 
+/**
+ * 语音建的 session 在 `metadata` 上的标记键。
+ * 靠它把"用户手敲的会话"和"语音派出去的任务"区分开 —— 见 {@link recentModel} 的自我锁死问题。
+ */
+export const VOICE_SESSION_MARK = "deskfoxVoice"
+
 export interface SidecarSession {
   readonly id: string
   readonly title?: string
@@ -21,6 +27,7 @@ export interface SidecarSession {
   readonly time?: { readonly updated?: number }
   /** 该 session 用的模型;注意字段是 `id` 不是 `modelID`(与 PromptPayload 的形状不同) */
   readonly model?: { readonly id?: string; readonly providerID?: string }
+  readonly metadata?: Record<string, unknown>
 }
 
 /** sidecar SSE 的一条事件(`GET /event` 的 data 字段)。 */
@@ -90,11 +97,19 @@ export function createSidecarClient(options: SidecarClientOptions) {
   }
 
   return {
-    /** 建一条 session。**这一步就是「语音任务出现在 DeskFox 列表里」的全部魔法** —— 没有别的同步机制。 */
+    /**
+     * 建一条 session。**这一步就是「语音任务出现在 DeskFox 列表里」的全部魔法** —— 没有别的同步机制。
+     *
+     * 一律打上 `{ [VOICE_SESSION_MARK]: true }` 标记。用途见 {@link recentModel}:
+     * 查"用户在用什么模型"时必须把语音自己建的 session 排除掉,否则会自我锁死。
+     */
     async createSession(directory: string, input?: { title?: string }): Promise<SidecarSession> {
       const res = await call("/session", directory, {
         method: "POST",
-        body: JSON.stringify(input?.title ? { title: input.title } : {}),
+        body: JSON.stringify({
+          ...(input?.title ? { title: input.title } : {}),
+          metadata: { [VOICE_SESSION_MARK]: true },
+        }),
       })
       return await json<SidecarSession>(res)
     },
@@ -135,23 +150,28 @@ export function createSidecarClient(options: SidecarClientOptions) {
     },
 
     /**
-     * 这个目录里**最近实际用过的模型** —— 语音派活据此跟随用户在 DeskFox 界面上的选择。
+     * 这个目录里**用户最近实际用过的模型** —— 语音派活据此跟随他在 DeskFox 界面上的选择。
      *
      * 为什么需要它:建 session 时不传 model,sidecar 会落到 `defaultModelIDs`
      * (`provider.ts:1098`)—— 那是**每个 provider 按模型名排序取第一个**,纯任意。
      * 真机实撞:alibaba-cn 的 106 个模型里排到了 `tongyi-intent-detect-v3`(意图识别档),
      * 任务 100% 失败。也就是说"不指定模型"≠"跟随用户的选择",两者差得很远。
      *
-     * 用户在界面上选的模型会记在他建的每条 session 上,所以"这个目录最近一条 session 的模型"
-     * 就是对他当前选择最忠实的代理 —— 换了模型,下一次语音派活自动跟上。
-     * 查不到(全新项目 / 全新装机)返回 null,由调用方决定回落。
+     * ⚠️ **必须排除语音自己建的 session**,否则会自我锁死:
+     * 语音第一次用了模型 X → 它建的 session 记着 X → 下次查"最近用过的"又读到 X ——
+     * **用户在界面上怎么换都没用**。2026-08-25 真机实撞:用户界面上明明选着 Claude Opus,
+     * 任务却一直跑 Qwen3.8 Max。所以只认**用户手敲的** session(没有语音标记的那些)。
+     *
+     * 查不到(全新项目 / 用户还没在这儿建过会话)返回 null,由调用方决定回落。
      */
     async recentModel(directory: string): Promise<{ providerID: string; modelID: string } | null> {
       try {
-        const res = await call("/session", directory, { method: "GET", query: { limit: "10" } })
+        // 多取一些:语音自己建的会插在中间,取太少可能全被它们占满
+        const res = await call("/session", directory, { method: "GET", query: { limit: "40" } })
         const list = await json<SidecarSession[] | null>(res)
         if (!Array.isArray(list)) return null
         for (const s of list) {
+          if (s.metadata?.[VOICE_SESSION_MARK]) continue // 语音自己建的,不算用户的选择
           const m = s.model
           if (m && typeof m.providerID === "string" && typeof m.id === "string" && m.providerID && m.id) {
             return { providerID: m.providerID, modelID: m.id }
