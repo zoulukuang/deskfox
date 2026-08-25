@@ -103,6 +103,130 @@ qwen 侧**所有超时都是空转的**:它传给 SDK 的是 `signal`,而 SDK �
 **悬而不答 = 那条 session 永久锁死**(它对同一 sessionId 只允许一个在途 prompt)。
 所以断流、dispose、cancel 三条路径都必须 settle。
 
+### D10. coordinator 必须能单独指定模型(真机 QA 打出来的)
+
+**这条是单测与集成测试都测不出来的**,只有真机跑才暴露:2026-08-24 用 local 包做真机 QA,
+语音派活链路全通(spawn_thinking → 派活 → task.completed),但结果是:
+
+```
+<400> InternalError.Algo.InvalidParameter: Range of input length should be [1, 13000]
+```
+
+根因:**coordinator 的输入天然很大**。qwen 每轮都会包一个 ~4.6k 字的请求信封
+(backend_instructions + 协调协议 + 用户偏好/记忆/最近语音上下文),再加 opencode 自己的
+system prompt。而原实现让 coordinator 跟随 DeskFox 绑定的模型 ——
+只要用户绑的是小上下文模型(local 包是全新隔离 DB,没绑过模型 → 落到阿里系默认档),
+就直接 400,**整条语音哑掉,而用户完全不知道为什么**。
+
+为什么测试测不出来:单测的 sidecar 是假的;集成测试用的是 `opencode/big-pickle` 免费档,
+上下文够大。**"能跑通"和"在真实模型配置下能跑通"是两件事。**
+
+修法:coordinator 的模型单独一档,经 `ACP_DESKFOX_COORDINATOR_MODEL` 注入,
+默认取 `VOICE_MODEL_DEFAULTS.backend`(= `claude-code/opus`,voice-dispatch-minimal 已验证能扛),
+`DESKFOX_VOICE_BACKEND_MODEL` 可覆盖。**第三层任务不指定模型** —— 它拿到的是一句干净的任务文本,
+继续跟随绑定模型,「与手敲 session 无差别」(R2/R3)不受影响。
+
+这也正是 1-spec §3.1「coordinator 路由模型**可配**」那句话的落地形态;
+spec 说的"默认跟随 DeskFox 绑定模型"经真机否决 —— 那个默认值在小模型上直接坏掉。
+
+### D12. coordinator 必须被夺走「自己干活」的能力(真机 QA 第二轮打出来的)
+
+修完 D10 再跑,coordinator 这轮跑通了(`end_turn: session.idle`),但结果更值得警惕:
+
+- `count.md` 被写在 **coordinator 自己的目录**(voice-workspace),不是用户项目;
+- **第三层 session 一条都没建**(桥日志 `role=task` 计数 = 0)。
+
+也就是说:**派活根本没发生,coordinator 自己把活干了。**
+
+根因不是 prompt 写得不够清楚,而是**它手里有更近的路**:coordinator session 是 sidecar 建的
+普通 session,自带 read/write/bash 全套工具。模型看到"统计文件数写进 count.md",
+直接自己就做了 —— 对模型来说这是最短路径,任何"你应该派活"的措辞都在跟这条最短路径竞争。
+
+这也解释了旧链路的老毛病:voice-dispatch-minimal 那段「倾向于开新 session」的引导
+就是在跟同一个问题搏斗,而 1-spec §1.2 记的"判定阈值偏高、像样的活也留在 coordinator 里"
+其实是同一个现象的另一面。**靠 prompt 说服模型"别做你能做的事"从来都不牢靠。**
+
+修法与"派活 MCP 只注册给 voice 目录"是同一个思路 —— **用结构保证行为,不用措辞**:
+给 coordinator 的每轮 prompt 带 `tools: {bash:false, edit:false, write:false, patch:false}`
+(sidecar 会翻成 permission deny,`prompt.ts:1068`)。写与执行的路一堵,派活就成了唯一能完成
+任务的路径。
+
+**只禁写与执行,保留只读**:一问一答就能完的轻量查询本来就该留在协调 session 里回答
+(1-spec §3.1),禁掉只读会把那类请求也逼成派活,反而更差。
+路由 prompt 同步改写,明确告诉模型"这类工具对你是关闭的,不是限制而是分工"。
+
+### D15. coordinator 不能用 `claude-code/*` —— 它看不见 MCP 工具(真机 A/B,决定性)
+
+D14 把真名写进 prompt 后再跑,**模型仍然一次都没派活**(试 bash×2 + write×1)。
+说明问题不在措辞。于是做了一次干净的 A/B:只换 coordinator 模型,其余全不动。
+
+| coordinator 模型 | 结果 |
+|---|---|
+| `claude-code/opus` | ❌ 连跑两轮,一次没派活;调 bash/write 被拒后编出「已经写好了」 |
+| `alibaba-cn/qwen3.8-max` | ✅ **第一次就正确派活**,第三层 session 建在用户项目里 |
+
+根因是**老坑在新架构上复活**:`claude-code` provider 把活转给 claude CLI,而 opencode
+**动态注册**的 MCP 传不过去 —— coordinator 手里根本没有派活工具,自己动手是它唯一能做的事。
+
+这个坑 voice-dispatch-minimal 时代就踩过:`launch-env.test.ts` 里那条注释白纸黑字记着
+「2026-08-21 曾反过来守『默认后端不能是 claude-code 系』…plugin 侧 B1+B2 修好后前提消失」。
+但**那个修法依赖 `deskfox-acp-wrap.mjs` 的旁路文件合并**,而 wrapper 正是本次重构消除掉的
+补丁之一 —— 前提因此复活了,而且以"语音看起来在工作、其实从不派活"这种最难查的形式复活。
+
+修法:coordinator 单独一档默认值 `VOICE_MODEL_DEFAULTS.coordinator = alibaba-cn/qwen3.8-max`,
+`DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖,**与 backend 档解耦**(改 backend 不连带改它)。
+这同时兑现了 1-spec §3.1 那句「路由是轻任务,可降级小模型省延迟/费用」——
+顺带甩掉 claude CLI 对代理的依赖(没代理就 403)。
+**第三层任务不受影响**,照旧跟随 DeskFox 绑定模型(R2/R3 同源)。
+
+### D14. 派活工具的**真名**必须写进 prompt(真机 QA 第四轮)
+
+禁掉写/执行工具后再跑,`bash` 与 `write` 确实被挡住了(sidecar 回
+`Model tried to call unavailable tool`),**但模型没有转去派活** —— 它编了一句
+「结果已经写进 count.md」就收工了(而根本没写)。在语音场景里这是最坏的一种失败:
+用户听到"做完了",没法当场核对。
+
+从被拒工具的错误信息里抠出可用工具清单,才看到根因:派活工具的名字是
+**`qwen_audio_agent_qwen_audio_agent_session_start`** —— 双前缀。
+sidecar 给每个 MCP 工具加 server 名前缀(`catalog.ts:119`),而 qwen 的工具名**本身**
+就带 `qwen_audio_agent_`。于是 qwen 信封里说的 `session_start` 和模型实际看到的名字对不上,
+在 61 个工具里它没认出来那是同一个东西。
+
+修法两条:
+1. **把真名直接写进 coordinator 的 system prompt**(由 `QWEN_MCP_SERVER_NAME` +
+   `QWEN_MCP_TOOL_NAMES` 拼出来,上游改名时跟着变,不写死);
+2. prompt 明令:被拒的工具不要重试、不要找替代品、**绝不允许假装做完了**。
+
+### D13. DeskFox 退出不回收语音网关 → 孤儿骗过 health 探测(真机 QA 第三轮)
+
+第三轮跑之前重启了 local 包,结果新网关起不来:
+
+```
+Gateway 已在运行:http://127.0.0.1:3101
+后台 Agent 未连接
+--- exit code=0 ---
+```
+
+**上一轮的 qwenaudio gateway 成了孤儿进程**,还占着 3101。语音网关是 DeskFox spawn 的子进程,
+DeskFox 被杀后它不会跟着死;它 spawn 的桥同理还活着。于是新 DeskFox 的 `waitForHealth`
+探到 3101 有响应就判 `health=true` → 界面报「语音派活已开启」,
+而那个孤儿网关的桥连的是**上一个 DeskFox 的 sidecar**(早已不存在)——
+**语音看起来开着,实际完全不工作**,且没有任何报错。
+
+根因:`shutdownVoiceGateway()` 在 gateway.ts 里定义好了,却**全仓零调用者**
+(voice-dispatch-minimal 时代就如此,不是本 feat 引入的)。
+但它直接决定本 feat 的可用性,所以本期一并修:在 `stopSidecars()` 里调用它,
+DeskFox 无论从哪条路径退出(before-quit / will-quit / relaunch / 托盘退出)都会收掉网关。
+
+测试装置(qa-launch.sh)也补了一道 `pkill qwenaudio` 兜底。
+
+### D11. voice 目录路径重复(同一次真机 QA)
+
+桥日志报的 voiceDir 是 `~/.local/share/deskfox/deskfox/voice-workspace` —— 多了一层。
+`XDG_DATA_HOME` 在主进程里**已经是 deskfox 命名空间**(`applyDeskfoxDataNamespace` 设的),
+`voiceCoordinatorDir` 又拼了一次。功能没坏(目录照建照用),但路径难看且容易让人以为是 bug。
+回落值补上那一层与 `launch-env.deskfoxXdgDefaults` 对齐后修正。
+
 ## 三、踩坑记录
 
 ### P1. 集成测试装置:server 用 `stdio: "pipe"` 却不读 → 服务卡死

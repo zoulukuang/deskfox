@@ -109,6 +109,122 @@ TC-U7 `env.test.ts` / TC-U8 `mcp.test.ts`。
    桥以 DeskFox 当前项目为准建 session,而 qwen 记的是它自己给的 cwd。仅影响 qwen 侧日志显示。
 3. **切项目最多 5 秒后生效**(跟随靠 renderer 的 5 秒轮询)。
 
+## 第 2 笔:真机 QA 修复 —— coordinator 模型 / 工具边界 / 目录路径(2026-08-24~25)
+
+用 local 包做真机 QA(见下「真机验证」)时打出来的三个问题,**都是单测与集成测试测不出来的**。
+其中第 ③ 条最要紧:它让「派活」这件事根本没有发生。
+
+### 改了什么
+
+| 文件 | 改动 |
+|---|---|
+| `bridge/contract.ts` | 新增 `ENV_COORDINATOR_MODEL`(`ACP_DESKFOX_COORDINATOR_MODEL`),纳入自检 |
+| `bridge/env.ts` | 新增 `parseModelRef`;`BridgeConfig.coordinatorModel` |
+| `bridge/sidecar.ts` | `promptAsync` 的第 4 参改成 `{system?, model?, tools?}` |
+| `bridge/bridge.ts` | `BridgeDeps.coordinatorModel`;`COORDINATOR_DENIED_TOOLS`;只对 coordinator 传 model 与 tools |
+| `bridge/coordinator-prompt.ts` | 新增「你是派活的人,不是干活的人」一节 |
+| `voice/launch-env.ts` | 新增 `VOICE_MODEL_DEFAULTS.coordinator` 第 4 档 + `DESKFOX_VOICE_COORDINATOR_MODEL` |
+| `voice/launch-config.ts` | 注入 `ACP_DESKFOX_COORDINATOR_MODEL`(取 coordinator 档);修 `voiceCoordinatorDir` 路径重复 |
+| `scripts/deskfox-voice-bridge.mjs` | 传 coordinatorModel,启动日志打出来 |
+| `main/index.ts` | `stopSidecars()` 里调 `shutdownVoiceGateway()`(+2 行,带 FORK marker) |
+| `voice/launch-config-acp.test.ts`(新) | 16 条用例 |
+| `bridge/coordinator-prompt.test.ts`(新) | 7 条用例 |
+| `bridge/{env,bridge}.test.ts` / `voice/launch-env.test.ts` | 补 10 条 |
+
+### 为什么
+
+**① coordinator 的输入天然很大。** qwen 每轮包一个 ~4.6k 字的请求信封,加上 opencode 自己的
+system prompt。原实现让 coordinator 跟随 DeskFox 绑定的模型,于是只要用户绑的是小上下文模型
+就直接 400(`Range of input length should be [1, 13000]`),**整条语音哑掉且用户无从知道原因**。
+现在 coordinator 单独一档,默认 `claude-code/opus`(voice-dispatch-minimal 已验证能扛),
+`DESKFOX_VOICE_BACKEND_MODEL` 可覆盖;**第三层任务仍不指定模型**,继续跟随绑定模型,
+「与手敲 session 无差别」不受影响。
+
+**② voice 目录多了一层。** `XDG_DATA_HOME` 在主进程里已经是 deskfox 命名空间,
+`voiceCoordinatorDir` 又拼了一次 → `deskfox/deskfox/voice-workspace`。功能没坏,路径难看。
+
+**③ coordinator 自己把活干了,派活根本没发生。** 修完 ① 再跑,这轮技术上"成功"了
+(`end_turn: session.idle`),但 `count.md` 写在 coordinator 自己的目录、**第三层 session 一条都没建**。
+根因不是 prompt 不够清楚,而是**它手里有更近的路**:coordinator session 是 sidecar 建的普通
+session,自带 read/write/bash。任何"你应该派活"的措辞都在跟这条最短路径竞争,而措辞会输。
+修法与"派活 MCP 只注册给 voice 目录"同思路 —— **用结构保证行为**:给 coordinator 的每轮 prompt
+带 `tools: {bash:false, edit:false, write:false, patch:false}`(sidecar 翻成 permission deny)。
+写与执行的路一堵,派活就成了唯一能完成任务的路径。**只禁写与执行、保留只读** ——
+一问一答的轻量查询本来就该留在协调 session 里回答(1-spec §3.1)。
+
+**④ coordinator 用 `claude-code/*` 时看不见 MCP 工具,一次都不会派活。**
+禁掉写工具、把派活工具真名写进 prompt 之后,模型**仍然**只试 bash/write。
+A/B 实测(只换 coordinator 模型,其余不动):`claude-code/opus` 连跑两轮零派活;
+`alibaba-cn/qwen3.8-max` **第一次就正确派活**,第三层 session 建在用户项目里。
+根因是老坑在新架构上复活 —— `claude-code` provider 把活转给 claude CLI,
+opencode **动态注册**的 MCP 传不过去。voice-dispatch-minimal 时代靠
+`deskfox-acp-wrap.mjs` 的旁路文件合并绕开,而 wrapper 正是本次重构消除掉的补丁之一。
+修法:coordinator 单独一档默认值(`VOICE_MODEL_DEFAULTS.coordinator`),与 backend 解耦,
+`DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖;第三层照旧跟随绑定模型。
+
+**⑤ DeskFox 退出不回收语音网关 → 孤儿骗过 health 探测。** 重启 local 包后新网关起不来
+(`Gateway 已在运行` + `后台 Agent 未连接` + `exit 0`):上一轮的 qwenaudio gateway 成了孤儿,
+还占着 3101。新 DeskFox 的 health 探到它就报「语音已开启」,而它连的 sidecar 早已随上一个
+DeskFox 死了 —— **语音看起来开着,实际完全不工作,且不报错**。
+根因是 `shutdownVoiceGateway()` 定义了却**全仓零调用者**(voice-dispatch-minimal 时代的既有缺陷,
+非本 feat 引入),但它直接决定本 feat 可用性,本期一并修:接进 `stopSidecars()`,
+DeskFox 从任何路径退出都会收掉网关。
+
+### 回归
+
+voice 单测 **342 pass / 0 fail**(新增 31 条);集成 **8 pass**;desktop typecheck 通过。
+
+---
+
+## 真机验证(local 包,2026-08-24)
+
+打 local 档 `.app`(`OPENCODE_CHANNEL=local` + `electron-builder --mac --dir`),
+与用户在用的正式版共存(appId `ai.deskfox.app.local`,全程未碰 `/Applications/DeskFox.app`)。
+
+| 验收点 | 结果 |
+|---|---|
+| 桥路径解析(packaged 态) | ✅ `voice_probe` → `ready: true` |
+| `qwenaudio setup --backend acp` | ✅ `ready:true`,`source: configured` |
+| 网关启动 | ✅ `voice_start` → `state: "on"`(health 含 backend.ok) |
+| 桥被 spawn + 握手 | ✅ 网关日志 `acp.process_started` → `acp.initialized`(protocolVersion 1,agentName `deskfox-voice-bridge`) |
+| ACP_LABEL 生效 | ✅ 界面显示「DeskFox 已连接」 |
+| 桥拿到随机端口 sidecar | ✅ `sidecar=http://127.0.0.1:55585` |
+| **TC-E7 语音沟通留痕** | ✅ coordinator session 落 voice-workspace,title「语音沟通」(查 local DB 确认) |
+| **§2.1 六步数据流(修完 ①③④ 后)** | ✅ 全通,默认配置下一次成功 —— 见下方时间线 |
+| **TC-E1 第三层落用户项目** | ✅ `建立 session … dir=/Users/openclaw/deskfox-voice-qa role=task` |
+| **三分法:第三层轮** | ✅ 收到 143 字**干净任务文本**(无信封)→ 判 task,`允许派活=否` |
+| **三分法:结果回流轮** | ✅ 判 `delegation-result`,`允许派活=否`(E4 递归坑的防护,真机确认) |
+| **TC-U3 resume 透明换新** | ✅ `acp=<qwen 记的旧 id>` → `sidecar=<新建 id>`,qwen 无感知;同轮内重复 resume 复用不重建 |
+| **MCP 注册去重** | ✅ 一轮多次 resume,`已注册 MCP` 只出现一次 |
+| **断流兜底** | ✅ 杀网关时在途轮次被收干净(补兜底文本 + `end_turn`),不留悬空请求 |
+| MCP 注册策略 | ✅ 日志:`已注册 MCP qwen_audio_agent → voice-workspace`;`跳过 open-computer-use` |
+| **三分法轮次判别** | ✅ 日志:`4594 字 → coordinator(带完整 backend_instructions 信封且无回流结果);允许派活=是` |
+| 意图分流(R1/R2) | ✅ realtime 判定复杂 → `spawn_thinking`,objective 被扩写 |
+| 任务编排(R4/R7) | ✅ `task.accepted → running → progress → completed` |
+| 跟随当前项目(§3.5) | ✅ renderer 的 5 秒轮询实时写状态文件,切项目即跟随 |
+| 关窗口不杀语音 | ✅ 关 DeskFox 窗口后主进程与网关照常 |
+| 失败被「说出来」 | ✅ 400 错误经 `agent_message_chunk` 播报,而不是静默 |
+| DashScope 180s 断连 | ✅ 真机复现 `user_idle_timeout`(E6 已知常态,gateway 自动重连) |
+
+最终一轮(全默认配置、无任何 env 覆盖)的时间线:
+
+```
+01:21:02  coordinator session → voice-workspace(4584 字信封 → 路由轮,允许派活=是)
+01:21:11  第三层 session → /Users/openclaw/deskfox-voice-qa(role=task)
+01:21:11  第三层收到 143 字干净任务文本(无信封 → 判 task,允许派活=否)
+01:21:12  第三层执行 → 400(见下方说明)
+01:21:15  结果回流 coordinator(2778 字 → delegation-result,允许派活=否)
+```
+
+**关于第三层那个 400**:local 包用的是全新隔离 DB,从没绑过模型,于是落到阿里系小档,
+撞了同一个 13000 输入上限。这**不是缺陷,恰恰是设计生效的证据** ——
+第三层跟随 DeskFox 绑定模型(R2/R3 同源),它撞的限制与用户手敲 session 撞的是同一个。
+正式版用户绑了模型即正常。
+
+**未覆盖(仍需 user 参与)**:TC-M1 真麦克风、TC-M2 播报内容抽查、TC-E2 长任务 ≥6 分钟、
+TC-E3 并发播报、TC-E6 崩溃恢复,以及**第三层在正常绑定模型下真正跑完一个任务**
+(需要在 local 包里绑一次模型 —— 共享 config 不能改,否则会波及正式版)。
+
 ### 回退方法
 
 一个 env 整体退回现方案,**不需要改代码或重新打包**:
