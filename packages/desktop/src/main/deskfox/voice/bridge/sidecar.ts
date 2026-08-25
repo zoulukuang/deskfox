@@ -19,6 +19,8 @@ export interface SidecarSession {
   readonly title?: string
   readonly directory?: string
   readonly time?: { readonly updated?: number }
+  /** 该 session 用的模型;注意字段是 `id` 不是 `modelID`(与 PromptPayload 的形状不同) */
+  readonly model?: { readonly id?: string; readonly providerID?: string }
 }
 
 /** sidecar SSE 的一条事件(`GET /event` 的 data 字段)。 */
@@ -130,6 +132,36 @@ export function createSidecarClient(options: SidecarClientOptions) {
     /** 中止一条 session 的当前轮次。恒返回 true,即使本来就 idle。 */
     async abort(directory: string, sessionID: string): Promise<void> {
       await call(`/session/${encodeURIComponent(sessionID)}/abort`, directory, { method: "POST" })
+    },
+
+    /**
+     * 这个目录里**最近实际用过的模型** —— 语音派活据此跟随用户在 DeskFox 界面上的选择。
+     *
+     * 为什么需要它:建 session 时不传 model,sidecar 会落到 `defaultModelIDs`
+     * (`provider.ts:1098`)—— 那是**每个 provider 按模型名排序取第一个**,纯任意。
+     * 真机实撞:alibaba-cn 的 106 个模型里排到了 `tongyi-intent-detect-v3`(意图识别档),
+     * 任务 100% 失败。也就是说"不指定模型"≠"跟随用户的选择",两者差得很远。
+     *
+     * 用户在界面上选的模型会记在他建的每条 session 上,所以"这个目录最近一条 session 的模型"
+     * 就是对他当前选择最忠实的代理 —— 换了模型,下一次语音派活自动跟上。
+     * 查不到(全新项目 / 全新装机)返回 null,由调用方决定回落。
+     */
+    async recentModel(directory: string): Promise<{ providerID: string; modelID: string } | null> {
+      try {
+        const res = await call("/session", directory, { method: "GET", query: { limit: "10" } })
+        const list = await json<SidecarSession[] | null>(res)
+        if (!Array.isArray(list)) return null
+        for (const s of list) {
+          const m = s.model
+          if (m && typeof m.providerID === "string" && typeof m.id === "string" && m.providerID && m.id) {
+            return { providerID: m.providerID, modelID: m.id }
+          }
+        }
+        return null
+      } catch (e) {
+        log(`查最近使用的模型失败(将回落 sidecar 默认):${String((e as { message?: string })?.message ?? e)}`)
+        return null
+      }
     },
 
     async listSessions(directory: string, limit = 50): Promise<readonly SidecarSession[]> {

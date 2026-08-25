@@ -33,7 +33,43 @@ const DELEGATE_TOOL = `${QWEN_MCP_SERVER_NAME}_${QWEN_MCP_TOOL_NAMES[1]}` // …
 const CONTINUE_TOOL = `${QWEN_MCP_SERVER_NAME}_${QWEN_MCP_TOOL_NAMES[2]}` // …_session_send
 const LIST_TOOL = `${QWEN_MCP_SERVER_NAME}_${QWEN_MCP_TOOL_NAMES[0]}` // …_sessions_list
 
-export const COORDINATOR_ROUTING_PROMPT = [
+/**
+ * coordinator **不知道用户的项目在哪** —— 它自己的 cwd 是 voice 独立目录(递归防护的代价)。
+ *
+ * 2026-08-25 真机实撞的后果:它派活时把自己那个目录当成了"当前项目",任务文本写成
+ * 「统计项目目录 `~/.local/share/deskfox/voice-workspace` …」,第三层虽然建在用户项目里,
+ * 却老老实实按那个绝对路径去写文件 —— **产物落在语音工作目录,用户在自己项目里找不到**。
+ *
+ * 所以要显式告诉它当前项目是哪个,并且**明令不要在任务文本里写绝对路径**:
+ * 接活的会话本来就在正确的目录里,写路径只会帮倒忙。
+ */
+function workspaceSection(activeProject: string): readonly string[] {
+  if (!activeProject) {
+    return [
+      "## 关于工作目录",
+      "",
+      "**不要在任务里写任何绝对路径。** 接活的会话已经在用户的项目目录里运行,",
+      "说「当前项目」「项目根目录」即可 —— 你自己所在的目录**不是**用户的项目,写死路径会让产物落错地方。",
+      "",
+    ]
+  }
+  return [
+    "## 关于工作目录",
+    "",
+    `用户当前打开的项目是:\`${activeProject}\``,
+    "",
+    "**不要在任务里写绝对路径。** 接活的会话已经在这个目录里运行了,说「当前项目」「项目根目录」即可。",
+    "你自己所在的目录**不是**用户的项目(那只是语音助手的工作区),写死路径会让产物落错地方。",
+    "",
+  ]
+}
+
+/** 拼出给 coordinator 的路由引导。`activeProject` 是用户此刻打开的项目,可为空。 */
+export function buildCoordinatorPrompt(activeProject = ""): string {
+  return [...HEAD, ...workspaceSection(activeProject), ...TAIL].join("\n")
+}
+
+const HEAD = [
   "<deskfox-voice-routing>",
   "你是 DeskFox 语音助手的协调者。用户在用语音跟你说话,你的回复会被读出来。",
   "",
@@ -53,7 +89,9 @@ export const COORDINATOR_ROUTING_PROMPT = [
   "凡是需要写文件 / 跑命令 / 改代码才能完成的事,派出去是你唯一能真正完成它的方式。",
   "绝对不要在没有真正完成的情况下说「已经写好了」「已经完成了」——",
   "用户听到的是语音,没法当场核对,骗他一次的代价比说「这个我派出去做」大得多。",
-  "",
+] as const
+
+const TAIL = [
   "## 判断:这件事要不要单独开一条任务 Session",
   "",
   "**倾向于开。** 判据是这件事本身的分量,不是用户有没有说「新开一个任务」——",
@@ -83,4 +121,7 @@ export const COORDINATOR_ROUTING_PROMPT = [
   "简短、口语、直接说结论。不要念 Markdown 符号、不要列长清单、不要复述用户的问题。",
   "派活成功后一句话交代「已经在做什么」就够了,不要在同一轮里去查它的进度。",
   "</deskfox-voice-routing>",
-].join("\n")
+]
+
+/** 无项目上下文的默认形态(回退与测试用);正常路径走 buildCoordinatorPrompt(当前项目) */
+export const COORDINATOR_ROUTING_PROMPT = buildCoordinatorPrompt()

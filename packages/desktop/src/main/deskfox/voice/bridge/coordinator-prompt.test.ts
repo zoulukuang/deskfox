@@ -4,7 +4,7 @@
 //   ① 模型认不出双前缀的派活工具名 → 必须把**真名**写进 prompt,不让它猜;
 //   ② 工具被拒后模型会编造"已完成" → prompt 必须明令禁止。
 import { describe, expect, test } from "bun:test"
-import { COORDINATOR_ROUTING_PROMPT } from "./coordinator-prompt"
+import { COORDINATOR_ROUTING_PROMPT, buildCoordinatorPrompt } from "./coordinator-prompt"
 import { QWEN_MCP_SERVER_NAME } from "./contract"
 
 describe("COORDINATOR_ROUTING_PROMPT", () => {
@@ -43,5 +43,31 @@ describe("COORDINATOR_ROUTING_PROMPT", () => {
   test("标签闭合(拼进 system prompt 后不会污染后文)", () => {
     expect(COORDINATOR_ROUTING_PROMPT.startsWith("<deskfox-voice-routing>")).toBe(true)
     expect(COORDINATOR_ROUTING_PROMPT.trimEnd().endsWith("</deskfox-voice-routing>")).toBe(true)
+  })
+})
+
+// coordinator 的 cwd 是 voice 独立目录(递归防护的代价),它对"用户项目在哪"一无所知。
+// 真机实撞:它把自己那个目录写进任务文本,第三层照着绝对路径写,产物落在语音工作区。
+describe("工作目录说明", () => {
+  test("知道当前项目时写进 prompt,并明令不要写绝对路径", () => {
+    const p = buildCoordinatorPrompt("/Users/u/my-project")
+    expect(p).toContain("/Users/u/my-project")
+    expect(p).toContain("不要在任务里写绝对路径")
+    expect(p).toContain("你自己所在的目录**不是**用户的项目")
+  })
+
+  test("不知道当前项目时,仍然明令不要写绝对路径", () => {
+    const p = buildCoordinatorPrompt("")
+    expect(p).toContain("不要在任务里写任何绝对路径")
+    expect(p).not.toContain("用户当前打开的项目是")
+  })
+
+  test("默认导出 = 无项目上下文的形态,且结构完整", () => {
+    expect(COORDINATOR_ROUTING_PROMPT).toBe(buildCoordinatorPrompt(""))
+    expect(COORDINATOR_ROUTING_PROMPT.trimEnd().endsWith("</deskfox-voice-routing>")).toBe(true)
+  })
+
+  test("换项目 → prompt 跟着换(每轮现算,不缓存)", () => {
+    expect(buildCoordinatorPrompt("/a")).not.toBe(buildCoordinatorPrompt("/b"))
   })
 })

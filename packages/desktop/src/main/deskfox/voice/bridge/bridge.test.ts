@@ -20,6 +20,7 @@ interface Harness {
     prompts: { directory: string; sessionID: string; text: string; system?: string; model?: unknown; tools?: unknown }[]
     aborts: { directory: string; sessionID: string }[]
     mcp: { directory: string; name: string }[]
+    recentModelQueries: string[]
   }
   subscriptions: string[]
   dispose(): void
@@ -36,6 +37,7 @@ function harness(
     sessionIds?: string[]
     coordinatorModel?: any
     taskModel?: any
+    recentModel?: any
   } = {},
 ): Harness {
   const out: any[] = []
@@ -43,7 +45,7 @@ function harness(
   const listeners = new Map<string, ((e: SidecarEvent) => void)[]>()
   const closers = new Map<string, (reason: string) => void>()
   const subscriptions: string[] = []
-  const calls: Harness["calls"] = { created: [], prompts: [], aborts: [], mcp: [] }
+  const calls: Harness["calls"] = { created: [], prompts: [], aborts: [], mcp: [], recentModelQueries: [] }
   const ids = [...(opts.sessionIds ?? [])]
   let seq = 0
 
@@ -70,6 +72,10 @@ function harness(
     },
     async abort(directory: string, sessionID: string) {
       calls.aborts.push({ directory, sessionID })
+    },
+    async recentModel(directory: string) {
+      calls.recentModelQueries.push(directory)
+      return opts.recentModel === undefined ? null : opts.recentModel
     },
     async listSessions() {
       return [{ id: "ses_hist", title: "上次的活", directory: "/proj", time: { updated: 1_700_000_000_000 } }]
@@ -453,14 +459,43 @@ describe("收尾", () => {
 describe("第三层模型:默认跟随绑定,配了才覆盖", () => {
   const tick2 = () => new Promise((r) => setTimeout(r, 0))
 
-  test("没配 → 第三层不传 model(跟随 DeskFox 绑定,R2/R3 同源)", async () => {
-    const h = harness({ activeProject: "/proj" })
+  // ★ 架构原则(user 2026-08-25):模型也走 DeskFox 通路 —— 用户界面上换了模型,
+  //   下一次语音派活就跟着换。靠的是"查该项目最近实际用过的模型",
+  //   **不能靠"不传 model"** —— 那会落到 sidecar 按模型名排序取的第一个,纯任意。
+  test("没配 → 第三层跟随该项目最近使用的模型", async () => {
+    const recent = { providerID: "claude-code", modelID: "opus" }
+    const h = harness({ activeProject: "/proj", recentModel: recent })
     h.send({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/p", mcpServers: [] } })
     await tick2()
     const sid = h.responseTo(1).result.sessionId
     h.send({ jsonrpc: "2.0", id: 2, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "干活" }] } })
     await tick2()
+    await tick2()
+    expect(h.calls.prompts[0].model).toEqual(recent)
+    // 查的是任务所在目录,不是 voice 目录
+    expect(h.calls.recentModelQueries).toEqual(["/proj"])
+  })
+
+  test("该项目还没有会话记录 → 不指定模型,交给 sidecar 默认", async () => {
+    const h = harness({ activeProject: "/proj", recentModel: null })
+    h.send({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/p", mcpServers: [] } })
+    await tick2()
+    const sid = h.responseTo(1).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 2, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "干活" }] } })
+    await tick2()
+    await tick2()
     expect(h.calls.prompts[0].model).toBeNull()
+  })
+
+  test("coordinator 不查最近模型(它在独立目录,那里没有用户的模型历史)", async () => {
+    const h = harness({ activeProject: "/proj", recentModel: { providerID: "x", modelID: "y" } })
+    h.send({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/p", mcpServers: [QWEN_HTTP] } })
+    await tick2()
+    const sid = h.responseTo(1).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 2, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "路由" }] } })
+    await tick2()
+    await tick2()
+    expect(h.calls.recentModelQueries).toEqual([])
   })
 
   // ★ 真机 QA:全新 DB 下 opencode 默认档挑中 tongyi-intent-detect-v3(意图识别模型),
@@ -483,6 +518,7 @@ describe("第三层模型:默认跟随绑定,配了才覆盖", () => {
     await tick2()
 
     expect(h.calls.prompts.find((p) => p.sessionID === c)!.model).toEqual(coord)
+    // 显式配置优先于"最近使用"
     expect(h.calls.prompts.find((p) => p.sessionID === t)!.model).toEqual(task)
     // 第三层不该被塞路由引导,也不该被禁工具
     expect(h.calls.prompts.find((p) => p.sessionID === t)!.system).toBeUndefined()

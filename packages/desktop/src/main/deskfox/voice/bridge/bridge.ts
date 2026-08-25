@@ -15,7 +15,7 @@
 //     → coordinator 整理 → announcement 通道播报(不打断)
 
 import { ACP_PROTOCOL_VERSION, type StopReason } from "./contract"
-import { COORDINATOR_ROUTING_PROMPT } from "./coordinator-prompt"
+import { buildCoordinatorPrompt } from "./coordinator-prompt"
 import { planMcpRegistrations } from "./mcp"
 import { createPeer, type JsonRpcId, type Peer } from "./protocol"
 import { createSessionStore, type SessionRecord, type SessionStore } from "./sessions"
@@ -56,6 +56,12 @@ const COORDINATOR_DENIED_TOOLS: Readonly<Record<string, boolean>> = {
   patch: false,
 }
 
+/** `provider/model` 的运行时形态(与 sidecar `PromptPayload.model` 同形) */
+export interface ModelRef {
+  readonly providerID: string
+  readonly modelID: string
+}
+
 export interface BridgeDeps {
   readonly sidecar: SidecarClient
   readonly voiceDir: string
@@ -63,9 +69,9 @@ export interface BridgeDeps {
   readonly write: (line: string) => void
   readonly log: (message: string) => void
   /** coordinator 的路由模型;null/省略 = 跟随 DeskFox 绑定的模型(见 startTurn 的注释) */
-  readonly coordinatorModel?: { readonly providerID: string; readonly modelID: string } | null
+  readonly coordinatorModel?: ModelRef | null
   /** 第三层任务的模型;null/省略 = 跟随 DeskFox 绑定的模型(默认,R2/R3 同源) */
-  readonly taskModel?: { readonly providerID: string; readonly modelID: string } | null
+  readonly taskModel?: ModelRef | null
 }
 
 /**
@@ -269,7 +275,14 @@ export function createBridge(deps: BridgeDeps): Bridge {
         `允许派活=${mayDelegate(turn.kind) ? "是" : "否"}`,
     )
 
-    startTurn(record, ctx.id, text)
+    // coordinator 用自己那档(见 startTurn);第三层要先问一下"用户现在在用什么模型"
+    if (record.coordinator) {
+      startTurn(record, ctx.id, text, null)
+    } else {
+      void resolveTaskModel(record.directory)
+        .then((model) => startTurn(record, ctx.id, text, model))
+        .catch((e) => peer.respondError(ctx.id, `选模型失败:${String((e as { message?: string })?.message ?? e)}`))
+    }
     // 返回 undefined = 响应稍后自己发。第三层可能挂好几分钟(qwen 对它设 timeoutMs:0 不超时)
     return undefined
   })
@@ -299,7 +312,28 @@ export function createBridge(deps: BridgeDeps): Bridge {
   peer.on("session/set_config_option", () => ({}))
 
   // ── 一轮 prompt 的生命周期 ──────────────────────────────────────────────────────
-  function startTurn(record: SessionRecord, id: JsonRpcId | undefined, text: string): void {
+  /**
+   * 第三层该用哪个模型。**这是「模型也走 DeskFox 通路」的落点**(user 2026-08-25 定的原则)。
+   *
+   * 顺序:显式配置 > 用户在该项目最近实际用的 > 不指定(交给 sidecar 默认)。
+   * 中间那条是关键 —— 用户在界面上换模型,下一次语音派活就跟着换,不需要重启语音、
+   * 也不需要在语音链路里另配一套。
+   *
+   * 最后那条兜底会落到 `defaultModelIDs`(按模型名排序取第一个,纯任意),
+   * 只在"全新项目 + 从没建过会话"时才可能走到;那种情况下用户自己手敲也会撞上同一个默认。
+   */
+  async function resolveTaskModel(directory: string): Promise<ModelRef | null> {
+    if (deps.taskModel) return deps.taskModel
+    const recent = await deps.sidecar.recentModel(directory)
+    if (recent) {
+      deps.log(`第三层跟随该项目最近使用的模型:${recent.providerID}/${recent.modelID}`)
+      return recent
+    }
+    deps.log(`该项目还没有会话记录,第三层不指定模型(交给 sidecar 默认档)`)
+    return null
+  }
+
+  function startTurn(record: SessionRecord, id: JsonRpcId | undefined, text: string, taskModel: ModelRef | null): void {
     const translator = createUpdateTranslator(record.sidecarId)
     const stream = ensureStream(record.directory)
     let done = false
@@ -362,16 +396,16 @@ export function createBridge(deps: BridgeDeps): Bridge {
     // 「与手敲 session 无差别」因此不受影响。
     const options = record.coordinator
       ? {
-          system: COORDINATOR_ROUTING_PROMPT,
+          // 每轮现算:用户可能刚切了项目,而 coordinator 自己的 cwd 是 voice 目录、
+          // 对"当前项目在哪"一无所知(不告诉它就会把自己那个目录写进任务文本)
+          system: buildCoordinatorPrompt(deps.readActiveProject()),
           model: deps.coordinatorModel ?? null,
           // 见 COORDINATOR_DENIED_TOOLS:堵死"自己把活干了"这条路,派活才会真的发生
           tools: COORDINATOR_DENIED_TOOLS as Record<string, boolean>,
         }
-      : // 第三层默认**不指定模型**(跟随 DeskFox 绑定的那个,R2/R3 同源);
-        // 只有显式配了 ACP_DESKFOX_TASK_MODEL 才覆盖,理由见 contract.ts 的 ENV_TASK_MODEL
-        deps.taskModel
-        ? { model: deps.taskModel }
-        : undefined
+      : // 第三层跟随**用户在 DeskFox 里实际用的模型**(见 resolveTaskModel)。
+        // 注意不能靠"不传 model" —— 那会落到 sidecar 按模型名排序取的第一个,纯任意。
+        { model: taskModel }
 
     void deps.sidecar.promptAsync(record.directory, record.sidecarId, [{ type: "text", text }], options).catch((e) => {
       const message = String((e as { message?: string })?.message ?? e)
