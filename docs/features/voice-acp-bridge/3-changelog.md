@@ -162,7 +162,18 @@ opencode **动态注册**的 MCP 传不过去。voice-dispatch-minimal 时代靠
 修法:coordinator 单独一档默认值(`VOICE_MODEL_DEFAULTS.coordinator`),与 backend 解耦,
 `DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖;第三层照旧跟随绑定模型。
 
-**⑤ DeskFox 退出不回收语音网关 → 孤儿骗过 health 探测。** 重启 local 包后新网关起不来
+**⑤ 第三层模型没有出口 + 失败播报等于没说**(user 自测反馈)。
+user 在 local 包上试,任务全失败;派活是成功的,挂在第三层执行的
+`<400> Range of input length should be [1, 13000]`。查 DB:第三层模型是
+`alibaba-cn/tongyi-intent-detect-v3` —— 一个**意图识别小模型**(任务文本才 628 字,
+吃掉上下文的是 system prompt 本身)。原因是 local 包全新隔离 DB、共享 config 也没有
+`model` 字段,opencode 默认档挑中了它;user 的正式版绑的是 `claude-code/opus`,不受影响。
+**这是测试环境问题而非设计缺陷**(第三层跟随绑定模型正是 R2/R3 要的),但暴露两处该修的:
+加 `DESKFOX_VOICE_TASK_MODEL`(**默认空 = 跟随绑定**,不改默认语义,只是给出一个
+不必改共享 config 的出口);加 `humanizeSidecarError` 把上下文超限/认证/代理/限流/网络
+翻成能照做的一句话,**原始错误仍进日志**。
+
+**⑥ DeskFox 退出不回收语音网关 → 孤儿骗过 health 探测。** 重启 local 包后新网关起不来
 (`Gateway 已在运行` + `后台 Agent 未连接` + `exit 0`):上一轮的 qwenaudio gateway 成了孤儿,
 还占着 3101。新 DeskFox 的 health 探到它就报「语音已开启」,而它连的 sidecar 早已随上一个
 DeskFox 死了 —— **语音看起来开着,实际完全不工作,且不报错**。
@@ -221,9 +232,20 @@ voice 单测 **342 pass / 0 fail**(新增 31 条);集成 **8 pass**;desktop type
 第三层跟随 DeskFox 绑定模型(R2/R3 同源),它撞的限制与用户手敲 session 撞的是同一个。
 正式版用户绑了模型即正常。
 
-**未覆盖(仍需 user 参与)**:TC-M1 真麦克风、TC-M2 播报内容抽查、TC-E2 长任务 ≥6 分钟、
-TC-E3 并发播报、TC-E6 崩溃恢复,以及**第三层在正常绑定模型下真正跑完一个任务**
-(需要在 local 包里绑一次模型 —— 共享 config 不能改,否则会波及正式版)。
+### 完整闭环复验(2026-08-25,第三层配 `alibaba-cn/qwen3.8-max`)
+
+修完 ⑤ 之后,**说话到产物落地的整条链路第一次真正跑通**:
+
+| 环节 | 证据 |
+|---|---|
+| 派活 | `建立 session … dir=~/deskfox-voice-qa role=task` |
+| 第三层真干活 | 该 session 的工具调用:`bash`×4 完成 + `write` 完成 |
+| **产物落在用户项目** | `~/deskfox-voice-qa/count.md`,内容正确(30 个文件 = .git 27 + .deskfox 1 + 根目录 2) |
+| 结果回流 | `2698 字 → delegation-result;允许派活=否` |
+| **播报(TC-M2 内容抽查)** | 「统计好了,项目里一共有 30 个文件,结果已经写进 count.md。其中大部分是 git 内部文件,如果排除 .git 目录,实际项目文件是 3 个。」—— 口语、准确,且主动补了有用的判断 |
+
+**未覆盖(仍需 user 参与)**:TC-M1 真麦克风、TC-E2 长任务 ≥6 分钟、
+TC-E3 并发播报、TC-E6 崩溃恢复。
 
 ### 回退方法
 

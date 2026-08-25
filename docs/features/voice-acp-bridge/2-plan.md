@@ -155,6 +155,31 @@ spec 说的"默认跟随 DeskFox 绑定模型"经真机否决 —— 那个默�
 (1-spec §3.1),禁掉只读会把那类请求也逼成派活,反而更差。
 路由 prompt 同步改写,明确告诉模型"这类工具对你是关闭的,不是限制而是分工"。
 
+### D16. 第三层模型要能配,失败要说人话(user 自测反馈)
+
+user 自己在 local 包上试了几轮,**任务全部失败**。查桥日志:派活是成功的
+(`建立 session … dir=/Volumes/ExtSSD/Finance role=task`),挂在第三层执行:
+`<400> Range of input length should be [1, 13000]`。
+
+查 DB 才看清:第三层 session 的模型是 **`alibaba-cn/tongyi-intent-detect-v3`** ——
+一个**意图识别小模型**,既吞不下 opencode 的 system prompt 也不会干活。
+注意任务文本只有 628 字,吃掉上下文的是 system prompt 本身。
+
+为什么会挑到它:第三层不指定模型 → 跟随 sidecar 默认;而 local 包是**全新隔离 DB**、
+共享 config 里也没有 `model` 字段 → opencode 从可用清单里挑了这个。
+对照 user 的正式版(`opencode.db`):绑的是 `claude-code/opus` / `fable`,不会有此问题。
+
+所以**这是测试环境问题,不是设计缺陷** —— 第三层跟随绑定模型正是 R2/R3 要的。
+但它暴露了两个该修的地方:
+
+1. **第三层模型没有出口**:想在 local 包上验证就只能改共享 config,而那会波及 user
+   正在用的正式版。→ 加 `DESKFOX_VOICE_TASK_MODEL`,**默认空 = 跟随绑定**(不改默认语义)。
+2. **失败播报等于没说**:user 听到的是
+   「任务执行失败:`<400> InternalError.Algo.InvalidParameter: Range of input length…`」。
+   对着麦克风的人既不知道这是什么,也不知道下一步该干什么。
+   → 加 `humanizeSidecarError`:上下文超限 / 认证 / 代理 / 限流 / 网络各给一句能照做的话,
+   认不出的保留原文但截短;**原始错误仍进日志**,排查时找得回来。
+
 ### D15. coordinator 不能用 `claude-code/*` —— 它看不见 MCP 工具(真机 A/B,决定性)
 
 D14 把真名写进 prompt 后再跑,**模型仍然一次都没派活**(试 bash×2 + write×1)。
