@@ -155,6 +155,30 @@ spec 说的"默认跟随 DeskFox 绑定模型"经真机否决 —— 那个默�
 (1-spec §3.1),禁掉只读会把那类请求也逼成派活,反而更差。
 路由 prompt 同步改写,明确告诉模型"这类工具对你是关闭的,不是限制而是分工"。
 
+### D17. 干活那层钉死 Opus 5(user 拍板)
+
+D16 给第三层留了 `DESKFOX_VOICE_TASK_MODEL` 出口,但**默认仍是跟随绑定模型**。
+user 2026-08-25 拍板:干脆钉死 Opus 5。
+
+理由站得住:跟随绑定在全新环境下会挑到荒唐的模型(D16 实撞的意图识别档),
+而语音场景里用户**看不见也换不了**模型,只听到一句"失败了"。
+钉死强模型正是 1-spec R2「复杂任务交给更强模型」的本意 ——
+R3 要的"与手敲 session 无差别"指的是**可见性、状态流转、执行过程**,不是模型对象必须同一个。
+
+本机的 Opus 5 可用形态是 `claude-code/opus`(claude-code provider 实测四档
+opus/sonnet/haiku/fable;原生 `anthropic` 是 oauth 且已过期,不可用)。
+
+⚠️ 代价:claude CLI 直连 Anthropic 会 403,**需要代理**;从 Dock/Finder 启动的 GUI 进程
+不继承 shell 代理变量(`needsOverseasNetwork` 会预警)。想换回国产直连:
+`DESKFOX_VOICE_TASK_MODEL=alibaba-cn/qwen3.8-max`。
+
+**coordinator 那档仍然避开 claude-code 系**(D15:它要看得见动态注册的 MCP 才能派活)。
+两档现在是两个不同的值,各有各的理由,单测钉死了这一点。
+
+真机复验:第三层 session 的模型确认为 `{"id":"opus","providerID":"claude-code"}`,
+工具调用 bash×2 + write 全部完成 —— **claude-code 档的内置工具可用**
+(它拿不到的只是**动态注册**的 MCP,而第三层本来就刻意不给)。
+
 ### D16. 第三层模型要能配,失败要说人话(user 自测反馈)
 
 user 自己在 local 包上试了几轮,**任务全部失败**。查桥日志:派活是成功的

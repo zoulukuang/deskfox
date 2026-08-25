@@ -232,6 +232,26 @@ voice 单测 **342 pass / 0 fail**(新增 31 条);集成 **8 pass**;desktop type
 第三层跟随 DeskFox 绑定模型(R2/R3 同源),它撞的限制与用户手敲 session 撞的是同一个。
 正式版用户绑了模型即正常。
 
+## 第 3 笔:干活那层固定 Opus 5(2026-08-25,user 拍板)
+
+第三层任务从"跟随 DeskFox 绑定模型"改为**钉死 `claude-code/opus`**
+(`VOICE_MODEL_DEFAULTS.task`,`DESKFOX_VOICE_TASK_MODEL` 可覆盖)。
+理由与代价见 2-plan 的 D17;要点:跟随绑定在全新环境下会挑到荒唐的模型,
+而语音场景用户看不见也换不了;钉死强模型正是 R2 的本意。
+**coordinator 那档仍避开 claude-code 系**(它要看得见动态注册的 MCP 才能派活),
+两档是两个不同的值。
+
+真机复验(local 包,默认配置):
+
+| 验收点 | 结果 |
+|---|---|
+| 第三层实际模型 | ✅ `{"id":"opus","providerID":"claude-code"}`(查 DB 确认) |
+| claude-code 档的内置工具可用 | ✅ `bash`×2 + `write` 全部 completed |
+| 产物 | ✅ `count.md` 落在 QA 项目,区分含/不含 `.git` 两个口径,并注明统计发生在文件创建之前 |
+| 播报 | ✅「统计完成了,结果已经写进 count.md。项目里一共有 2 个文件…如果把 git 仓库内部文件也算上就是 29 个,不过这类一般不算项目文件,count.md 里两个口径都注明了。」 |
+
+回归:voice 单测 **356 pass / 0 fail**、typecheck 29/29。
+
 ### 完整闭环复验(2026-08-25,第三层配 `alibaba-cn/qwen3.8-max`)
 
 修完 ⑤ 之后,**说话到产物落地的整条链路第一次真正跑通**:
