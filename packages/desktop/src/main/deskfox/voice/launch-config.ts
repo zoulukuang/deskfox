@@ -513,6 +513,11 @@ export function buildAcpGatewayEnv(input: AcpGatewayEnvInput): GatewayEnvResult 
     //      而新链路没有 wrapper。详见 VOICE_MODEL_DEFAULTS.coordinator 的注释。
     // `DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖;第三层任务仍跟随绑定模型,同源性不受影响。
     ACP_DESKFOX_COORDINATOR_MODEL: models.coordinator,
+    // 第三层任务的模型:**默认空 = 跟随 DeskFox 绑定的模型**(R2/R3「与手敲 session 无差别」)。
+    // `DESKFOX_VOICE_TASK_MODEL` 才覆盖 —— 留这个出口是因为全新环境下 opencode 的默认档
+    // 可能挑到完全不能干活的模型(真机撞到过 `tongyi-intent-detect-v3`),
+    // 而改共享 config 会波及用户正在用的实例。
+    ACP_DESKFOX_TASK_MODEL: String(base.DESKFOX_VOICE_TASK_MODEL ?? "").trim(),
   }
   if (dashscopeKey) env.DASHSCOPE_API_KEY = dashscopeKey
 

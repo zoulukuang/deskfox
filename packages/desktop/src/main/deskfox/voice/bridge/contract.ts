@@ -121,6 +121,18 @@ export const ENV_VOICE_DIR = "ACP_DESKFOX_VOICE_DIR"
  * 「与手敲 session 无差别」(1-spec R2/R3)因此不受影响。
  */
 export const ENV_COORDINATOR_MODEL = "ACP_DESKFOX_COORDINATOR_MODEL"
+
+/**
+ * 第三层任务的模型,形如 `provider/model`;**默认空 = 跟随 DeskFox 绑定的模型**
+ * (1-spec R2/R3:任务 session 与手敲的同源)。
+ *
+ * 留这个口子是因为 2026-08-25 真机 QA 撞到的一幕:local 包是全新隔离 DB、共享 config 里也没有
+ * `model` 字段,于是 opencode 的默认档挑中了 `alibaba-cn/tongyi-intent-detect-v3` ——
+ * 一个**意图识别小模型**,既吞不下 system prompt(13000 上限)也不会干活,
+ * 语音任务 100% 失败。绑过模型的正式版不会这样,但"全新环境开箱即坏"这件事本身
+ * 需要一个不改共享配置就能绕开的出口(改 config 会波及用户正在用的实例)。
+ */
+export const ENV_TASK_MODEL = "ACP_DESKFOX_TASK_MODEL"
 export const ENV_ACTIVE_PROJECT_FILE = "ACP_DESKFOX_ACTIVE_PROJECT_FILE"
 export const ENV_LOG_FILE = "ACP_DESKFOX_LOG_FILE"
 
@@ -150,6 +162,7 @@ export function assertContractSelfConsistent(): void {
     ENV_ACTIVE_PROJECT_FILE,
     ENV_LOG_FILE,
     ENV_COORDINATOR_MODEL,
+    ENV_TASK_MODEL,
   ]) {
     if (!name.startsWith(ACP_ENV_PREFIX)) problems.push(`${name} 不是 ${ACP_ENV_PREFIX} 前缀,穿不过 qwen 的 env 白名单`)
   }

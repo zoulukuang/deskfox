@@ -56,6 +56,7 @@ const bridge = createBridge({
   sidecar,
   voiceDir: config.voiceDir,
   coordinatorModel: config.coordinatorModel,
+  taskModel: config.taskModel,
   readActiveProject: () => (config.activeProjectFile ? readActiveProject(config.activeProjectFile) : ""),
   write: (line) => process.stdout.write(`${line}\n`),
   log,

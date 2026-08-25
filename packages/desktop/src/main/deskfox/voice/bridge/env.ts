@@ -13,6 +13,7 @@ import {
   ENV_LOG_FILE,
   ENV_SERVER_URL,
   ENV_SERVER_AUTH,
+  ENV_TASK_MODEL,
   ENV_VOICE_DIR,
 } from "./contract"
 
@@ -43,6 +44,11 @@ export interface BridgeConfig {
    * coordinator 每轮都要吞一个 ~4.6k 字的信封,小上下文模型会直接 400。
    */
   readonly coordinatorModel: { readonly providerID: string; readonly modelID: string } | null
+  /**
+   * 第三层任务的模型;**null = 跟随 DeskFox 绑定的模型**(默认,R2/R3 同源)。
+   * 见 contract.ts 的 {@link ENV_TASK_MODEL}。
+   */
+  readonly taskModel: { readonly providerID: string; readonly modelID: string } | null
 }
 
 /** 把 `opencode:密码` 编成 Basic 头。sidecar 的校验见 `packages/opencode/src/server/auth.ts:28-34`。 */
@@ -80,5 +86,6 @@ export function readBridgeConfig(env: NodeJS.ProcessEnv = process.env): BridgeCo
     logFile: String(env[ENV_LOG_FILE] ?? "").trim(),
     // 配错了(比如漏了斜杠)不阻断启动:回落到跟随绑定模型,总比语音起不来强
     coordinatorModel: parseModelRef(String(env[ENV_COORDINATOR_MODEL] ?? "")),
+    taskModel: parseModelRef(String(env[ENV_TASK_MODEL] ?? "")),
   }
 }

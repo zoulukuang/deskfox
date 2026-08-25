@@ -4,7 +4,7 @@
 // session/new → sidecar 建 session;prompt → prompt_async + 事件转发;idle → end_turn。
 // 以及几条"错了就很难查"的边界:空轮次兜底、cancel 必须立刻回、断流不许把请求悬着。
 import { describe, expect, test } from "bun:test"
-import { createBridge } from "./bridge"
+import { createBridge, humanizeSidecarError } from "./bridge"
 import type { SidecarClient, SidecarEvent } from "./sidecar"
 
 const VOICE_DIR = "/home/u/.deskfox/voice"
@@ -30,7 +30,13 @@ interface Harness {
 }
 
 function harness(
-  opts: { activeProject?: string; failPrompt?: string; sessionIds?: string[]; coordinatorModel?: any } = {},
+  opts: {
+    activeProject?: string
+    failPrompt?: string
+    sessionIds?: string[]
+    coordinatorModel?: any
+    taskModel?: any
+  } = {},
 ): Harness {
   const out: any[] = []
   const logs: string[] = []
@@ -84,6 +90,7 @@ function harness(
     voiceDir: VOICE_DIR,
     readActiveProject: () => opts.activeProject ?? "",
     coordinatorModel: opts.coordinatorModel ?? null,
+    taskModel: opts.taskModel ?? null,
     write: (line) => out.push(JSON.parse(line)),
     log: (m) => logs.push(m),
   })
@@ -260,8 +267,13 @@ describe("session/prompt — 一轮任务的完整生命周期", () => {
     h.send({ jsonrpc: "2.0", id: 1, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "x" }] } })
     await tick()
     h.emit("/proj", { type: "session.error", properties: { sessionID: "ses_a", error: { data: { message: "API 403" } } } })
-    expect(h.updates()[0].params.update.content.text).toContain("API 403")
+    const spoken = h.updates()[0].params.update.content.text
+    expect(spoken).toContain("任务执行失败")
+    // 播报的是人话而不是原始错误码 —— 对着麦克风的人听 "403" 没有任何用
+    expect(spoken).toContain("代理")
     expect(h.responseTo(1).result.stopReason).toBe("end_turn")
+    // 原文进日志,排查时还找得回来
+    expect(h.logs.join("\n")).toContain("API 403")
   })
 
   test("发 prompt 失败 → 回错误响应,不把请求悬着", async () => {
@@ -435,5 +447,77 @@ describe("收尾", () => {
     h.send({ jsonrpc: "2.0", id: 1, method: "session/setConfigOption", params: { sessionId: "x" } })
     await tick()
     expect(h.responseTo(1).result).toEqual({})
+  })
+})
+
+describe("第三层模型:默认跟随绑定,配了才覆盖", () => {
+  const tick2 = () => new Promise((r) => setTimeout(r, 0))
+
+  test("没配 → 第三层不传 model(跟随 DeskFox 绑定,R2/R3 同源)", async () => {
+    const h = harness({ activeProject: "/proj" })
+    h.send({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/p", mcpServers: [] } })
+    await tick2()
+    const sid = h.responseTo(1).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 2, method: "session/prompt", params: { sessionId: sid, prompt: [{ type: "text", text: "干活" }] } })
+    await tick2()
+    expect(h.calls.prompts[0].model).toBeNull()
+  })
+
+  // ★ 真机 QA:全新 DB 下 opencode 默认档挑中 tongyi-intent-detect-v3(意图识别模型),
+  //   任务 100% 失败;改共享 config 会波及用户实例,所以需要这个出口
+  test("配了 → 第三层用指定模型,coordinator 仍用自己那档", async () => {
+    const task = { providerID: "claude-code", modelID: "opus" }
+    const coord = { providerID: "alibaba-cn", modelID: "qwen3.8-max" }
+    const h = harness({ activeProject: "/proj", taskModel: task, coordinatorModel: coord })
+
+    h.send({ jsonrpc: "2.0", id: 10, method: "session/new", params: { cwd: "/p", mcpServers: [QWEN_HTTP] } })
+    await tick2()
+    const c = h.responseTo(10).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 11, method: "session/prompt", params: { sessionId: c, prompt: [{ type: "text", text: "路由" }] } })
+    await tick2()
+
+    h.send({ jsonrpc: "2.0", id: 20, method: "session/new", params: { cwd: "/p", mcpServers: [] } })
+    await tick2()
+    const t = h.responseTo(20).result.sessionId
+    h.send({ jsonrpc: "2.0", id: 21, method: "session/prompt", params: { sessionId: t, prompt: [{ type: "text", text: "干活" }] } })
+    await tick2()
+
+    expect(h.calls.prompts.find((p) => p.sessionID === c)!.model).toEqual(coord)
+    expect(h.calls.prompts.find((p) => p.sessionID === t)!.model).toEqual(task)
+    // 第三层不该被塞路由引导,也不该被禁工具
+    expect(h.calls.prompts.find((p) => p.sessionID === t)!.system).toBeUndefined()
+    expect(h.calls.prompts.find((p) => p.sessionID === t)!.tools).toBeUndefined()
+  })
+})
+
+describe("humanizeSidecarError — 播报得让人知道下一步干什么", () => {
+  // ★ 真机 QA 用户实际听到的原文:「<400> InternalError.Algo.InvalidParameter:
+  //   Range of input length should be [1, 13000]」—— 对着麦克风的人完全不知道该怎么办
+  test("上下文超限 → 指向「换个上下文更大的模型」", () => {
+    const out = humanizeSidecarError(
+      '{"message":"<400> InternalError.Algo.InvalidParameter: Range of input length should be [1, 13000]"}',
+    )
+    expect(out).toContain("装不下")
+    expect(out).toContain("换一个上下文更大的模型")
+    expect(out).not.toContain("InvalidParameter")
+  })
+
+  test("认证 / 代理 / 限流 / 网络各有各的说法", () => {
+    expect(humanizeSidecarError("401 unauthorized")).toContain("重新连接")
+    expect(humanizeSidecarError("API Error: 403 Request not allowed")).toContain("代理")
+    expect(humanizeSidecarError("429 rate limit exceeded")).toContain("限流")
+    expect(humanizeSidecarError("fetch failed ECONNREFUSED")).toContain("网络")
+  })
+
+  test("认不出的错误保留原文但截短(播报念一长串堆栈没意义)", () => {
+    expect(humanizeSidecarError("某个没见过的错误")).toBe("某个没见过的错误")
+    const long = "x".repeat(400)
+    expect(humanizeSidecarError(long).length).toBeLessThanOrEqual(161)
+    expect(humanizeSidecarError(long).endsWith("…")).toBe(true)
+  })
+
+  test("空输入不抛", () => {
+    expect(humanizeSidecarError("")).toBe("")
+    expect(humanizeSidecarError(undefined as unknown as string)).toBe("")
   })
 })

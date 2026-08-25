@@ -114,3 +114,20 @@ describe("readBridgeConfig 的 coordinatorModel", () => {
     expect(readBridgeConfig({ ...full, ACP_DESKFOX_COORDINATOR_MODEL: "乱写" }).coordinatorModel).toBeNull()
   })
 })
+
+describe("readBridgeConfig 的 taskModel", () => {
+  test("默认 null = 第三层跟随 DeskFox 绑定模型(R2/R3 同源)", () => {
+    expect(readBridgeConfig(full).taskModel).toBeNull()
+  })
+
+  test("配了才覆盖", () => {
+    expect(readBridgeConfig({ ...full, ACP_DESKFOX_TASK_MODEL: "claude-code/opus" }).taskModel).toEqual({
+      providerID: "claude-code",
+      modelID: "opus",
+    })
+  })
+
+  test("配错回落 null,不阻断启动", () => {
+    expect(readBridgeConfig({ ...full, ACP_DESKFOX_TASK_MODEL: "乱写" }).taskModel).toBeNull()
+  })
+})
