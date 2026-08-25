@@ -129,6 +129,13 @@ system prompt。而原实现让 coordinator 跟随 DeskFox 绑定的模型 —�
 这也正是 1-spec §3.1「coordinator 路由模型**可配**」那句话的落地形态;
 spec 说的"默认跟随 DeskFox 绑定模型"经真机否决 —— 那个默认值在小模型上直接坏掉。
 
+### D11. voice 目录路径重复(同一次真机 QA)
+
+桥日志报的 voiceDir 是 `~/.local/share/deskfox/deskfox/voice-workspace` —— 多了一层。
+`XDG_DATA_HOME` 在主进程里**已经是 deskfox 命名空间**(`applyDeskfoxDataNamespace` 设的),
+`voiceCoordinatorDir` 又拼了一次。功能没坏(目录照建照用),但路径难看且容易让人以为是 bug。
+回落值补上那一层与 `launch-env.deskfoxXdgDefaults` 对齐后修正。
+
 ### D12. coordinator 必须被夺走「自己干活」的能力(真机 QA 第二轮打出来的)
 
 修完 D10 再跑,coordinator 这轮跑通了(`end_turn: session.idle`),但结果更值得警惕:
@@ -155,29 +162,70 @@ spec 说的"默认跟随 DeskFox 绑定模型"经真机否决 —— 那个默�
 (1-spec §3.1),禁掉只读会把那类请求也逼成派活,反而更差。
 路由 prompt 同步改写,明确告诉模型"这类工具对你是关闭的,不是限制而是分工"。
 
-### D17. 干活那层钉死 Opus 5(user 拍板)
+### D13. DeskFox 退出不回收语音网关 → 孤儿骗过 health 探测(真机 QA 第三轮)
 
-D16 给第三层留了 `DESKFOX_VOICE_TASK_MODEL` 出口,但**默认仍是跟随绑定模型**。
-user 2026-08-25 拍板:干脆钉死 Opus 5。
+第三轮跑之前重启了 local 包,结果新网关起不来:
 
-理由站得住:跟随绑定在全新环境下会挑到荒唐的模型(D16 实撞的意图识别档),
-而语音场景里用户**看不见也换不了**模型,只听到一句"失败了"。
-钉死强模型正是 1-spec R2「复杂任务交给更强模型」的本意 ——
-R3 要的"与手敲 session 无差别"指的是**可见性、状态流转、执行过程**,不是模型对象必须同一个。
+```
+Gateway 已在运行:http://127.0.0.1:3101
+后台 Agent 未连接
+--- exit code=0 ---
+```
 
-本机的 Opus 5 可用形态是 `claude-code/opus`(claude-code provider 实测四档
-opus/sonnet/haiku/fable;原生 `anthropic` 是 oauth 且已过期,不可用)。
+**上一轮的 qwenaudio gateway 成了孤儿进程**,还占着 3101。语音网关是 DeskFox spawn 的子进程,
+DeskFox 被杀后它不会跟着死;它 spawn 的桥同理还活着。于是新 DeskFox 的 `waitForHealth`
+探到 3101 有响应就判 `health=true` → 界面报「语音派活已开启」,
+而那个孤儿网关的桥连的是**上一个 DeskFox 的 sidecar**(早已不存在)——
+**语音看起来开着,实际完全不工作**,且没有任何报错。
 
-⚠️ 代价:claude CLI 直连 Anthropic 会 403,**需要代理**;从 Dock/Finder 启动的 GUI 进程
-不继承 shell 代理变量(`needsOverseasNetwork` 会预警)。想换回国产直连:
-`DESKFOX_VOICE_TASK_MODEL=alibaba-cn/qwen3.8-max`。
+根因:`shutdownVoiceGateway()` 在 gateway.ts 里定义好了,却**全仓零调用者**
+(voice-dispatch-minimal 时代就如此,不是本 feat 引入的)。
+但它直接决定本 feat 的可用性,所以本期一并修:在 `stopSidecars()` 里调用它,
+DeskFox 无论从哪条路径退出(before-quit / will-quit / relaunch / 托盘退出)都会收掉网关。
 
-**coordinator 那档仍然避开 claude-code 系**(D15:它要看得见动态注册的 MCP 才能派活)。
-两档现在是两个不同的值,各有各的理由,单测钉死了这一点。
+测试装置(qa-launch.sh)也补了一道 `pkill qwenaudio` 兜底。
 
-真机复验:第三层 session 的模型确认为 `{"id":"opus","providerID":"claude-code"}`,
-工具调用 bash×2 + write 全部完成 —— **claude-code 档的内置工具可用**
-(它拿不到的只是**动态注册**的 MCP,而第三层本来就刻意不给)。
+### D14. 派活工具的**真名**必须写进 prompt(真机 QA 第四轮)
+
+禁掉写/执行工具后再跑,`bash` 与 `write` 确实被挡住了(sidecar 回
+`Model tried to call unavailable tool`),**但模型没有转去派活** —— 它编了一句
+「结果已经写进 count.md」就收工了(而根本没写)。在语音场景里这是最坏的一种失败:
+用户听到"做完了",没法当场核对。
+
+从被拒工具的错误信息里抠出可用工具清单,才看到根因:派活工具的名字是
+**`qwen_audio_agent_qwen_audio_agent_session_start`** —— 双前缀。
+sidecar 给每个 MCP 工具加 server 名前缀(`catalog.ts:119`),而 qwen 的工具名**本身**
+就带 `qwen_audio_agent_`。于是 qwen 信封里说的 `session_start` 和模型实际看到的名字对不上,
+在 61 个工具里它没认出来那是同一个东西。
+
+修法两条:
+1. **把真名直接写进 coordinator 的 system prompt**(由 `QWEN_MCP_SERVER_NAME` +
+   `QWEN_MCP_TOOL_NAMES` 拼出来,上游改名时跟着变,不写死);
+2. prompt 明令:被拒的工具不要重试、不要找替代品、**绝不允许假装做完了**。
+
+### D15. coordinator 不能用 `claude-code/*` —— 它看不见 MCP 工具(真机 A/B,决定性)
+
+D14 把真名写进 prompt 后再跑,**模型仍然一次都没派活**(试 bash×2 + write×1)。
+说明问题不在措辞。于是做了一次干净的 A/B:只换 coordinator 模型,其余全不动。
+
+| coordinator 模型 | 结果 |
+|---|---|
+| `claude-code/opus` | ❌ 连跑两轮,一次没派活;调 bash/write 被拒后编出「已经写好了」 |
+| `alibaba-cn/qwen3.8-max` | ✅ **第一次就正确派活**,第三层 session 建在用户项目里 |
+
+根因是**老坑在新架构上复活**:`claude-code` provider 把活转给 claude CLI,而 opencode
+**动态注册**的 MCP 传不过去 —— coordinator 手里根本没有派活工具,自己动手是它唯一能做的事。
+
+这个坑 voice-dispatch-minimal 时代就踩过:`launch-env.test.ts` 里那条注释白纸黑字记着
+「2026-08-21 曾反过来守『默认后端不能是 claude-code 系』…plugin 侧 B1+B2 修好后前提消失」。
+但**那个修法依赖 `deskfox-acp-wrap.mjs` 的旁路文件合并**,而 wrapper 正是本次重构消除掉的
+补丁之一 —— 前提因此复活了,而且以"语音看起来在工作、其实从不派活"这种最难查的形式复活。
+
+修法:coordinator 单独一档默认值 `VOICE_MODEL_DEFAULTS.coordinator = alibaba-cn/qwen3.8-max`,
+`DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖,**与 backend 档解耦**(改 backend 不连带改它)。
+这同时兑现了 1-spec §3.1 那句「路由是轻任务,可降级小模型省延迟/费用」——
+顺带甩掉 claude CLI 对代理的依赖(没代理就 403)。
+**第三层任务不受影响**,照旧跟随 DeskFox 绑定模型(R2/R3 同源)。
 
 ### D16. 第三层模型要能配,失败要说人话(user 自测反馈)
 
@@ -204,78 +252,29 @@ user 自己在 local 包上试了几轮,**任务全部失败**。查桥日志:�
    → 加 `humanizeSidecarError`:上下文超限 / 认证 / 代理 / 限流 / 网络各给一句能照做的话,
    认不出的保留原文但截短;**原始错误仍进日志**,排查时找得回来。
 
-### D15. coordinator 不能用 `claude-code/*` —— 它看不见 MCP 工具(真机 A/B,决定性)
+### D17. 干活那层钉死 Opus 5(user 拍板)
 
-D14 把真名写进 prompt 后再跑,**模型仍然一次都没派活**(试 bash×2 + write×1)。
-说明问题不在措辞。于是做了一次干净的 A/B:只换 coordinator 模型,其余全不动。
+D16 给第三层留了 `DESKFOX_VOICE_TASK_MODEL` 出口,但**默认仍是跟随绑定模型**。
+user 2026-08-25 拍板:干脆钉死 Opus 5。
 
-| coordinator 模型 | 结果 |
-|---|---|
-| `claude-code/opus` | ❌ 连跑两轮,一次没派活;调 bash/write 被拒后编出「已经写好了」 |
-| `alibaba-cn/qwen3.8-max` | ✅ **第一次就正确派活**,第三层 session 建在用户项目里 |
+理由站得住:跟随绑定在全新环境下会挑到荒唐的模型(D16 实撞的意图识别档),
+而语音场景里用户**看不见也换不了**模型,只听到一句"失败了"。
+钉死强模型正是 1-spec R2「复杂任务交给更强模型」的本意 ——
+R3 要的"与手敲 session 无差别"指的是**可见性、状态流转、执行过程**,不是模型对象必须同一个。
 
-根因是**老坑在新架构上复活**:`claude-code` provider 把活转给 claude CLI,而 opencode
-**动态注册**的 MCP 传不过去 —— coordinator 手里根本没有派活工具,自己动手是它唯一能做的事。
+本机的 Opus 5 可用形态是 `claude-code/opus`(claude-code provider 实测四档
+opus/sonnet/haiku/fable;原生 `anthropic` 是 oauth 且已过期,不可用)。
 
-这个坑 voice-dispatch-minimal 时代就踩过:`launch-env.test.ts` 里那条注释白纸黑字记着
-「2026-08-21 曾反过来守『默认后端不能是 claude-code 系』…plugin 侧 B1+B2 修好后前提消失」。
-但**那个修法依赖 `deskfox-acp-wrap.mjs` 的旁路文件合并**,而 wrapper 正是本次重构消除掉的
-补丁之一 —— 前提因此复活了,而且以"语音看起来在工作、其实从不派活"这种最难查的形式复活。
+⚠️ 代价:claude CLI 直连 Anthropic 会 403,**需要代理**;从 Dock/Finder 启动的 GUI 进程
+不继承 shell 代理变量(`needsOverseasNetwork` 会预警)。想换回国产直连:
+`DESKFOX_VOICE_TASK_MODEL=alibaba-cn/qwen3.8-max`。
 
-修法:coordinator 单独一档默认值 `VOICE_MODEL_DEFAULTS.coordinator = alibaba-cn/qwen3.8-max`,
-`DESKFOX_VOICE_COORDINATOR_MODEL` 可覆盖,**与 backend 档解耦**(改 backend 不连带改它)。
-这同时兑现了 1-spec §3.1 那句「路由是轻任务,可降级小模型省延迟/费用」——
-顺带甩掉 claude CLI 对代理的依赖(没代理就 403)。
-**第三层任务不受影响**,照旧跟随 DeskFox 绑定模型(R2/R3 同源)。
+**coordinator 那档仍然避开 claude-code 系**(D15:它要看得见动态注册的 MCP 才能派活)。
+两档现在是两个不同的值,各有各的理由,单测钉死了这一点。
 
-### D14. 派活工具的**真名**必须写进 prompt(真机 QA 第四轮)
-
-禁掉写/执行工具后再跑,`bash` 与 `write` 确实被挡住了(sidecar 回
-`Model tried to call unavailable tool`),**但模型没有转去派活** —— 它编了一句
-「结果已经写进 count.md」就收工了(而根本没写)。在语音场景里这是最坏的一种失败:
-用户听到"做完了",没法当场核对。
-
-从被拒工具的错误信息里抠出可用工具清单,才看到根因:派活工具的名字是
-**`qwen_audio_agent_qwen_audio_agent_session_start`** —— 双前缀。
-sidecar 给每个 MCP 工具加 server 名前缀(`catalog.ts:119`),而 qwen 的工具名**本身**
-就带 `qwen_audio_agent_`。于是 qwen 信封里说的 `session_start` 和模型实际看到的名字对不上,
-在 61 个工具里它没认出来那是同一个东西。
-
-修法两条:
-1. **把真名直接写进 coordinator 的 system prompt**(由 `QWEN_MCP_SERVER_NAME` +
-   `QWEN_MCP_TOOL_NAMES` 拼出来,上游改名时跟着变,不写死);
-2. prompt 明令:被拒的工具不要重试、不要找替代品、**绝不允许假装做完了**。
-
-### D13. DeskFox 退出不回收语音网关 → 孤儿骗过 health 探测(真机 QA 第三轮)
-
-第三轮跑之前重启了 local 包,结果新网关起不来:
-
-```
-Gateway 已在运行:http://127.0.0.1:3101
-后台 Agent 未连接
---- exit code=0 ---
-```
-
-**上一轮的 qwenaudio gateway 成了孤儿进程**,还占着 3101。语音网关是 DeskFox spawn 的子进程,
-DeskFox 被杀后它不会跟着死;它 spawn 的桥同理还活着。于是新 DeskFox 的 `waitForHealth`
-探到 3101 有响应就判 `health=true` → 界面报「语音派活已开启」,
-而那个孤儿网关的桥连的是**上一个 DeskFox 的 sidecar**(早已不存在)——
-**语音看起来开着,实际完全不工作**,且没有任何报错。
-
-根因:`shutdownVoiceGateway()` 在 gateway.ts 里定义好了,却**全仓零调用者**
-(voice-dispatch-minimal 时代就如此,不是本 feat 引入的)。
-但它直接决定本 feat 的可用性,所以本期一并修:在 `stopSidecars()` 里调用它,
-DeskFox 无论从哪条路径退出(before-quit / will-quit / relaunch / 托盘退出)都会收掉网关。
-
-测试装置(qa-launch.sh)也补了一道 `pkill qwenaudio` 兜底。
-
-### D11. voice 目录路径重复(同一次真机 QA)
-
-桥日志报的 voiceDir 是 `~/.local/share/deskfox/deskfox/voice-workspace` —— 多了一层。
-`XDG_DATA_HOME` 在主进程里**已经是 deskfox 命名空间**(`applyDeskfoxDataNamespace` 设的),
-`voiceCoordinatorDir` 又拼了一次。功能没坏(目录照建照用),但路径难看且容易让人以为是 bug。
-回落值补上那一层与 `launch-env.deskfoxXdgDefaults` 对齐后修正。
-
+真机复验:第三层 session 的模型确认为 `{"id":"opus","providerID":"claude-code"}`,
+工具调用 bash×2 + write 全部完成 —— **claude-code 档的内置工具可用**
+(它拿不到的只是**动态注册**的 MCP,而第三层本来就刻意不给)。
 ## 三、踩坑记录
 
 ### P1. 集成测试装置:server 用 `stdio: "pipe"` 却不读 → 服务卡死
@@ -296,7 +295,7 @@ macOS 上 `/var` 是 `/private/var` 的软链,`POST /session` 返回的 `directo
 
 | 层级 | 结果 |
 |---|---|
-| 单测(TC-U1–U8 + 新增边界) | `bun test src/main/deskfox/voice/` **311 pass / 0 fail** |
+| 单测(TC-U1–U8 + 新增边界) | `bun test src/main/deskfox/voice/` **356 pass / 0 fail**(真机 QA 后新增 45 条) |
 | desktop 包全量 | **581 pass / 8 skip / 1 fail** — 唯一失败是 `draft-store.test.ts`「No such built-in module: node:sqlite」,**stash 掉本次改动后照样红**,属本机 bun 版本的既有环境问题 |
 | 集成(TC-E1/E4/E5/E7/E8 + resume 幂等 + 事件流终局) | `VOICE_BRIDGE_ITEST=1 bun test bridge.integration` **8 pass / 0 fail** |
 | typecheck | `bun turbo typecheck --filter='!./packages/console/*'` **29/29 successful** |
