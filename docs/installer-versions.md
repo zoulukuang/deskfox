@@ -16,6 +16,38 @@
 
 
 
+
+## [macOS] 2026.11.2 - 2026-09-17
+
+**主题**:对外发版收口批 —— 构建版本号注入 + 消息不丢 + 引用回看 + 三簇高频误触
+
+**为什么是 patch**:8 条全是缺陷修复,零新功能(台账规则:补号 = bugfix / 适配补丁)。
+
+**修了什么**(feat: `release-closeout-2026-09`,详见 `docs/features/release-closeout-2026-09/`):
+
+- **REQ-132(P1,本批发版动因)** 构建从未注入 `OPENCODE_VERSION`,叠加 `OPENCODE_CHANNEL=prod`
+  使 `IS_PREVIEW=true` → 版本号 fallback 成 `0.0.0-prod-<时间戳>`,**全平台正式版对外自称 0.0.0**,
+  被 OpenCode Zen 免费档按 semver 拒(`1.17.0 or newer is required`)。两份构建 wrapper 补注入 +
+  取值失败 fail-fast + `0.0.0-*` 显式拦截(该坏值本身是合法 semver,只做格式校验拦不住)。
+- **REQ-100(P1,唯一会丢数据)** 后端不可达时消息静默蒸发 + 停止键空转。回吐路径其实早已存在,
+  只是请求挂住时既不 resolve 也不 reject、catch 永远等不到 → 加 20s 送达超时(abort + 独立 deadline
+  双保险);忙闲对账改后端权威全量表,不再按目录切。
+- **REQ-131** 引用提交后看不到原文 · **REQ-125** 加入聊天新建会话标题清一色相同(🔴 本批唯一
+  R4 override,`prompt.ts` 3 行)· **REQ-130** 点 × 关标签把预览区整个收起 · **REQ-128** 工具折叠行
+  整行可点致误触 · **REQ-123** 纯引用消息撤回验收归档 · **REQ-133** 文件预览 tab 内容区静默空白。
+- 另修 user 真机反馈 8 条体感问题(引用卡片统一「[图标] 引用:<引文>」、纯引用可提交、
+  发送后卡片不残留、tab × hover 等)。
+
+**验收**:S6 六项全过(两平台)。mac:产物 `InstallationVersion=1.18.16`、冻后端 18s 回吐且时间线
+0 残留、命中区 960px→126px、残留 busy 25s 自愈、坏值注入构建退出码 1。Win:自动闸 10 项逐项对照、
+e2e 142/142、冒烟 22/22、GUI 11/11、冷启动 2×CLEAN,并补上 mac 侧测不到的 PS1 注入块真执行 8 场景。
+
+**回归**:typecheck 29/29 · app 1129+41 · e2e 142 · core 1147 · session-ui 121 · media-gen 140 ·
+adapter-feishu-lark 792 · branding 77(+Win 8)· desktop 169 —— 全部 0 fail。新增测试 100+ 条。
+
+**installer 路径**:(ship 后回填)
+
+---
 ## [macOS] 2026.11.1 - 2026-08-19
 
 **主题**:数据库自愈(REQ-084①)+ performance e2e 套件复活(REQ-117)+ 会话呈现与输入修复批
