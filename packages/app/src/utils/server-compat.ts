@@ -22,7 +22,16 @@ type CompatibleSessionApi = Omit<
   SessionApi,
   "prompt" | "command" | "shell" | "compact" | "rename" | "archive" | "remove"
 > & {
-  prompt: (input: SessionPromptInput & LegacyPrompt) => Promise<SessionPromptOutput>
+  // FORK: REQ-100 ④ —— 第二参透传 requestOptions(只为 AbortSignal)。
+  //   后端半死时 promptAsync 既不 resolve 也不 reject(挂住),消息就此蒸发;
+  //   调用方靠超时 abort 把它变成一次真实的 reject,才能走进既有的回吐/撤乐观消息路径。
+  //   v1(本文件 createV1Api)与 v2(input.current,generated client)两条路径的 prompt
+  //   都接受 `(input, requestOptions?)`,lazyApi 代理原样转发 ...args,故两侧一致生效。
+  //   [feat: release-closeout-2026-09] 2026-09-17
+  prompt: (
+    input: SessionPromptInput & LegacyPrompt,
+    requestOptions?: PromptRequestOptions,
+  ) => Promise<SessionPromptOutput>
   command: (input: SessionCommandInput) => Promise<SessionCommandOutput>
   shell: (input: SessionShellInput & LegacyPrompt) => Promise<SessionShellOutput>
   compact: (input: SessionCompactInput & { model?: LegacyPrompt["model"] }) => Promise<SessionCompactOutput>
@@ -45,6 +54,9 @@ type LegacyPrompt = {
   variant?: string
   legacyParts?: (TextPartInput | FilePartInput | AgentPartInput)[]
 }
+// FORK: REQ-100 ④ —— 两条协议路径共用的请求级选项(目前只用 signal)
+//   [feat: release-closeout-2026-09] 2026-09-17
+export type PromptRequestOptions = { signal?: AbortSignal }
 type LegacyLocation = { directory?: string }
 type CompatibleInput = {
   protocol: Promise<ServerProtocol>
@@ -197,7 +209,10 @@ function createV1Api(input: CompatibleInput): CompatibleApi {
       async interrupt(value: Parameters<ServerApi["session"]["interrupt"]>[0]) {
         await legacy().session.abort(value)
       },
-      async prompt(value: SessionPromptInput & LegacyPrompt) {
+      async prompt(value: SessionPromptInput & LegacyPrompt, requestOptions?: PromptRequestOptions) {
+        // FORK: REQ-100 ④ —— requestOptions 透传到底层 fetch,让调用方的超时 abort 真能掐断请求
+        //   (只 race 不 abort 的话,请求可能在回吐之后才落地,造成"输入框一条 + 时间线一条"双份)
+        //   [feat: release-closeout-2026-09] 2026-09-17
         await legacy().session.promptAsync({
           sessionID: value.sessionID,
           messageID: value.id ?? undefined,
@@ -227,7 +242,7 @@ function createV1Api(input: CompatibleInput): CompatibleApi {
                 : undefined,
             })),
           ],
-        })
+        }, requestOptions)
         return {
           admittedSeq: 0,
           id: value.id ?? "",

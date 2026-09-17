@@ -74,3 +74,97 @@ packages/branding: bun test
 - **S6.2** Console 免费额度真发消息
 - **S6.3** 造取值失败 → 构建报错退出(单测已覆盖逻辑,S6.3 验的是**真构建**里也如此)
 - **S6.6** Win 端同验(Win wrapper 改动本机跑不了)
+
+
+---
+
+## S2 · REQ-100 停止键空转 + 消息静默蒸发 — ✅ 已完成(代码 + 测试)
+
+### 落点
+
+| 文件 | 改动 |
+|---|---|
+| `packages/app/src/utils/server-compat.ts` | `prompt` 增第二参 `requestOptions`(只为 `AbortSignal`),v1 路径透传给 `promptAsync` |
+| `packages/app/src/components/prompt-input/submit.ts` | 送达超时闸(abort + race)· `PromptNotDeliveredError` · 失败处置分流 · 停止键本地兜底 |
+| `packages/app/src/components/prompt-input/comment-restore.ts` | **新增**纯函数:引用卡片回吐的字段映射(含原先漏传的 `kind`) |
+| `packages/app/src/context/global-sync/stale-busy.ts` | **新增**纯函数:残留 busy 判定 |
+| `packages/app/src/context/server-sync.tsx` | 后端权威全量忙闲对账(`server.connected` + 60s 周期)· 清死变量 `bootingRoot` |
+| `packages/app/src/context/server-session.ts` | `optimistic.pending(sessionID)` —— 对账的竞态护栏 |
+| `packages/app/src/i18n/*.ts`(62 个) | 3 条新词条,en/zh/zht 真译,其余按仓内惯例 en 兜底 |
+
+零上游文件改动、零 R4 override(`packages/app` 全在白名单)。
+
+### D5 · 🔴 第二次被测试推翻:只 abort 不够,必须 abort + 本地 race
+
+原实现:超时 → `AbortController.abort()` → 指望底层 fetch 拒绝 → 走既有 catch。
+写 T9 时用「忽略 signal 的假 client」跑,**四条断言全部超时挂死** —— abort 只有在下游肯听 signal 时才生效。
+
+回头看真实链路,这不是测试假设苛刻,而是**真实的一支**:`api.prompt` 经 `server-compat.ts` 的
+`lazyApi` 代理,调用被包在 `implementation.then(...)` 里,而 `implementation` 来自 `input.protocol`
+这个 Promise。**后端不可达时协议探测本身就可能挂住,abort 压根传不到 fetch。**
+本需求的病灶恰恰就是"后端半死",这一支不是边角情形,而是主场景。
+
+**修正**:两件事都做 —— `delivery.abort()` 掐断请求(防回吐后迟到落地造成双份)+ 一个独立的
+deadline Promise 直接 reject(**不依赖任何人肯听 signal**),`Promise.race` 取先到者。
+迟到的 `delivered` 挂 no-op catch 防未捕获拒绝。
+
+> 与 D-E 拍板不冲突:拍的是"(a) 超时 + abort 请求"这条路线,这里只是把它实现对 ——
+> 少了 race 那一半,这条路线在真实链路上根本不成立。
+
+### D6 · 忙闲对账改成不按目录切(而非只删那道 active 闸)
+
+spec S2.1 给了两个选项,施工时选了后者「后端权威全量忙闲表」,理由是读码发现**第二层根因**:
+
+- 第一层(需求 doc 已定位):`server.connected` 分支的 `if (!children.active(directory)) continue`
+  让被 evict 的目录拿不到对账。
+- **第二层(本次新发现)**:即便绕过第一层,`seedActiveSessionStatuses` 也救不回来 ——
+  它头一行就是 `if (session.data.session_status[sessionID] !== undefined) continue`,
+  **只填本地缺失的条目,对"本地 busy、后端 idle"的残留一个字都不改**。它是 seed,不是 reconcile。
+  真正能清残留的只有按目录 bootstrap 的全量替换,而那条正好被第一层挡住了。
+
+两层叠加,才造成 REQ-100 doc 里那句「代码在、类型对、也确实被执行了,但恰好跳过了出事的那一个」。
+
+**修法**:忙闲本就是**会话**维度,后端 `SessionStatus`(`packages/opencode/src/session/status.ts`)
+本来就维护着一张全局表,且**只存非 idle 项**(`set` 到 idle 会 `delete`,`get` 缺失返回 idle)——
+所以「不在表里 = idle」是后端的确定语义,不是猜测;它还是 per-instance 内存态,sidecar 一 respawn
+表就是空的,正对应"该清干净"。于是直接拿这张表做权威覆盖,完全不按目录切。
+按目录的 `queue.push` 循环**保留原样**(它还负责 bootstrap 其他数据),只是忙闲不再依赖它。
+
+**竞态护栏**:刚发出的消息有个窗口 —— 前端已乐观置 busy,后端还没登记进 status 表。
+此时对账撞进来会把正在发送的会话错误清掉。故新增 `session.optimistic.pending(sessionID)`:
+有未确认的乐观消息 = 这一发还在飞,对账跳过。
+
+### D7 · S2.2c 回吐的静默分支
+
+原代码 `if (restoreInput()) restoreCommentItems(...)`:用户在失败前已另起输入时 `restoreInput()`
+返 false,**引用卡片就地蒸发且无任何提示**。
+改为:原文不覆盖(不抢用户正在打的字),但引用卡片是**追加**语义,无论如何都还回去;
+toast 文案分流成两条,明确告知"原文未覆盖"。
+
+### D8 · 停止键兜底读写走 `sync()` 而非 `serverSync()`
+
+`session.tsx:1009` 的 spinner 读的是 `sync().data.session_status`,兜底就写同一个 store,
+免得写了一个 store、转圈的是另一个。4s(spec 定 3–5s 取中位),仅在仍为 busy 时才置 idle。
+
+### 测试结果
+
+```
+packages/app: bun run typecheck   → 通过
+packages/app: bun run test:unit   → 1089 pass  0 fail  (141 files)
+packages/app: bun run test:browser→   41 pass  0 fail  ( 14 files)
+```
+
+新增 20 条:
+- `stale-busy.test.ts`(8 条):后端缺席=idle / 后端说忙不清 / 非 busy 不动 / **乐观在飞不清** /
+  **被 evict 目录名下会话照样被对账到(REQ-100 复现)** / 多残留一次清 / 空表
+- `comment-restore.test.ts`(5 条):**聊天引用 kind 保真(漏传复现)** / 文件引用全字段 /
+  preview 不丢 / 字段无遗漏看门狗 / 可选字段缺席不炸
+- `submit-delivery.test.ts`(7 条):**挂住→超时抛 PromptNotDeliveredError** / 撤乐观消息 /
+  busy 归 idle / **真的 abort 了请求** / 正常返回不误伤 / 后端明确报错原样上抛不冒充"未送达" /
+  `isPromptNotDelivered` 不误判
+
+### 遗留到 S6
+
+- **S6.4 真机**:kill 后台子进程 → UI ≤N 秒复位 / 发带引用卡片的消息 → 原样回输入框 + toast /
+  时间线不残留 / 后端恢复后不自动重发
+- 弱网 + 大附件各验一次,确认 20s 不误伤"活着但慢"的后端(spec R5)
