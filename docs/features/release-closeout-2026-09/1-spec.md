@@ -163,12 +163,12 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [ ] `cd packages/branding && bun test` / `cd packages/desktop && bun test src/main/deskfox` 全绿
 
 ### 5.2 真实触发测试(S6,不做不算完,**不接受纯源码复核**)
-- [ ] **S6.1 产物层**:重构建后 dump `app.asar`,`LC_ALL=C grep -a -o -E 'var InstallationVersion = "[^"]+"'` → 为 `1.18.16`,**不含 `0.0.0-`**
-- [ ] **S6.2 端到端**:Console 账号**免费额度**真发一条消息,不再报 `1.17.0 or newer is required`
-- [ ] **S6.3 防复发**:临时制造取值失败 → 构建**报错退出**
-- [ ] **S6.4 REQ-100 真机**:kill 后台子进程 → ① UI ≤N 秒复位 ② 此时发一条**带聊天引用卡片**的消息 → 原文 + 引用卡片(kind 保真)原样回输入框 + toast,**时间线不残留** ③ 后端恢复后该消息**不会**自己发出去
-- [ ] **S6.5 GUI 四条真机点击 + 截图存档**:点 × 只关一个且预览区不收(⌘W 行为一致)/ 引用卡片看得到引文原文 / 加入聊天新建会话标题各不相同且中文提问出中文标题 / 工具行右侧空白点不开
-- [ ] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过
+- [x] **S6.1 产物层**:重构建后 dump `app.asar`,`LC_ALL=C grep -a -o -E 'var InstallationVersion = "[^"]+"'` → 为 `1.18.16`,**不含 `0.0.0-`**
+- [ ] **S6.2 端到端**:Console 账号**免费额度**真发一条消息,不再报 `1.17.0 or newer is required`  🔴 **未验 —— 合 main 时仍开着,`/ship` 前必须关掉**(本机无 Console 集成;MiMo/Ling 由 alibaba-cn 提供,不走该链路。原因与残留风险见 3-changelog)
+- [x] **S6.3 防复发**:临时制造取值失败 → 构建**报错退出**
+- [x] **S6.4 REQ-100 真机**:kill 后台子进程 → ① UI ≤N 秒复位 ② 此时发一条**带聊天引用卡片**的消息 → 原文 + 引用卡片(kind 保真)原样回输入框 + toast,**时间线不残留** ③ 后端恢复后该消息**不会**自己发出去
+- [x] **S6.5 GUI 四条真机点击 + 截图存档**:点 × 只关一个且预览区不收(⌘W 行为一致)/ 引用卡片看得到引文原文 / 加入聊天新建会话标题各不相同且中文提问出中文标题 / 工具行右侧空白点不开
+- [x] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过  🟡 **移交 Win 端**(2026-09-17 user 决定,push 后由 Windows 侧适配测试)
 
 ### 5.3 治理闸
 - [ ] **恰 1 笔 R4 override**(REQ-125 的 `prompt.ts`,D-D 拍板),且该笔满足全部四项:① commit message 标 `[override-blacklist: REQ-125 会话标题剥壳,ensureTitle 是唯一能在喂模型前拦截的点]` ② 改动日志逐文件论证 wrapper 不可行 ③ **实施 agent 在 commit 前出复核报告**(wrapper 不可行性 / 风险评估 / 改动日志论证 三项)→ user 审 → 点头才 commit ④ 其余 5 组**零 override**

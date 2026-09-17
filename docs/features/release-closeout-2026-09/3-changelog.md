@@ -139,8 +139,35 @@ user 自测确认通过:点 × 只关一个且预览区不收(⌘W 行为一致)
 
 | 项 | 为什么必须人工 |
 |---|---|
-| **S6.2** Console 免费额度真发一条消息 | 需真实 Console 账号与额度。**注意**:user 日常在用的 MiMo / Ling 等第三方免费模型**不走这条链路**,不能替代本项 |
-| **S6.6** Win 端产物 | 需 Windows 机器 |
+| **S6.2** Console 免费额度真发一条消息 | 🔴 **未验,合 main 时仍开着 —— 发版前必须关掉** |
+| **S6.6** Win 端产物 | 🟡 **移交 Win 端**(2026-09-17 user 决定:push 后由 Windows 侧做适配测试) |
+
+#### S6.2 为什么没验,以及残留风险有多大(如实记录)
+
+**没验的原因**:本机 `auth.json` 里只有 `anthropic` / `alibaba-cn` / `kimi-for-coding`,
+**没有 `opencode`(Console)集成**。user 日常在用的 MiMo V2.5 Free / Ling 3.0 Flash Fin Free
+由 `alibaba-cn` 提供,**不走 Console 链路**,替代不了本项。
+(Console 是 `console.opencode.ai` 的独立 OAuth 集成,label「OpenCode Console account」,设备码登录。)
+
+**已验到哪一步**:S6.1 证明了打包产物里 `InstallationVersion = "1.18.16"`,不含 `0.0.0-`。
+这是本次修复改变的**唯一**一个值。
+
+**没验的那一步**:Console 服务端确实接受它。
+
+**残留风险的诚实评估** —— 取决于 Console 按什么判版本,而这一点**代码里查不出来**:
+- REQ-132 立项时的诊断是「UA 报出去即被判旧客户端」。若确实如此,且 UA 源自 `InstallationVersion`,
+  那 S6.1 基本等价于闭环。
+- 但施工时实际追查发现:Console provider(`packages/core/src/plugin/provider/opencode.ts`)自己
+  **不拼 UA** —— 它 `GET /api/config` 只带 bearer + `x-org-id`,再按远端 config 指定的 npm SDK 走推理;
+  而 `provider/openai.ts:192` 那个 `User-Agent: opencode/${InstallationVersion}` 有
+  `providerID !== openai` 的闸,**不在 Console 链路上**。
+- 也就是说:**版本号经由哪个 header 到达 Console,本次未能从代码确认**。
+  报错文案「OpenCode 1.17.0 or newer is required」是 Console **服务端**的文本,服务端代码不在本仓。
+
+**结论**:S6.2 不是"锦上添花的复验",它是这条修复链上**唯一能闭环的一步**。
+合 main 可以先走(合并 ≠ 发版),但 **`/ship` 之前必须连一个 Console 账号实测一次**。
+做法:设置 → 供应商/集成 → 「OpenCode Console account」→ 设备码登录 → 切到它提供的模型发一条,
+确认不再报 `1.17.0 or newer is required`。
 
 ---
 
