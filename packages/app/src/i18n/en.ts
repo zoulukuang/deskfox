@@ -353,9 +353,9 @@ export const dict = {
   // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
   "prompt.toast.promptNotDelivered.title": "Message may not have been sent — put back in the input box",
   "prompt.toast.promptNotDelivered.description":
-    "The backend engine did not respond within 20 seconds. Your text and quoted cards are intact. Check the conversation before resending — in rare cases the backend did accept it.",
+    "The backend engine did not respond within 2 minutes. Your text and quoted cards are intact. Check the conversation before resending — in rare cases the backend did accept it.",
   "prompt.toast.promptNotDelivered.inputBusy.description":
-    "The backend engine did not respond within 20 seconds. Your input box already had new content so it was left untouched; the quoted cards were put back. Check the conversation before resending.",
+    "The backend engine did not respond within 2 minutes. Your input box already had new content so it was left untouched; the quoted cards were put back. Check the conversation before resending.",
 
   "dialog.mcp.title": "MCPs",
   "dialog.mcp.description": "{{enabled}} of {{total}} enabled",
