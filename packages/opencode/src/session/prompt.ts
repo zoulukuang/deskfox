@@ -58,6 +58,8 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
+// FORK: REQ-125 会话标题剥壳 [feat: release-closeout-2026-09] 2026-09-17
+import { unwrapCommentNotesForTitle } from "./fork/comment-title"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -224,6 +226,11 @@ const layer = Layer.effect(
       const msgs = onlySubtasks
         ? [{ role: "user" as const, content: subtasks.map((p) => p.prompt).join("\n") }]
         : yield* MessageV2.toModelMessagesEffect(context, mdl)
+      // FORK: REQ-125 —— 「加入聊天」的首消息是一层英文样板包着用户真写的那句话,原样喂小模型
+      //   会让所有这样发起的会话都得到同一个标题(中文提问也出英文标题)。剥壳后再喂。
+      //   只影响标题这一条路径,主模型拿到的 prompt 一个字不变。
+      //   [feat: release-closeout-2026-09] 2026-09-17
+      const titleMsgs = unwrapCommentNotesForTitle(msgs)
       const text = yield* llm
         .stream({
           agent: ag,
@@ -234,7 +241,7 @@ const layer = Layer.effect(
           model: mdl,
           sessionID: input.session.id,
           retries: 2,
-          messages: [{ role: "user", content: "Generate a title for this conversation:\n" }, ...msgs],
+          messages: [{ role: "user", content: "Generate a title for this conversation:\n" }, ...titleMsgs],
         })
         .pipe(
           Stream.filter(LLMEvent.is.textDelta),
