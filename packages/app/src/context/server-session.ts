@@ -1319,6 +1319,14 @@ export function createServerSession(
       return Date.now() - (meta.at[sessionID] ?? 0) <= ttl
     },
     optimistic: {
+      // FORK: REQ-100 ②③ —— 全量忙闲对账的竞态护栏 [feat: release-closeout-2026-09] 2026-09-17
+      // 对账把"本地 busy 但后端说不忙"的会话清成 idle。但刚发出的消息有一个窗口:
+      // 前端已乐观置 busy,后端还没把该会话登记进 status 表(它只存非 idle 项)。
+      // 此时若对账恰好撞进来,会把正在发送的会话错误地清掉转圈。
+      // 有未确认的乐观消息 = 这一发还在飞,对账一律跳过该会话。
+      pending(sessionID: string) {
+        return (optimistic.get(sessionID)?.size ?? 0) > 0
+      },
       add(input: { sessionID: string; message: Message; parts: Part[] }) {
         const parts = input.parts
           .filter((part) => !!part?.id && !SKIP_PARTS.has(part.type))

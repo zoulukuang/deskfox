@@ -46,6 +46,7 @@ import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
+import { collectStaleBusySessions } from "./global-sync/stale-busy"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
 import type { ServerApi } from "@/utils/server"
@@ -294,6 +295,61 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     },
   })
 
+  // FORK-BEGIN: REQ-100 ②③ 后端权威全量忙闲对账 [feat: release-closeout-2026-09] 2026-09-17
+  //
+  // 2026-08-18 真机:后端 respawn 后前端确实重连并重跑了 6 个目录的 bootstrap,但出事的那个目录
+  // **恰好不在这 6 个里** —— 它被 child store 的 eviction 挤掉了,而重连对账的循环有一道
+  // `if (!children.active(directory)) continue`(见下方 server.connected 分支),于是被 evict 的
+  // 目录永远拿不到对账,它名下会话的残留 busy 永不清除。净效果:卡死 ≥38 分钟。
+  //
+  // 修法不是"把那道闸删掉再按目录遍历一遍" —— 按目录切本身就是错的切法:忙闲是**会话**维度的,
+  // 后端 SessionStatus 本来就有一张全局表(packages/opencode/src/session/status.ts),且它
+  // **只存非 idle 项**(set 到 idle 会 delete),所以"不在表里 = idle"是后端的确定语义。
+  // 于是这里改成:直接拿那张全局表,对本地做**权威覆盖**,完全不按目录切。
+  //
+  // 与既有 seedActiveSessionStatuses 的区别(那个不够用,这是第二层根因):
+  //   seed 只填**本地缺失**的条目(`if (... !== undefined) continue`),对"本地 busy、后端 idle"
+  //   的残留一个字都不改 —— 它是 seed,不是 reconcile。真正能清残留的只有按目录的 bootstrap
+  //   全量替换,而那条正好被 active 闸挡住了。两处叠加才造成"代码在、也执行了,但恰好跳过出事那个"。
+  //
+  // 竞态护栏见 session.optimistic.pending():刚发出、后端还没登记的会话不参与清理。
+  const reconcileSessionStatuses = async () => {
+    const remote = await (async () => {
+      if ((await serverSDK.protocol) === "v1") {
+        const statuses = (await serverSDK.client.session.status()).data ?? {}
+        return Object.fromEntries(
+          Object.entries(statuses).map(([sessionID, status]) => [sessionID, status?.type !== "idle"]),
+        )
+      }
+      const active = await serverSDK.api.session.active()
+      return Object.fromEntries(Object.keys(active).map((sessionID) => [sessionID, true]))
+    })()
+
+    const stale = collectStaleBusySessions({
+      local: session.data.session_status,
+      remote,
+      pending: (sessionID) => session.optimistic.pending(sessionID),
+    })
+    for (const sessionID of stale) session.set("session_status", sessionID, { type: "idle" })
+  }
+
+  const reconcileSessionStatusesSafely = () => {
+    void reconcileSessionStatuses().catch(() => {
+      // 对账失败(后端仍不可达)不弹 toast:看门狗统管恢复 UX,这里只是错过一轮,下一轮再来。
+    })
+  }
+
+  // ② 周期性对账 —— 不能只有「重连」才触发。事件流"活着但停止投递"时不会触发重连
+  //    (心跳被无关事件不断 reset),那条路径下只有这个定时器救得回来。
+  //    仅在窗口可见时跑:后台标签页没人看,白烧请求。
+  const RECONCILE_INTERVAL_MS = 60_000
+  const reconcileTimer = setInterval(() => {
+    if (typeof document === "object" && document.visibilityState === "hidden") return
+    reconcileSessionStatusesSafely()
+  }, RECONCILE_INTERVAL_MS)
+  onCleanup(() => clearInterval(reconcileTimer))
+  // FORK-END
+
   const queryClient = useQueryClient()
   const homeSessions = createHomeSessionIndexCache(queryClient, ServerConnection.key(serverSDK.server))
   const refreshProviders = () =>
@@ -302,7 +358,6 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     })
 
   let bootedAt = 0
-  let bootingRoot = false
   let eventFrame: number | undefined
   let eventTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -543,7 +598,11 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     const key = directoryKey(directory)
     const event = e.details
     const eventType: string = event.type
-    const recent = bootingRoot || Date.now() - bootedAt < 1500
+    // FORK: REQ-100 ⑤ —— 原为 `bootingRoot || Date.now() - bootedAt < 1500`,而 bootingRoot 全仓
+    //   只有"声明为 false"和"在这里被读"两处,没有任何地方赋 true —— 是个恒假的死变量。
+    //   2026-08-07 那次关闭把它当成自愈链语义的一部分来读,是误判的一环。直接删,不补赋值:
+    //   补赋值等于凭空新造一条没人验证过的语义。 [feat: release-closeout-2026-09] 2026-09-17
+    const recent = Date.now() - bootedAt < 1500
 
     if (event.current) session.applyV2(event.current)
     session.apply(event)
@@ -574,6 +633,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         bootstrap.refetch()
       if (eventType === "server.connected" || eventType === "global.disposed") {
         if (recent) return
+        // FORK: REQ-100 ③ —— 按目录刷新照旧(它还负责 bootstrap 其他数据),但**忙闲不再靠它**:
+        //   下面这行全局对账不按目录切,被 evict 掉的目录名下的残留 busy 也能被清。
+        //   [feat: release-closeout-2026-09] 2026-09-17
+        reconcileSessionStatusesSafely()
         for (const directory of Object.keys(children.children)) {
           if (!children.active(directory)) continue
           queue.push(directory)
