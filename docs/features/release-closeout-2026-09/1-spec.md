@@ -168,7 +168,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] **S6.3 防复发**:临时制造取值失败 → 构建**报错退出**
 - [x] **S6.4 REQ-100 真机**:kill 后台子进程 → ① UI ≤N 秒复位 ② 此时发一条**带聊天引用卡片**的消息 → 原文 + 引用卡片(kind 保真)原样回输入框 + toast,**时间线不残留** ③ 后端恢复后该消息**不会**自己发出去
 - [x] **S6.5 GUI 四条真机点击 + 截图存档**:点 × 只关一个且预览区不收(⌘W 行为一致)/ 引用卡片看得到引文原文 / 加入聊天新建会话标题各不相同且中文提问出中文标题 / 工具行右侧空白点不开
-- [x] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过  🟡 **移交 Win 端**(2026-09-17 user 决定,push 后由 Windows 侧适配测试)
+- [x] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过  ✅ **Win 侧已完成**(2026-09-17,分支 `fix/win-release-closeout-2026-09`):自动闸 10 项与 mac 逐项对照、e2e 142/142、真 local 产物 `InstallationVersion=1.18.16` 且 0 处 `0.0.0-`、坏版本号构建 fail-fast、冒烟 22/22、GUI 11/11、冷启动连续 2 次 CLEAN。**并补上 mac 侧测不到的洞**:PS1 注入块此前只有文本断言,现已真执行 8 场景并固化为常驻测试。详见 [3-changelog.md](./3-changelog.md#win-侧回验2026-09-17分支-fixwin-release-closeout-2026-09)
 
 ### 5.3 治理闸
 - [ ] **恰 1 笔 R4 override**(REQ-125 的 `prompt.ts`,D-D 拍板),且该笔满足全部四项:① commit message 标 `[override-blacklist: REQ-125 会话标题剥壳,ensureTitle 是唯一能在喂模型前拦截的点]` ② 改动日志逐文件论证 wrapper 不可行 ③ **实施 agent 在 commit 前出复核报告**(wrapper 不可行性 / 风险评估 / 改动日志论证 三项)→ user 审 → 点头才 commit ④ 其余 5 组**零 override**
