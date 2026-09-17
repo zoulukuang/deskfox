@@ -160,6 +160,37 @@ if (Test-Path $loSoffice) {
 
 # === 4. electron-vite build(自动跑 prebuild:编译 opencode Node 后端 + copy-icons)===
 $env:OPENCODE_CHANNEL = $Env
+# FORK-BEGIN: REQ-132 构建时注入真实基线版本号 [feat: release-closeout-2026-09] 2026-09-17
+# 不注入时 packages/script/src/index.ts 的推导是:OPENCODE_CHANNEL≠"latest" → IS_PREVIEW=true →
+#   版本号 fallback 成 `0.0.0-<channel>-<时间戳>`,经 packages/opencode/script/build-node.ts 的
+#   define.OPENCODE_VERSION 烧进 bundle → InstallationVersion → 各 provider 的 User-Agent。
+#   Console 按 semver 判客户端版本,于是对外发布的正式版被当成 0.0.0 拒掉免费额度
+#   (实测报 "OpenCode 1.17.0 or newer is required",而真实基线 1.18.16 本就比门槛新)。
+# 取值失败一律 fail-fast:静默回退默认值 = 原地复发本缺陷,这正是本条的教训本身。
+# ⚠️ 只在本脚本进程内设,绝不写进用户/机器级 env —— packages/desktop/scripts/finalize-latest-{yml,json}.ts
+#    同名读这个 env,但它们要的是 DeskFox 日历号(installer-versions.json),不是上游基线号。两条号线不能混。
+# 与 Mac wrapper(build-deskfox-electron.sh)保持逐项对偶:两份脚本历史上漂移过,改一侧必须同改另一侧。
+$opencodePkgJson = Join-Path $repoRoot "packages/opencode/package.json"
+$opencodeVersion = $null
+try {
+    $opencodeVersion = (Get-Content -Raw -Encoding UTF8 $opencodePkgJson | ConvertFrom-Json).version
+} catch {
+    $opencodeVersion = $null
+}
+if ($opencodeVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$') {
+    Write-Host "[deskfox] X REQ-132: 读不出上游基线版本号(得到 '$opencodeVersion')" -ForegroundColor Red
+    Write-Host "[deskfox]   源:$opencodePkgJson 的 .version 字段,期望形如 1.18.16"
+    throw "[deskfox]   绝不静默回退 —— 回退会产出对外自称 0.0.0-* 的包,Console 免费额度当场被拒。"
+}
+if ($opencodeVersion -like '0.0.0*') {
+    # `0.0.0-*` 是合法 semver,过得了上面的格式校验 —— 但它正是本缺陷的那个坏值本身。
+    # 只要 package.json 里出现它(上游改推导 / 有人手误 / 合并事故),必须当场炸掉而不是照单注入。
+    Write-Host "[deskfox] X REQ-132: 基线版本号是 '$opencodeVersion',这正是本缺陷要防的坏值" -ForegroundColor Red
+    throw "[deskfox]   $opencodePkgJson 的 .version 不该是 0.0.0-*;先查上游同步是否出错。"
+}
+$env:OPENCODE_VERSION = $opencodeVersion
+Write-Host "[deskfox] REQ-132: 注入 OPENCODE_VERSION=$opencodeVersion(上游基线;与 DeskFox 日历号是两条独立号线)"
+# FORK-END
 if (-not $env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/" }
 if (-not $env:ELECTRON_BUILDER_BINARIES_MIRROR) {
     $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"

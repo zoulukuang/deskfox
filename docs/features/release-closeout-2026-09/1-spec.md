@@ -1,5 +1,5 @@
 feat-id: release-closeout-2026-09
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 对外发版收口批 — 开发方案(1-spec)
