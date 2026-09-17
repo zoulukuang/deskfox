@@ -388,6 +388,10 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Ukaza ni bilo mogoče poslati",
   "prompt.toast.promptSendFailed.title": "Poziva ni bilo mogoče poslati",
   "prompt.toast.promptSendFailed.description": "Seje ni mogoče pridobiti",
+  // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.toast.promptNotDelivered.title": "Message not sent — put back in the input box", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.promptNotDelivered.description": "The backend engine did not respond. Your text and quoted cards are intact — send again when you are ready.", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.promptNotDelivered.inputBusy.description": "The backend engine did not respond. Your input box already had new content so it was left untouched; the quoted cards were put back.", // FORK-i18n-backfill(en 兜底)
   "dialog.mcp.title": "MCP-ji",
   "dialog.mcp.description": "{{enabled}} od {{total}} omogočen",
   "dialog.mcp.empty": "MCP-ji niso konfigurirani",

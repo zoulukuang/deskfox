@@ -396,6 +396,10 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "コマンドの送信に失敗しました",
   "prompt.toast.promptSendFailed.title": "プロンプトの送信に失敗しました",
   "prompt.toast.promptSendFailed.description": "セッションを取得できませんでした",
+  // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.toast.promptNotDelivered.title": "Message not sent — put back in the input box", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.promptNotDelivered.description": "The backend engine did not respond. Your text and quoted cards are intact — send again when you are ready.", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.promptNotDelivered.inputBusy.description": "The backend engine did not respond. Your input box already had new content so it was left untouched; the quoted cards were put back.", // FORK-i18n-backfill(en 兜底)
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "{{total}}個中{{enabled}}個が有効",
   "dialog.mcp.empty": "MCPが設定されていません",

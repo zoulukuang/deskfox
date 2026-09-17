@@ -437,6 +437,10 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "傳送命令失敗",
   "prompt.toast.promptSendFailed.title": "傳送提示失敗",
   "prompt.toast.promptSendFailed.description": "無法取得工作階段",
+  // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.toast.promptNotDelivered.title": "這條沒發出去,已放回輸入框",
+  "prompt.toast.promptNotDelivered.description": "後台引擎沒有回應。原文和引用卡片都還在,確認後可以重新發送。",
+  "prompt.toast.promptNotDelivered.inputBusy.description": "後台引擎沒有回應。輸入框已有新內容,原文未覆蓋;引用卡片已放回。",
 
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "已啟用 {{enabled}} / {{total}}",
