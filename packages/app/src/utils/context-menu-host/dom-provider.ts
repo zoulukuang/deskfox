@@ -74,7 +74,8 @@ export class DomSelectionProvider implements SelectionProvider {
 
     // FORK: chat 区(session-turn-list)选区也透传 sourceMeta,Host 据此走"卡片"路径
     // kind="chat" 让 LLM 模板分流为 "user is quoting earlier in this conversation"。
-    // path 用固定标识 "<chat selection>"(LLM 端不会用它,卡片渲染也不显示),
+    // path 用固定标识 "<chat selection>"(LLM 端不会用它;卡片渲染见 comment-card-v2.tsx ——
+    //   REQ-131 之前它其实被当文件名印出来了,现在按 kind 分流成引文首行),
     // 真正区分多次选区靠 Host 生成 commentID=quote-{textHash}-{ts}。
     // [feat: 聊天选区-卡片化-换行] 2026-05-25
     const inChatRegion = target.closest('[data-slot="session-turn-list"]') != null

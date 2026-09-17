@@ -193,6 +193,12 @@ export type UserMessageComment = {
     startLine: number
     endLine: number
   }
+  // FORK: REQ-131 —— 与 timeline/rows.ts 的 MessageComment 对齐,否则引文到不了卡片
+  //   [feat: release-closeout-2026-09] 2026-09-17
+  /** 引文原文 */
+  preview?: string
+  /** chat = 引用本次对话;file = 引用文件选区 */
+  kind?: "chat" | "file"
 }
 
 export interface MessagePartProps {
@@ -1094,7 +1100,12 @@ function UserMessageComments(props: { comments: UserMessageComment[]; bounded: b
             comment={comment.comment}
             path={comment.path}
             selection={comment.selection}
-            title={comment.comment}
+            // FORK: REQ-131 —— tooltip 原先 title={comment.comment},等于把用户自己写的那句话
+            //   重复一遍,回看时依然不知道当初引的是哪段。改成优先显引文原文。
+            //   [feat: release-closeout-2026-09] 2026-09-17
+            title={comment.preview ?? comment.comment}
+            preview={comment.preview}
+            kind={comment.kind}
             tooltip
             wide
           />
