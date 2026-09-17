@@ -13,12 +13,35 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 |---|---|---|---|---|
 | 1 | `4a576548f1` | — | 开发方案立项 spec | +214 |
 | 2 | `a1889915a2` | — | D-D/D-E 拍板,方案定稿 | ~ |
-| 3 | `70ad754c8f` | **S1** | REQ-132 构建时注入真实基线版本号 | +299 |
+| 3 | `70ad754c8f` | **S1** | REQ-132 构建时注入真实基线版本号(+16 测试) | +299 |
 | 4 | `0499acfe48` | **S2** | REQ-100 未送达回吐提示词条(62 语言) | +248 |
-| 5 | `293f2a112b` | **S2** | REQ-100 ②③⑤ 忙闲对账改后端权威全量表 | +202 |
-| 6 | `ee1815facc` | **S2** | REQ-100 ①④ 送达超时闸 + 回吐保真 | +453 |
-| 7 | `5ed5325f6a` | **S4a** | REQ-131 引用卡片能看到引文原文 | +214 |
-| 8 | (本笔) | **S4b** | REQ-125 会话标题剥壳 🔴 **R4 override** | +385 / 改上游 3 |
+| 5 | `293f2a112b` | **S2** | REQ-100 ②③⑤ 忙闲对账改后端权威全量表(+8 测试) | +202 |
+| 6 | `ee1815facc` | **S2** | REQ-100 ①④ 送达超时闸 + 回吐保真(+12 测试) | +453 |
+| 7 | `5ed5325f6a` | **S4a** | REQ-131 引用卡片能看到引文原文(+6 测试) | +214 |
+| 8 | `f123503078` | **S4b** | REQ-125 会话标题剥壳 🔴 **R4 override**(+22 测试) | +619 / 改上游 3 |
+| 9 | `f7ee11d0e1` | **S3** | REQ-130 点 × 不再收起预览区(+5 测试) | +78 |
+| 10 | `654d9e37ab` | **S5** | REQ-128 工具行命中区收窄(+7 测试) | +205 |
+
+**新增测试合计 58 条**,零上游文件改动(除 S4b 的 `prompt.ts` 3 行)。
+
+## 整体回归结果(2026-09-17,R9 分支内验收闸)
+
+| 项 | 结果 |
+|---|---|
+| `bun turbo typecheck --filter='!./packages/console/*'` | 29/29 successful |
+| `packages/app` unit + browser | 1100 + 41 pass,0 fail |
+| `packages/app` **e2e** | **142 pass,0 fail** |
+| `packages/core` | 1137 pass,0 fail |
+| `packages/session-ui` | 121 pass,0 fail |
+| `packages/opencode` `test/session` | 438 pass,7 skip,0 fail |
+| `packages/media-gen` / `adapter-feishu-lark` / `branding` / `desktop(deskfox)` | 140 / 792 / 77 / 169 pass,0 fail |
+
+## 尚未完成 — S6 真实触发测试(本机做不了,见 1-spec §5.2)
+
+- S6.1/6.2/6.3 REQ-132 产物层 + Console 免费额度 + 防复发(需真构建)
+- S6.4 REQ-100 真机 kill 后端
+- S6.5 GUI 四条真机点击 + 截图
+- S6.6 Win 端产物
 
 ---
 

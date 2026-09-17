@@ -217,6 +217,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 1. **S2.2 工作性质更正**(C-2):回吐路径已存在,改为「让失败可判 + 补保真缺口」。
 2. **新增 S2.2b/c/d**:`kind` 漏传、`restoreInput()` 返 false 的静默分支、toast 文案按 D-C 语义重写。
 3. **S4.4 修法 A 落地细化**(D-D 已拍):服务端剥壳照做并批 1 笔 override;但把模板 + parser 提成 `packages/core/src/fork/comment-note.ts` 单一真源(core 是 app 与 opencode 的共同依赖),**消除了需求 doc 预期的「跨包正则重复」代价**,并加 T7b 往返契约测试锁住模板↔正则对偶。
-4. **S5.1 落点改 `packages/session-ui/src/components/basic-tool.css`**:等效于修法 B,但不动黑名单 `packages/ui/`。
+4. **S5.1 落点改 `packages/session-ui/src/components/basic-tool.css`**(不动黑名单 `packages/ui/`),**且修法从 doc 倾向的 B 换成次选 A**:`pointer-events:none` 版实现后 e2e 当场红 13 条,暴露① `.tool-collapsible` 有三个使用方、`context-tool-group` 自带 trigger 内容不走 basic-tool 那套 slot,白名单漏了它 → 「已运行 N 条命令」整组完全点不开;② 「按钮边界」与「可点区域」脱节。改 `width:fit-content` 后全套 142 条 e2e 全过。doc 当初把 A 列次选的理由「牵动右侧 action 靠右布局」实测不成立(行内无任何 `margin-left:auto` 类的靠右定位)。详见 2-plan D9。
 5. **新增 R2 / R5 / R6 三条风险**。
 6. **REQ-132 doc 路径订正**(B-1)照旧回填。
+7. **S2.1 选了「后端权威全量表」而非「删 active 闸」**:读码发现第二层根因 —— `seedActiveSessionStatuses` 只填本地缺失条目、不清残留 busy,它是 seed 不是 reconcile。详见 2-plan D6。
+8. **三次「读码觉得对、跑起来不对」**:S1 的 `0.0.0-*` 是合法 semver / S2 的 abort 传不到 fetch / S5 的 pointer-events 漏网。均由测试当场抓出,见 2-plan D2、D5、D9。
