@@ -139,35 +139,37 @@ user 自测确认通过:点 × 只关一个且预览区不收(⌘W 行为一致)
 
 | 项 | 为什么必须人工 |
 |---|---|
-| **S6.2** Console 免费额度真发一条消息 | 🔴 **未验,合 main 时仍开着 —— 发版前必须关掉** |
 | **S6.6** Win 端产物 | 🟡 **移交 Win 端**(2026-09-17 user 决定:push 后由 Windows 侧做适配测试) |
 
-#### S6.2 为什么没验,以及残留风险有多大(如实记录)
+#### ✅ S6.2 Console(OpenCode Zen)免费额度 — **通过**
 
-**没验的原因**:本机 `auth.json` 里只有 `anthropic` / `alibaba-cn` / `kimi-for-coding`,
-**没有 `opencode`(Console)集成**。user 日常在用的 MiMo V2.5 Free / Ling 3.0 Flash Fin Free
-由 `alibaba-cn` 提供,**不走 Console 链路**,替代不了本项。
-(Console 是 `console.opencode.ai` 的独立 OAuth 集成,label「OpenCode Console account」,设备码登录。)
+**证据**:
 
-**已验到哪一步**:S6.1 证明了打包产物里 `InstallationVersion = "1.18.16"`,不含 `0.0.0-`。
-这是本次修复改变的**唯一**一个值。
+1. 构建产物 `InstallationVersion = "1.18.16"`(S6.1),不含 `0.0.0-`。
+2. `packages/opencode/src/session/llm/request.ts:18` 把它拼成
+   `const USER_AGENT = \`opencode/${InstallationVersion}\``,在 `:194` / `:200` 挂到**每一个模型请求**的
+   `User-Agent` 头上 —— 这正是服务端设闸读的那个值(REQ-132 doc §二① 亦记载了
+   `installation/index.ts:41-43` 的 `userAgent()` 同源拼装)。
+3. 本地库 `opencode-local.db` 里 **114 条消息**的 `providerID` 是 `opencode`(即 OpenCode Zen),
+   全部正常发出并收到回答;user 自测与本批 GUI 验证期间用的 MiMo V2.5 Free / Ling 3.0 Flash Fin Free
+   都属于 Zen 的免费档。**全程未再出现 `OpenCode 1.17.0 or newer is required`。**
 
-**没验的那一步**:Console 服务端确实接受它。
+> **⚠️ 本文件此前写过一段错误的「S6.2 未验 + 残留风险」分析,已整段作废。** 三处错在:
+> ① 把 MiMo / Ling 归给 `alibaba-cn` —— 实际它们在模型选择器的 **OpenCode Zen** 分组下,
+>    `Alibaba (China)` 是**另一个**分组;Zen 的 provider id 就是 `opencode`
+>    (`use-providers` mock 里写得很清楚:`{ id: "opencode", name: "OpenCode Zen" }`),
+>    与 `console.opencode.ai` 那个集成同一个。
+> ② 只凭 `auth.json`(v1 遗留存储)里没有 `opencode` 键就断定「没连 Console」——
+>    Zen 免费档根本不需要存凭据,DB 的 `credential` 表也是空的,但模型照用不误。
+> ③ 断言「版本号经由哪个 header 到达 Console,代码里查不出来」—— 查得出来,就在
+>    `session/llm/request.ts`;而且 REQ-132 详情 doc 的 §二① **原文已写明** UA 拼装位置,
+>    当时读那份 doc 读到一半被打断,之后却没回去读完就下了结论。
+>
+> 教训与本批那四次「读码觉得对、跑起来不对」是同一族的反面:**这次是"没读完就断言"**。
+> 留此记录,不删。
 
-**残留风险的诚实评估** —— 取决于 Console 按什么判版本,而这一点**代码里查不出来**:
-- REQ-132 立项时的诊断是「UA 报出去即被判旧客户端」。若确实如此,且 UA 源自 `InstallationVersion`,
-  那 S6.1 基本等价于闭环。
-- 但施工时实际追查发现:Console provider(`packages/core/src/plugin/provider/opencode.ts`)自己
-  **不拼 UA** —— 它 `GET /api/config` 只带 bearer + `x-org-id`,再按远端 config 指定的 npm SDK 走推理;
-  而 `provider/openai.ts:192` 那个 `User-Agent: opencode/${InstallationVersion}` 有
-  `providerID !== openai` 的闸,**不在 Console 链路上**。
-- 也就是说:**版本号经由哪个 header 到达 Console,本次未能从代码确认**。
-  报错文案「OpenCode 1.17.0 or newer is required」是 Console **服务端**的文本,服务端代码不在本仓。
-
-**结论**:S6.2 不是"锦上添花的复验",它是这条修复链上**唯一能闭环的一步**。
-合 main 可以先走(合并 ≠ 发版),但 **`/ship` 之前必须连一个 Console 账号实测一次**。
-做法:设置 → 供应商/集成 → 「OpenCode Console account」→ 设备码登录 → 切到它提供的模型发一条,
-确认不再报 `1.17.0 or newer is required`。
+**结论**:REQ-132 的修复链**已端到端闭环** —— 构建注入 → `InstallationVersion` → LLM 请求 UA →
+Zen 免费档接受。S6 六项中 5 项本机完成、1 项(S6.6 Win 端)移交。
 
 ---
 
