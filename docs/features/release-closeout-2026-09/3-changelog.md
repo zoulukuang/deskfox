@@ -36,12 +36,68 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | `packages/opencode` `test/session` | 438 pass,7 skip,0 fail |
 | `packages/media-gen` / `adapter-feishu-lark` / `branding` / `desktop(deskfox)` | 140 / 792 / 77 / 169 pass,0 fail |
 
-## 尚未完成 — S6 真实触发测试(本机做不了,见 1-spec §5.2)
+## S6 真实触发测试 — 部分完成(2026-09-17,local 渠道本地测试版)
 
-- S6.1/6.2/6.3 REQ-132 产物层 + Console 免费额度 + 防复发(需真构建)
-- S6.4 REQ-100 真机 kill 后端
-- S6.5 GUI 四条真机点击 + 截图
-- S6.6 Win 端产物
+产物:`packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app`
+(`-Env local --no-bundle`,appId `ai.deskfox.app.local`,DB `opencode-local.db` —— 与正式版完全隔离,
+全程未碰 user 正在使用的 `DeskFox.app` / `opencode.db`)
+
+### ✅ S6.1 REQ-132 产物层 — 通过
+
+```
+$ LC_ALL=C grep -a -o -E 'var InstallationVersion = "[^"]+"' '…/DeskFox 本地版.app/Contents/Resources/app.asar'
+var InstallationVersion = "1.18.16"
+```
+**不含 `0.0.0-`**。连带确认 S1.3(不动 channel):同一 asar 里
+`InstallationChannel = "local"`,`Info.plist` 的 `CFBundleIdentifier = ai.deskfox.app.local`。
+
+**并反向印证了 S1.3 那条警戒是真的**:`packages/core/src/database/database.ts:47` 的白名单是
+`["latest","beta","prod"]` —— 当初若图省事把 `OPENCODE_CHANNEL` 改成 `latest` 来修版本号,
+DB 会从 `opencode-local.db` 切到 `opencode.db`,用户数据当场"凭空消失"。
+实测本地版打开的正是 `~/.local/share/deskfox/opencode/opencode-local.db`(`lsof` 确认)。
+
+### ✅ S6.4 REQ-100 真机 — 三条全过
+
+**复现手法更正**:直接 kill 后端只会让 fetch 立刻 `ECONNREFUSED` —— 那是**旧**路径,本来就能 reject。
+REQ-100 的病灶是「后端半死:socket 还开着但永不响应」,请求既不 resolve 也不 reject。
+故用 **`SIGSTOP` 冻住后端 NodeService 进程**精确复现(`SIGCONT` 还原)。
+
+| 验收项 | 实测 |
+|---|---|
+| ① 消息回到输入框 + 明确 toast | ✅ **18s** 触发(20s 闸内),toast 文案「这条没发出去,已放回输入框 / 后台引擎没有响应。原文和引用卡片都还在,确认后可以重新发送。」 |
+| ② 时间线**不残留** | ✅ 0 次(乐观挂上 → 超时后被撤下) |
+| ③ 后端恢复后**不自动重发** | ✅ `SIGCONT` 解冻后时间线仍 0 次 —— 证明 D-C 否决自动重投成立,且 abort 确实掐断了请求、没有迟到落地 |
+
+**服务端佐证**(照 REQ-100 原始证据链的查法):探针消息在 `part` 表 **0 条**、`session_input` **0 行**
+—— 与 2026-08-18 故障现场一致(消息确实没落盘),**但**它回到了输入框且有明确 toast。
+这正是 D-C 定的语义:**东西没丢、在你手里、发不发你说了算**。
+
+> 探针第一版把 `document.body.innerText` 当时间线来数,回吐后输入框里正含着那条消息 → 误报"残留"。
+> 改为只数 `[data-slot="session-turn-list"]` 区域后复测通过。记此一笔:**测量口径错了会假红**。
+
+### ✅ S6.5 REQ-128 真机点击 — 通过(量化)
+
+CDP 实点(非源码复核):
+
+```
+选中行「已运行 1 条命令」 trigger 宽 126px / 整行宽 960px → 命中区占比 13%
+① 点右侧死区 x=1556(trigger 右边界 763) → aria-expanded false→false  ✅ 不展开
+② 点文字区   x=696                        → aria-expanded false→true   ✅ 展开
+```
+两族组件都验到:`basic-tool`(「写入 xxx」189-200px)与 `context-tool-group`(「已运行 N 条命令」126-128px)。
+视觉零变化经截图核对(文字左对齐、行高、箭头位置均无位移)。
+
+### ⬜ 仍需人工真机确认(CDP 做不到 / 需要原生交互)
+
+| 项 | 为什么必须人工 |
+|---|---|
+| **S6.2** Console 免费额度真发一条消息 | 需真实账号与额度,且会产生真实调用 |
+| **S6.3** 造取值失败 → 构建报错退出 | 需再跑一次真构建(单测已覆盖逻辑,此处验的是真构建里也如此) |
+| **S6.5-a** 点 × 只关一个且预览区不收(⌘W 行为一致) | 需开多个文件标签并真点 ×;⌘W 是原生快捷键 |
+| **S6.5-b** 引用卡片能看到引文原文 | 需选中文字 → 右键「加入聊天」(原生右键菜单) |
+| **S6.5-c** 加入聊天新建会话标题各不相同 + 中文出中文 | 同上,且需真实模型调用生成标题 |
+| **S6.4 补充** 带**引用卡片**的消息回吐(kind 保真) | 同 S6.5-b,需原生右键菜单起手 |
+| **S6.6** Win 端产物 | 需 Windows 机器 |
 
 ---
 
