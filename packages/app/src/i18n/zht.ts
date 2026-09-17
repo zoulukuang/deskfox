@@ -412,6 +412,10 @@ export const dict = {
   "prompt.context.removeActiveFile": "從上下文移除目前檔案",
   "prompt.context.removeFile": "從上下文移除檔案",
   "prompt.context.chatQuoteLabel": "聊天引用",
+  // FORK: 引用卡片前缀 + 文件不可用兜底 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.context.quotePrefix": "引用:",
+  "fileViewer.unavailable.title": "無法顯示此檔案",
+  "fileViewer.unavailable.description": "它可能已被移動、改名或刪除。可以關掉這個標籤頁,或從檔案樹重新開啟。",
   "prompt.context.removeChatQuote": "移除聊天引用",
   "prompt.action.attachFile": "附加檔案",
   "prompt.menu.addImagesAndFiles": "新增檔案及更多內容",

@@ -320,6 +320,10 @@ export const dict = {
   "prompt.context.removeActiveFile": "Remove active file from context",
   "prompt.context.removeFile": "Remove file from context",
   "prompt.context.chatQuoteLabel": "Chat quote",
+  // FORK: 引用卡片前缀 + 文件不可用兜底 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.context.quotePrefix": "Quote:",
+  "fileViewer.unavailable.title": "Can't show this file",
+  "fileViewer.unavailable.description": "It may have been moved, renamed or deleted. Close this tab, or reopen it from the file tree.",
   "prompt.context.removeChatQuote": "Remove chat quote",
   "prompt.action.attachFile": "Add files",
   "prompt.menu.addImagesAndFiles": "Add files and more",
