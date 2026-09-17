@@ -99,10 +99,18 @@ export const katexExtension: MarkedExtension = {
       //   所以只认行首(允许 ≤3 空格缩进,与 markdown 块级惯例一致)既不误伤转义、也不漏真公式。
       //   2026-08-19 [feat: ship-2026-11-1-preflight]
       start(src) {
-        const match = src.match(/(^|\n) {0,3}\\\[/)
+        // FORK 2026-09-18:**不能用 `^` 当行首锚点** —— marked 调 start() 时传的是 `src.slice(1)`
+        //   (marked@13 lexer:`const tempSrc = src.slice(1)` → `getStartIndex.call(…, tempSrc)`,
+        //    随后 `cutSrc = src.substring(0, startIndex + 1)` 用 +1 换回真实坐标)。
+        //   所以 `^` 锚到的是**真实偏移 1**,不是行首:`见 $$x$$` / `见 \[1\]` 这类
+        //   「单字 + 空格 + 定界符」会被误判成块级起点,正文当场被劈成两半 —— 恰恰是本条要防的形态。
+        //   [bug-repro: 2026-08-19 那版 `(^|\n)` 写法实测无效,`见 $$x$$` 仍渲染成「见」+ 独立公式块]
+        //   改法:只认 `\n`(真实行首必有前驱换行),返回 slice 坐标的 match.index,
+        //   经 marked 的 +1 正好把段落切在换行处。文档开头的块级公式不依赖 start():
+        //   块 tokenizer 先于 paragraph 跑,本来就能吃掉它。
+        const match = src.match(/\n {0,3}\\\[/)
         if (!match) return
-        // 命中的是分组 1(行首锚点)之后的位置:`^` 时偏移 0,`\n` 时跳过换行本身
-        return match.index! + match[1].length
+        return match.index!
       },
       tokenizer(src) {
         const match = src.match(blockBracketMathRegex)
@@ -122,9 +130,11 @@ export const katexExtension: MarkedExtension = {
       // FORK: 同上,只认行首的 `$$` —— 否则 `在 shell 里 $$ 代表当前进程 pid` 这类正文
       //   也会被切开段落(tokenizer 随后不匹配,但段落已被劈成两半)。2026-08-19
       start(src) {
-        const match = src.match(/(^|\n) {0,3}\$\$/)
+        // FORK 2026-09-18:同上 —— `^` 锚的是 src.slice(1) 的开头(真实偏移 1)而非行首。
+        //   实测 `见 $$x$$` 被劈成「见」+ 独立 KaTeX 块,`参考 $$x$$` 被吃成「参考 $」+ 行内公式。
+        const match = src.match(/\n {0,3}\$\$/)
         if (!match) return
-        return match.index! + match[1].length
+        return match.index!
       },
       tokenizer(src) {
         const match = src.match(blockMathRegex)

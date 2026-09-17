@@ -3,7 +3,7 @@
 // REQ-100 ②③ · 2026-09-17 · [feat: release-closeout-2026-09]
 
 import { describe, expect, test } from "bun:test"
-import { collectStaleBusySessions } from "./stale-busy"
+import { collectMissingBusySessions, collectStaleBusySessions } from "./stale-busy"
 
 const never = () => false
 
@@ -80,5 +80,58 @@ describe("collectStaleBusySessions", () => {
 
   test("空表不炸", () => {
     expect(collectStaleBusySessions({ local: {}, remote: {}, pending: never })).toEqual([])
+  })
+})
+
+// FORK 2026-09-18 —— 对账的**反向**(后端忙、本地不忙 → 恢复 busy)。
+// [bug-repro: 停止键 4s 兜底把 session_status 写成 idle 后,没有任何路径能把 busy 写回来:
+//  对账当时只有 busy→idle 单向,seedActiveSessionStatuses 显式跳过已定义的键,
+//  后端又只在状态跃迁时推事件。后果是后端还在跑(interrupt 响应 >4s)、前端已自认 idle,
+//  queueEnabled 随之为假 → 用户下一条消息绕过队列,与仍在运行的那轮并发。]
+describe("collectMissingBusySessions —— 后端忙但本地不忙,要补回 busy", () => {
+  test("兜底写成 idle 后,对账把真实 busy 恢复回来(本缺陷的正面复现)", () => {
+    expect(
+      collectMissingBusySessions({
+        local: { ses_stopped: { type: "idle" } },
+        remote: { ses_stopped: true },
+        pending: never,
+      }),
+    ).toEqual(["ses_stopped"])
+  })
+
+  test("本地缺席、后端说忙 → 也要补(seed 只填缺失,但它跑在别处)", () => {
+    expect(collectMissingBusySessions({ local: {}, remote: { a: true }, pending: never })).toEqual(["a"])
+  })
+
+  test("本地已 busy → 不重复写", () => {
+    expect(
+      collectMissingBusySessions({ local: { a: { type: "busy" } }, remote: { a: true }, pending: never }),
+    ).toEqual([])
+  })
+
+  test("后端说不忙 → 不补(不忙就是不忙)", () => {
+    expect(collectMissingBusySessions({ local: { a: { type: "idle" } }, remote: { a: false }, pending: never })).toEqual(
+      [],
+    )
+  })
+
+  test("有未确认乐观消息 → 同一道竞态护栏,不插手", () => {
+    expect(
+      collectMissingBusySessions({ local: { a: { type: "idle" } }, remote: { a: true }, pending: (id) => id === "a" }),
+    ).toEqual([])
+  })
+
+  test("两个方向互不干扰:同一批里该清的清、该补的补", () => {
+    const args = {
+      local: { stale: { type: "busy" }, stopped: { type: "idle" } },
+      remote: { stopped: true },
+      pending: never,
+    }
+    expect(collectStaleBusySessions(args)).toEqual(["stale"])
+    expect(collectMissingBusySessions(args)).toEqual(["stopped"])
+  })
+
+  test("空表不炸", () => {
+    expect(collectMissingBusySessions({ local: {}, remote: {}, pending: never })).toEqual([])
   })
 })

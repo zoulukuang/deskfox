@@ -154,6 +154,32 @@ describe("块级定界符只在行首生效(转义方括号零误伤)", () => {
           expect(await parse(src)).toContain(KATEX)
         }
       })
+
+      // FORK 2026-09-18 —— 专钉「1 字前缀」。
+      // [bug-repro: 2026-08-19 那版「只认行首」的写法 `(^|\n) {0,3}…` 实测根本没生效。
+      //  marked@13 调 start() 时传的是 src.slice(1)(lexer:`const tempSrc = src.slice(1)`,
+      //  随后 `cutSrc = src.substring(0, startIndex + 1)` 用 +1 换回真实坐标),
+      //  所以 `^` 锚到的是**真实偏移 1**、不是行首 → 「单字 + 空格 + 定界符」仍被当块级起点:
+      //  `见 $$x$$` 渲染成「见」+ 独立 KaTeX 块,`见 \[1\]` 的方括号直接消失。
+      //  上面 Ⓐ-Ⓔ 这组用例的前缀全是 ≥2 字符(「路径 C:」「参考 」「在 shell 里 」「如下:」),
+      //  恰好整组绕开了偏移 1,所以缺陷在眼皮底下一条都没红。**本组是专门的偏移哨兵,别删。**]
+      test("Ⓕ 1 字前缀 + 同行 `$$…$$` 保持裸文本,不劈段落", async () => {
+        const html = await parse("见 $$x$$")
+        expect(html).not.toContain("katex-display")
+        expect(html.match(/<p>/g)?.length ?? 0).toBe(1)
+      })
+
+      test("Ⓖ 1 字前缀 + `\\[…\\]` 保持字面方括号", async () => {
+        const html = await parse("见 \\[1\\]")
+        expect(html).not.toContain(KATEX)
+        expect(html).toContain("[1]")
+      })
+
+      test("Ⓗ 1 字前缀 + 缩进定界符仍不算块级", async () => {
+        for (const src of ["见   $$x$$", "见   \\[x\\]"]) {
+          expect(await parse(src)).not.toContain("katex-display")
+        }
+      })
     })
   }
 })

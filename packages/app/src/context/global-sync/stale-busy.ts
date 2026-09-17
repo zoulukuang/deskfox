@@ -43,3 +43,29 @@ export function collectStaleBusySessions(input: StaleBusyInput): string[] {
   }
   return stale
 }
+
+/**
+ * 反向:挑出「后端说忙、本地却不忙」的会话 —— 这些要被恢复成 busy。
+ *
+ * FORK 2026-09-18 —— 对账必须是**双向**的。
+ * [bug-repro: REQ-100 ① 的停止键兜底在 4s 后把 session_status 写成 idle,注释写「重连/周期对账会把
+ *  真实状态盖回来」,但当时对账只有上面那个单向函数(busy→idle),`seedActiveSessionStatuses` 又
+ *  显式跳过**已定义**的键(`if (... !== undefined) continue`),后端也只在状态**跃迁**时推事件 ——
+ *  三条路都不会把 busy 写回来。于是后端还在跑(interrupt 响应 >4s)时前端已自认 idle,
+ *  `session.tsx` 的 `queueEnabled` 读同一个 store 判为不忙 → 用户下一条消息**绕过队列直接 prompt**,
+ *  与仍在运行的那一轮并发。]
+ *
+ * 两条不恢复的情形:
+ *   ① 本地已经是 busy —— 没什么可恢复
+ *   ② 有未确认的乐观消息 —— 与上面同一道竞态护栏,该会话状态正在飞,别插手
+ */
+export function collectMissingBusySessions(input: StaleBusyInput): string[] {
+  const missing: string[] = []
+  for (const [sessionID, isBusy] of Object.entries(input.remote)) {
+    if (!isBusy) continue
+    if (input.local[sessionID]?.type === "busy") continue
+    if (input.pending(sessionID)) continue
+    missing.push(sessionID)
+  }
+  return missing
+}

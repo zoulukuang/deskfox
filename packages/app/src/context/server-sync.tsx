@@ -46,7 +46,7 @@ import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
-import { collectStaleBusySessions } from "./global-sync/stale-busy"
+import { collectMissingBusySessions, collectStaleBusySessions } from "./global-sync/stale-busy"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
 import type { ServerApi } from "@/utils/server"
@@ -325,12 +325,18 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       return Object.fromEntries(Object.keys(active).map((sessionID) => [sessionID, true]))
     })()
 
-    const stale = collectStaleBusySessions({
+    const args = {
       local: session.data.session_status,
       remote,
-      pending: (sessionID) => session.optimistic.pending(sessionID),
-    })
+      pending: (sessionID: string) => session.optimistic.pending(sessionID),
+    }
+    const stale = collectStaleBusySessions(args)
     for (const sessionID of stale) session.set("session_status", sessionID, { type: "idle" })
+    // FORK 2026-09-18:**双向**对账。只清不补的话,任何把本地错误写成 idle 的路径都永久无解 ——
+    //   REQ-100 ① 停止键 4s 兜底就是这样一条(它的注释还写着「对账会把真实状态盖回来」,
+    //   而当时对账根本没有这个方向)。后端那张表是权威,既然拿到了就两个方向都覆盖。
+    const missing = collectMissingBusySessions(args)
+    for (const sessionID of missing) session.set("session_status", sessionID, { type: "busy" })
   }
 
   const reconcileSessionStatusesSafely = () => {
