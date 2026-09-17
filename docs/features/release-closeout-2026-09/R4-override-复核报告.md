@@ -1,5 +1,5 @@
 feat-id: release-closeout-2026-09
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # R4 黑名单 override 复核报告 — REQ-125 会话标题剥壳
@@ -72,7 +72,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## 四、配额与合规
 
 - 本批 **恰 1 笔** override(即本笔),其余 5 组零 override。
-- CLAUDE.md 健康指标:override 每季 ≤ 2 笔。**提交前请 user 确认本季已用笔数**。
+- CLAUDE.md 健康指标:override 每季 ≤ 2 笔。**实测 Q3(7/1 起)已有 16 笔**(含 4 笔上游 sync merge,黑名单改动来自上游侧),该指标早已不成立。已如实向 user 报备,user 知悉后批准本笔;指标口径是否重订另行决策,不阻塞本笔。
 - commit message 将标:`[override-blacklist: REQ-125 会话标题剥壳 —— ensureTitle 是整条链路上唯一能在喂标题模型前拦截的位置,无扩展点,剥壳逻辑已全部外置]`
 - 一笔 commit 触动多个黑名单文件算 1 笔;本笔实际只触 `prompt.ts` 一个。
 
@@ -91,11 +91,13 @@ typecheck           core / opencode / app / session-ui 四包全通过
 
 ---
 
-## 六、请 user 裁决
+## 六、裁决结果
 
-- [ ] 同意本笔 override,可 commit
-- [ ] 不同意,改走 D-D 的 A′(客户端命名,零 override)
-- [ ] 其他
+- [x] **同意本笔 override,可 commit** —— user 2026-09-17 审批,commit `f123503078`
+- [ ] ~~不同意,改走 D-D 的 A′(客户端命名,零 override)~~
+- [ ] ~~其他~~
+
+user 同日复核后确认「不用再看」。
 
 > 若不同意,回退成本很低:`prompt.ts` 的 3 行撤掉即可,fork 侧文件可原样保留
 > (`packages/core/src/fork/comment-note.ts` 作为单一真源本身就有价值,与 override 无关)。

@@ -1,5 +1,5 @@
 feat-id: release-closeout-2026-09
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实施计划 + 决策轨迹
