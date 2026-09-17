@@ -59,7 +59,7 @@ function harness(prompt: (input: unknown, options?: { signal?: AbortSignal }) =>
         draft,
         messageID: "msg_1",
         optimisticBusy: true,
-        // 生产是 20s;测试注入 30ms,免得单测跑 20 秒
+        // 生产是 2 分钟(PROMPT_DELIVERY_TIMEOUT_MS);测试注入 30ms,免得单测真等那么久
         deliveryTimeoutMs: 30,
       }),
   }
