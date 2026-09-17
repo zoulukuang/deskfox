@@ -1849,7 +1849,14 @@ export function FileTabContent(props: {
               一个节点都不渲染,于是用户看到的是一片**纯白**:没有错误、没有 loading、没有任何线索。
               文件被移走/改名/删除时尤其如此。静默失败是本批反复踩到的同一类坑,这里明确给出可读状态。
               [feat: release-closeout-2026-09] 2026-09-17 */}
-          <Match when={!state()?.loaded && !state()?.loading && !state()?.error}>
+          {/* FORK 2026-09-18 修正:首帧 state() 必为 undefined(file.load 要等 onMount,
+              而 onMount 在首帧之后),若把它当「文件不可用」会导致**每次打开未缓存的 tab 都闪一下
+              错误文案** —— 比原来的纯白更像真出错。故未初始化时按 loading 渲染,
+              兜底只接「state 已存在、但三条分支都不成立」这一种真异常。 */}
+          <Match when={state() === undefined}>
+            <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
+          </Match>
+          <Match when={state() !== undefined && !state()?.loaded && !state()?.loading && !state()?.error}>
             <div class="px-6 py-4 flex flex-col gap-1">
               <div class="text-text-strong">{language.t("fileViewer.unavailable.title")}</div>
               <div class="text-text-weak text-12-regular">{language.t("fileViewer.unavailable.description")}</div>

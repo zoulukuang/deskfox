@@ -150,8 +150,18 @@ function contextItemKey(item: ContextItem) {
   return `${key}:c=${digest.slice(0, 8)}`
 }
 
+/**
+ * 是否属于「引用/附件卡」这一族 —— 快照回滚与 replaceComments 清理都以它为准。
+ *
+ * FORK 2026-09-18 修正:原判据是 `type === "file" && !!comment?.trim()`,即**要求有注释**。
+ * 而 2026-09-17 那批放宽了「无注释的选区卡/附件卡也能提交」(文件预览区选区不填注释时
+ * comment 为 undefined),于是这些卡:① 撤回请求失败走 rollback 时被快照漏掉、还原不回来
+ * ② replaceComments 的清理侧同样漏过它们 → 永远不被收敛,撤回/恢复往返后在输入框里累积。
+ * 改为只看 type,与 `prompt-input/context-gate.ts` 的 `clearableContextItems` 对齐 ——
+ * 同一族东西在三处(提交闸 / 发送后清理 / 快照回滚)必须用同一个判据。
+ */
 export function isCommentItem(item: ContextItem | (ContextItem & { key: string })) {
-  return item.type === "file" && !!item.comment?.trim()
+  return item.type === "file"
 }
 
 function createPromptActions(setStore: SetStoreFunction<PromptStore>) {

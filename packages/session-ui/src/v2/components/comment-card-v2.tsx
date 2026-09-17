@@ -26,6 +26,8 @@ export function CommentCardV2(props: {
   kind?: "chat" | "file"
   /** 「引用:」前缀(由调用方喂 i18n 文案;session-ui 的 i18n 字典绑上游包,不新增键) */
   quotePrefix?: string
+  /** 无引文时的回退文案(同样由调用方喂,不在共享 UI 包里硬编码任何语言) */
+  quoteFallback?: string
   // FORK-END
 }) {
   let title: HTMLSpanElement | undefined
@@ -33,7 +35,10 @@ export function CommentCardV2(props: {
 
   // FORK: REQ-131 —— 聊天引用的副标题:引文首行。空引文(老消息无 metadata)回退到通用词,
   //   绝不回落成打印伪路径。 [feat: release-closeout-2026-09] 2026-09-17
-  const quoteLabel = () => commentQuoteLabel(props.preview) ?? "引用对话"
+  // FORK 2026-09-18:去掉硬编码中文兜底 —— 该分支外层是 <Show when={props.preview?.trim()}>,
+  //   preview 非空时 commentQuoteLabel 必有返回值,兜底是死代码;而它是 session-ui(共享 UI 包)
+  //   里的裸中文串,一旦有人放宽外层条件就会直接漏给英文用户。文案一律由调用方喂(同 quotePrefix)。
+  const quoteLabel = () => commentQuoteLabel(props.preview) ?? props.quoteFallback ?? ""
 
   // FORK: 用户没写注释时(含历史的 "(see selected text)" 占位)不显示正文 ——
   //   卡片上印一句英文占位对用户没有任何意义。2026-09-17 真机截图即此。

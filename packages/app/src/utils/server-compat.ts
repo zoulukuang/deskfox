@@ -32,7 +32,9 @@ type CompatibleSessionApi = Omit<
     input: SessionPromptInput & LegacyPrompt,
     requestOptions?: PromptRequestOptions,
   ) => Promise<SessionPromptOutput>
-  command: (input: SessionCommandInput) => Promise<SessionCommandOutput>
+  // FORK 2026-09-18:与 prompt 同待遇透传 requestOptions(AbortSignal)——
+  //   /command 在后端半死时同样会挂住,REQ-100 ④ 首版只覆盖了 prompt 路径
+  command: (input: SessionCommandInput, requestOptions?: PromptRequestOptions) => Promise<SessionCommandOutput>
   shell: (input: SessionShellInput & LegacyPrompt) => Promise<SessionShellOutput>
   compact: (input: SessionCompactInput & { model?: LegacyPrompt["model"] }) => Promise<SessionCompactOutput>
   rename: (input: Parameters<SessionApi["rename"]>[0] & LegacyLocation) => ReturnType<SessionApi["rename"]>
@@ -253,7 +255,7 @@ function createV1Api(input: CompatibleInput): CompatibleApi {
           delivery: value.delivery ?? "steer",
         }
       },
-      async command(value: SessionCommandInput) {
+      async command(value: SessionCommandInput, requestOptions?: PromptRequestOptions) {
         await legacy().session.command({
           sessionID: value.sessionID,
           messageID: value.id ?? undefined,
@@ -268,7 +270,7 @@ function createV1Api(input: CompatibleInput): CompatibleApi {
             url: file.uri,
             filename: file.name,
           })),
-        })
+        }, requestOptions)
         return {
           admittedSeq: 0,
           id: value.id ?? "",

@@ -76,6 +76,23 @@ const PROMPT_DELIVERY_TIMEOUT_MS = 120_000
 /** REQ-100 ① 点停止后本地强制置 idle 的兜底窗口(spec 定 3–5s,取中位) */
 const STOP_FALLBACK_IDLE_MS = 4_000
 
+/**
+ * FORK: 停止兜底定时器的句柄表(按 sessionID)。
+ * [bug-repro: 点停止后 2 秒内改好提示词重新发送 → 新消息乐观置 busy → T+4s 旧定时器醒来,
+ *  看到 type==="busy" 就置 idle → 新消息真正在跑,UI 却显示空闲、停止按钮消失]
+ * 首版只 setTimeout 不存句柄、也不校验"是不是还是被停的那一轮",于是兜底本身变成了
+ * 它要消灭的那种幻影状态的镜像。发新消息时必须先撤掉上一轮的兜底。
+ * [feat: release-closeout-2026-09] 2026-09-18
+ */
+const stopFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function cancelStopFallback(sessionID: string) {
+  const timer = stopFallbackTimers.get(sessionID)
+  if (timer === undefined) return
+  clearTimeout(timer)
+  stopFallbackTimers.delete(sessionID)
+}
+
 /** 消息没送达(超时 abort)—— 区别于后端明确报错,文案与处置都不同 */
 export class PromptNotDeliveredError extends Error {
   readonly notDelivered = true
@@ -87,6 +104,46 @@ export class PromptNotDeliveredError extends Error {
 
 export function isPromptNotDelivered(error: unknown): error is PromptNotDeliveredError {
   return !!error && typeof error === "object" && (error as { notDelivered?: unknown }).notDelivered === true
+}
+
+/**
+ * 给「把消息交给后端」的请求套送达超时。
+ *
+ * 两件事都要做,缺一不可:
+ *   · abort:掐断底层请求,保证它不会在回吐之后才落地造成双份
+ *   · deadline reject:**不依赖**下游肯听 signal。api 经 lazyApi 代理,调用被包在
+ *     `protocol.then(...)` 里 —— 后端不可达时连协议探测都可能挂住,abort 压根传不到 fetch。
+ *
+ * FORK 2026-09-18:原先只有 prompt 一条路径套了它,`/command` 两处漏掉 ——
+ * 后端半死时斜杠命令照样"既不 resolve 也不 reject",REQ-100 ④ 的病在那条路径上原样保留。
+ * 抽成 helper 后三处同待遇。
+ */
+export async function withDeliveryDeadline<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs = PROMPT_DELIVERY_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController()
+  let timedOut = false
+  let rejectDeadline: ((reason: unknown) => void) | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    rejectDeadline = reject
+  })
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+    rejectDeadline?.(new PromptNotDeliveredError())
+  }, timeoutMs)
+  try {
+    const running = run(controller.signal)
+    // 超时胜出时 running 可能稍后才 reject(abort 的 DOMException),挂 no-op 防未捕获拒绝
+    running.catch(() => {})
+    return await Promise.race([running, deadline])
+  } catch (err) {
+    if (timedOut) throw new PromptNotDeliveredError()
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
 }
 // FORK-END
 
@@ -148,24 +205,31 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
       }
 
       const messageID = Identifier.ascending("message")
-      await input.api.command({
-        sessionID: input.draft.sessionID,
-        id: messageID,
-        command: cmd,
-        arguments: tail.join(" "),
-        agent: input.draft.agent,
-        model: {
-          id: input.draft.model.modelID,
-          providerID: input.draft.model.providerID,
-          variant: input.draft.variant,
-        },
-        files: await Promise.all(
-          images.map(async (attachment) => ({
-            uri: await blobDataUrl(attachment.blob, attachment.mime),
-            name: attachment.filename,
-          })),
+      // FORK 2026-09-18:/command 与 prompt 同待遇 —— 后端半死时它同样会挂住
+      const files = await Promise.all(
+        images.map(async (attachment) => ({
+          uri: await blobDataUrl(attachment.blob, attachment.mime),
+          name: attachment.filename,
+        })),
+      )
+      await withDeliveryDeadline((signal) =>
+        input.api.command(
+          {
+            sessionID: input.draft.sessionID,
+            id: messageID,
+            command: cmd,
+            arguments: tail.join(" "),
+            agent: input.draft.agent,
+            model: {
+              id: input.draft.model.modelID,
+              providerID: input.draft.model.providerID,
+              variant: input.draft.variant,
+            },
+            files,
+          },
+          { signal },
         ),
-      })
+      )
       return true
     } catch (err) {
       setIdle()
@@ -388,10 +452,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     // session.status() 全量)会把真实状态盖回来 —— 兜底只负责让按钮别永久转圈。
     // 与 REQ-049 那条 toast 是两条独立路径:那条告知"请求没送达",这条兜底"状态不复位"。
     // 读写都走 sync()(session.tsx:1009 的 spinner 就读这个 store),与下方 command 路径一致。
-    setTimeout(() => {
-      if (sync().data.session_status[sessionID]?.type !== "busy") return
-      sync().set("session_status", sessionID, { type: "idle" })
-    }, STOP_FALLBACK_IDLE_MS)
+    cancelStopFallback(sessionID)
+    stopFallbackTimers.set(
+      sessionID,
+      setTimeout(() => {
+        stopFallbackTimers.delete(sessionID)
+        if (sync().data.session_status[sessionID]?.type !== "busy") return
+        sync().set("session_status", sessionID, { type: "idle" })
+      }, STOP_FALLBACK_IDLE_MS),
+    )
     // FORK-END
 
     return sdk()
@@ -475,6 +544,10 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       })
       return
     }
+
+    // FORK: 新一轮发送 —— 撤掉上一轮「停止」留下的兜底定时器,否则它会在 4s 后
+            //   把这条**新消息**打成 idle。 [feat: release-closeout-2026-09] 2026-09-18
+    if (params.id) cancelStopFallback(params.id)
 
     input.addToHistory(currentPrompt, mode)
     input.resetHistoryNavigation()
