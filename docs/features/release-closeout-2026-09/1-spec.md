@@ -27,7 +27,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | **C-1** ✅ | B-1:Mac 侧是 `build-deskfox-electron.sh:207` | **确认**。`export OPENCODE_CHANNEL="$ENV"` 就在 `:207`;Win `build-deskfox-electron.ps1:162` `$env:OPENCODE_CHANNEL = $Env` 亦确认 | 按此改;回填订正 REQ-132 doc(S1.5) |
 | **C-2** 🔴 | S2.2 要「新建」回吐输入框 + toast + 撤下乐观消息 + busy 回滚 | **这四件事代码里已经全有**,在 `packages/app/src/components/prompt-input/submit.ts:654-666` 的 `.catch()` 里:`session_status → idle` + `promptSendFailed` toast + `removeOptimisticMessage()` + `restoreInput()` + `restoreCommentItems()`;`send-followup` 内层 `submit.ts:202-209` 还有一层 `setIdle() + remove()`。**S2.2 不是"没做",是"没被触发"** | **S2.2 的工作性质变了**:从「造回吐路径」变成「让失败可被判定,好走进这条已有路径」+「补回吐保真度缺口」。详见 §3 S2 |
 | **C-3** 🟡 | S2.2 ②「复用 `prompt-comments.ts` 保真回填」 | 回填走的是 `submit.ts:307` 的 `restoreCommentItems()`(不是 `prompt-comments.ts`,那条是**撤回**路径用的)。该函数还原 path/selection/comment/commentID/commentOrigin/preview,**独漏 `kind`** | 聊天引用(`kind:"chat"`)回吐后降级成文件引用 → 再发时走错 LLM 模板。S2.2 必须补 `kind`(一行) |
-| **C-4** 🔴 | §5 验收门槛:「**无 R4 override**」 | 与 S4.4 / S5.1 冲突。pre-commit `BLACKLIST_REGEX` 覆盖 `packages/(…\|core\|opencode\|script\|sdk\|shared\|ui\|web)/`:<br>· **REQ-125 修法 A** 要改 `packages/opencode/src/session/prompt.ts` → **黑名单**<br>· **REQ-128 修法 B** 要改 `packages/ui/src/components/collapsible.css` → **黑名单** | 两条都有**零 override 的替代路**(见 §2 D-D / §3 S5),按替代路走则 §5 该条门槛可保 |
+| **C-4** 🔴 | §5 验收门槛:「**无 R4 override**」 | 与 S4.4 / S5.1 冲突。pre-commit `BLACKLIST_REGEX` 覆盖 `packages/(…\|core\|opencode\|script\|sdk\|shared\|ui\|web)/`:<br>· **REQ-125 修法 A** 要改 `packages/opencode/src/session/prompt.ts` → **黑名单**<br>· **REQ-128 修法 B** 要改 `packages/ui/src/components/collapsible.css` → **黑名单** | **REQ-128 走零 override 替代路**(§3 S5,落 fork 侧 `basic-tool.css`);**REQ-125 经 2026-09-17 user 拍板走修法 A,批 1 笔 override**(§2 D-D)。§5.3 门槛相应改为「**恰 1 笔 override + 复核报告**」 |
 | **C-5** ✅ | — | `packages/session-ui/` **不在黑名单**(它是 1.18 才有的目录,`BLACKLIST_REGEX` 未列) | S4 的 `message-part.tsx` / `comment-card-v2.tsx` / `basic-tool.css` 可自由改,无 override |
 | **C-6** ⚪ | 行号 `server-sync.tsx:578` / `:305` / `:546` | 实际 `:580`(active 闸)/ `:307`(`bootingRoot` 声明)/ `:548`(读取)。全仓仅此两处,确无赋值 | 仅行号漂 ±2,结论不变 |
 
@@ -35,14 +35,14 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ---
 
-## §2 待 user 拍板(D-A/B/C 需求计划已拍,此处只列新增两题)
+## §2 决策记录(五题全部已拍,无待决项)
 
-| # | 题目 | 备选 | 建议 | 阻塞谁 |
+| # | 题目 | 备选 | 结论 | 影响哪组 |
 |---|---|---|---|---|
-| **D-D** | REQ-125 会话标题改哪一侧 | **(A) 服务端**:`prompt.ts:195` `ensureTitle` 喂模型前剥壳 —— 需 **R4 override**(黑名单 `packages/opencode/`),且 `parseCommentNote()` 在 `packages/app/src/utils/`(前端包),后端**用不了**,要在 `packages/opencode` 里**复制一份与前端模板对偶的正则** → 两处正则从此必须手工保持同步<br>**(A′) 客户端命名**:`submit.ts` 新建会话分支里,当本条是「加入聊天」发起(`commentItems.length>0`)时,`session.create` 后直接 `api.session.rename({title})`,标题取用户真写的 comment(截断);comment 为空则回落「引用:<文件名/对话片段首句>」。服务端 `ensureTitle` 见 `isDefaultTitle()` 为假**自动跳过**(`prompt.ts:202`),不冲突。**零 upstream 改动、零 override、零正则重复**<br>(B) 改模板 / (C) 改 title.txt —— 需求 doc 已否决 | **A′**。代价是标题不再过小模型润色,但本需求要的就是「各不相同 + 中文提问出中文标题」,取用户原话在这两点上**严格优于**模型摘要,且确定性可单测。若 user 要模型润色质感则选 A 并批 1 笔 override | S4.4 |
-| **D-E** | REQ-100 ④ 的「失败」怎么判定 | (a) 给 `api.prompt` 套 **AbortController + N 秒超时**,超时即 abort 请求并走已有 catch(请求被 abort,不会迟到落地)<br>(b) 等**服务端回声**:N 秒内既没 resolve、也没收到该 `messageID` 的事件 → 判失败<br>(c) 两者都做 | **(a)**,N=20s。理由:真机证据链里那条消息**服务端三处皆无**(`message`/`session_input`/日志),说明请求打进了半死后端后**既不 resolve 也不 reject**(挂住)。(a) 直接消灭「挂住」这一态,且 abort 保证不会「回吐后请求又迟到落地」造成双份。(b) 需要额外接事件层、且慢后端会误判 | S2.2 |
+| **D-D** | REQ-125 会话标题改哪一侧 | (A) 服务端 `ensureTitle` 剥壳 / (A′) 客户端 rename / (B) 改模板 / (C) 改 title.txt | ✅ **(A),2026-09-17 user 拍板**。user 已知悉并接受其代价:**需 1 笔 R4 override**(`prompt.ts` 在黑名单)。<br>另一项代价「跨包正则重复」**已在施工方案里消除** —— `@opencode-ai/core` 是 `packages/app` 与 `packages/opencode` 的**共同 workspace 依赖**,把模板 + parser 提成 fork 自建文件 `packages/core/src/fork/comment-note.ts` 作单一真源,两边 import 同一份,无副本、无手工同步。该新文件享 pre-commit 的 fork 自建豁免(`upstream-base` tag 在),**不额外增加 override 笔数** | S4.4 |
+| **D-E** | REQ-100 ④ 的「失败」怎么判定 | (a) AbortController + N 秒超时 / (b) 等服务端回声 / (c) 两者都做 | ✅ **(a),N=20s,2026-09-17 user 拍板**。真机证据链里那条消息服务端三处皆无(`message`/`session_input`/日志),说明请求打进半死后端后**既不 resolve 也不 reject**(挂住)。(a) 直接消灭「挂住」这一态,且 abort 保证不会「回吐后请求又迟到落地」造成双份 | S2.2 |
 
-> D-A/D-B/D-C 已于 2026-09-17 拍板,本文按既定执行,不再复议。
+> D-A/D-B/D-C 已于 2026-09-17 拍板。**D-D/D-E 同日拍完,五题全定,可直接开工。**
 
 ---
 
@@ -110,7 +110,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | S4.1 | **REQ-131** 一条直路三个断点,**必须同一笔改完**(R4 风险):<br>① `MessageComment` 类型 + `fromPart` 返回值补 `preview` / `kind`<br>② `UserMessageComment` 类型补同两字段<br>③ `UserMessageComments` 的 `title` 改成 `comment.preview ?? comment.comment`(tooltip 显引文原文) | `packages/app/src/pages/session/timeline/rows.ts:328-355`<br>`packages/session-ui/src/components/message-part.tsx:189, :1084` |
 | S4.2 | **同一处类型顺手收口**(REQ-123 §八 backlog#2):卡片副标题按 `kind` 分流 —— `kind==="chat"` 显「引用对话」(不再走 `getFilenameTruncated`),`kind==="file"`/未定义仍显 `文件名:行范围` | `comment-card-v2.tsx:~50` |
 | S4.3 | 伪路径露脸:`comment-card-v2.tsx:50` 硬渲染 `<chat selection>` 字面量,由 S4.2 的 kind 分流一并消除;顺手订正 `dom-provider.ts:77` 已失效的注释 | 同上 |
-| S4.4 | **REQ-125** 标题 —— **按 D-D 拍板结果执行**。建议 A′:`submit.ts` 新建会话分支内,`session.create` 成功后若 `commentItems.length>0` 则 `api.session.rename({sessionID, title})`。标题派生规则单独抽 `deriveCommentSessionTitle()` **纯函数**(→ R5 Logic 清单,单测覆盖):优先用户 comment 首行截断 40 字;为空则 `引用:<preview 首句 / 文件名>` | 新文件 `packages/app/src/utils/comment-session-title.ts` + `submit.ts` 调用 3 行 |
+| S4.4 | **REQ-125** 标题 —— **D-D 已拍:修法 A(服务端剥壳)**。三步:<br>① **提单一真源**:把 `formatCommentNote` / `parseCommentNote` / `createCommentMetadata` / `readCommentMetadata` 整体迁到 fork 自建文件 `packages/core/src/fork/comment-note.ts`(纯字符串函数,零依赖,浏览器/Node 双安全);`packages/app/src/utils/comment-note.ts` 改为**纯 re-export**,调用方一处不动<br>② **注入**:`ensureTitle` 在取到 `firstUser` 后、喂模型前,把首条 user 消息的 text part 过一遍 `parseCommentNote()`,命中则只送「用户真写的 comment + 文件名」;`kind:"chat"` 走 fork 的聊天模板**另一条分支**,须**分别判断**(两个模板长得不一样,一个正则接不住)<br>③ 未命中 / 老消息 → 原样送,行为不变 | **新建** `packages/core/src/fork/comment-note.ts`(fork 自建,享豁免)<br>**改** `packages/app/src/utils/comment-note.ts`(转 re-export,无 override)<br>**改** `packages/opencode/src/session/prompt.ts` ensureTitle ≤5 行注入 —— 🔴 **本批唯一 R4 override**,须带 FORK marker |
 | S4.5 | **REQ-123 验收归档**(已交付 `d6a1aafb0f`,本批不写码):真机确认「纯引用消息 hover 出撤回 + 撤回后引用保真回填」;§八 backlog#1 不做,转独立 backlog 行 | 文档 |
 
 > **老消息兼容**:`metadata` 缺 `preview` 时全链路退回现状(tooltip = comment、副标题 = 文件名),不新开机制。
@@ -140,7 +140,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | T4 | `decideTabCollapse` 既有 5 条 | unit(回归) | 全绿不变 |
 | T5 | `MessageComment.fromPart` 带 preview/kind 的 part | unit | 返回值含 `preview`/`kind` |
 | T6 | `fromPart` 老 part(无 metadata,走 `parseCommentNote`) | unit | `preview` undefined,不抛 |
-| T7 | `deriveCommentSessionTitle()`:中文 comment / 空 comment / 超长 comment / 纯引用无 comment | unit | 四种各出不同且非英文样板 |
+| T7 | `ensureTitle` 剥壳:文件引用模板 / 聊天引用模板 / 中文 comment / 非模板普通消息(不该被剥) | unit(`packages/opencode`) | 前三种送进模型的是用户原话 + 文件名;第四种原样透传 |
+| T7b | **模板↔parser 对偶契约**:`parseCommentNote(formatCommentNote(x))` 往返等价(file / chat 两种 kind × 有无 selection × 有无 preview) | unit(`packages/core`) | 全部往返还原。**这条是单一真源的保命闸** —— 谁改了模板忘了改正则,这里必红 |
 | T8 | `restoreCommentItems` 还原 `kind:"chat"` | unit | 还原后 item.kind==="chat" |
 | T9 | mock 不可达 sdk → `sendFollowupDraft` 20s 超时 | unit(假时钟) | reject + 乐观消息被 remove + status→idle |
 | T10 | mock 已 evict 目录 → `server.connected` | unit | 该目录仍进对账队列 |
@@ -170,7 +171,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [ ] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过
 
 ### 5.3 治理闸
-- [ ] **无 R4 override**(按 D-D 选 A′ + S5 的 fork CSS 方案可达成;若 user 选 D-D(A) 则此条改为「1 笔 override + 复核报告」)
+- [ ] **恰 1 笔 R4 override**(REQ-125 的 `prompt.ts`,D-D 拍板),且该笔满足全部四项:① commit message 标 `[override-blacklist: REQ-125 会话标题剥壳,ensureTitle 是唯一能在喂模型前拦截的点]` ② 改动日志逐文件论证 wrapper 不可行 ③ **实施 agent 在 commit 前出复核报告**(wrapper 不可行性 / 风险评估 / 改动日志论证 三项)→ user 审 → 点头才 commit ④ 其余 5 组**零 override**
+- [ ] override 配额账:本季累计 ≤ 2 笔(CLAUDE.md 健康指标),本批占 1 笔 —— 提交前先查本季已用几笔
 - [ ] 改上游文件逐处带 FORK marker 并说明理由
 - [ ] 7 条需求各自 doc 的验收标准逐条对过;REQ-132 doc 路径订正已回填
 - [ ] 回归:历史会话可打开、数据库未换库(channel 未动)、daemon 首启重启一次属预期
@@ -183,7 +185,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 |---|---|---|---|
 | 1 | **S1** REQ-132 | 发版闸,且与其余六条零代码交集;先做完可立刻单独验产物,失败不拖累其他 | `[feat: release-closeout-2026-09]` + `[bug-repro: 构建未注入版本号致对外自称 0.0.0]` |
 | 2 | **S2** REQ-100 | 唯一丢数据项,改动面最大、回归最重,趁上下文最新做 | 同上 + `[bug-repro: 后端不可达时消息静默蒸发]` |
-| 3 | **S4** comment 簇 | 四项改同一片代码,**必须一笔到底**(R4 风险),不许分两次 | 同上 |
+| 3a | **S4a** REQ-131 comment 簇(S4.1-S4.3) | 三项改同一片 `MessageComment` 类型,**必须一笔到底**(R4 回归风险),不许分两次。**不含 override** | `[feat: release-closeout-2026-09]` |
+| 3b | **S4b** REQ-125 标题(S4.4) | **单独一笔**,与 S4a 分开 —— override 笔要可单独 revert、可单独复核(P4)。改的是 `prompt.ts` + `core/fork/`,与 S4a 的 `rows.ts`/`message-part.tsx` 零交集,拆开不违反「同片代码不分两次」 | 同上 + `[override-blacklist: …]` |
 | 4 | **S3** REQ-130 | 独立小面 | 同上 |
 | 5 | **S5** REQ-128 | 一处 CSS,最后做,视觉比对一次到位 | 同上 |
 | 6 | **S6** 真机 + 双平台构建 | 全码就位后一次跑完 | — |
@@ -201,10 +204,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | **R1** | 版本号是全局常量,daemon 复用判定 / `session.version` / TUI 自升级三处都读 | S1.4 逐处回归;确认 DeskFox 分发物无可被用户直接拉起的 CLI 入口,否则置 `OPENCODE_DISABLE_AUTOUPDATE` |
 | **R2** | **`OPENCODE_VERSION` 污染 updater 清单**(新增,计划未列):`finalize-latest-{yml,json}.ts` 同名读该 env,要的却是日历号 | S1.5:已核构建脚本不调这两个;施工后加断言,env 只在构建脚本内部 export |
 | **R3** | 回吐时序不原子 → 时间线留一条 + 输入框又一条,用户重复发送 | 复用现成单一 catch + `batch()`;**abort 请求**保证不迟到落地;S6.4 专门看时间线残留 |
-| **R4** | S4 四项改同一片 comment 代码,回归面叠加 | 按簇一笔改完;`MessageComment` 的 preview/kind/tooltip 三处不许分两次 |
+| **R4** | S4a 三项改同一片 `MessageComment` 代码,回归面叠加 | S4a 一笔改完,preview/kind/tooltip 三处不许分两次;S4b(标题)与之零文件交集,单独成笔以隔离 override |
 | **R5** | **超时阈值误伤慢后端**(新增):20s 对正常但慢的后端可能误判 | 只对**未 resolve 的 HTTP 请求**计时(不是对模型回答计时);发版前用弱网 + 大附件各验一次;阈值做成常量便于调 |
 | **R6** | `packages/session-ui` 不在 pre-push 闸 → 本批主力改动的测试写了不跑 | §5.1 手工跑 + 同批补进 pre-push(独立 `chore` commit) |
 | **R7** | 发版本身的风险(签名 / 公证 / 更新源 / 两平台产物) | 走 `/ship` 既有 SOP,本方案不重新发明;发版前按既定信号制查上游 schema 漂移 |
+| **R8** | **模板真源迁移**(S4.4 ①)动到 `formatCommentNote`,而它的输出是**送给主模型的正文** —— 迁移时哪怕差一个空格,都会改变 LLM 收到的文案;`createCommentMetadata` 还被 REQ-123 撤回回填依赖 | 迁移必须**逐字节等价**(纯移动,不顺手改写);T7b 往返契约测试 + 迁移前后各跑一次 `bun test` 对齐;**回归锚**:REQ-123 撤回回填真机复验一次 |
 
 ---
 
@@ -212,7 +216,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 1. **S2.2 工作性质更正**(C-2):回吐路径已存在,改为「让失败可判 + 补保真缺口」。
 2. **新增 S2.2b/c/d**:`kind` 漏传、`restoreInput()` 返 false 的静默分支、toast 文案按 D-C 语义重写。
-3. **S4.4 修法改 A′**(D-D 待拍):客户端命名,规避 R4 override 与跨包正则重复。
+3. **S4.4 修法 A 落地细化**(D-D 已拍):服务端剥壳照做并批 1 笔 override;但把模板 + parser 提成 `packages/core/src/fork/comment-note.ts` 单一真源(core 是 app 与 opencode 的共同依赖),**消除了需求 doc 预期的「跨包正则重复」代价**,并加 T7b 往返契约测试锁住模板↔正则对偶。
 4. **S5.1 落点改 `packages/session-ui/src/components/basic-tool.css`**:等效于修法 B,但不动黑名单 `packages/ui/`。
 5. **新增 R2 / R5 / R6 三条风险**。
 6. **REQ-132 doc 路径订正**(B-1)照旧回填。
