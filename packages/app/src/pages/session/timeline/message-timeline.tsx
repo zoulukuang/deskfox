@@ -14,6 +14,10 @@ import {
 import { createStore, produce } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
 import { useNavigate } from "@solidjs/router"
+// FORK: REQ-131 —— 引用卡片标签与另一条渲染路径(CommentCardV2)共用 core 里的同一份实现
+//   [feat: release-closeout-2026-09] 2026-09-17
+import { isChatSelectionPath } from "@opencode-ai/core/util/chat-selection"
+import { commentQuoteLabel, isBlankComment } from "@opencode-ai/core/fork/comment-note"
 import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
@@ -1235,22 +1239,46 @@ export function MessageTimeline(props: {
                           border: !settings.general.newLayoutDesigns(),
                         }}
                       >
+                        {/* FORK-BEGIN: REQ-131 补渲染路径 [feat: release-closeout-2026-09] 2026-09-17
+                            时间线上的引用卡片有**两条**渲染路径:v2 布局走 UserMessageComments →
+                            CommentCardV2,经典布局走本 CommentStrip 行。REQ-131 首版只改了前者,
+                            这里仍拿 path 当文件名渲染 → 聊天引用的伪路径 `<chat selection>` 直接印在卡片上,
+                            下面一行又是占位注释 "(see selected text)" —— user 2026-09-17 真机截图反馈
+                            「提交之后看不出来提交的是什么内容」。标签实现与 CommentCardV2 共用 core 里的
+                            commentQuoteLabel,避免两条路径再次各写各的。 */}
                         <div class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong">
-                          <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />
-                          <span class="truncate">{getFilename(comment().path)}</span>
-                          <Show when={comment().selection}>
-                            {(selection) => (
-                              <span class="shrink-0 text-text-weak">
-                                {selection().startLine === selection().endLine
-                                  ? `:${selection().startLine}`
-                                  : `:${selection().startLine}-${selection().endLine}`}
-                              </span>
-                            )}
+                          <Show
+                            when={comment().kind === "chat" || isChatSelectionPath(comment().path)}
+                            fallback={
+                              <>
+                                <FileIcon
+                                  node={{ path: comment().path, type: "file" }}
+                                  class="size-3.5 shrink-0"
+                                />
+                                <span class="truncate">{getFilename(comment().path)}</span>
+                                <Show when={comment().selection}>
+                                  {(selection) => (
+                                    <span class="shrink-0 text-text-weak">
+                                      {selection().startLine === selection().endLine
+                                        ? `:${selection().startLine}`
+                                        : `:${selection().startLine}-${selection().endLine}`}
+                                    </span>
+                                  )}
+                                </Show>
+                              </>
+                            }
+                          >
+                            <span class="truncate" data-slot="comment-strip-quote">
+                              {commentQuoteLabel(comment().preview) ?? "引用对话"}
+                            </span>
                           </Show>
                         </div>
-                        <div class="pt-1 text-12-regular text-text-strong whitespace-pre-wrap break-words">
-                          {comment().comment}
-                        </div>
+                        <Show when={!isBlankComment(comment().comment)}>
+                          <div class="pt-1 text-12-regular text-text-strong whitespace-pre-wrap break-words">
+                            {comment().comment}
+                          </div>
+                        </Show>
+                        {/* FORK-END */}
                       </div>
                     )}
                   </Index>

@@ -20,6 +20,7 @@ import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
 import { commentRestorePayload } from "./comment-restore"
+import { clearableContextItems } from "./context-gate"
 import { setCursorPosition } from "./editor-dom"
 import { formatServerError } from "@/utils/server-errors"
 import { ScopedKey } from "@/utils/server-scope"
@@ -283,6 +284,9 @@ type PromptSubmitInput = {
   info: Accessor<{ id: string } | undefined>
   imageAttachments: Accessor<ImageAttachmentPart[]>
   commentCount: Accessor<number>
+  /** FORK: 可提交判定用的上下文项计数(含无注释的附件/选区卡)
+   *  [feat: release-closeout-2026-09] 2026-09-17 */
+  contextCount: Accessor<number>
   autoAccept: Accessor<boolean>
   mode: Accessor<"normal" | "shell">
   working: Accessor<boolean>
@@ -432,7 +436,9 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const images = input.imageAttachments().slice()
     const mode = input.mode()
 
-    if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
+    // FORK: 由 commentCount 改为 contextCount —— 没填注释的选区卡/附件卡同样算「有东西可发」
+    //   [feat: release-closeout-2026-09] 2026-09-17
+    if (text.trim().length === 0 && images.length === 0 && input.contextCount() === 0) {
       if (input.working()) void abort()
       return
     }
@@ -646,7 +652,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       }
     }
 
-    const commentItems = context.filter((item) => item.type === "file" && !!item.comment?.trim())
+    // FORK-BEGIN: 发送后清空**所有** file 上下文项,不只有注释的那些
+    //   [feat: release-closeout-2026-09] 2026-09-17
+    //   原先只清「有注释」的,于是没填注释的选区卡/附件卡发完仍留在输入框。表面是「卡片没消失」,
+    //   真正的代价是它**还在 context 里** —— 下一条消息会把同一个文件再发给模型一次,
+    //   用户看不出来,白烧 token。与 REQ-116 修过的是同一族(那次只修了新会话 retarget 那一支,
+    //   已有会话这一支没修);queue 分支的 clearContext 本来就是全清,此处与之对齐。
+    //   失败回吐时 restoreCommentItems 会把它们原样还回来,语义不变。
+    const commentItems = clearableContextItems(context)
+    // FORK-END
     const messageID = Identifier.ascending("message")
 
     const removeOptimisticMessage = () => {

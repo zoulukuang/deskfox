@@ -172,3 +172,39 @@ export function stripCommentNoteForTitle(text: string): string | undefined {
   }
   return undefined
 }
+
+// FORK: 引用卡片的"引文标签" —— 时间线上有**两条**渲染路径,必须共用同一份实现
+// [feat: release-closeout-2026-09] 2026-09-17
+//
+// 起因:REQ-131 首版只改了 CommentCardV2(v2 布局),漏了 message-timeline.tsx 的 CommentStrip 行
+// (经典布局),后者仍拿 path 当文件名渲染 → 聊天引用卡片上赫然印着 `<chat selection>`,
+// 用户 2026-09-17 真机截图反馈「提交之后看不出来提交的是什么内容」。
+// 两条路径分居 packages/session-ui 与 packages/app,唯一能共用的地方就是 core。
+// 放这里不是为了优雅,是为了下次再有人改一处漏一处时,至少标签逻辑不会漂。
+
+/** 聊天引用副标题上的引文标签:取引文首个非空行,过长截断。无引文返回 undefined,由调用方决定回退文案。 */
+export function commentQuoteLabel(preview: string | undefined, maxLength = 24): string | undefined {
+  const first = preview
+    ?.split("\n")
+    .find((line) => line.trim().length > 0)
+    ?.trim()
+  if (!first) return undefined
+  return first.length > maxLength ? `${first.slice(0, maxLength)}\u2026` : first
+}
+
+/**
+ * 「加入聊天」未填注释时塞进 comment 的英文占位。
+ *
+ * 它存在的理由是历史的(早期 formatCommentNote 无 comment 就返回空串),**如今已不需要** ——
+ * build-request-parts 的 `if (!comment && !preview)` 闸保证了"有引文即使无注释"也照发完整引用。
+ * 但它已经写进了历史消息的 metadata,所以不能直接删:渲染层见到它要当"用户什么都没写"处理,
+ * 否则用户会在自己的引用卡片上看到一句莫名其妙的英文(2026-09-17 真机截图即此)。
+ */
+export const EMPTY_COMMENT_PLACEHOLDER = "(see selected text)"
+
+/** 这条 comment 是不是"用户其实什么都没写"(空 / 仅空白 / 历史占位)。渲染层据此决定不显示正文。 */
+export function isBlankComment(comment: string | undefined): boolean {
+  const trimmed = comment?.trim()
+  if (!trimmed) return true
+  return trimmed === EMPTY_COMMENT_PLACEHOLDER
+}

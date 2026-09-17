@@ -2,6 +2,10 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { getFilenameTruncated } from "@opencode-ai/core/util/path"
 import { isChatSelectionPath } from "@opencode-ai/core/util/chat-selection"
+// FORK: 与 message-timeline.tsx 的 CommentStrip 共用同一份标签实现
+//   (REQ-131 首版就是因为两条渲染路径各写各的,漏改了一条)
+//   [feat: release-closeout-2026-09] 2026-09-17
+import { commentQuoteLabel, isBlankComment } from "@opencode-ai/core/fork/comment-note"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { AttachmentCardV2 } from "./attachment-card-v2"
 
@@ -26,11 +30,11 @@ export function CommentCardV2(props: {
 
   // FORK: REQ-131 —— 聊天引用的副标题:引文首行。空引文(老消息无 metadata)回退到通用词,
   //   绝不回落成打印伪路径。 [feat: release-closeout-2026-09] 2026-09-17
-  const quoteLabel = () => {
-    const first = props.preview?.split("\n").find((line) => line.trim().length > 0)?.trim()
-    if (!first) return "引用对话"
-    return first.length > 24 ? `${first.slice(0, 24)}…` : first
-  }
+  const quoteLabel = () => commentQuoteLabel(props.preview) ?? "引用对话"
+
+  // FORK: 用户没写注释时(含历史的 "(see selected text)" 占位)不显示正文 ——
+  //   卡片上印一句英文占位对用户没有任何意义。2026-09-17 真机截图即此。
+  const bodyText = () => (isBlankComment(props.comment) ? "" : props.comment)
 
   onMount(() => {
     const element = title
@@ -57,7 +61,7 @@ export function CommentCardV2(props: {
       contentStyle={{ "max-width": "320px", "white-space": "pre-wrap" }}
     >
       <AttachmentCardV2
-        title={props.comment}
+        title={bodyText()}
         active={props.active}
         clickable={!!props.onClick}
         wide={props.wide}
