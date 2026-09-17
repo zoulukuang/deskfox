@@ -168,3 +168,103 @@ packages/app: bun run test:browser→   41 pass  0 fail  ( 14 files)
 - **S6.4 真机**:kill 后台子进程 → UI ≤N 秒复位 / 发带引用卡片的消息 → 原样回输入框 + toast /
   时间线不残留 / 后端恢复后不自动重发
 - 弱网 + 大附件各验一次,确认 20s 不误伤"活着但慢"的后端(spec R5)
+
+
+---
+
+## S4a · REQ-131 引用卡片能看到引文原文 — ✅ 已完成
+
+`5ed5325f6a`。四个断点同一笔改完(spec R4)。落点:`rows.ts` / `message-part.tsx` /
+`comment-card-v2.tsx` / `dom-provider.ts` 注释订正。
+
+### D9-a · `MessageComment` 抽到独立文件,理由是可测不是洁癖
+
+`rows.ts` 经 `@opencode-ai/session-ui/message-part` 牵进 `markdown.worker`(vite `?worker&url`),
+`bun test` 直接 import 报 `Missing 'default' export`。这段是纯数据提取,不该被渲染层的构建期依赖
+绑架 → 移到 `message-comment.ts`,`rows.ts` re-export 保持路径不变。
+
+### D9-b · 聊天引用副标题不新增 i18n 词条
+
+原设想给 `kind==="chat"` 显一个静态标签「引用对话」,但 `session-ui` 的 `useI18n` 键类型是
+`keyof typeof packages/ui/src/i18n/en`,加键就要动黑名单 `packages/ui`。
+改为**显引文首行** —— 既不需要新词条,信息量还更高(它才真正说明"引的是哪段");
+引文为空(老消息)才回落静态词。
+
+---
+
+## S4b · REQ-125 会话标题剥壳 — ✅ 已完成(🔴 本批唯一 R4 override)
+
+`f123503078`。复核报告见 [`R4-override-复核报告.md`](./R4-override-复核报告.md),user 2026-09-17 批准。
+
+要点已在报告与 `3-changelog.md` 展开,此处只记两条施工判断:
+
+- **真源落 `packages/core/src/fork/`**:core 是 app 与 opencode 的共同 workspace 依赖,fork 自建
+  新文件享 pre-commit 动态豁免。这一步把「跨包正则重复」这项代价直接消掉了 —— 它本来是 D-D
+  修法 A 的第二项代价。
+- **迁移逐字节等价**:`git show HEAD:… | sed 's/FileSelection/CommentSelection/g' | diff` 验证,
+  spec R8 的风险据此闭合。
+
+---
+
+## S3 · REQ-130 点 × 关标签不再收起预览区 — ✅ 已完成
+
+`f7ee11d0e1`。修法 A(wrapper onClick 认出 × 即 return,v1/v2 两个 sortable-tab 一起改)
++ 修法 C(`decideTabCollapse` 增 `tabStillExists`,纯逻辑兜底可单测)。
+
+A 是 DOM 行为只能 e2e 验、C 是纯函数可单测,两条一起上才同时满足 R5 双清单;
+C 对"× 之外任何把 tab 关掉后仍冒出 click"的路径同样有效。
+
+---
+
+## S5 · REQ-128 工具行命中区 — ✅ 已完成
+
+`f077799729`。
+
+### D9 · 🔴 第三次被测试推翻:pointer-events 方案换成 fit-content
+
+需求 doc 的**倾向修法 B** 是「trigger 保持满宽但 `pointer-events:none`,只给文字块与箭头开 auto」。
+实现完跑 e2e,**13 条既有用例当场变红**,暴露两个问题:
+
+1. **白名单漏网(真 bug,不是测试问题)**:`.tool-collapsible` 有三个使用方,
+   `message-part.tsx` 的 `context-tool-group`(「已运行 N 条命令」「已探索」)**自带 trigger 内容**、
+   不走 `basic-tool` 那套 slot,初版白名单没列它 → 整组变成**完全点不开**。
+   这类漏网只能靠人肉枚举使用方,每新增一个使用方就多一次静默失效的机会。
+2. **「按钮边界」与「可点区域」从此脱节**:`<button>` 仍满宽,只是不吃指针事件。
+   既有 e2e 点 trigger 元素的**中心**,而中心落在死区 —— 15+ 处调用点要逐个改成点文字 slot。
+
+改走需求 doc 的**次选修法 A** `width: fit-content` + `max-width: 100%`:
+**让按钮本身就等于文字区**,缩到哪儿可点区就是哪儿,两者定义上不可能脱节。
+
+- doc 当初把 A 列为次选的理由是「牵动右侧 action 靠右布局,需逐类型回归」。实测不成立:
+  行内是 `justify-content: flex-start`、action 是 `flex-shrink:0` 的 inline-flex、箭头紧跟文字,
+  **没有任何 `margin-left:auto` 之类依赖整行宽度的靠右定位**。
+- 逐类型回归拿 e2e 做了:**全套 142 条全过**(pointer-events 版是 129 过 13 败)。
+- `align-self: stretch` 不会把它拉回满宽 —— 该属性只在 cross size 为 `auto` 时生效,
+  显式宽度即让它失效。
+
+> 这是本批第三次「读码觉得对、跑起来不对」。前两次是 S1 的 `0.0.0-*` 合法 semver、
+> S2 的 abort 传不到 fetch。三次都印证 spec §5.2 那条「不接受纯源码复核」。
+
+---
+
+## 整体回归(R9 分支内验收闸)
+
+代码六组全部完成后一次性跑完:
+
+| 项 | 结果 |
+|---|---|
+| `bun turbo typecheck --filter='!./packages/console/*'` | **29/29 successful** |
+| `packages/app` `bun run test`(unit + browser) | **1100 + 41 pass,0 fail** |
+| `packages/app` `bun run test:e2e` | **142 pass,0 fail** |
+| `packages/core` | **1137 pass,0 fail** |
+| `packages/session-ui` | **121 pass,0 fail** |
+| `packages/opencode` `test/session` | **438 pass,7 skip,0 fail** |
+| `packages/media-gen` | **140 pass,0 fail** |
+| `packages/adapter-feishu-lark` | **792 pass,0 fail** |
+| `packages/branding` | **77 pass,0 fail** |
+| `packages/desktop` `src/main/deskfox` | **169 pass,0 fail** |
+
+新增测试合计 **58 条**(S1 16 / S2 20 / S4a 6 / S4b 22 / S3 5 / S5 7,其中 S4b 含 core 14 + opencode 8)。
+
+**尚未做、不能在本机做的**:S6 全部(真构建产物 / Console 免费额度 / 真机 kill 后端 /
+GUI 四条真机点击 / Win 端),见 spec §5.2。
