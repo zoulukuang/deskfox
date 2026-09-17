@@ -268,3 +268,78 @@ C 对"× 之外任何把 tab 关掉后仍冒出 click"的路径同样有效。
 
 **尚未做、不能在本机做的**:S6 全部(真构建产物 / Console 免费额度 / 真机 kill 后端 /
 GUI 四条真机点击 / Win 端),见 spec §5.2。
+
+
+---
+
+## 追加修复 · user 2026-09-17 真机反馈四条
+
+打完 local 包交 user 上手,反馈四条。查证结论:一条不成立(转 REQ-133),三条成立且**其中一条是本批的漏改**。
+
+### D10 · 🔴 第四次被实测推翻:REQ-131 漏了第二条渲染路径
+
+user 截图显示聊天引用卡片仍是「`<chat selection>` + `(see selected text)`」——
+而 S4a 明明改过、local 包里也确实含改动(asar 里 `引用对话` / `comment-card-v2-quote` 都在)。
+
+靠 CDP 在真机 DOM 里逐层 dump 才定位:渲染该字面量的是 `span.truncate`,外层是纯 Tailwind 的
+`max-w-[260px] rounded-[6px]` 卡片,**没有 `data-component="attachment-card-v2"`** ——
+根本不是我改的 `CommentCardV2`。
+
+真相:时间线上的引用卡片有**两条**渲染路径,分居两个包:
+
+| 路径 | 布局 | S4a 首版 |
+|---|---|---|
+| `UserMessageComments` → `CommentCardV2`(`packages/session-ui`) | v2 | ✅ 改了 |
+| **`message-timeline.tsx` 的 `CommentStrip` 行**(`packages/app`) | 经典 | ❌ **漏了** |
+
+需求 doc 与我的 1-spec 都只点了 `comment-card-v2.tsx` 那一处,S4.1 列的三个断点也不含它。
+数据层(`preview`/`kind`)其实早就接上了,是这个渲染点没用。
+
+**修法**:两条路径共用 `packages/core/src/fork/comment-note.ts` 的 `commentQuoteLabel` ——
+它们分居 session-ui 与 app,唯一能共用的地方就是 core(与 S4b 真源同一套路)。
+并加 `comment-render-paths.test.ts` 结构闸:两边都必须引同一个模块、都不许再裸打 path 当文件名。
+
+> 教训:「一处根因」不等于「一个渲染点」。本批 spec 的 S4.1 把断点数成 3 个,实际是 4 个 ——
+> 而第 4 个只有在**真机上看到**才会暴露,单测和 e2e 都没覆盖到经典布局的 CommentStrip。
+
+### D11 · ②③ 同一病根:判定与清理都只认「有注释的」上下文项
+
+user 另两条反馈(文件预览区纯引用发不出去 / 发完卡片残留)查下来是同一处。
+
+**选区加入聊天其实有三条独立实现**(立 spec 时只知道两条):
+
+| 来源 | 实现 | 空注释时 |
+|---|---|---|
+| 聊天区 | `utils/context-menu-host/host.tsx` | 塞英文占位 `(see selected text)` |
+| PDF / office | 同上 | 同上 |
+| **md / 文本 / 代码预览区** | **`pages/session/file-tabs.tsx` 自己那套** | `comment: undefined` |
+
+于是前两条 `commentCount>0` 能提交、发完也被 `commentItems` 清掉;第三条两样都落空。
+
+**没有选「给第三条也补占位注释」**,因为数据层本就支持空注释:`build-request-parts` 的
+`if (!comment && !preview)` 闸保证「有引文即使没注释」也照发完整引用给模型。
+而占位注释正是 user 在卡片上看到那句莫名英文的来源 —— 补它等于把 bug 抄到第三处。
+改为把判定与清理放宽到「所有 file 上下文项」:`contextCount`(新,专供提交闸)+ `clearableContextItems`。
+
+**③ 的真实代价比「卡片没消失」大**:残留项还在 context 里,下一条消息会把同一个文件再发给模型一次,
+用户看不出来。与 REQ-116 修过的是同一族(那次只修了新会话 retarget 那一支)。
+
+### D12 · user 报的「tab 上出现不属于当前项目的文件」不成立
+
+截图里两个文件确实在 Finance 项目内(`research/notes/基本面研究/`、`research/backtests/…`)。
+真正的现象只有「激活 tab 内容区空白」,根因未知 → 按既定规则(同 REQ-126 的判断)**不并入本批**,
+已立 **REQ-133** 单独排查。
+
+### GUI 真机验证(CDP 实操,local 本地测试版)
+
+```
+① 页面出现 '<chat selection>'   : False        ✅
+   页面出现 '(see selected text)': False        ✅
+   CommentStrip 引文标签实测      : ['中国创新药全产业链深度调研报告(', '莫德纳/默沙东', '药明康德']
+② 预览区选区不填注释 → 发送按钮 disabled = False  ✅
+③ 发送后 composer dock 只剩 placeholder,4 张累积卡片一次清空  ✅
+```
+
+> 过程中踩到两个测量坑,都记在这:菜单按钮文案是「**添加到聊天窗口**」不是「加入聊天」,
+> 正则写错会误判成「菜单没弹出」;输入框里的引用卡片**没有**专用 `data-component`,
+> 稳定锚是 `[data-dock-surface="shell"]`。
