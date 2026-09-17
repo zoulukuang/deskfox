@@ -46,4 +46,11 @@ echo "[pre-push] fork 包单测 backstop…"
 #   注:src/main/draft-store.test.ts 撞上游顶层 `import "node:sqlite"`(bun 至今 resolve 不了,
 #   见记忆 reference_known_dev_issues #5),属存量、非本仓回归,故按目录跑 deskfox 子集。
 (cd packages/desktop && bun test src/main/deskfox)
+# session-ui:消息流渲染层(工具折叠行 / 引用卡片 / message-part)。
+#   2026-09-17 发版收口批补入 —— 此前 packages/session-ui 既不在 turbo test 任务、也不在本闸内,
+#   而 REQ-131(引用卡片能看到引文原文)与 REQ-128(工具行命中区)的主力改动全落在这个包,
+#   写了测试也不会被自动跑。REQ-128 尤其需要:它是纯 CSS 作用域覆盖,有静默失效形态 ——
+#   覆盖被删或被挪进上游全局 CSS,整行又变回可点且没有任何报错。
+#   该包 121 条跑完 < 0.1s,零成本。
+(cd packages/session-ui && bun test)
 # FORK-END

@@ -337,6 +337,9 @@ export function SessionSidePanel(props: {
       viewerOpen: view().reviewPanel.opened(),
       isTemporary: temporaryTab() === tab,
       isFileTab: !!file.pathFromTab(normalizeTab(tab)),
+      // FORK: REQ-130 兜底 —— 点 × 时 tab 已被关掉,此刻冒上来的 click 不该再收面板
+      //   [feat: release-closeout-2026-09] 2026-09-17
+      tabStillExists: openedTabs().includes(tab),
     })
     if (decision === "ignore") return
     if (decision === "collapse") {

@@ -43,6 +43,7 @@ import { creation } from "./media-creation-store"
 import { MediaCreationControls, MediaModeMenu } from "./media-creation-bar"
 import { submitCreation } from "./prompt-input/creation-submit"
 import { CHAT_SELECTION_PATH } from "@/utils/context-menu-host/dom-provider"
+import { contextItemCount } from "./prompt-input/context-gate"
 // FORK-END
 
 export type PromptInputV2ComposerProps = {
@@ -144,12 +145,19 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     if (mode() === "shell") return 0
     return prompt.context.items().filter((item) => !!item.comment?.trim()).length
   })
+  // FORK: 可提交判定看的是「有没有东西可发」,不是「有没有注释」。
+  //   文件预览区的选区卡(file-tabs.tsx)不填注释时 comment 为 undefined,
+  //   原先只数 commentCount → 纯引用无法提交,而聊天区/PDF 那两条路径因为塞了英文占位注释
+  //   反而能提交 —— 同一个动作三条路径行为不一致(user 2026-09-17 真机反馈)。
+  //   commentCount 保持原语义(它还喂 placeholder 文案),另开一个计数专供提交闸。
+  //   [feat: release-closeout-2026-09] 2026-09-17
+  const contextCount = createMemo(() => contextItemCount(prompt.context.items(), mode()))
   const blank = createMemo(() => {
     const text = prompt
       .current()
       .map((part) => ("content" in part ? part.content : ""))
       .join("")
-    return text.trim().length === 0 && attachments().length === 0 && commentCount() === 0
+    return text.trim().length === 0 && attachments().length === 0 && contextCount() === 0
   })
   const stopping = createMemo(() => working() && blank())
   const placeholder = createMemo(() =>
@@ -217,6 +225,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     info,
     imageAttachments: attachments,
     commentCount,
+    contextCount,
     autoAccept: accepting,
     mode,
     working,

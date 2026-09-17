@@ -1,4 +1,4 @@
-import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
+import { MessageComment } from "./message-comment"
 import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import { AssistantMessage, Part, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
 import { groupParts, renderable, type PartGroup } from "@opencode-ai/session-ui/message-part"
@@ -7,6 +7,9 @@ import { uniqueSummaryDiffs } from "./summary-diffs"
 import { compareMessages } from "@/utils/session-message"
 
 export { TimelineRow, type SummaryDiff } from "./timeline-row"
+// FORK: REQ-131 —— MessageComment 移到 ./message-comment(为可测,见该文件头),
+//   此处 re-export 保持既有 import 路径不变。 [feat: release-closeout-2026-09] 2026-09-17
+export { MessageComment } from "./message-comment"
 
 export type TimelineRowMap = {
   TurnGap: { userMessageID: string }
@@ -322,32 +325,5 @@ export namespace Timeline {
 
   function record(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === "object" && !Array.isArray(value)
-  }
-}
-
-export namespace MessageComment {
-  export type MessageComment = {
-    path: string
-    comment: string
-    selection?: {
-      startLine: number
-      endLine: number
-    }
-  }
-
-  export const fromPart = (part: Part): MessageComment | undefined => {
-    if (part.type !== "text" || !part.synthetic) return
-    const next = readCommentMetadata(part.metadata) ?? parseCommentNote(part.text)
-    if (!next) return
-    return {
-      path: next.path,
-      comment: next.comment,
-      selection: next.selection
-        ? {
-            startLine: next.selection.startLine,
-            endLine: next.selection.endLine,
-          }
-        : undefined,
-    }
   }
 }

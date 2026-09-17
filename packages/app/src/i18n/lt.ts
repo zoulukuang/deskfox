@@ -394,6 +394,10 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Nepavyko išsiųsti komandos",
   "prompt.toast.promptSendFailed.title": "Nepavyko išsiųsti raginimo",
   "prompt.toast.promptSendFailed.description": "Nepavyko nuskaityti seanso",
+  // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.toast.promptNotDelivered.title": "Message not sent — put back in the input box", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.promptNotDelivered.description": "The backend engine did not respond. Your text and quoted cards are intact — send again when you are ready.", // FORK-i18n-backfill(en 兜底)
+  "prompt.toast.promptNotDelivered.inputBusy.description": "The backend engine did not respond. Your input box already had new content so it was left untouched; the quoted cards were put back.", // FORK-i18n-backfill(en 兜底)
   "dialog.mcp.title": "MCPs",
   "dialog.mcp.description": "Įjungtas {{enabled}} arba {{total}}",
   "dialog.mcp.empty": "MCP nesukonfigūruota",
@@ -1201,6 +1205,10 @@ export const dict = {
   "provider.getbot.refreshModels.success": "Model list synced ({{count}} models)", // FORK-i18n-backfill(en 兜底)
   "provider.getbot.refreshModels.failed": "Failed to refresh models: {{error}}", // FORK-i18n-backfill(en 兜底)
   "prompt.context.chatQuoteLabel": "Chat quote", // FORK-i18n-backfill(en 兜底)
+  // FORK: 引用卡片前缀 + 文件不可用兜底 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.context.quotePrefix": "Quote:", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.unavailable.title": "Can't show this file", // FORK-i18n-backfill(en 兜底)
+  "fileViewer.unavailable.description": "It may have been moved, renamed or deleted. Close this tab, or reopen it from the file tree.", // FORK-i18n-backfill(en 兜底)
   "prompt.context.removeChatQuote": "Remove chat quote", // FORK-i18n-backfill(en 兜底)
   "prompt.toast.imageUnsupported.title": "Current model does not support images", // FORK-i18n-backfill(en 兜底)
   "prompt.toast.imageUnsupported.description": "“{{model}}” does not support image input. Switch to a vision model (hover a model to see its input capabilities), then paste or drop the image again.", // FORK-i18n-backfill(en 兜底)

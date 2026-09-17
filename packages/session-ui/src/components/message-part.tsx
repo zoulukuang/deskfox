@@ -193,6 +193,12 @@ export type UserMessageComment = {
     startLine: number
     endLine: number
   }
+  // FORK: REQ-131 —— 与 timeline/rows.ts 的 MessageComment 对齐,否则引文到不了卡片
+  //   [feat: release-closeout-2026-09] 2026-09-17
+  /** 引文原文 */
+  preview?: string
+  /** chat = 引用本次对话;file = 引用文件选区 */
+  kind?: "chat" | "file"
 }
 
 export interface MessagePartProps {
@@ -1094,7 +1100,17 @@ function UserMessageComments(props: { comments: UserMessageComment[]; bounded: b
             comment={comment.comment}
             path={comment.path}
             selection={comment.selection}
-            title={comment.comment}
+            // FORK: REQ-131 —— tooltip 原先 title={comment.comment},等于把用户自己写的那句话
+            //   重复一遍,回看时依然不知道当初引的是哪段。改成优先显引文原文。
+            //   [feat: release-closeout-2026-09] 2026-09-17
+            title={comment.preview ?? comment.comment}
+            preview={comment.preview}
+            kind={comment.kind}
+            // FORK: 键住在 app 的字典里。session-ui 的 UiI18nKey 类型绑的是上游 packages/ui 的 en
+            //   字典(黑名单,不能加键),但运行时 app.tsx 把**自己合并后的 t** 喂给了 I18nProvider,
+            //   所以这个键在运行时查得到。类型窄、运行时宽,故此处显式 cast 并留证。
+            //   [feat: release-closeout-2026-09] 2026-09-17
+            quotePrefix={i18n.t("prompt.context.quotePrefix" as Parameters<typeof i18n.t>[0])}
             tooltip
             wide
           />

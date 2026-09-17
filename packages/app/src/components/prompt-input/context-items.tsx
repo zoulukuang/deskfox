@@ -7,6 +7,9 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/core/util/path"
 import type { ContextItem } from "@/context/prompt"
+// FORK: 引文标签/占位注释判定与时间线卡片共用同一份实现
+//   [feat: release-closeout-2026-09] 2026-09-17
+import { isBlankComment } from "@opencode-ai/core/fork/comment-note"
 
 type PromptContextItem = ContextItem & { key: string }
 
@@ -43,9 +46,30 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
               <Dynamic
                 component={props.newLayoutDesigns ? TooltipV2 : Tooltip}
                 // FORK: 聊天引用卡 tooltip 显示引用预览 [feat: 聊天选区-卡片化-换行]
+                // FORK: 文件引用原先 tooltip 只显示路径 —— 用户看不到自己选了哪段
+                //   (user 2026-09-17 反馈:「修改为和从聊天区域选择内容一样,鼠标放上去能出现选择内容的预览」)。
+                //   有引文就显「引用:<全文>」+ 路径溯源;纯文件附件(无引文)保持原样只显路径。
+                //   [feat: release-closeout-2026-09] 2026-09-17
                 value={
-                  isChatQuote ? (
-                    <span class="flex max-w-[320px] whitespace-pre-wrap break-words">{item.preview ?? ""}</span>
+                  isChatQuote || item.preview ? (
+                    <span class="flex flex-col gap-1 max-w-[320px]">
+                      <span class="whitespace-pre-wrap break-words">
+                        {props.t("prompt.context.quotePrefix")}
+                        {item.preview ?? ""}
+                      </span>
+                      <Show when={!isChatQuote}>
+                        <span
+                          classList={{
+                            "text-[11px] truncate-start [unicode-bidi:plaintext] min-w-0": true,
+                            "text-v2-text-text-muted": props.newLayoutDesigns,
+                            "text-text-invert-base": !props.newLayoutDesigns,
+                          }}
+                        >
+                          {directory}
+                          {filename}
+                        </span>
+                      </Show>
+                    </span>
                   ) : (
                   <span class="flex max-w-[300px]">
                     <span
@@ -62,7 +86,7 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                   )
                 }
                 placement="top"
-                openDelay={isChatQuote ? 400 : 800}
+                openDelay={isChatQuote || item.preview ? 400 : 800}
               >
                 <div
                   classList={{
@@ -107,7 +131,9 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                       aria-label={props.t(isChatQuote ? "prompt.context.removeChatQuote" : "prompt.context.removeFile")}
                     />
                   </div>
-                  <Show when={item.comment}>
+                  {/* FORK: 用户没写注释时(含历史占位 "(see selected text)")不占一行 ——
+                      卡片上印一句英文占位对用户没有意义。[feat: release-closeout-2026-09] 2026-09-17 */}
+                  <Show when={!isBlankComment(item.comment) && item.comment}>
                     {(comment) => <div class="text-12-regular text-text-strong ml-5 pr-1 truncate">{comment()}</div>}
                   </Show>
                 </div>

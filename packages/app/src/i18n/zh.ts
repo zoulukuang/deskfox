@@ -432,6 +432,10 @@ export const dict = {
   "prompt.context.removeActiveFile": "从上下文移除活动文件",
   "prompt.context.removeFile": "从上下文移除文件",
   "prompt.context.chatQuoteLabel": "聊天引用",
+  // FORK: 引用卡片前缀 + 文件不可用兜底 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.context.quotePrefix": "引用:",
+  "fileViewer.unavailable.title": "无法显示此文件",
+  "fileViewer.unavailable.description": "它可能已被移动、改名或删除。可以关掉这个标签页,或从文件树重新打开。",
   "prompt.context.removeChatQuote": "移除聊天引用",
   "prompt.action.attachFile": "附加文件",
   "prompt.menu.addImagesAndFiles": "添加文件及更多内容",
@@ -456,6 +460,10 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "发送命令失败",
   "prompt.toast.promptSendFailed.title": "发送提示失败",
   "prompt.toast.promptSendFailed.description": "无法获取会话",
+  // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.toast.promptNotDelivered.title": "这条没发出去,已放回输入框",
+  "prompt.toast.promptNotDelivered.description": "后台引擎没有响应。原文和引用卡片都还在,确认后可以重新发送。",
+  "prompt.toast.promptNotDelivered.inputBusy.description": "后台引擎没有响应。输入框已有新内容,原文未覆盖;引用卡片已放回。",
 
   "dialog.mcp.title": "MCP 服务器",
   "dialog.mcp.description": "已启用 {{enabled}} / {{total}}",

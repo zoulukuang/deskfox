@@ -320,6 +320,10 @@ export const dict = {
   "prompt.context.removeActiveFile": "Remove active file from context",
   "prompt.context.removeFile": "Remove file from context",
   "prompt.context.chatQuoteLabel": "Chat quote",
+  // FORK: 引用卡片前缀 + 文件不可用兜底 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.context.quotePrefix": "Quote:",
+  "fileViewer.unavailable.title": "Can't show this file",
+  "fileViewer.unavailable.description": "It may have been moved, renamed or deleted. Close this tab, or reopen it from the file tree.",
   "prompt.context.removeChatQuote": "Remove chat quote",
   "prompt.action.attachFile": "Add files",
   "prompt.menu.addImagesAndFiles": "Add files and more",
@@ -346,6 +350,10 @@ export const dict = {
   "prompt.toast.commandSendFailed.title": "Failed to send command",
   "prompt.toast.promptSendFailed.title": "Failed to send prompt",
   "prompt.toast.promptSendFailed.description": "Unable to retrieve session",
+  // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
+  "prompt.toast.promptNotDelivered.title": "Message not sent — put back in the input box",
+  "prompt.toast.promptNotDelivered.description": "The backend engine did not respond. Your text and quoted cards are intact — send again when you are ready.",
+  "prompt.toast.promptNotDelivered.inputBusy.description": "The backend engine did not respond. Your input box already had new content so it was left untouched; the quoted cards were put back.",
 
   "dialog.mcp.title": "MCPs",
   "dialog.mcp.description": "{{enabled}} of {{total}} enabled",

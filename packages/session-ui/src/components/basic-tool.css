@@ -356,3 +356,34 @@ body:not([data-new-layout]) {
     }
   }
 }
+
+/* FORK-BEGIN: REQ-128 工具折叠行命中区收窄到文字段 + 箭头
+   [feat: release-closeout-2026-09] 2026-09-17
+   [bug-repro: 消息流里的工具折叠行(「写入 xxx.py」「已运行 N 条命令」「N 个文件已更改」)
+    整行都是可点区,宽窗口下右侧一大片空白同样触发展开 → 划过/拖选/随手一点频繁误触]
+
+   根因是一行 CSS 不是逻辑:collapsible.css 给 Kobalte 的 Collapsible.Trigger(渲染成 <button>)
+   加了 width:100%,整行于是变成按钮;而文字其实只占里面那一段。
+
+   做法:让**按钮本身就等于文字区** —— trigger 收成 fit-content(上限 100%,长标题照旧截断)。
+   行内布局是 justify-content:flex-start、右侧 action 是 flex-shrink:0 的 inline-flex、
+   箭头紧跟文字,没有任何 margin-left:auto 之类依赖整行宽度的靠右定位,故视觉不变。
+
+   为什么不用 pointer-events:none(需求 doc 原倾向的"修法 B"):
+     那样 <button> 仍然满宽,只是不吃指针事件 —— "按钮的边界"与"真正能点的区域"从此不一致。
+     ① 13 条既有 e2e 当场变红:它们点 trigger 元素的中心,而中心落在死区;
+     ② 更要紧的是初版白名单漏了 context-tool-group(它自带 trigger 内容、不走 basic-tool 那套
+        slot),整组「已运行 N 条命令」「已探索」变成完全点不开 —— 这类漏网只能靠人肉枚举使用方,
+        每新增一个 .tool-collapsible 使用方就多一次静默失效的机会。
+   fit-content 没有这个问题:按钮缩到哪儿,可点区就是哪儿,两者定义上不可能脱节。
+
+   作用域限定在 .tool-collapsible:**不动**全局 collapsible.css —— 那是 packages/ui 的上游文件
+   (pre-commit 黑名单,改它要 R4 override),且非工具行也共用它。 */
+[data-component="collapsible"].tool-collapsible {
+  [data-slot="collapsible-trigger"] {
+    /* align-self:stretch 只在 cross size 为 auto 时生效,显式宽度即让它失效,无需覆盖 */
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+/* FORK-END */

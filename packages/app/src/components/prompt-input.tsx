@@ -86,6 +86,7 @@ import { pathKey } from "@/utils/path-key"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { displayName, projectForDirectory as resolveProjectForDirectory } from "@/pages/layout/helpers"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
+import { contextItemCount } from "./prompt-input/context-gate"
 
 export type PromptInputState = ReturnType<typeof usePrompt>
 
@@ -382,12 +383,19 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (store.mode === "shell") return 0
     return prompt.context.items().filter((item) => !!item.comment?.trim()).length
   })
+  // FORK: 可提交判定看的是「有没有东西可发」,不是「有没有注释」。
+  //   文件预览区的选区卡(file-tabs.tsx)不填注释时 comment 为 undefined,
+  //   原先只数 commentCount → 纯引用无法提交,而聊天区/PDF 那两条路径因为塞了英文占位注释
+  //   反而能提交 —— 同一个动作三条路径行为不一致(user 2026-09-17 真机反馈)。
+  //   commentCount 保持原语义(它还喂 placeholder 文案),另开一个计数专供提交闸。
+  //   [feat: release-closeout-2026-09] 2026-09-17
+  const contextCount = createMemo(() => contextItemCount(prompt.context.items(), store.mode))
   const blank = createMemo(() => {
     const text = prompt
       .current()
       .map((part) => ("content" in part ? part.content : ""))
       .join("")
-    return text.trim().length === 0 && imageAttachments().length === 0 && commentCount() === 0
+    return text.trim().length === 0 && imageAttachments().length === 0 && contextCount() === 0
   })
   const stopping = createMemo(() => working() && blank())
   const tip = () => {
@@ -1305,6 +1313,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       info,
       imageAttachments,
       commentCount,
+    contextCount,
       autoAccept: () => accepting(),
       mode: () => store.mode,
       working,
@@ -1508,7 +1517,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           .join("")
           .trim().length === 0 &&
         imageAttachments().length === 0 &&
-        commentCount() === 0
+        // FORK: 同上,提交闸看 contextCount [feat: release-closeout-2026-09] 2026-09-17
+        contextCount() === 0
       ) {
         return
       }

@@ -14,6 +14,10 @@ import {
 import { createStore, produce } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
 import { useNavigate } from "@solidjs/router"
+// FORK: REQ-131 —— 引用卡片标签与另一条渲染路径(CommentCardV2)共用 core 里的同一份实现
+//   [feat: release-closeout-2026-09] 2026-09-17
+import { isChatSelectionPath } from "@opencode-ai/core/util/chat-selection"
+import { commentQuoteLabel, isBlankComment } from "@opencode-ai/core/fork/comment-note"
 import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
@@ -1212,6 +1216,21 @@ export function MessageTimeline(props: {
     )
   }
 
+  // FORK: 引用卡片的 hover 全文 —— 主视觉让给引文本身,溯源信息(文件名:行范围)退到原生 title。
+  //   用原生 title 而非 Tooltip 组件:CommentStrip 行在虚拟列表里,挂组件级 tooltip 会多出一层
+  //   随滚动重算的开销,而这里只需要"悬停看全文"。 [feat: release-closeout-2026-09] 2026-09-17
+  const quoteHover = (comment: MessageComment.MessageComment) => {
+    const parts: string[] = []
+    if (comment.preview?.trim()) parts.push(language.t("prompt.context.quotePrefix") + comment.preview.trim())
+    const isChat = comment.kind === "chat" || isChatSelectionPath(comment.path)
+    if (!isChat) {
+      const sel = comment.selection
+      const range = sel ? (sel.startLine === sel.endLine ? `:${sel.startLine}` : `:${sel.startLine}-${sel.endLine}`) : ""
+      parts.push(getFilename(comment.path) + range)
+    }
+    return parts.join("\n\n") || undefined
+  }
+
   const renderTimelineRow = (row: Accessor<TimelineRow.TimelineRow>, onSizeChange?: () => void) => {
     switch (row()._tag) {
       case "TurnGap":
@@ -1235,22 +1254,60 @@ export function MessageTimeline(props: {
                           border: !settings.general.newLayoutDesigns(),
                         }}
                       >
-                        <div class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong">
-                          <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />
-                          <span class="truncate">{getFilename(comment().path)}</span>
-                          <Show when={comment().selection}>
-                            {(selection) => (
-                              <span class="shrink-0 text-text-weak">
-                                {selection().startLine === selection().endLine
-                                  ? `:${selection().startLine}`
-                                  : `:${selection().startLine}-${selection().endLine}`}
+                        {/* FORK-BEGIN: REQ-131 补渲染路径 [feat: release-closeout-2026-09] 2026-09-17
+                            时间线上的引用卡片有**两条**渲染路径:v2 布局走 UserMessageComments →
+                            CommentCardV2,经典布局走本 CommentStrip 行。REQ-131 首版只改了前者,
+                            这里仍拿 path 当文件名渲染 → 聊天引用的伪路径 `<chat selection>` 直接印在卡片上,
+                            下面一行又是占位注释 "(see selected text)" —— user 2026-09-17 真机截图反馈
+                            「提交之后看不出来提交的是什么内容」。标签实现与 CommentCardV2 共用 core 里的
+                            commentQuoteLabel,避免两条路径再次各写各的。 */}
+                        {/* FORK: user 2026-09-17 反馈「在引用内容前增加引用标记」——
+                            统一成 [图标] 引用:<引文首行>,聊天引用用气泡图标、文件引用用文件图标。
+                            识别度的关键是**引文本身**,所以它占第一行;文件名:行范围退到原生 title
+                            (hover 可见),不再挤占主视觉。无引文的老消息回落原来的文件名显示。 */}
+                        <div
+                          class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong"
+                          title={quoteHover(comment())}
+                        >
+                          <Show
+                            when={comment().kind === "chat" || isChatSelectionPath(comment().path)}
+                            fallback={
+                              <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />
+                            }
+                          >
+                            <Icon name="bubble-5" class="size-3.5 shrink-0 text-text-weak" />
+                          </Show>
+                          <Show
+                            when={commentQuoteLabel(comment().preview)}
+                            fallback={
+                              <>
+                                <span class="truncate">{getFilename(comment().path)}</span>
+                                <Show when={comment().selection}>
+                                  {(selection) => (
+                                    <span class="shrink-0 text-text-weak">
+                                      {selection().startLine === selection().endLine
+                                        ? `:${selection().startLine}`
+                                        : `:${selection().startLine}-${selection().endLine}`}
+                                    </span>
+                                  )}
+                                </Show>
+                              </>
+                            }
+                          >
+                            {(label) => (
+                              <span class="truncate" data-slot="comment-strip-quote">
+                                <span class="text-text-weak">{language.t("prompt.context.quotePrefix")}</span>
+                                {label()}
                               </span>
                             )}
                           </Show>
                         </div>
-                        <div class="pt-1 text-12-regular text-text-strong whitespace-pre-wrap break-words">
-                          {comment().comment}
-                        </div>
+                        <Show when={!isBlankComment(comment().comment)}>
+                          <div class="pt-1 text-12-regular text-text-strong whitespace-pre-wrap break-words">
+                            {comment().comment}
+                          </div>
+                        </Show>
+                        {/* FORK-END */}
                       </div>
                     )}
                   </Index>

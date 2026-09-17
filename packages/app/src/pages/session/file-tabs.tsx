@@ -429,6 +429,23 @@ export function FileTabContent(props: {
     if (!p) return
     return file.get(p)
   })
+  // FORK-BEGIN: 挂载即自加载 [feat: release-closeout-2026-09] 2026-09-17
+  // [bug-repro: 应用重启后,恢复出来的那个激活 tab 内容区一片空白 —— 没有错误、没有 loading,
+  //  点别的 tab 再点回来才正常]
+  //
+  // 根因是"谁负责加载"这件事没人兜底:FileTabContent **自己不加载**,加载由外部
+  // session-side-panel 的 activateTab / previewTab 调 file.load 驱动。而恢复出来的 tab
+  // 不经过这两条路径 → file.get(path) 返回 undefined → 下面那个 Switch 三个分支全不匹配 → 空白。
+  //
+  // 本文件 :593 那条 FORK 注释早就点破过一半:`<Show when={activeFileTab()} keyed>` 切 tab 时
+  // FileTabContent 整个 unmount + remount。既然如此,把"确保已加载"放在 mount 上最稳 ——
+  // load() 自身幂等(已 loaded 且非 force 时立即返回),重复调用零成本。
+  onMount(() => {
+    const p = path()
+    if (p) void file.load(p)
+  })
+  // FORK-END
+
   const contents = createMemo(() => state()?.content?.content ?? "")
   const cacheKey = createMemo(() => sampledChecksum(contents()))
 
@@ -1828,6 +1845,17 @@ export function FileTabContent(props: {
             <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
           </Match>
           <Match when={state()?.error}>{(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}</Match>
+          {/* FORK: 兜底分支 —— 上面三条(loaded/loading/error)之外的任何状态,原先都会让 Switch
+              一个节点都不渲染,于是用户看到的是一片**纯白**:没有错误、没有 loading、没有任何线索。
+              文件被移走/改名/删除时尤其如此。静默失败是本批反复踩到的同一类坑,这里明确给出可读状态。
+              [feat: release-closeout-2026-09] 2026-09-17 */}
+          <Match when={!state()?.loaded && !state()?.loading && !state()?.error}>
+            <div class="px-6 py-4 flex flex-col gap-1">
+              <div class="text-text-strong">{language.t("fileViewer.unavailable.title")}</div>
+              <div class="text-text-weak text-12-regular">{language.t("fileViewer.unavailable.description")}</div>
+              <div class="text-text-weaker text-12-regular break-all">{path()}</div>
+            </div>
+          </Match>
         </Switch>
       </ScrollView>
       <Show when={highlightRects()}>

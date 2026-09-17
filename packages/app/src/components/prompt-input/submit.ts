@@ -19,6 +19,8 @@ import { useSync, type DirectorySync } from "@/context/sync"
 import { Identifier } from "@/utils/id"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
+import { commentRestorePayload } from "./comment-restore"
+import { clearableContextItems } from "./context-gate"
 import { setCursorPosition } from "./editor-dom"
 import { formatServerError } from "@/utils/server-errors"
 import { ScopedKey } from "@/utils/server-scope"
@@ -31,6 +33,41 @@ type PendingPrompt = {
   abort: AbortController
   cleanup: VoidFunction
 }
+
+// FORK-BEGIN: REQ-100 ④ 消息静默蒸发 —— 把"挂住"变成一次真实的失败
+// [feat: release-closeout-2026-09] 2026-09-17
+//
+// 2026-08-18 真机证据链:用户那条带 <chat selection> 的消息在服务端 message 表 / session_input 表 /
+// 日志三处皆无,前端却已乐观挂上时间线并置 busy,然后永久停在"思考中"
+// (实测 ≥38 分钟、横跨一次后端 respawn 仍未复位)。
+//
+// 关键发现:回吐路径(撤乐观消息 + 回填输入框 + toast + busy 归 idle)**早就存在**于本文件的
+// catch 里 —— 它只是从来没被触发:后端半死时请求既不 resolve 也不 reject(挂住),catch 永远等不到。
+// 故本闸只做一件事:给请求加超时并 **abort**,把"挂住"翻译成一次 reject。
+//
+// 为什么必须 abort 而不是只 Promise.race:只 race 的话请求可能在回吐之后才落地,
+// 用户会看到"输入框里一条 + 时间线上又一条",甚至重复发送(spec §7 R3)。
+//
+// 阈值:promptAsync 是**异步准入**端点(收下消息即返回,不等模型回答),正常 RTT 毫秒级。
+// 20s 对"活着但慢"的后端仍极宽松,对"半死"的后端则足够快地给用户一个交代。
+const PROMPT_DELIVERY_TIMEOUT_MS = 20_000
+
+/** REQ-100 ① 点停止后本地强制置 idle 的兜底窗口(spec 定 3–5s,取中位) */
+const STOP_FALLBACK_IDLE_MS = 4_000
+
+/** 消息没送达(超时 abort)—— 区别于后端明确报错,文案与处置都不同 */
+export class PromptNotDeliveredError extends Error {
+  readonly notDelivered = true
+  constructor() {
+    super("prompt not delivered: backend did not respond in time")
+    this.name = "PromptNotDeliveredError"
+  }
+}
+
+export function isPromptNotDelivered(error: unknown): error is PromptNotDeliveredError {
+  return !!error && typeof error === "object" && (error as { notDelivered?: unknown }).notDelivered === true
+}
+// FORK-END
 
 const pending = new Map<string, PendingPrompt>()
 
@@ -52,6 +89,8 @@ type FollowupSendInput = {
   messageID?: string
   optimisticBusy?: boolean
   before?: () => Promise<boolean> | boolean
+  /** FORK: REQ-100 ④ 送达超时,仅供测试注入;生产走 PROMPT_DELIVERY_TIMEOUT_MS */
+  deliveryTimeoutMs?: number
 }
 
 const draftText = (prompt: Prompt) => prompt.map((part) => ("content" in part ? part.content : "")).join("")
@@ -159,6 +198,12 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
     add()
   })
 
+  // FORK: REQ-100 ④ —— 送达超时闸,详见文件头 PROMPT_DELIVERY_TIMEOUT_MS 处的说明
+  //   [feat: release-closeout-2026-09] 2026-09-17
+  const delivery = new AbortController()
+  let deliveryTimedOut = false
+  let deliveryTimer: ReturnType<typeof setTimeout> | undefined
+
   try {
     if (!(await wait())) {
       batch(() => {
@@ -168,7 +213,22 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
       return false
     }
 
-    await input.api.prompt({
+    // 两件事都要做,缺一不可:
+    //   · abort(delivery):掐断底层请求,保证它不会在回吐之后才落地造成双份
+    //   · deadline reject:**不依赖**下游肯听 signal。api.prompt 经 lazyApi 代理,调用被包在
+    //     `protocol.then(...)` 里 —— 后端不可达时连协议探测都可能挂住,abort 压根传不到 fetch。
+    //     单测里用"忽略 signal 的假 client"复现过这一支:只 abort 不 race 会一直等下去。
+    let rejectDeadline: ((reason: unknown) => void) | undefined
+    const deadline = new Promise<never>((_, reject) => {
+      rejectDeadline = reject
+    })
+    deliveryTimer = setTimeout(() => {
+      deliveryTimedOut = true
+      delivery.abort()
+      rejectDeadline?.(new PromptNotDeliveredError())
+    }, input.deliveryTimeoutMs ?? PROMPT_DELIVERY_TIMEOUT_MS)
+
+    const delivered = input.api.prompt({
       sessionID: input.draft.sessionID,
       id: messageID,
       agent: input.draft.agent,
@@ -199,14 +259,23 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
             ]
           : [],
       ),
-    })
+    }, { signal: delivery.signal })
+    // 超时胜出时 delivered 可能稍后才 reject(abort 的 DOMException),挂个 no-op 防未捕获拒绝
+    delivered.catch(() => {})
+    await Promise.race([delivered, deadline])
     return true
   } catch (err) {
     batch(() => {
       setIdle()
       remove()
     })
+    // FORK: REQ-100 ④ —— 超时 abort 的 DOMException 对用户没有意义,换成语义明确的错误,
+    //   让上层出"这条没发出去,已放回输入框"而不是通用的"发送失败"。
+    //   [feat: release-closeout-2026-09] 2026-09-17
+    if (deliveryTimedOut) throw new PromptNotDeliveredError()
     throw err
+  } finally {
+    if (deliveryTimer !== undefined) clearTimeout(deliveryTimer)
   }
 }
 
@@ -215,6 +284,9 @@ type PromptSubmitInput = {
   info: Accessor<{ id: string } | undefined>
   imageAttachments: Accessor<ImageAttachmentPart[]>
   commentCount: Accessor<number>
+  /** FORK: 可提交判定用的上下文项计数(含无注释的附件/选区卡)
+   *  [feat: release-closeout-2026-09] 2026-09-17 */
+  contextCount: Accessor<number>
   autoAccept: Accessor<boolean>
   mode: Accessor<"normal" | "shell">
   working: Accessor<boolean>
@@ -287,6 +359,20 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       pending.delete(key)
       return Promise.resolve()
     }
+    // FORK-BEGIN: REQ-100 ① 停止键本地超时兜底 [feat: release-closeout-2026-09] 2026-09-17
+    // 原行为:点停止后纯等后台,自己不置 idle。后台健康时没问题(事件流很快回 idle);
+    // 后台半死时就成了"幻影 spinner" —— 2026-08-18 真机实测卡 ≥38 分钟、横跨一次后端 respawn。
+    // 兜底语义:点了停止后 STOP_FALLBACK_IDLE_MS 内后台还没把状态改过来,前端自己置 idle。
+    // 这不是"假装停下了":用户的意图就是停;后端即便还在跑,重连/周期对账(server-sync.tsx 的
+    // session.status() 全量)会把真实状态盖回来 —— 兜底只负责让按钮别永久转圈。
+    // 与 REQ-049 那条 toast 是两条独立路径:那条告知"请求没送达",这条兜底"状态不复位"。
+    // 读写都走 sync()(session.tsx:1009 的 spinner 就读这个 store),与下方 command 路径一致。
+    setTimeout(() => {
+      if (sync().data.session_status[sessionID]?.type !== "busy") return
+      sync().set("session_status", sessionID, { type: "idle" })
+    }, STOP_FALLBACK_IDLE_MS)
+    // FORK-END
+
     return sdk()
       .api.session.interrupt({
         sessionID,
@@ -310,15 +396,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     items: (ContextItem & { key: string })[],
   ) => {
     for (const item of items) {
-      target.context.add({
-        type: "file",
-        path: item.path,
-        selection: item.selection,
-        comment: item.comment,
-        commentID: item.commentID,
-        commentOrigin: item.commentOrigin,
-        preview: item.preview,
-      })
+      target.context.add(commentRestorePayload(item))
     }
   }
 
@@ -358,7 +436,9 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const images = input.imageAttachments().slice()
     const mode = input.mode()
 
-    if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
+    // FORK: 由 commentCount 改为 contextCount —— 没填注释的选区卡/附件卡同样算「有东西可发」
+    //   [feat: release-closeout-2026-09] 2026-09-17
+    if (text.trim().length === 0 && images.length === 0 && input.contextCount() === 0) {
       if (input.working()) void abort()
       return
     }
@@ -572,7 +652,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       }
     }
 
-    const commentItems = context.filter((item) => item.type === "file" && !!item.comment?.trim())
+    // FORK-BEGIN: 发送后清空**所有** file 上下文项,不只有注释的那些
+    //   [feat: release-closeout-2026-09] 2026-09-17
+    //   原先只清「有注释」的,于是没填注释的选区卡/附件卡发完仍留在输入框。表面是「卡片没消失」,
+    //   真正的代价是它**还在 context 里** —— 下一条消息会把同一个文件再发给模型一次,
+    //   用户看不出来,白烧 token。与 REQ-116 修过的是同一族(那次只修了新会话 retarget 那一支,
+    //   已有会话这一支没修);queue 分支的 clearContext 本来就是全清,此处与之对齐。
+    //   失败回吐时 restoreCommentItems 会把它们原样还回来,语义不变。
+    const commentItems = clearableContextItems(context)
+    // FORK-END
     const messageID = Identifier.ascending("message")
 
     const removeOptimisticMessage = () => {
@@ -657,12 +745,34 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       if (sessionDirectory === projectDirectory) {
         sync().set("session_status", session.id, { type: "idle" })
       }
-      showToast({
-        title: language.t("prompt.toast.promptSendFailed.title"),
-        description: errorMessage(err),
-      })
+      // FORK-BEGIN: REQ-100 ④ 失败处置分流 [feat: release-closeout-2026-09] 2026-09-17
+      // 三件事必须一起发生,顺序不能反:
+      //   ① 撤下乐观挂上的那条消息 —— 不能既留在时间线又回到输入框(用户会以为发了两条)
+      //   ② 原文 + 引用卡片原样还原进输入框
+      //   ③ toast 说清"没发出去、东西还在你手里"(D-C 拍板的语义)
       removeOptimisticMessage()
-      if (restoreInput()) restoreCommentItems(submission.target(), commentItems)
+
+      // restoreInput() 返 false = 用户在失败前已另起输入,原文不覆盖(不能抢用户正在打的字)。
+      // 但引用卡片是**追加**语义、不覆盖正文,所以无论如何都还回去 ——
+      // 原先写成 `if (restoreInput()) restoreCommentItems(...)`,这一支下引用卡片会就地蒸发且无提示。
+      const restored = restoreInput()
+      restoreCommentItems(submission.target(), commentItems)
+
+      const notDelivered = isPromptNotDelivered(err)
+      showToast({
+        variant: notDelivered ? "error" : undefined,
+        title: language.t(
+          notDelivered ? "prompt.toast.promptNotDelivered.title" : "prompt.toast.promptSendFailed.title",
+        ),
+        description: notDelivered
+          ? language.t(
+              restored
+                ? "prompt.toast.promptNotDelivered.description"
+                : "prompt.toast.promptNotDelivered.inputBusy.description",
+            )
+          : errorMessage(err),
+      })
+      // FORK-END
     })
   }
 

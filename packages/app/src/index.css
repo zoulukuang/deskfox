@@ -682,3 +682,26 @@
   background: transparent;
   color: inherit;
 }
+
+/* FORK: 文件 tab 的 × 加 hover 反馈 [feat: release-closeout-2026-09] 2026-09-17
+   user 2026-09-17 反馈「鼠标焦点放在 x 号上的时候,给一个 hover 的交互效果」。
+   原先 × 只有 tooltip,没有任何按下前的视觉确认 —— 在一排紧挨着的 tab 里,
+   用户无法确定自己到底悬在「关闭」上还是「切换」上。
+
+   落点在 fork 侧本文件而不是上游 packages/ui/src/components/tabs.css:
+   那是黑名单文件,改它要走 R4 override;而这里是纯视觉增强,作用域覆盖足够。 */
+[data-slot="tabs-trigger-close-button"] {
+  border-radius: var(--radius-sm, 4px);
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+
+  &:hover {
+    background-color: var(--surface-base-hover);
+    color: var(--text-strong);
+  }
+
+  &:active {
+    background-color: var(--surface-base-active, var(--surface-base-hover));
+  }
+}
