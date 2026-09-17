@@ -160,3 +160,86 @@ describe("REQ-132 · 0.0.0 专项闸(合法 semver,但正是坏值本身)", () =
     expect(PS1).toMatch(/0\.0\.0\*/)
   })
 })
+
+// FORK 2026-09-17 [feat: release-closeout-2026-09] · Win 侧回验补洞
+//
+// 上面 ④ 那组「Mac / Win 对偶」全是**文本断言** —— 只查 PS1 里有没有 `throw`、正则长得像不像,
+// 真正被**执行**过的只有 sh 块(runInjection 起 bash 真跑)。也就是说:PS1 注入块的实际行为
+// 一次都没被验证过,而它恰恰是 Windows 发布物的唯一版本号来源。两份脚本历史上漂移过,
+// 「长得一样」不等于「跑起来一样」——PowerShell 的 non-terminating error、`-notmatch` 对 $null
+// 的语义、ConvertFrom-Json 的失败方式,都可能让同形的代码行为不同。
+//
+// 故在 Windows 上把 sh 侧那 6 个场景原样再跑一遍 PS1 块。非 Windows 自动跳过(拿不到 powershell.exe)。
+//
+// ⚠️ runner 必须写成 **UTF-8 with BOM**:PS 5.1 读无 BOM 的 UTF-8 .ps1 会按系统 ANSI(中文机上是 GBK)
+//    解码,注入块里的中文注释被错拆后会吃掉后续引号,脚本直接变成语法错误 —— 实测踩过,
+//    表现为「一堆莫名其妙的 ParserError」,与被测逻辑毫无关系。
+const IS_WIN = process.platform === "win32"
+
+function ps1InjectionBlock(): string {
+  const begin = PS1.indexOf(`# FORK-BEGIN: ${MARKER}`)
+  expect(begin).toBeGreaterThan(-1)
+  const end = PS1.indexOf("# FORK-END", begin)
+  expect(end).toBeGreaterThan(begin)
+  return PS1.slice(begin, end)
+}
+
+async function runInjectionPs1(pkgJsonContent: string | null) {
+  const root = fakeRepo(pkgJsonContent)
+  try {
+    const runner = [
+      `$repoRoot = ${JSON.stringify(root)}`,
+      "$env:OPENCODE_VERSION = $null",
+      ps1InjectionBlock(),
+      'Write-Host "RESULT=$($env:OPENCODE_VERSION)"',
+    ].join("\r\n")
+    const runnerPath = join(root, "runner.ps1")
+    writeFileSync(runnerPath, "﻿" + runner, "utf8") // BOM,见上
+    const proc = Bun.spawn(
+      ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", runnerPath],
+      { stdout: "pipe", stderr: "pipe" },
+    )
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    return { exitCode, stdout, stderr, all: stdout + stderr }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+describe.if(IS_WIN)("REQ-132 · 版本号注入(Win wrapper 真代码,仅 Windows 跑)", () => {
+  test("① 正常 package.json → 注入该版本号", async () => {
+    const r = await runInjectionPs1(JSON.stringify({ name: "opencode", version: "1.18.16" }))
+    expect(r.exitCode).toBe(0)
+    expect(r.stdout).toContain("RESULT=1.18.16")
+    expect(r.stdout).not.toContain("0.0.0-")
+  })
+
+  test("① 预发布号(1.19.0-rc.1)也放行", async () => {
+    const r = await runInjectionPs1(JSON.stringify({ version: "1.19.0-rc.1" }))
+    expect(r.exitCode).toBe(0)
+    expect(r.stdout).toContain("RESULT=1.19.0-rc.1")
+  })
+
+  test.each([
+    ["version 字段缺失", JSON.stringify({ name: "opencode" })],
+    ["version 为空串", JSON.stringify({ version: "" })],
+    ["version 不是 semver", JSON.stringify({ version: "latest" })],
+    ["version 就是坏值 0.0.0-prod-x", JSON.stringify({ version: "0.0.0-prod-202608190542" })],
+    ["package.json 不是合法 JSON", "{ this is not json"],
+  ])("② fail-fast:%s → 构建报错退出,绝不回退", async (_label, content) => {
+    const r = await runInjectionPs1(content)
+    expect(r.exitCode).not.toBe(0)
+    expect(r.all).toContain("REQ-132")
+    expect(r.stdout).not.toContain("RESULT=0.0.0")
+  })
+
+  test("② fail-fast:package.json 根本不存在", async () => {
+    const r = await runInjectionPs1(null)
+    expect(r.exitCode).not.toBe(0)
+    expect(r.all).toContain("REQ-132")
+  })
+})

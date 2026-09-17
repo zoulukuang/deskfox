@@ -157,10 +157,13 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## §5 验收闸(R9 — 全过才向 user 提 merge)
 
 ### 5.1 自动闸
-- [ ] `bun turbo typecheck --filter='!./packages/console/*'` 全绿
-- [ ] `cd packages/app && bun run test` 全绿(含新增 T3-T10)
-- [ ] `cd packages/session-ui && bun test` 全绿 —— ⚠️ **该包不在 `.husky/pre-push` 闸内**,本批必须**手工跑**;建议同批把它补进 pre-push(一行,`chore` 单独 commit)
-- [ ] `cd packages/branding && bun test` / `cd packages/desktop && bun test src/main/deskfox` 全绿
+
+> 勾选于 2026-09-17 合并前自查。**mac / Win 两侧各跑一遍**,数字逐项对照见 2-plan 末表与 3-changelog「Win 侧回验 §一」。
+
+- [x] `bun turbo typecheck --filter='!./packages/console/*'` 全绿 —— mac 29/29;Win 29/29(退出码 0)
+- [x] `cd packages/app && bun run test` 全绿(含新增 T3-T10)—— mac 1100+41;Win 1129+41,0 fail
+- [x] `cd packages/session-ui && bun test` 全绿 —— mac 121;Win 121。⚠️ 该包原不在 `.husky/pre-push` 闸内,**本批已补进**(commit `0007f55090`),不再依赖手工跑
+- [x] `cd packages/branding && bun test` / `cd packages/desktop && bun test src/main/deskfox` 全绿 —— mac 77 / 169;Win **85**(Win 回验新增 8 条 PS1 真执行)/ 169
 
 ### 5.2 真实触发测试(S6,不做不算完,**不接受纯源码复核**)
 - [x] **S6.1 产物层**:重构建后 dump `app.asar`,`LC_ALL=C grep -a -o -E 'var InstallationVersion = "[^"]+"'` → 为 `1.18.16`,**不含 `0.0.0-`**
@@ -168,14 +171,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - [x] **S6.3 防复发**:临时制造取值失败 → 构建**报错退出**
 - [x] **S6.4 REQ-100 真机**:kill 后台子进程 → ① UI ≤N 秒复位 ② 此时发一条**带聊天引用卡片**的消息 → 原文 + 引用卡片(kind 保真)原样回输入框 + toast,**时间线不残留** ③ 后端恢复后该消息**不会**自己发出去
 - [x] **S6.5 GUI 四条真机点击 + 截图存档**:点 × 只关一个且预览区不收(⌘W 行为一致)/ 引用卡片看得到引文原文 / 加入聊天新建会话标题各不相同且中文提问出中文标题 / 工具行右侧空白点不开
-- [x] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过  🟡 **移交 Win 端**(2026-09-17 user 决定,push 后由 Windows 侧适配测试)
+- [x] **S6.6 两平台产物都验**(Mac + Win)—— 两份构建脚本历史上漂移过  ✅ **Win 侧已完成**(2026-09-17,分支 `fix/win-release-closeout-2026-09`):自动闸 10 项与 mac 逐项对照、e2e 142/142、真 local 产物 `InstallationVersion=1.18.16` 且 0 处 `0.0.0-`、坏版本号构建 fail-fast、冒烟 22/22、GUI 11/11、冷启动连续 2 次 CLEAN。**并补上 mac 侧测不到的洞**:PS1 注入块此前只有文本断言,现已真执行 8 场景并固化为常驻测试。详见 [3-changelog.md](./3-changelog.md#win-侧回验2026-09-17分支-fixwin-release-closeout-2026-09)
 
 ### 5.3 治理闸
-- [ ] **恰 1 笔 R4 override**(REQ-125 的 `prompt.ts`,D-D 拍板),且该笔满足全部四项:① commit message 标 `[override-blacklist: REQ-125 会话标题剥壳,ensureTitle 是唯一能在喂模型前拦截的点]` ② 改动日志逐文件论证 wrapper 不可行 ③ **实施 agent 在 commit 前出复核报告**(wrapper 不可行性 / 风险评估 / 改动日志论证 三项)→ user 审 → 点头才 commit ④ 其余 5 组**零 override**
-- [ ] override 配额账:本季累计 ≤ 2 笔(CLAUDE.md 健康指标),本批占 1 笔 —— 提交前先查本季已用几笔
-- [ ] 改上游文件逐处带 FORK marker 并说明理由
-- [ ] 7 条需求各自 doc 的验收标准逐条对过;REQ-132 doc 路径订正已回填
-- [ ] 回归:历史会话可打开、数据库未换库(channel 未动)、daemon 首启重启一次属预期
+> 勾选于 2026-09-17 合并前自查,逐条现场取证(证据见每条行末)。
+
+- [x] **恰 1 笔 R4 override**(REQ-125 的 `prompt.ts`,D-D 拍板),四项齐备:① commit `f123503078` message 带 `[override-blacklist: …]` ② 3-changelog 有逐文件 wrapper 不可行性论证表 ③ [`R4-override-复核报告.md`](./R4-override-复核报告.md) 已出具、user 2026-09-17 审批 ④ 其余 5 组零 override
+- [x] override 配额账 —— 已查:本季带 `[override-blacklist]` 的 commit 实测 **16 笔**(含 4 笔上游 sync merge),健康基线「每季 ≤2」早已不成立。**已如实向 user 报备**,user 同日批准本笔并知悉计数现状;「指标口径是否重订」另行决策,不阻塞本批(详见 3-changelog「配额」段)
+- [x] 改上游文件逐处带 FORK marker —— 本批唯一改动的上游文件 `packages/opencode/src/session/prompt.ts`,marker 在 `:61`(`// FORK: REQ-125 会话标题剥壳 [feat: release-closeout-2026-09] 2026-09-17`)+ `:229` 处的理由说明
+- [x] 7 条需求各自 doc 的验收标准逐条对过;**REQ-132 doc 路径订正已回填** —— 已现场确认:`OPENCODE-PLAN/需求池/构建版本号未注入-对外自称0.0.0.md:55` 有 2026-09-17 的订正说明(原写「Mac 侧是 `build-deskfox.sh`」,该文件是 Tauri 时代遗留称呼、实际不存在)
+- [x] 回归:**数据库未换库**(mac 侧 `lsof` 确认打开的是 `opencode-local.db`;Win 侧 asar 内 `InstallationChannel = "local"`,注入版本号未动 channel)· **历史会话可打开**(mac 侧 user 真机自测)· **daemon 首启重启一次属预期**(Win 侧冷启动连续 2 次 CLEAN,无 error toast / JS 异常)
 
 ---
 
