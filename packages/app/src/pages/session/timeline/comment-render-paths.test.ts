@@ -63,3 +63,53 @@ describe("引用卡片两条渲染路径必须同进同退", () => {
     expect(idxFilename).toBeGreaterThan(idxFallback)
   })
 })
+
+// user 2026-09-17 追加反馈:「在引用内容前增加引用标记 —— 一个聊天小图标,然后是『引用:』冒号之后接引用内容」
+// 文件引用同理:「加一个文档的标记,在标记之后写『引用:』,从文档里引用的内容,这样识别度更高」
+describe("引用卡片统一格式:[图标] 引用:<引文>", () => {
+  test("经典布局:聊天引用用气泡图标,文件引用用文件图标", () => {
+    const block = commentStripBlock()
+    expect(block).toContain('name="bubble-5"')
+    expect(block).toContain("FileIcon")
+  })
+
+  test("经典布局:引文前面有「引用:」前缀", () => {
+    expect(commentStripBlock()).toContain("prompt.context.quotePrefix")
+  })
+
+  test("v2 布局:同样是气泡/文件图标 + 引用前缀", () => {
+    expect(CARD_V2).toContain('name="bubble-5"')
+    expect(CARD_V2).toContain("quotePrefix")
+  })
+
+  test("两条路径都以「有没有引文」决定显引文还是回落文件名 —— 老消息不受影响", () => {
+    expect(commentStripBlock()).toContain("commentQuoteLabel(comment().preview)")
+    expect(CARD_V2).toMatch(/when=\{props\.preview\?\.trim\(\)\}/)
+  })
+
+  test("经典布局给 hover 全文(引文 + 文件名:行范围退到 title)", () => {
+    expect(commentStripBlock()).toContain("quoteHover(comment())")
+  })
+})
+
+// 输入框里的卡片(context-items.tsx)是第三个位置 —— user 反馈文件引用 hover 只显示路径、看不到选中内容
+describe("输入框引用卡片:文件引用也要 hover 出引文", () => {
+  const COMPOSER = readFileSync(
+    join(HERE, "..", "..", "..", "components", "prompt-input", "context-items.tsx"),
+    "utf8",
+  )
+
+  test("有引文时 tooltip 显「引用:<全文>」,不再只有路径", () => {
+    expect(COMPOSER).toContain("prompt.context.quotePrefix")
+    expect(COMPOSER).toMatch(/isChatQuote \|\| item\.preview/)
+  })
+
+  test("占位注释不占卡片正文", () => {
+    expect(COMPOSER).toContain("isBlankComment")
+  })
+
+  test("纯文件附件(无引文)保持原样只显路径 —— 不给它硬凑引用", () => {
+    expect(COMPOSER).toContain("{directory}")
+    expect(COMPOSER).toContain("{filename}")
+  })
+})

@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
+import { Icon } from "@opencode-ai/ui/icon"
 import { getFilenameTruncated } from "@opencode-ai/core/util/path"
 import { isChatSelectionPath } from "@opencode-ai/core/util/chat-selection"
 // FORK: 与 message-timeline.tsx 的 CommentStrip 共用同一份标签实现
@@ -23,6 +24,8 @@ export function CommentCardV2(props: {
   preview?: string
   /** chat = 引用本次对话的一段话,没有真实文件可显示 */
   kind?: "chat" | "file"
+  /** 「引用:」前缀(由调用方喂 i18n 文案;session-ui 的 i18n 字典绑上游包,不新增键) */
+  quotePrefix?: string
   // FORK-END
 }) {
   let title: HTMLSpanElement | undefined
@@ -77,25 +80,34 @@ export function CommentCardV2(props: {
             "<chat selection>" —— 既没信息量又像个 bug。dom-provider 里"卡片渲染也不显示"
             那句注释早就失效了。
             改成:聊天引用显引文首行(它才真正说明"引的是哪段"),文件引用维持 文件名:行范围。 */}
+        {/* FORK: user 2026-09-17 反馈「在引用内容前增加引用标记」——
+            与经典布局的 CommentStrip 保持同一形态:[图标] 引用:<引文首行>。
+            无引文的老消息回落原来的「文件名:行范围」。 */}
         <Show
           when={props.kind === "chat" || isChatSelectionPath(props.path)}
+          fallback={<FileIcon node={{ path: props.path, type: "file" }} />}
+        >
+          <Icon name="bubble-5" />
+        </Show>
+        <Show
+          when={props.preview?.trim()}
           fallback={
-            <>
-              <FileIcon node={{ path: props.path, type: "file" }} />
-              <span>
-                {getFilenameTruncated(props.path, 14)}
-                <Show when={props.selection}>
-                  {(sel) =>
-                    sel().startLine === sel().endLine
-                      ? `:${sel().startLine}`
-                      : `:${sel().startLine}-${sel().endLine}`
-                  }
-                </Show>
-              </span>
-            </>
+            <span>
+              {getFilenameTruncated(props.path, 14)}
+              <Show when={props.selection}>
+                {(sel) =>
+                  sel().startLine === sel().endLine
+                    ? `:${sel().startLine}`
+                    : `:${sel().startLine}-${sel().endLine}`
+                }
+              </Show>
+            </span>
           }
         >
-          <span data-slot="comment-card-v2-quote">{quoteLabel()}</span>
+          <span data-slot="comment-card-v2-quote">
+            <span data-slot="comment-card-v2-quote-prefix">{props.quotePrefix ?? ""}</span>
+            {quoteLabel()}
+          </span>
         </Show>
         {/* FORK-END */}
       </AttachmentCardV2>

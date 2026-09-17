@@ -1106,6 +1106,11 @@ function UserMessageComments(props: { comments: UserMessageComment[]; bounded: b
             title={comment.preview ?? comment.comment}
             preview={comment.preview}
             kind={comment.kind}
+            // FORK: 键住在 app 的字典里。session-ui 的 UiI18nKey 类型绑的是上游 packages/ui 的 en
+            //   字典(黑名单,不能加键),但运行时 app.tsx 把**自己合并后的 t** 喂给了 I18nProvider,
+            //   所以这个键在运行时查得到。类型窄、运行时宽,故此处显式 cast 并留证。
+            //   [feat: release-closeout-2026-09] 2026-09-17
+            quotePrefix={i18n.t("prompt.context.quotePrefix" as Parameters<typeof i18n.t>[0])}
             tooltip
             wide
           />

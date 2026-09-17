@@ -1216,6 +1216,21 @@ export function MessageTimeline(props: {
     )
   }
 
+  // FORK: 引用卡片的 hover 全文 —— 主视觉让给引文本身,溯源信息(文件名:行范围)退到原生 title。
+  //   用原生 title 而非 Tooltip 组件:CommentStrip 行在虚拟列表里,挂组件级 tooltip 会多出一层
+  //   随滚动重算的开销,而这里只需要"悬停看全文"。 [feat: release-closeout-2026-09] 2026-09-17
+  const quoteHover = (comment: MessageComment.MessageComment) => {
+    const parts: string[] = []
+    if (comment.preview?.trim()) parts.push(language.t("prompt.context.quotePrefix") + comment.preview.trim())
+    const isChat = comment.kind === "chat" || isChatSelectionPath(comment.path)
+    if (!isChat) {
+      const sel = comment.selection
+      const range = sel ? (sel.startLine === sel.endLine ? `:${sel.startLine}` : `:${sel.startLine}-${sel.endLine}`) : ""
+      parts.push(getFilename(comment.path) + range)
+    }
+    return parts.join("\n\n") || undefined
+  }
+
   const renderTimelineRow = (row: Accessor<TimelineRow.TimelineRow>, onSizeChange?: () => void) => {
     switch (row()._tag) {
       case "TurnGap":
@@ -1246,15 +1261,26 @@ export function MessageTimeline(props: {
                             下面一行又是占位注释 "(see selected text)" —— user 2026-09-17 真机截图反馈
                             「提交之后看不出来提交的是什么内容」。标签实现与 CommentCardV2 共用 core 里的
                             commentQuoteLabel,避免两条路径再次各写各的。 */}
-                        <div class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong">
+                        {/* FORK: user 2026-09-17 反馈「在引用内容前增加引用标记」——
+                            统一成 [图标] 引用:<引文首行>,聊天引用用气泡图标、文件引用用文件图标。
+                            识别度的关键是**引文本身**,所以它占第一行;文件名:行范围退到原生 title
+                            (hover 可见),不再挤占主视觉。无引文的老消息回落原来的文件名显示。 */}
+                        <div
+                          class="flex items-center gap-1.5 min-w-0 text-11-medium text-text-strong"
+                          title={quoteHover(comment())}
+                        >
                           <Show
                             when={comment().kind === "chat" || isChatSelectionPath(comment().path)}
                             fallback={
+                              <FileIcon node={{ path: comment().path, type: "file" }} class="size-3.5 shrink-0" />
+                            }
+                          >
+                            <Icon name="bubble-5" class="size-3.5 shrink-0 text-text-weak" />
+                          </Show>
+                          <Show
+                            when={commentQuoteLabel(comment().preview)}
+                            fallback={
                               <>
-                                <FileIcon
-                                  node={{ path: comment().path, type: "file" }}
-                                  class="size-3.5 shrink-0"
-                                />
                                 <span class="truncate">{getFilename(comment().path)}</span>
                                 <Show when={comment().selection}>
                                   {(selection) => (
@@ -1268,9 +1294,12 @@ export function MessageTimeline(props: {
                               </>
                             }
                           >
-                            <span class="truncate" data-slot="comment-strip-quote">
-                              {commentQuoteLabel(comment().preview) ?? "引用对话"}
-                            </span>
+                            {(label) => (
+                              <span class="truncate" data-slot="comment-strip-quote">
+                                <span class="text-text-weak">{language.t("prompt.context.quotePrefix")}</span>
+                                {label()}
+                              </span>
+                            )}
                           </Show>
                         </div>
                         <Show when={!isBlankComment(comment().comment)}>
