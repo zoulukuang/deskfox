@@ -69,7 +69,18 @@ export function SortableTab(props: {
       <div
         class="relative"
         on:pointerdown={{ handleEvent: () => props.onTabPress?.(props.tab), capture: true }}
-        onClick={() => props.onTabClick?.(props.tab)}
+        onClick={(event) => {
+          // FORK: REQ-130 —— × 在 DOM 上是本 wrapper 的后代(tabs.tsx 把 close button 渲染成
+          //   Kobalte.Trigger 的兄弟、同在 tabs-trigger-wrapper 内),点它必然冒泡到这里。
+          //   出事时序:pointerdown 快照 activeTabAtPress=本 tab → × 的 onClick 关掉该 tab →
+          //   click 冒到 wrapper → decideTabCollapse 三条件全真 → reviewPanel.close(),
+          //   于是"关掉一个标签"变成"整个预览区收起"。× 本来就不是"点 tab",命中即 return。
+          //   两条既有判据正好当回归锚:关**非激活** tab 本来就不收(activeAtPress≠tab),
+          //   ⌘W 不经 click 故本来就不受影响 —— 修完三者行为一致。
+          //   [feat: release-closeout-2026-09] 2026-09-17
+          if ((event.target as Element | null)?.closest?.('[data-slot="tabs-trigger-close-button"]')) return
+          props.onTabClick?.(props.tab)
+        }}
       >
         <Tabs.Trigger
           value={props.tab}

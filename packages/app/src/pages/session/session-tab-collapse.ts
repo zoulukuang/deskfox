@@ -31,7 +31,19 @@ export function decideTabCollapse(input: {
   isTemporary: boolean
   /** 是否是真实文件 tab(review / context 等非文件 tab 不参与) */
   isFileTab: boolean
+  /**
+   * FORK: REQ-130 兜底 —— click 时该 tab 是否还在。
+   *
+   * 点 × 的时序是「× 先把 tab 关掉 → click 再冒泡上来」,所以冒上来时那个 tab 其实已经不存在了。
+   * 「点一个已经不存在的 tab」本身就不该触发任何收起判定。
+   *
+   * 主修法在 session-sortable-tab{,-v2}.tsx(wrapper onClick 认出 × 就 return),那是 DOM 层、
+   * 只能 e2e 验;这条是纯逻辑兜底,可单测,且对"× 之外任何把 tab 关掉后仍冒出 click"的路径同样有效。
+   * 省略时按 true 处理,老调用方行为不变。
+   */
+  tabStillExists?: boolean
 }): TabCollapseDecision {
+  if (input.tabStillExists === false) return "ignore"
   if (!input.isFileTab) return "ignore"
   if (!input.viewerOpen) return "ignore"
   if (input.activeAtPress !== input.tab) return "ignore"
