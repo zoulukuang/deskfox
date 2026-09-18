@@ -314,27 +314,58 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   //
   // 竞态护栏见 session.optimistic.pending():刚发出、后端还没登记的会话不参与清理。
   const reconcileSessionStatuses = async () => {
-    const remote = await (async () => {
-      if ((await serverSDK.protocol) === "v1") {
-        const statuses = (await serverSDK.client.session.status()).data ?? {}
-        return Object.fromEntries(
-          Object.entries(statuses).map(([sessionID, status]) => [sessionID, status?.type !== "idle"]),
-        )
-      }
-      const active = await serverSDK.api.session.active()
-      return Object.fromEntries(Object.keys(active).map((sessionID) => [sessionID, true]))
-    })()
+    // 🔴 2026-09-18 修正:status 表是**按目录**的(证据链见 stale-busy.ts 头部),
+    //   必须按目录逐个查、且只在查过的目录内下结论。
+    //
+    // 目录集合取**并集**,两个方向各需要一半 —— 只取其一都会悄悄削弱另一个方向:
+    //   ① 本地 busy 会话所属的目录 —— busy→idle 方向需要。从会话自身推导,所以
+    //      **evict 过的目录照样覆盖得到**(那正是 REQ-100 的原始病灶),不依赖 child store。
+    //   ② 当前已打开的目录(children.children,含根目录)—— idle→busy 方向需要。后端在忙、本地却不忙的
+    //      会话,其所在目录本地**没有任何 busy**,只靠 ① 永远发现不了它。
+    const directories = new Set<string>()
+    for (const [sessionID, status] of Object.entries(session.data.session_status)) {
+      if (status?.type !== "busy") continue
+      const directory = session.get(sessionID)?.directory
+      if (directory) directories.add(directory)
+    }
+    for (const directory of Object.keys(children.children)) directories.add(directory)
+    if (directories.size === 0) return
+
+    const remote: Record<string, boolean> = {}
+    const covered = new Set<string>()
+
+    await Promise.all(
+      [...directories].map(async (directory) => {
+        try {
+          // 目录由 sdkFor(directory) 建出来的 client 自身携带,不另传参 ——
+          // 与 bootstrap.ts:395 既有的 `input.sdk.session.status()` 同一写法,两种协议通用。
+          const statuses = (await sdkFor(directory).session.status()).data ?? {}
+          for (const [sessionID, status] of Object.entries(statuses)) {
+            if (status?.type !== "idle") remote[sessionID] = true
+          }
+          // 只有**查成功**的目录才进覆盖集:查失败时宁可不动,也不能误判成空闲
+          covered.add(directory)
+        } catch {
+          // 单个目录查不动(后端半死 / 目录已不可服务)不影响其他目录,本轮跳过它
+        }
+      }),
+    )
 
     const args = {
       local: session.data.session_status,
       remote,
       pending: (sessionID: string) => session.optimistic.pending(sessionID),
+      directoryOf: (sessionID: string) => session.get(sessionID)?.directory,
+      coveredDirectories: covered,
     }
     const stale = collectStaleBusySessions(args)
     for (const sessionID of stale) session.set("session_status", sessionID, { type: "idle" })
     // FORK 2026-09-18:**双向**对账。只清不补的话,任何把本地错误写成 idle 的路径都永久无解 ——
     //   REQ-100 ① 停止键 4s 兜底就是这样一条(它的注释还写着「对账会把真实状态盖回来」,
     //   而当时对账根本没有这个方向)。后端那张表是权威,既然拿到了就两个方向都覆盖。
+    //   反向不需要 coveredDirectories 守卫:remote 里的条目**本来就只来自查成功的目录**,
+    //   是"后端明确说它在忙"的正面证据;而正向清理是从本地表反推"后端没说它忙",
+    //   缺席既可能是真 idle、也可能是这个目录压根没查 —— 那才需要守卫。
     const missing = collectMissingBusySessions(args)
     for (const sessionID of missing) session.set("session_status", sessionID, { type: "busy" })
   }

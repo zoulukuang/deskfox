@@ -189,6 +189,11 @@ if ($opencodeVersion -like '0.0.0*') {
     throw "[deskfox]   $opencodePkgJson 的 .version 不该是 0.0.0-*;先查上游同步是否出错。"
 }
 $env:OPENCODE_VERSION = $opencodeVersion
+# FORK 2026-09-18:.ps1 按路径调用是在**调用方会话内**执行(不是子进程),$env: 赋值会留在
+#   操作者的 shell 里。上面注释承诺的「只在本脚本进程内设」在 Windows 上并不成立 ——
+#   同会话后续任何调 finalize-latest-{yml,json}.ts 的流程都会静默拿到上游基线号而非日历号。
+#   故注册退出时清理(trap 覆盖 throw 路径)。Bash 侧 export 在子 shell,无此问题。
+trap { Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue }
 Write-Host "[deskfox] REQ-132: 注入 OPENCODE_VERSION=$opencodeVersion(上游基线;与 DeskFox 日历号是两条独立号线)"
 # FORK-END
 if (-not $env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/" }
