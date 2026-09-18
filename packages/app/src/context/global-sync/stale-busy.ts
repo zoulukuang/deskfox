@@ -83,16 +83,41 @@ export function collectStaleBusySessions(input: StaleBusyInput): string[] {
  *  `session.tsx` 的 `queueEnabled` 读同一个 store 判为不忙 → 用户下一条消息**绕过队列直接 prompt**,
  *  与仍在运行的那一轮并发。]
  *
- * 两条不恢复的情形:
- *   ① 本地已经是 busy —— 没什么可恢复
+ * 🔴 2026-09-18 第三轮 code-review 修正 —— 首版这两道守卫都不够:
+ *
+ *   (a) 只跳过 `type === "busy"`,于是把 **retry** 也当成「本地不忙」补成 busy。
+ *       `SessionStatus` 是三态,`retry` 还带 `attempt` / `message` / `action` / `next` 负载,
+ *       被倒计时横幅、配额超限升级 CTA、时间线 retry 行消费;调用方是 `{type:"busy"}` **整体覆盖**,
+ *       一补就把负载抹光 → 限流提示与升级入口当场消失,退化成普通转圈。
+ *       退避常达数分钟而对账 60 秒一轮 —— 几乎必中。
+ *       改为判「本地已非 idle」:语义是「本地已经显示它在动」,**不枚举具体状态**,
+ *       将来新增第四态自动受保护。`seedActiveSessionStatuses` 早有同款不变量
+ *       (跳过一切已定义的键),这里补齐到同一水位。
+ *
+ *   (b) 对**前端不认识**的会话(CLI 起的 / 子 agent 的 / 尚未加载 info)也照补 busy,
+ *       而正向清理第一道守卫就是 `if (!directory) continue` —— 正向永远够不着它。
+ *       后端转 idle 后这条 busy 再也清不掉,还因非 idle 被 `server-session.ts` 的 LRU
+ *       `preserve` 永久钉住:**反向方向自己造出了 REQ-100 要消灭的那种幻影 busy**。
+ *       改为要求 `directoryOf` 能定位 —— 两个方向的可达性必须对称:
+ *       **凡是补得进来的,就必须清得掉**。不认识的会话本来也不渲染在任何界面上,补了无收益、只有风险。
+ *
+ * 三条不恢复的情形:
+ *   ① 本地已经不是 idle —— 已经在显示"它在动"了,别拿粗状态去覆盖细状态
  *   ② 有未确认的乐观消息 —— 与上面同一道竞态护栏,该会话状态正在飞,别插手
+ *   ③ 查不出它属于哪个目录 —— 补进来就再也清不掉(见上 (b))
+ *
+ * 注:这里**不**需要 `coveredDirectories` 守卫,那是正向专属的。
+ * `remote` 条目本就只来自查成功的目录,「后端说它忙」是正面证据;
+ * 正向是从本地表反推「后端没说它忙」,缺席才存在「没查过」的歧义。
  */
 export function collectMissingBusySessions(input: StaleBusyInput): string[] {
   const missing: string[] = []
   for (const [sessionID, isBusy] of Object.entries(input.remote)) {
     if (!isBusy) continue
-    if (input.local[sessionID]?.type === "busy") continue
+    const local = input.local[sessionID]?.type
+    if (local && local !== "idle") continue
     if (input.pending(sessionID)) continue
+    if (!input.directoryOf(sessionID)) continue
     missing.push(sessionID)
   }
   return missing

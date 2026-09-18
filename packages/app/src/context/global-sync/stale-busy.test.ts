@@ -169,19 +169,35 @@ describe("collectMissingBusySessions —— 后端忙但本地不忙,要补回 b
     expect(collectMissingBusySessions(args())).toEqual([])
   })
 
-  test("🔴 反向不需要目录守卫 —— remote 条目本就只来自查成功的目录,是正面证据", () => {
-    // 「后端说它忙」是正面证据,不像「后端没说它忙」那样存在「没查过」的歧义。
-    // 所以即便 coveredDirectories 为空、directoryOf 未知,也照补不误。
+  // [bug-repro: 反向对账给**前端根本不认识**的会话(CLI 起的 / 子 agent 的 / 尚未加载 info 的)写 busy,
+  //  而正向清理的第一道守卫就是 `if (!directory) continue` —— 同一个会话正向永远够不着它。
+  //  后端转 idle 后这条 busy 再也清不掉,且因非 idle 被 server-session.ts:277 的 LRU `preserve`
+  //  永久钉住。即反向方向能**自造出** REQ-100 要消灭的那种幻影 busy。]
+  test("🔴 查不出所属目录的会话不补 —— 否则造出正向永远清不掉的幻影 busy", () => {
     expect(
       collectMissingBusySessions(
         args({
           local: { ses_a: { type: "idle" } },
           remote: { ses_a: true },
           directoryOf: () => undefined,
-          coveredDirectories: new Set<string>(),
         }),
       ),
-    ).toEqual(["ses_a"])
+    ).toEqual([])
+  })
+
+  test("🔴 补进来的会话下一轮正向必须够得着 —— 两个方向的可达性必须对称", () => {
+    // 反证式断言:凡是反向补过的,后端转 idle 后正向都必须能把它清掉。
+    const base = args({
+      local: { ses_a: { type: "idle" }, ses_b: { type: "idle" } },
+      remote: { ses_a: true, ses_b: true },
+    })
+    const directoryOf = (id: string) => (id === "ses_a" ? DIR_A : undefined)
+    const missing = collectMissingBusySessions({ ...base, directoryOf })
+    expect(missing).toEqual(["ses_a"])
+    // 模拟下一轮:补过的都置 busy,后端已转 idle(remote 空)
+    const local = Object.fromEntries(missing.map((id) => [id, { type: "busy" as const }]))
+    const stale = collectStaleBusySessions({ ...base, local, remote: {}, directoryOf })
+    expect(stale.sort()).toEqual([...missing].sort())
   })
 
   test("🔴 没有会话会同时落进两个方向(否则每轮对账都来回翻转)", () => {
@@ -191,5 +207,33 @@ describe("collectMissingBusySessions —— 后端忙但本地不忙,要补回 b
     })
     const stale = new Set(collectStaleBusySessions(input))
     for (const id of collectMissingBusySessions(input)) expect(stale.has(id)).toBe(false)
+  })
+})
+
+// [bug-repro: SessionStatus 是三态(idle / retry / busy),`retry` 带 attempt/message/action/next 负载,
+//  被 session-retry.tsx(倒计时横幅)、usage-exceeded-dialogs.tsx(配额超限升级 CTA)、
+//  timeline/rows.ts(时间线 retry 行)消费。collectMissingBusySessions 首版只跳过 `type === "busy"`,
+//  于是本地 retry + 后端非 idle 时它进 missing,server-sync.tsx 用 `{type:"busy"}` **整体覆盖** →
+//  横幅 / 弹窗 / retry 行全部消失,退化成普通转圈。retry 退避常是几分钟而对账 60 秒一轮,几乎必中。
+//  此前 100+ 条测试全绿没拦住:一条 retry 用例都没有。
+//  注:`seedActiveSessionStatuses` 早有同款不变量(server-sync.test.ts 的
+//  「does not overwrite statuses already written by events」),反向对账绕过了它。]
+describe("collectMissingBusySessions —— 不得碾掉 retry 等非 idle 的富状态", () => {
+  test("🔴 本地 retry + 后端非 idle → 不补(补了就把 attempt/action 负载抹掉)", () => {
+    expect(collectMissingBusySessions(args({ local: { ses_a: { type: "retry" } }, remote: { ses_a: true } }))).toEqual(
+      [],
+    )
+  })
+
+  test("🔴 判据是「本地已非 idle」而非「本地已 busy」—— 将来新增状态自动受保护", () => {
+    // 钉死语义而不是枚举当前三态:再加第四态时不必回来改这里,也不会重演本次。
+    for (const type of ["busy", "retry", "queued", "paused"]) {
+      expect(collectMissingBusySessions(args({ local: { s: { type } }, remote: { s: true } }))).toEqual([])
+    }
+  })
+
+  test("本地 idle / 缺席 → 仍然要补(别把守卫收得连正事都不干了)", () => {
+    expect(collectMissingBusySessions(args({ local: { a: { type: "idle" } }, remote: { a: true } }))).toEqual(["a"])
+    expect(collectMissingBusySessions(args({ remote: { b: true } }))).toEqual(["b"])
   })
 })
