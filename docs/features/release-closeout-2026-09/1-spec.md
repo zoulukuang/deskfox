@@ -40,7 +40,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | # | 题目 | 备选 | 结论 | 影响哪组 |
 |---|---|---|---|---|
 | **D-D** | REQ-125 会话标题改哪一侧 | (A) 服务端 `ensureTitle` 剥壳 / (A′) 客户端 rename / (B) 改模板 / (C) 改 title.txt | ✅ **(A),2026-09-17 user 拍板**。user 已知悉并接受其代价:**需 1 笔 R4 override**(`prompt.ts` 在黑名单)。<br>另一项代价「跨包正则重复」**已在施工方案里消除** —— `@opencode-ai/core` 是 `packages/app` 与 `packages/opencode` 的**共同 workspace 依赖**,把模板 + parser 提成 fork 自建文件 `packages/core/src/fork/comment-note.ts` 作单一真源,两边 import 同一份,无副本、无手工同步。该新文件享 pre-commit 的 fork 自建豁免(`upstream-base` tag 在),**不额外增加 override 笔数** | S4.4 |
-| **D-E** | REQ-100 ④ 的「失败」怎么判定 | (a) AbortController + N 秒超时 / (b) 等服务端回声 / (c) 两者都做 | ✅ **(a),N=20s,2026-09-17 user 拍板**。真机证据链里那条消息服务端三处皆无(`message`/`session_input`/日志),说明请求打进半死后端后**既不 resolve 也不 reject**(挂住)。(a) 直接消灭「挂住」这一态,且 abort 保证不会「回吐后请求又迟到落地」造成双份 | S2.2 |
+| **D-E** | REQ-100 ④ 的「失败」怎么判定 | (a) AbortController + N 秒超时 / (b) 等服务端回声 / (c) 两者都做 | ✅ **(a),2026-09-17 user 拍板**(N **初定 20s,2026-09-18 放宽到 120s**,见文末「签核后的修订」)。真机证据链里那条消息服务端三处皆无(`message`/`session_input`/日志),说明请求打进半死后端后**既不 resolve 也不 reject**(挂住)。(a) 直接消灭「挂住」这一态,且 abort 保证不会「回吐后请求又迟到落地」造成双份 | S2.2 |
 
 > D-A/D-B/D-C 已于 2026-09-17 拍板。**D-D/D-E 同日拍完,五题全定,可直接开工。**
 
@@ -79,7 +79,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | 项 | 内容 | 落点 |
 |---|---|---|
 | S2.1 | ③ 重连对账不再只覆盖 active 目录:`if (!children.active(directory)) continue` 这道闸删除 / 改为「后端权威全量忙闲表」。**倾向**:保留按目录遍历但去掉 active 闸(改动最小、可单测);若 `session.status()` 支持不带目录的全量查询则优先改成一次全量 | `packages/app/src/context/server-sync.tsx:580` |
-| S2.2 | ④ **让失败可判**(D-E(a)):给 `sendFollowupDraft` 内的 `input.api.prompt(...)` 套 `AbortController` + 20s 超时。超时 → abort 请求 → reject → **走已有的** `submit.ts:654` catch(toast + 撤乐观消息 + 回吐 + busy 归 idle)。三动作原子性由现成的 `batch()` / 单一 catch 块保证,不需新造 | `packages/app/src/components/prompt-input/submit.ts`(`sendFollowupDraft` 内) |
+| S2.2 | ④ **让失败可判**(D-E(a)):给 `sendFollowupDraft` 内的 `input.api.prompt(...)` 套 `AbortController` + 送达超时(初定 20s → 现 120s)。超时 → abort 请求 → reject → **走已有的** `submit.ts:654` catch(toast + 撤乐观消息 + 回吐 + busy 归 idle)。三动作原子性由现成的 `batch()` / 单一 catch 块保证,不需新造 | `packages/app/src/components/prompt-input/submit.ts`(`sendFollowupDraft` 内) |
 | S2.2b | **回吐保真缺口**(C-3):`restoreCommentItems()` 补 `kind: item.kind`,`CommentItem` 类型已有该字段(`submit.ts:346`),仅 `target.context.add({...})` 漏传 | `submit.ts:307-322` |
 | S2.2c | **回吐失败的静默分支**:`if (restoreInput()) restoreCommentItems(...)` —— 用户在失败前已另起输入时 `restoreInput()` 返回 false,**引用卡片就地丢失且无提示**。补:false 分支下 toast 文案改为「这条没发出去,输入框已有新内容故未覆盖」并把原文写入剪贴板 / 或仍追加引用卡片。**取最小方案:toast 文案分流 + 引用卡片照常 restore**(卡片是追加语义,不覆盖正文) | 同上 |
 | S2.2d | toast 文案按 D-C 语义重写:现文案是 `prompt.toast.promptSendFailed`(通用「发送失败」)。改成明确的「**这条没发出去,已放回输入框**」+ 原因。需同时改 zh/en 词条 | `packages/app/src/**/i18n` 词条 |
@@ -143,7 +143,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | T7 | `ensureTitle` 剥壳:文件引用模板 / 聊天引用模板 / 中文 comment / 非模板普通消息(不该被剥) | unit(`packages/opencode`) | 前三种送进模型的是用户原话 + 文件名;第四种原样透传 |
 | T7b | **模板↔parser 对偶契约**:`parseCommentNote(formatCommentNote(x))` 往返等价(file / chat 两种 kind × 有无 selection × 有无 preview) | unit(`packages/core`) | 全部往返还原。**这条是单一真源的保命闸** —— 谁改了模板忘了改正则,这里必红 |
 | T8 | `restoreCommentItems` 还原 `kind:"chat"` | unit | 还原后 item.kind==="chat" |
-| T9 | mock 不可达 sdk → `sendFollowupDraft` 20s 超时 | unit(假时钟) | reject + 乐观消息被 remove + status→idle |
+| T9 | mock 不可达 sdk → `sendFollowupDraft` 送达超时(单测注入 30ms) | unit | reject + 乐观消息被 remove + status→idle |
 | T10 | mock 已 evict 目录 → `server.connected` | unit | 该目录仍进对账队列 |
 | T11 | 工具折叠行:点右侧空白 / 点文字 / 点箭头 | e2e(app) | 空白不展开,文字与箭头展开 |
 | T12 | 点 × 关激活 tab | e2e(app) | 只关一个,预览区仍开,切到相邻 tab |
@@ -210,7 +210,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | **R2** | **`OPENCODE_VERSION` 污染 updater 清单**(新增,计划未列):`finalize-latest-{yml,json}.ts` 同名读该 env,要的却是日历号 | S1.5:已核构建脚本不调这两个;施工后加断言,env 只在构建脚本内部 export |
 | **R3** | 回吐时序不原子 → 时间线留一条 + 输入框又一条,用户重复发送 | 复用现成单一 catch + `batch()`;**abort 请求**保证不迟到落地;S6.4 专门看时间线残留 |
 | **R4** | S4a 三项改同一片 `MessageComment` 代码,回归面叠加 | S4a 一笔改完,preview/kind/tooltip 三处不许分两次;S4b(标题)与之零文件交集,单独成笔以隔离 override |
-| **R5** | **超时阈值误伤慢后端**(新增):20s 对正常但慢的后端可能误判 | 只对**未 resolve 的 HTTP 请求**计时(不是对模型回答计时);发版前用弱网 + 大附件各验一次;阈值做成常量便于调 |
+| **R5** | **超时阈值误伤慢后端**(新增):阈值过短对正常但慢的后端会误判(20s 实测偏短,已调 120s) | 只对**未 resolve 的 HTTP 请求**计时(不是对模型回答计时);发版前用弱网 + 大附件各验一次;阈值做成常量便于调 |
 | **R6** | `packages/session-ui` 不在 pre-push 闸 → 本批主力改动的测试写了不跑 | §5.1 手工跑 + 同批补进 pre-push(独立 `chore` commit) |
 | **R7** | 发版本身的风险(签名 / 公证 / 更新源 / 两平台产物) | 走 `/ship` 既有 SOP,本方案不重新发明;发版前按既定信号制查上游 schema 漂移 |
 | **R8** | **模板真源迁移**(S4.4 ①)动到 `formatCommentNote`,而它的输出是**送给主模型的正文** —— 迁移时哪怕差一个空格,都会改变 LLM 收到的文案;`createCommentMetadata` 还被 REQ-123 撤回回填依赖 | 迁移必须**逐字节等价**(纯移动,不顺手改写);T7b 往返契约测试 + 迁移前后各跑一次 `bun test` 对齐;**回归锚**:REQ-123 撤回回填真机复验一次 |
@@ -227,3 +227,18 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 6. **REQ-132 doc 路径订正**(B-1)照旧回填。
 7. **S2.1 选了「后端权威全量表」而非「删 active 闸」**:读码发现第二层根因 —— `seedActiveSessionStatuses` 只填本地缺失条目、不清残留 busy,它是 seed 不是 reconcile。详见 2-plan D6。
 8. **三次「读码觉得对、跑起来不对」**:S1 的 `0.0.0-*` 是合法 semver / S2 的 abort 传不到 fetch / S5 的 pointer-events 漏网。均由测试当场抓出,见 2-plan D2、D5、D9。
+
+---
+
+## 签核后的修订(spec 锁版后只补不改,此处逐条留痕)
+
+| 日期 | 改了什么 | 为什么 | 出处 |
+|---|---|---|---|
+| 2026-09-18 | **D-E 的 N:20s → 120s** | 20s 误报的是"服务端其实已 admit、只是回包慢"这一类,而误报的代价是用户重发出重复的一轮。两分钟静默几乎只可能是后端真卡死。注:这是**压低误报概率**,不是消除 —— 消除要等 REQ-135 的幂等准入 | commit `422de83515` · user 拍板 |
+| 2026-09-18 | S2.2 的落点从「只 abort」改为 **abort + 独立 deadline race** | 只 abort 不够:`api.prompt` 经 `lazyApi` 包在 `protocol.then(...)` 里,后端不可达时协议探测本身就挂住,abort 传不到 fetch | commit `9a7c35e18c` |
+| 2026-09-18 | 送达超时的覆盖面从 1 条路径扩到 **3 条**(prompt / followup-command / 主 /command) | 第三轮 code-review 查出 commit message 声称的"三处同待遇"实际只落了一处;主 `/command` 路径仍是裸 `.catch`,后端半死时斜杠命令连同附件直接蒸发 | 见 3-changelog 第三轮 |
+| 2026-09-18 | REQ-100 ②③ 的对账改为 **按目录 + 双向**,并保留 **v1/v2 协议分流** | 后端 `SessionStatus` 按 directory 分桶(非全局表);且只清不补时任何把本地写成 idle 的路径都永久无解 | 见 3-changelog 第二 / 三轮 |
+
+⚠️ **验收证据的口径提醒**:S6.4 那条「冻结后端 18s 回吐」是在 **20s 闸**下取得的。
+阈值改 120s 后**未复表**同场景 —— 现在的预期行为是「冻结后约 2 分钟回吐」。
+下次真机回归时按新阈值重新取证,别照抄 18s 那个数。
