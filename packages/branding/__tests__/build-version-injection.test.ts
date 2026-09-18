@@ -243,3 +243,36 @@ describe.if(IS_WIN)("REQ-132 · 版本号注入(Win wrapper 真代码,仅 Window
     expect(r.all).toContain("REQ-132")
   })
 })
+
+// [bug-repro: 给 .ps1 加 `trap { Remove-Item Env:OPENCODE_VERSION }`(无 break)后,PowerShell 的
+//  trap 默认「跑完处理器继续往下执行」,两道 fail-fast 的 throw 被它吞掉、执行流直落到
+//  `$env:OPENCODE_VERSION = $opencodeVersion` —— Win 实测 6 种坏值全部 exit=0,
+//  且 `0.0.0-prod-202608190542` / `latest` 被真的注入,REQ-132 整道防线反向失效]
+// 2026-09-18 · Win 端实测抓出并修复(`55f26ca483`),本组是它的**跨平台**防回归闸。
+//
+// 为什么还要这一组:抓到它的是 Win 专属的真执行组(describe.if(win32)),那组在 mac 上整体跳过。
+// 也就是说在 mac 上把 break 删掉,本地全绿,要等推到 Win 才炸 —— 而这个脚本的改动
+// 十有八九是在 mac 上发生的(本批那个 trap 就是)。故补一条纯文本断言,两端都跑。
+describe("REQ-132 · PS1 trap 必须带 break(否则 fail-fast 被吞)", () => {
+  test("🔒 trap 处理器以 break 结尾 —— 清理后把终止性错误继续抛出去", () => {
+    const trapLine = PS1.split("\n").find((line) => line.trim().startsWith("trap {"))
+    expect(trapLine).toBeDefined()
+    expect(trapLine).toMatch(/Remove-Item\s+Env:OPENCODE_VERSION/)
+    expect(trapLine).toMatch(/;\s*break\s*\}/)
+  })
+
+  test("🔒 正常路径另有显式清理 —— trap 在脚本正常结束时根本不触发", () => {
+    // Win 实测:CASE-A normal-exit => LEAKED / CASE-B throw => cleaned。
+    // 而构建**成功**恰恰是最常见的路径,只靠 trap 等于没清。
+    const tail = PS1.slice(PS1.lastIndexOf("FORK-END"))
+    expect(tail).toMatch(/Remove-Item\s+Env:OPENCODE_VERSION/)
+  })
+
+  test("🔒 两道 fail-fast 仍在 —— break 是为了让它们生效,不是替代它们", () => {
+    const begin = PS1.indexOf(`# FORK-BEGIN: ${MARKER}`)
+    const end = PS1.indexOf("# FORK-END", begin)
+    const block = PS1.slice(begin, end)
+    expect(block).toContain("throw")
+    expect(block).toMatch(/0\.0\.0\*/)
+  })
+})
