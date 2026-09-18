@@ -15,6 +15,7 @@ import {
   normalizePromptHistoryEntry,
   promptLength,
   type PromptHistoryComment,
+  contextItemsToHistoryComments,
 } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
@@ -174,42 +175,17 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       language.t(key as Parameters<typeof language.t>[0], params as never),
     )
 
-  const historyComments = () => {
-    const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
-    return prompt.context.items().flatMap((item) => {
-      const comment = item.comment?.trim()
-      if (!comment) return []
-      const selection = item.commentID ? byID.get(`${item.path}\n${item.commentID}`)?.selection : undefined
-      const nextSelection =
-        selection ??
-        (item.selection
-          ? ({ start: item.selection.startLine, end: item.selection.endLine } satisfies SelectedLineRange)
-          : undefined)
-      if (!nextSelection) return []
-      return [
-        {
-          id: item.commentID ?? item.key,
-          path: item.path,
-          selection: { ...nextSelection },
-          comment,
-          time: item.commentID ? (byID.get(`${item.path}\n${item.commentID}`)?.time ?? Date.now()) : Date.now(),
-          origin: item.commentOrigin,
-          preview: item.preview,
-          // FORK: REQ-123 — 与 legacy composer 同步:历史找回的聊天引用不退化成文件卡片 2026-08-19
-          kind: item.kind,
-        } satisfies PromptHistoryComment,
-      ]
-    })
-  }
+  // FORK 2026-09-18:与 legacy composer 共用同一份产出实现(见 history.ts)
+  const historyComments = () =>
+    contextItemsToHistoryComments({ items: prompt.context.items(), comments: comments.all() })
+
   const restoreHistoryComments = (items: PromptHistoryComment[]) => {
     comments.replace(
-      items.map((item) => ({
-        id: item.id,
-        file: item.path,
-        selection: { ...item.selection },
-        comment: item.comment,
-        time: item.time,
-      })),
+      items.flatMap((item) =>
+        item.selection && item.comment
+          ? [{ id: item.id, file: item.path, selection: { ...item.selection }, comment: item.comment, time: item.time }]
+          : [],
+      ),
     )
     // FORK: REQ-123 — 映射收口到 history.ts(与 legacy composer 共用一份)2026-08-19
     prompt.context.replaceComments(items.map(historyCommentToContextItem))

@@ -65,6 +65,7 @@ import {
   type PromptHistoryComment,
   type PromptHistoryEntry,
   type PromptHistoryStoredEntry,
+  contextItemsToHistoryComments,
   promptLength,
 } from "./prompt-input/history"
 import { createPromptSubmit, type FollowupDraft } from "./prompt-input/submit"
@@ -453,49 +454,28 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     })
   })
 
-  const historyComments = () => {
-    const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
-    return prompt.context.items().flatMap((item) => {
-      if (item.type !== "file") return []
-      const comment = item.comment?.trim()
-      if (!comment) return []
-
-      const selection = item.commentID ? byID.get(`${item.path}\n${item.commentID}`)?.selection : undefined
-      const nextSelection =
-        selection ??
-        (item.selection
-          ? ({
-              start: item.selection.startLine,
-              end: item.selection.endLine,
-            } satisfies SelectedLineRange)
-          : undefined)
-      if (!nextSelection) return []
-
-      return [
-        {
-          id: item.commentID ?? item.key,
-          path: item.path,
-          selection: { ...nextSelection },
-          comment,
-          time: item.commentID ? (byID.get(`${item.path}\n${item.commentID}`)?.time ?? Date.now()) : Date.now(),
-          origin: item.commentOrigin,
-          preview: item.preview,
-          // FORK: REQ-123 — 带上 kind,历史找回的聊天引用不退化成文件卡片 2026-08-19
-          kind: item.kind,
-        } satisfies PromptHistoryComment,
-      ]
-    })
-  }
+  // FORK 2026-09-18:产出侧与 `replaceComments` 的移除侧必须同源(见 history.ts 的说明),
+  //   且与 v2 composer 共用同一份实现 —— 此前两边各抄一份,正是 REQ-123 漏 kind 的同款结构。
+  const historyComments = () =>
+    contextItemsToHistoryComments({ items: prompt.context.items(), comments: comments.all() })
 
   const applyHistoryComments = (items: PromptHistoryComment[]) => {
     comments.replace(
-      items.map((item) => ({
-        id: item.id,
-        file: item.path,
-        selection: { ...item.selection },
-        comment: item.comment,
-        time: item.time,
-      })),
+      // 批注 store 只收「有选区且有注释」的;无选区的附件卡 / 无注释的引用卡不属于它,
+      // 但它们仍会经下面的 replaceComments 原样回到输入框 —— 这正是本次要保住的那部分。
+      items.flatMap((item) =>
+        item.selection && item.comment
+          ? [
+              {
+                id: item.id,
+                file: item.path,
+                selection: { ...item.selection },
+                comment: item.comment,
+                time: item.time,
+              },
+            ]
+          : [],
+      ),
     )
     // FORK: REQ-123 — 映射收口到 history.ts(与 v2 composer 共用一份,kind 曾在两边同时漏)2026-08-19
     prompt.context.replaceComments(items.map(historyCommentToContextItem))

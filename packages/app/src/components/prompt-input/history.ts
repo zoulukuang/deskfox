@@ -8,8 +8,10 @@ export const MAX_HISTORY = 100
 export type PromptHistoryComment = {
   id: string
   path: string
-  selection: SelectedLineRange
-  comment: string
+  // FORK 2026-09-18:selection / comment 放开成可选 —— 见下面 contextItemsToHistoryComments 的说明。
+  //   无选区的附件卡、无注释的引用卡都必须能被历史快照**原样带回来**,否则上下键翻一次历史就丢。
+  selection?: SelectedLineRange
+  comment?: string
   time: number
   origin?: "review" | "file" | "quote"
   preview?: string
@@ -25,13 +27,57 @@ export function historyCommentToContextItem(item: PromptHistoryComment): FileCon
   return {
     type: "file",
     path: item.path,
-    selection: selectionFromLines(item.selection),
+    selection: item.selection ? selectionFromLines(item.selection) : undefined,
     comment: item.comment,
     commentID: item.id,
     commentOrigin: item.origin,
     preview: item.preview,
     kind: item.kind,
   }
+}
+
+/**
+ * 输入框里的引用/附件卡 → 历史快照条目。
+ *
+ * FORK 2026-09-18 第三轮 code-review:
+ * [bug-repro: `isCommentItem` 这批放宽成"只看 type === file",于是 `replaceComments` 的**移除侧**
+ *  会清掉全部 file 卡;而快照的**产出侧**仍要求 `comment?.trim()` 且必须有 selection,
+ *  于是无注释的选区卡、无选区的附件卡进不了快照 —— 上下键翻一次历史就被 replaceComments
+ *  清掉且再也回不来,全程无任何提示。]
+ *
+ * 不变量:**移除的集合 ⊆ 快照能表达的集合**。两侧判据必须同源,否则差集就是静默丢数据。
+ *
+ * 另:此函数原先在 legacy composer 与 v2 composer 里**各抄了一份**逐行等价的实现 ——
+ * 正是 REQ-123 当年 `kind` 在两边一起漏掉的同款结构。这次一并收口成一处纯函数(可单测)。
+ */
+export function contextItemsToHistoryComments(input: {
+  items: readonly (FileContextItem & { key: string })[]
+  comments: readonly { file: string; id: string; selection: SelectedLineRange; time: number }[]
+  now?: () => number
+}): PromptHistoryComment[] {
+  const now = input.now ?? Date.now
+  const byID = new Map(input.comments.map((item) => [`${item.file}\n${item.id}`, item] as const))
+  return input.items.flatMap((item) => {
+    if (item.type !== "file") return []
+    const stored = item.commentID ? byID.get(`${item.path}\n${item.commentID}`) : undefined
+    const selection =
+      stored?.selection ??
+      (item.selection ? ({ start: item.selection.startLine, end: item.selection.endLine } as SelectedLineRange) : undefined)
+    const comment = item.comment?.trim()
+    return [
+      {
+        id: item.commentID ?? item.key,
+        path: item.path,
+        selection: selection ? { ...selection } : undefined,
+        comment: comment || undefined,
+        time: stored?.time ?? now(),
+        origin: item.commentOrigin,
+        preview: item.preview,
+        // FORK: REQ-123 — 缺了它,历史找回的聊天引用会退化成文件卡片 2026-08-19
+        kind: item.kind,
+      } satisfies PromptHistoryComment,
+    ]
+  })
 }
 
 export type PromptHistoryEntry = {
@@ -74,7 +120,7 @@ function cloneSelection(selection: SelectedLineRange): SelectedLineRange {
 export function clonePromptHistoryComments(comments: PromptHistoryComment[]) {
   return comments.map((comment) => ({
     ...comment,
-    selection: cloneSelection(comment.selection),
+    selection: comment.selection ? cloneSelection(comment.selection) : undefined,
   }))
 }
 
@@ -137,7 +183,9 @@ export function prependHistoryEntry(
     .map((part) => ("content" in part ? part.content : ""))
     .join("")
     .trim()
-  const hasComments = comments.some((comment) => !!comment.comment.trim())
+  // FORK 2026-09-18:comment 现在可选(快照要能带回无注释的卡)。这里的语义**保持不变** ——
+  //   「有没有值得入历史的内容」仍按"有注释"算,不因为快照变宽而改变入历史的门槛。
+  const hasComments = comments.some((comment) => !!comment.comment?.trim())
   // FORK: REQ-087 历史不存图片 part → 纯图片 prompt 无可回填内容,不入历史
   //   [feat: renderer-snapshot-oom] 2026-08-02
   if (!text && !hasComments) return entries
@@ -158,10 +206,10 @@ function isCommentEqual(commentA: PromptHistoryComment, commentB: PromptHistoryC
     commentA.comment === commentB.comment &&
     commentA.origin === commentB.origin &&
     commentA.preview === commentB.preview &&
-    commentA.selection.start === commentB.selection.start &&
-    commentA.selection.end === commentB.selection.end &&
-    commentA.selection.side === commentB.selection.side &&
-    commentA.selection.endSide === commentB.selection.endSide
+    commentA.selection?.start === commentB.selection?.start &&
+    commentA.selection?.end === commentB.selection?.end &&
+    commentA.selection?.side === commentB.selection?.side &&
+    commentA.selection?.endSide === commentB.selection?.endSide
   )
 }
 
