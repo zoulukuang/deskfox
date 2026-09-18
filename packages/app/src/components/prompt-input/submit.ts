@@ -176,6 +176,11 @@ const draftText = (prompt: Prompt) => prompt.map((part) => ("content" in part ? 
 const draftImages = (prompt: Prompt) => prompt.filter((part): part is ImageAttachmentPart => part.type === "image")
 
 export async function sendFollowupDraft(input: FollowupSendInput) {
+  // FORK 2026-09-18 第三轮 review:这条路径同样是「新一轮发送」,必须撤掉上一轮「停止」留下的兜底。
+  //   [bug-repro: 点停止 → 4s 内队列排干 / 手动重发走到这里 → T+4s 旧定时器醒来把**这条正在跑的新消息**
+  //    打成 idle → queueEnabled 转假 → 下一条绕过队列与上一轮并发。]
+  //   首版只在 handleSubmit 里撤,followup / 队列这条路径原样保留了缺陷。
+  cancelStopFallback(input.draft.sessionID)
   const text = draftText(input.draft.prompt)
   const images = draftImages(input.draft.prompt)
   const setBusy = () => {
@@ -229,6 +234,7 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
           },
           { signal },
         ),
+        input.deliveryTimeoutMs,
       )
       return true
     } catch (err) {
@@ -283,12 +289,6 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
     add()
   })
 
-  // FORK: REQ-100 ④ —— 送达超时闸,详见文件头 PROMPT_DELIVERY_TIMEOUT_MS 处的说明
-  //   [feat: release-closeout-2026-09] 2026-09-17
-  const delivery = new AbortController()
-  let deliveryTimedOut = false
-  let deliveryTimer: ReturnType<typeof setTimeout> | undefined
-
   try {
     if (!(await wait())) {
       batch(() => {
@@ -298,22 +298,11 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
       return false
     }
 
-    // 两件事都要做,缺一不可:
-    //   · abort(delivery):掐断底层请求,保证它不会在回吐之后才落地造成双份
-    //   · deadline reject:**不依赖**下游肯听 signal。api.prompt 经 lazyApi 代理,调用被包在
-    //     `protocol.then(...)` 里 —— 后端不可达时连协议探测都可能挂住,abort 压根传不到 fetch。
-    //     单测里用"忽略 signal 的假 client"复现过这一支:只 abort 不 race 会一直等下去。
-    let rejectDeadline: ((reason: unknown) => void) | undefined
-    const deadline = new Promise<never>((_, reject) => {
-      rejectDeadline = reject
-    })
-    deliveryTimer = setTimeout(() => {
-      deliveryTimedOut = true
-      delivery.abort()
-      rejectDeadline?.(new PromptNotDeliveredError())
-    }, input.deliveryTimeoutMs ?? PROMPT_DELIVERY_TIMEOUT_MS)
-
-    const delivered = input.api.prompt({
+    // FORK: REQ-100 ④ —— 送达超时闸,详见文件头 PROMPT_DELIVERY_TIMEOUT_MS 与 withDeliveryDeadline。
+    //   2026-09-18 第三轮 review:这里原是与 helper **逐行重复**的内联实现,
+    //   commit message 却已声称"抽成 helper 三处同待遇" —— 现在改成真的共用一份。
+    const sendPrompt = (signal: AbortSignal) =>
+      input.api.prompt({
       sessionID: input.draft.sessionID,
       id: messageID,
       agent: input.draft.agent,
@@ -344,23 +333,17 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
             ]
           : [],
       ),
-    }, { signal: delivery.signal })
-    // 超时胜出时 delivered 可能稍后才 reject(abort 的 DOMException),挂个 no-op 防未捕获拒绝
-    delivered.catch(() => {})
-    await Promise.race([delivered, deadline])
+    }, { signal })
+    await withDeliveryDeadline(sendPrompt, input.deliveryTimeoutMs)
     return true
   } catch (err) {
     batch(() => {
       setIdle()
       remove()
     })
-    // FORK: REQ-100 ④ —— 超时 abort 的 DOMException 对用户没有意义,换成语义明确的错误,
-    //   让上层出"这条没发出去,已放回输入框"而不是通用的"发送失败"。
-    //   [feat: release-closeout-2026-09] 2026-09-17
-    if (deliveryTimedOut) throw new PromptNotDeliveredError()
+    // 送达超时已由 withDeliveryDeadline 归一成 PromptNotDeliveredError,
+    // 上层据此出"这条可能没发出去"而不是通用的"发送失败"。
     throw err
-  } finally {
-    if (deliveryTimer !== undefined) clearTimeout(deliveryTimer)
   }
 }
 
@@ -545,10 +528,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
-    // FORK: 新一轮发送 —— 撤掉上一轮「停止」留下的兜底定时器,否则它会在 4s 后
-            //   把这条**新消息**打成 idle。 [feat: release-closeout-2026-09] 2026-09-18
-    if (params.id) cancelStopFallback(params.id)
-
     input.addToHistory(currentPrompt, mode)
     input.resetHistoryNavigation()
 
@@ -688,6 +667,17 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       return
     }
 
+    // FORK: 新一轮发送 —— 撤掉上一轮「停止」留下的兜底定时器,否则它会在 4s 后
+    //   把这条**新消息**打成 idle。 [feat: release-closeout-2026-09] 2026-09-18
+    //
+    // 🔴 2026-09-18 第三轮 review:首版把这行放在函数**前部**(队列分支之前),于是
+    //   [bug-repro: 后端半死时点停止(interrupt 不回包)→ 4s 兜底已武装 → 4 秒内再输入一条 →
+    //    因状态仍 busy 命中 shouldQueue → 但兜底**已被提前撤销** → 状态永久停在 busy →
+    //    而队列排干的前提正是 !busy → 消息卡在队列里永不发出,spinner 永不停。]
+    //   修复前兜底会在 4s 后置 idle 并把队列排干,所以那是**本批修复自己引入的回归、且比原 bug 更重**。
+    //   位置即语义:只有"这一发真的要出去了"才该撤销兜底 —— 走队列的那条并没有发出去。
+    if (params.id) cancelStopFallback(params.id)
+
     input.onSubmit?.()
 
     if (mode === "shell") {
@@ -719,29 +709,50 @@ export function createPromptSubmit(input: PromptSubmitInput) {
         clearInput()
         const messageID = Identifier.ascending("message")
         serverSync().session.set("session_status", session.id, { type: "busy" })
-        sdk()
-          .api.session.command({
-            sessionID: session.id,
-            id: messageID,
-            command: commandName,
-            arguments: args.join(" "),
-            agent,
-            model: { id: model.modelID, providerID: model.providerID, variant },
-            files: await Promise.all(
-              images.map(async (attachment) => ({
-                uri: await blobDataUrl(attachment.blob, attachment.mime),
-                name: attachment.filename,
-              })),
+        const files = await Promise.all(
+          images.map(async (attachment) => ({
+            uri: await blobDataUrl(attachment.blob, attachment.mime),
+            name: attachment.filename,
+          })),
+        )
+        // 🔴 2026-09-18 第三轮 review:这条**主** /command 路径此前是裸 `.catch`,完全没有送达超时 ——
+        //   commit message 声称的"三处同待遇"实际只落在 sendFollowupDraft 那一处。
+        //   [bug-repro: 后端半死(socket 开着但永不响应)时请求永不 settle → `.catch` 永不触发 →
+        //    上面已经 clearInput() 且置了 busy → **用户输入的斜杠命令连同附件直接蒸发、状态永久 busy**。
+        //    这正是 REQ-100 ④ 要消灭的那种形态,却在它自己的主路径上原封不动。]
+        withDeliveryDeadline((signal) =>
+          sdk().api.session.command(
+            {
+              sessionID: session.id,
+              id: messageID,
+              command: commandName,
+              arguments: args.join(" "),
+              agent,
+              model: { id: model.modelID, providerID: model.providerID, variant },
+              files,
+            },
+            { signal },
+          ),
+        ).catch((err) => {
+          serverSync().session.set("session_status", session.id, { type: "idle" })
+          const restored = restoreInput()
+          // 未送达与"后端明确报错"处置不同:前者不能说死"没发出去"(服务端可能已 admit 只是回包慢),
+          // 与 prompt 路径共用同一组已打磨的文案。
+          const notDelivered = isPromptNotDelivered(err)
+          showToast({
+            variant: notDelivered ? "error" : undefined,
+            title: language.t(
+              notDelivered ? "prompt.toast.promptNotDelivered.title" : "prompt.toast.commandSendFailed.title",
             ),
+            description: notDelivered
+              ? language.t(
+                  restored
+                    ? "prompt.toast.promptNotDelivered.description"
+                    : "prompt.toast.promptNotDelivered.inputBusy.description",
+                )
+              : formatServerError(err, language.t, language.t("common.requestFailed")),
           })
-          .catch((err) => {
-            serverSync().session.set("session_status", session.id, { type: "idle" })
-            showToast({
-              title: language.t("prompt.toast.commandSendFailed.title"),
-              description: formatServerError(err, language.t, language.t("common.requestFailed")),
-            })
-            restoreInput()
-          })
+        })
         return
       }
     }
