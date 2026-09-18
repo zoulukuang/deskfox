@@ -192,8 +192,17 @@ $env:OPENCODE_VERSION = $opencodeVersion
 # FORK 2026-09-18:.ps1 按路径调用是在**调用方会话内**执行(不是子进程),$env: 赋值会留在
 #   操作者的 shell 里。上面注释承诺的「只在本脚本进程内设」在 Windows 上并不成立 ——
 #   同会话后续任何调 finalize-latest-{yml,json}.ts 的流程都会静默拿到上游基线号而非日历号。
-#   故注册退出时清理(trap 覆盖 throw 路径)。Bash 侧 export 在子 shell,无此问题。
-trap { Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue }
+#   Bash 侧 export 在子 shell,无此问题。
+#
+# 🔴 FORK 2026-09-18 Win 实测订正 —— **trap 结尾必须有 `break`**。
+#   PowerShell 的 `trap` 默认语义是「跑完处理器**继续往下执行**」,并不终止脚本。
+#   不加 break 时,上面两道 fail-fast 的 `throw` 会被 trap"处理掉"然后**继续往下跑**,
+#   执行流直接落到下面的 `$env:OPENCODE_VERSION = $opencodeVersion` ——
+#   [bug-repro: Win 实测 8 场景,加 trap(无 break)后 6 种坏值全部 exit=0,
+#    且 `0.0.0-prod-202608190542` / `latest` **被真的注入**;REQ-132 整道防线失效,
+#    它要拦的那个坏值反而进了构建。加 break 后恢复 exit=1 且不注入。]
+#   `break` 让 trap 在清理后把终止性错误继续抛出去,fail-fast 才成立。
+trap { Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue; break }
 Write-Host "[deskfox] REQ-132: 注入 OPENCODE_VERSION=$opencodeVersion(上游基线;与 DeskFox 日历号是两条独立号线)"
 # FORK-END
 if (-not $env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/" }
@@ -268,3 +277,11 @@ if ($useDir) {
     Get-ChildItem $out -Filter "*.exe" -ErrorAction SilentlyContinue |
         ForEach-Object { Write-Host "  $($_.FullName)" }
 }
+
+# FORK 2026-09-18:REQ-132 注入的 OPENCODE_VERSION 在这里收尾清理。
+#   上面那个 trap 只管**出错**路径(PowerShell 的 trap 正常结束时不触发 —— Win 实测:
+#   脚本正常 return 后调用方 shell 里该变量仍在),而构建成功恰恰是最常见的路径。
+#   .ps1 按路径调用是在调用方会话内跑,不清理就会让同会话后续调
+#   finalize-latest-{yml,json}.ts 的流程静默拿到上游基线号(1.18.x)而非 DeskFox 日历号。
+#   放在最末尾:此处 bun run build 与 electron-builder 都已消费完该变量,清掉不影响构建。
+Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue
