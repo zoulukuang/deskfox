@@ -466,6 +466,8 @@ export const dict = {
     "后台引擎 2 分钟内没有响应。原文和引用卡片都还在。重发前请先看一眼对话里是否已经有了 —— 极少数情况下后台其实已经收下。",
   "prompt.toast.promptNotDelivered.inputBusy.description":
     "后台引擎 2 分钟内没有响应。输入框已有新内容,原文未覆盖;引用卡片已放回。重发前请先确认对话里是否已经有了。",
+  "prompt.toast.promptNotDelivered.queued.description":
+    "后台引擎 2 分钟内没有响应。这条仍在队列里、已标记为失败,可以重发 —— 重发前请先看一眼对话里是否已经有了。",
 
   "dialog.mcp.title": "MCP 服务器",
   "dialog.mcp.description": "已启用 {{enabled}} / {{total}}",

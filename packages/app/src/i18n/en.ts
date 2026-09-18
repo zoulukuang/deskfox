@@ -356,6 +356,8 @@ export const dict = {
     "The backend engine did not respond within 2 minutes. Your text and quoted cards are intact. Check the conversation before resending — in rare cases the backend did accept it.",
   "prompt.toast.promptNotDelivered.inputBusy.description":
     "The backend engine did not respond within 2 minutes. Your input box already had new content so it was left untouched; the quoted cards were put back. Check the conversation before resending.",
+  "prompt.toast.promptNotDelivered.queued.description":
+    "The backend engine did not respond within 2 minutes. This message is still in the queue and marked as failed, so you can send it again — check the conversation first, in case the backend did accept it.",
 
   "dialog.mcp.title": "MCPs",
   "dialog.mcp.description": "{{enabled}} of {{total}} enabled",

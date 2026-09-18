@@ -442,9 +442,10 @@ export const dict = {
   "prompt.toast.promptSendFailed.title": "傳送提示失敗",
   "prompt.toast.promptSendFailed.description": "無法取得工作階段",
   // FORK: REQ-100 ④ 消息未送达的回吐提示 [feat: release-closeout-2026-09] 2026-09-17
-  "prompt.toast.promptNotDelivered.title": "這條沒發出去,已放回輸入框",
-  "prompt.toast.promptNotDelivered.description": "後台引擎沒有回應。原文和引用卡片都還在,確認後可以重新發送。",
-  "prompt.toast.promptNotDelivered.inputBusy.description": "後台引擎沒有回應。輸入框已有新內容,原文未覆蓋;引用卡片已放回。",
+  "prompt.toast.promptNotDelivered.title": "Message may not have been sent — put back in the input box",
+  "prompt.toast.promptNotDelivered.description": "The backend engine did not respond within 2 minutes. Your text and quoted cards are intact. Check the conversation before resending — in rare cases the backend did accept it.",
+  "prompt.toast.promptNotDelivered.inputBusy.description": "The backend engine did not respond within 2 minutes. Your input box already had new content so it was left untouched; the quoted cards were put back. Check the conversation before resending.",
+  "prompt.toast.promptNotDelivered.queued.description": "The backend engine did not respond within 2 minutes. This message is still in the queue and marked as failed, so you can send it again — check the conversation first, in case the backend did accept it.", // FORK-i18n-backfill(en 兜底)
 
   "dialog.mcp.title": "MCP",
   "dialog.mcp.description": "已啟用 {{enabled}} / {{total}}",
