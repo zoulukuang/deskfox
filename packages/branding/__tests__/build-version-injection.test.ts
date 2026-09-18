@@ -253,19 +253,61 @@ describe.if(IS_WIN)("REQ-132 · 版本号注入(Win wrapper 真代码,仅 Window
 // 为什么还要这一组:抓到它的是 Win 专属的真执行组(describe.if(win32)),那组在 mac 上整体跳过。
 // 也就是说在 mac 上把 break 删掉,本地全绿,要等推到 Win 才炸 —— 而这个脚本的改动
 // 十有八九是在 mac 上发生的(本批那个 trap 就是)。故补一条纯文本断言,两端都跑。
-describe("REQ-132 · PS1 trap 必须带 break(否则 fail-fast 被吞)", () => {
+describe("REQ-132 · PS1 构建期 env 的 trap / 还原", () => {
   test("🔒 trap 处理器以 break 结尾 —— 清理后把终止性错误继续抛出去", () => {
     const trapLine = PS1.split("\n").find((line) => line.trim().startsWith("trap {"))
     expect(trapLine).toBeDefined()
-    expect(trapLine).toMatch(/Remove-Item\s+Env:OPENCODE_VERSION/)
     expect(trapLine).toMatch(/;\s*break\s*\}/)
   })
 
-  test("🔒 正常路径另有显式清理 —— trap 在脚本正常结束时根本不触发", () => {
-    // Win 实测:CASE-A normal-exit => LEAKED / CASE-B throw => cleaned。
-    // 而构建**成功**恰恰是最常见的路径,只靠 trap 等于没清。
-    const tail = PS1.slice(PS1.lastIndexOf("FORK-END"))
-    expect(tail).toMatch(/Remove-Item\s+Env:OPENCODE_VERSION/)
+  test("🔒 trap 与收尾走同一个还原函数 —— 两条路径不得再分叉", () => {
+    // 首版就是两处各写各的:trap 里删 VERSION、收尾也删 VERSION,而 CHANNEL 两处都没管。
+    // 收敛成一个函数后,再漏一个变量必须是"函数里漏",不会再出现"只修了一半路径"。
+    expect(PS1).toMatch(/function\s+Restore-DeskFoxBuildEnv\s*\{/)
+    const calls = PS1.split("\n").filter((line) => /(^|[\s{;])Restore-DeskFoxBuildEnv\s*(;|\}|$)/.test(line))
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    const trapLine = PS1.split("\n").find((line) => line.trim().startsWith("trap {"))
+    expect(trapLine).toMatch(/Restore-DeskFoxBuildEnv/)
+    // 正常路径的那次调用在脚本末尾(trap 正常结束不触发,构建成功才是最常见的路径)
+    expect(PS1.trimEnd().endsWith("Restore-DeskFoxBuildEnv")).toBe(true)
+  })
+
+  // [bug-repro: 注入块只管了 OPENCODE_VERSION,漏了同样泄漏进调用方会话的 OPENCODE_CHANNEL。
+  //  后者更危险 —— electron.vite.config.ts / electron-builder.deskfox.config.ts 在它缺省时兜底成 "dev",
+  //  被污染则静默改判:同会话先 `-Env local` 自测再跑 `bun run build`,本该 dev 的产物会拿到
+  //  LOCAL 徽标 + appId `.local` + opencode-local.db + 版本号回落裸号。]
+  test("🔴 两个构建期变量都要还原 —— CHANNEL 与 VERSION 同等待遇", () => {
+    const fn = PS1.slice(PS1.indexOf("function Restore-DeskFoxBuildEnv"))
+    const body = fn.slice(0, fn.indexOf("\n}") + 2)
+    for (const name of ["OPENCODE_CHANNEL", "OPENCODE_VERSION"]) {
+      expect(body).toContain(name)
+    }
+  })
+
+  // [bug-repro: PowerShell 的 trap 编译期注册、覆盖整个 scope(含文本位置在它之前的语句),
+  //  故脚本前段任一 throw 都会执行处理器 —— 那时脚本还没设过这两个变量,
+  //  无条件 Remove-Item 删掉的是**调用方预设的值**。]
+  test("🔴 还原而不是一律删除 —— 先存调用方原值,且存在第一处 throw 之前", () => {
+    const saveIdx = PS1.indexOf("$script:prevOpencodeChannel = $env:OPENCODE_CHANNEL")
+    expect(saveIdx).toBeGreaterThan(-1)
+    expect(PS1).toContain("$script:prevOpencodeVersion = $env:OPENCODE_VERSION")
+    // 存值必须早于脚本里第一处**可执行**的 throw,否则前段出错时还原的是空值。
+    // 按行扫并跳过注释行 —— 注释里出现 "throw" 这个词不算(本测试自己就踩过这个坑)。
+    const lines = PS1.split("\n")
+    let offset = 0
+    let firstThrow = -1
+    for (const line of lines) {
+      const code = line.trim()
+      if (firstThrow < 0 && !code.startsWith("#") && /(^|[\s{;])throw\s/.test(line)) firstThrow = offset
+      offset += line.length + 1
+    }
+    expect(firstThrow).toBeGreaterThan(-1)
+    expect(saveIdx).toBeLessThan(firstThrow)
+    // 函数体必须是"有原值就写回,没有才删"
+    const fn = PS1.slice(PS1.indexOf("function Restore-DeskFoxBuildEnv"))
+    const body = fn.slice(0, fn.indexOf("\n}") + 2)
+    expect(body).toMatch(/\$env:OPENCODE_CHANNEL\s*=\s*\$script:prevOpencodeChannel/)
+    expect(body).toMatch(/\$env:OPENCODE_VERSION\s*=\s*\$script:prevOpencodeVersion/)
   })
 
   test("🔒 两道 fail-fast 仍在 —— break 是为了让它们生效,不是替代它们", () => {
