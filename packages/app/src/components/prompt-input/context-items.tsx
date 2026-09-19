@@ -28,7 +28,12 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
       {/* FORK: 卡片多了从横向滚改为自动换行,max-h 兜底防止挤压聊天区
             (3 行卡片高度 = 3×48 + 2×8 gap + 2×8 padding ≈ 180px)
             [feat: 聊天选区-卡片化-换行] 2026-05-25 */}
-      <div class="flex flex-wrap items-start gap-2 p-2 max-h-[180px] overflow-y-auto">
+      {/* FORK: e2e 测试契约 —— 容器锚点,与 v2 卡片条的 data-context-card 成对
+            2026-09-19 [feat: e2e-context-flow-harness] */}
+      <div
+        data-component="prompt-context-items"
+        class="flex flex-wrap items-start gap-2 p-2 max-h-[180px] overflow-y-auto"
+      >
         <For each={props.items}>
           {(item) => {
             // FORK: chat 选区卡片 — kind="chat" 显示聊天气泡图标 + "聊天引用"标签;
@@ -89,6 +94,13 @@ export const PromptContextItems: Component<ContextItemsProps> = (props) => {
                 openDelay={isChatQuote || item.preview ? 400 : 800}
               >
                 <div
+                  // FORK: e2e 测试契约 —— 与 v2 卡片条同一套属性名,工具两套布局共用一份选择器
+                  //   2026-09-19 [feat: e2e-context-flow-harness]
+                  data-context-card=""
+                  data-path={item.path}
+                  data-has-comment={item.comment?.trim() ? "true" : "false"}
+                  data-comment-id={item.commentID ?? undefined}
+                  data-kind={item.kind ?? "file"}
                   classList={{
                     "group shrink-0 flex flex-col rounded-[6px] pl-2 pr-1 py-1 max-w-[200px] h-12 cursor-default transition-all transition-transform shadow-xs-border hover:shadow-xs-border-hover": true,
                     "hover:bg-surface-interactive-weak": !!item.commentID && !selected,

@@ -306,7 +306,18 @@ export function createPromptInputV2Controller(input: {
       return draft.state.context.items.find((item) => item.key === id)
     },
     comments() {
-      return draft.state.context.items.filter((item) => !!item.comment?.trim())
+      // FORK-BEGIN: 判据与 fork 侧同源 —— 渲染侧不得再按「有没有注释」筛 2026-09-19
+      // [bug-repro: 2026-09-17 那批把「无注释的选区卡 / 无选区的附件卡也能提交」放宽到了 fork 侧三处
+      //  (context-gate.ts 的 contextItemCount 提交闸 / clearableContextItems 清理侧 /
+      //   prompt-state.ts 的 isCommentItem 快照侧),**唯独这里没同源**。而 session.tsx 在新版界面
+      //  (settings.general.newLayoutDesigns)下用的正是本 v2 composer:
+      //  用户预览区右键 →「加入聊天」不填注释 → file-tabs 的 prompt.context.add **确实执行了**
+      //  (e2e 探针实测 mdMenu().text.length=43 / path 非空,守卫全过),但这里把它筛掉 →
+      //  卡片条不出现、canSubmit 也判为空 → **界面上零反应,功能静默失效**;
+      //  而那张卡已经躺在 prompt store 里,用户之后随便输入一句发送时,它会一起发给模型 ——
+      //  用户全程不知道自己多发了一段引用。]
+      return draft.state.context.items
+      // FORK-END
     },
     attachments(): PromptInputV2Attachment[] {
       return draft.state.prompt.filter((part): part is PromptInputV2Attachment => part.type === "image")
@@ -330,7 +341,8 @@ export function createPromptInputV2Controller(input: {
     canSubmit() {
       const persisted = draft.state
       if (persisted.prompt.some((part) => part.type === "image")) return true
-      if (persisted.context.items.some((item) => !!item.comment?.trim())) return true
+      // FORK: 同上 —— 「有东西可发」只看有没有卡,不看有没有注释(与 fork 侧 contextItemCount 同源)2026-09-19
+      if (persisted.context.items.length > 0) return true
       return persisted.prompt.some((part) => "content" in part && !!part.content.trim())
     },
     setEditor(element: HTMLElement) {
