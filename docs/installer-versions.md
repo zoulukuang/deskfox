@@ -100,7 +100,37 @@ e2e 142/142、冒烟 22/22、GUI 11/11、冷启动 2×CLEAN,并补上 mac 侧测
 **回归**:typecheck 29/29 · app 1165 · e2e 142 · core 1147 · session-ui 121 · media-gen 140 ·
 adapter-feishu-lark 792 · branding 82(+8 skip)· desktop 169 —— 全部 0 fail。新增测试 120+ 条。
 
-**installer 路径**:(ship 后回填)
+**产物**(2026-09-19 22:xx ship,双 arch 共享版本号,靠文件名区分):
+
+- `DeskFox-2026.11.2-mac-arm64.dmg` — 397,323,931 bytes,sha256 `a92e2f0e1e0bc168…`
+- `DeskFox-2026.11.2-mac-x64.dmg` — 413,440,668 bytes,sha256 `ace619444b0aba3f…`
+- 本地路径:`packages/desktop/dist-deskfox/`(.app 分别在 `mac-arm64/` 与 `mac/`)
+
+**签名公证**:两个 dmg 均 `Accepted` + staple + `spctl` 门禁 `source=Notarized Developer ID`。
+
+**发布**:
+
+- GitHub Release `ship-mac-prod-2026.11.2`(双 dmg,`--latest`)
+- 国内 CDN `https://dl.clawtray.com/DeskFox-2026.11.2-mac-{arm64,x64}.dmg`
+- Gitee Release(id 1153987,正文挂 CDN 链接,不传附件)
+- 升级源 A 链路 `https://updates.deskfox.ai/electron/prod/latest-mac.yml` —— 单本双 arch,
+  `files[]` 4 条逐条 curl 实测 206 可下载、size 与 manifest 一致
+- 官网 deskfox.ai 已更新并部署(`f442565`),线上 6 条下载链接逐条 curl 核对通过
+
+**ship 过程中的两处非预期**(均已处理,记档备查):
+
+1. `gh release create` 上传 380MB 资产撞工具 10 分钟上限被打断 → **release 停在 draft**,
+   而 draft 不进公开 API 列表 → 官网脚本连跑两次都拿不到本版、一路显示 `nothing to do`
+   (正是 2026-08-12 那条「脚本说成功、官网实际停在旧版」的同族)。
+   `gh release edit --draft=false --latest` 发布后第三次跑才真更新。
+   **给下次**:资产走后台上传,且 publish 前先确认 `gh api .../releases/latest` 已是本版。
+2. x64 资产首次上传卡死 28 分钟(arm64 同等大小只用 48 秒),杀掉重传 30 秒成功。
+
+**发版前 code-review(第四轮,2026-09-19)**:抓出 6 条,无崩溃级。唯一发版前修掉的是
+`waitForWorktree` 的 abort cleanup 仍用 `if (restoreInput()) restoreCommentItems(...)` 旧写法 ——
+本批已在 catch 分支修掉同一形态,这条兄弟路径漏改,会在用户已另起输入时静默丢引用卡。
+已改同源 + 加全文件结构闸防复发(反证过)。其余 5 条排后续,详见
+`docs/features/release-closeout-2026-09/3-changelog.md`。
 
 ---
 ## [macOS] 2026.11.1 - 2026-08-19
