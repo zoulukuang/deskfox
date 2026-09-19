@@ -63,7 +63,7 @@ import { PromptInputV2Composer, usePromptInputV2Controller } from "@/components/
 import { useSettingsCommand } from "@/components/settings-dialog"
 import { setCursorPosition } from "@/components/prompt-input/editor-dom"
 import { promptLength } from "@/components/prompt-input/history"
-import { type FollowupDraft, sendFollowupDraft } from "@/components/prompt-input/submit"
+import { type FollowupDraft, isPromptNotDelivered, sendFollowupDraft } from "@/components/prompt-input/submit"
 import {
   createPromptInputController,
   createSessionComposerController,
@@ -1855,7 +1855,23 @@ export default function Page() {
         optimisticBusy: item.sessionDirectory === sdk().directory,
       }).catch((err) => {
         setFollowup("failed", input.sessionID, input.id)
-        fail(err)
+        // FORK 2026-09-18 第三轮 review:队列 / 手动重发这条路径同样会抛 PromptNotDeliveredError,
+        //   但此前直接走通用 fail() —— 用户看到的是内部英文串
+        //   `prompt not delivered: backend did not respond in time`,
+        //   而本批两轮打磨出来的「可能没发出去 / 重发前先核对对话」提示一次都不会出现。
+        //   这条路径的消息留在队列里(已标 failed)、不回输入框,故用 queued 专属文案。
+        //
+        // 🔴 2026-09-19 第四轮 code-review:上一版只换了 description,title 仍复用通用那条 ——
+        //   [bug-repro: 通用 title 写的是「这条可能没发出去,已放回输入框」,而这条路径**明确不回输入框**
+        //    (正文自己写的是「仍在队列里」)。同一个 toast 标题与正文互相矛盾:用户照标题去输入框
+        //    找原文,那里是空的,于是以为内容彻底丢了、重新手打一遍。] title 一并走 queued 专属键。
+        if (isPromptNotDelivered(err)) {
+          showToast({
+            variant: "error",
+            title: language.t("prompt.toast.promptNotDelivered.queued.title"),
+            description: language.t("prompt.toast.promptNotDelivered.queued.description"),
+          })
+        } else fail(err)
         return false
       })
       if (!ok) return

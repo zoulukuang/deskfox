@@ -6,10 +6,17 @@ const DEFAULT_PROMPT: Prompt = [{ type: "text", content: "", start: 0, end: 0 }]
 export const MAX_HISTORY = 100
 
 export type PromptHistoryComment = {
-  id: string
+  // FORK 2026-09-19 第四轮 code-review:`id` 放开成可选 —— 它是**真批注 ID**,不是"某个标识符"。
+  //   上一版为了填满这个必填字段写了 `item.commentID ?? item.key`,于是本来没有批注的卡
+  //   (无注释的选区卡 / 无选区的附件卡)在快照里被塞进一个伪 ID,回填时又当成真 ID 写回
+  //   `commentID` —— 往返不是恒等,而**三处下游都以"有无 commentID"分流**(见下面 bug-repro)。
+  //   没有批注就让它缺席:回填后 `contextItemKey` 会按原样重算出同一个 key,它不需要被持久化。
+  id?: string
   path: string
-  selection: SelectedLineRange
-  comment: string
+  // FORK 2026-09-18:selection / comment 放开成可选 —— 见下面 contextItemsToHistoryComments 的说明。
+  //   无选区的附件卡、无注释的引用卡都必须能被历史快照**原样带回来**,否则上下键翻一次历史就丢。
+  selection?: SelectedLineRange
+  comment?: string
   time: number
   origin?: "review" | "file" | "quote"
   preview?: string
@@ -25,13 +32,73 @@ export function historyCommentToContextItem(item: PromptHistoryComment): FileCon
   return {
     type: "file",
     path: item.path,
-    selection: selectionFromLines(item.selection),
+    selection: item.selection ? selectionFromLines(item.selection) : undefined,
     comment: item.comment,
     commentID: item.id,
     commentOrigin: item.origin,
     preview: item.preview,
     kind: item.kind,
   }
+}
+
+/**
+ * 输入框里的引用/附件卡 → 历史快照条目。
+ *
+ * FORK 2026-09-18 第三轮 code-review:
+ * [bug-repro: `isCommentItem` 这批放宽成"只看 type === file",于是 `replaceComments` 的**移除侧**
+ *  会清掉全部 file 卡;而快照的**产出侧**仍要求 `comment?.trim()` 且必须有 selection,
+ *  于是无注释的选区卡、无选区的附件卡进不了快照 —— 上下键翻一次历史就被 replaceComments
+ *  清掉且再也回不来,全程无任何提示。]
+ *
+ * 不变量一:**移除的集合 ⊆ 快照能表达的集合**。两侧判据必须同源,否则差集就是静默丢数据。
+ *
+ * 不变量二(2026-09-19 补):**往返恒等** —— 进快照再回来的卡,必须与进去前是同一张卡。
+ * 判据同源只保证"不丢",恒等才保证"不变形"。
+ *
+ * FORK 2026-09-19 第四轮 code-review:
+ * [bug-repro: 上一版写 `id: item.commentID ?? item.key` —— 无批注的卡被塞进伪 ID(= 前端 dedup key),
+ *  `historyCommentToContextItem` 再把它写回 `commentID`,于是历史往返**不恒等**,三处以
+ *  「有无 commentID」分流的下游全被击穿:① `contextItemKey` 从 `file:/a.ts:3:5` 变成
+ *  `file:/a.ts:3:5:c=file:/a.ts:3:5`,与重新添加同一选区算出的 key 不等 → `context.add()` 去重失效,
+ *  输入框出现两张同源卡并一起发给模型 ② `build-request-parts.ts` 有 commentID 的分支不写 url 集,
+ *  「prompt 已 @mention 同路径则丢重复卡」对历史找回的卡失效 ③ `openComment` 的
+ *  `if (!item.commentID) return` 守卫被绕过 → 点这张卡会去 focus 一条不存在的批注,
+ *  还顺手撑开评审面板 / 切走 tab(改动前点它是 no-op)。]
+ *
+ * 另:此函数原先在 legacy composer 与 v2 composer 里**各抄了一份**逐行等价的实现 ——
+ * 正是 REQ-123 当年 `kind` 在两边一起漏掉的同款结构。这次一并收口成一处纯函数(可单测)。
+ */
+export function contextItemsToHistoryComments(input: {
+  // `key` 是 store 内的 dedup key,快照**不持久化它**(回填后由 contextItemKey 重算);
+  // 这里留成可选只为兼容调用方直接传 store items。
+  items: readonly (FileContextItem & { key?: string })[]
+  comments: readonly { file: string; id: string; selection: SelectedLineRange; time: number }[]
+  now?: () => number
+}): PromptHistoryComment[] {
+  const now = input.now ?? Date.now
+  const byID = new Map(input.comments.map((item) => [`${item.file}\n${item.id}`, item] as const))
+  return input.items.flatMap((item) => {
+    if (item.type !== "file") return []
+    const stored = item.commentID ? byID.get(`${item.path}\n${item.commentID}`) : undefined
+    const selection =
+      stored?.selection ??
+      (item.selection ? ({ start: item.selection.startLine, end: item.selection.endLine } as SelectedLineRange) : undefined)
+    const comment = item.comment?.trim()
+    return [
+      {
+        // 没有真批注就缺席 —— 绝不用 key 顶位(见上 bug-repro)
+        id: item.commentID,
+        path: item.path,
+        selection: selection ? { ...selection } : undefined,
+        comment: comment || undefined,
+        time: stored?.time ?? now(),
+        origin: item.commentOrigin,
+        preview: item.preview,
+        // FORK: REQ-123 — 缺了它,历史找回的聊天引用会退化成文件卡片 2026-08-19
+        kind: item.kind,
+      } satisfies PromptHistoryComment,
+    ]
+  })
 }
 
 export type PromptHistoryEntry = {
@@ -74,7 +141,7 @@ function cloneSelection(selection: SelectedLineRange): SelectedLineRange {
 export function clonePromptHistoryComments(comments: PromptHistoryComment[]) {
   return comments.map((comment) => ({
     ...comment,
-    selection: cloneSelection(comment.selection),
+    selection: comment.selection ? cloneSelection(comment.selection) : undefined,
   }))
 }
 
@@ -137,7 +204,9 @@ export function prependHistoryEntry(
     .map((part) => ("content" in part ? part.content : ""))
     .join("")
     .trim()
-  const hasComments = comments.some((comment) => !!comment.comment.trim())
+  // FORK 2026-09-18:comment 现在可选(快照要能带回无注释的卡)。这里的语义**保持不变** ——
+  //   「有没有值得入历史的内容」仍按"有注释"算,不因为快照变宽而改变入历史的门槛。
+  const hasComments = comments.some((comment) => !!comment.comment?.trim())
   // FORK: REQ-087 历史不存图片 part → 纯图片 prompt 无可回填内容,不入历史
   //   [feat: renderer-snapshot-oom] 2026-08-02
   if (!text && !hasComments) return entries
@@ -158,10 +227,10 @@ function isCommentEqual(commentA: PromptHistoryComment, commentB: PromptHistoryC
     commentA.comment === commentB.comment &&
     commentA.origin === commentB.origin &&
     commentA.preview === commentB.preview &&
-    commentA.selection.start === commentB.selection.start &&
-    commentA.selection.end === commentB.selection.end &&
-    commentA.selection.side === commentB.selection.side &&
-    commentA.selection.endSide === commentB.selection.endSide
+    commentA.selection?.start === commentB.selection?.start &&
+    commentA.selection?.end === commentB.selection?.end &&
+    commentA.selection?.side === commentB.selection?.side &&
+    commentA.selection?.endSide === commentB.selection?.endSide
   )
 }
 

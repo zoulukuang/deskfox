@@ -44,6 +44,29 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# FORK-BEGIN: 构建期 env 的存 / 还原 [feat: release-closeout-2026-09] 2026-09-18(第三轮 code-review)
+# .ps1 按路径调用是在**调用方会话内**执行(不是子进程),$env: 赋值会留在操作者的 shell 里。
+#
+# 两个变量都要管,此前只管了 OPENCODE_VERSION,漏了 OPENCODE_CHANNEL —— 而后者更危险:
+#   electron.vite.config.ts / electron-builder.deskfox.config.ts 在它缺省时兜底成 "dev",
+#   被污染则**静默改判**。典型事故:同一会话里先 `-Env local` 自测,再按 CLAUDE.md
+#   「renderer 改动闭环」再跑一次 electron-vite 构建 → 本该 dev 的产物拿到 LOCAL 徽标 + appId `.local`
+#   + opencode-local.db + 版本号回落裸号;先 `-Env prod` 则反向把 prod 身份带进 dev 产物。
+#   与 REQ-132 同族的「静默拿到错身份」。
+#
+# 还原而不是一律删除:trap 覆盖整个 scope(含文本位置在它之前的语句),脚本前段任何 throw
+#   都会触发它 —— 那时脚本还没设过这两个变量,无条件 Remove-Item 删掉的是**调用方预设的值**。
+#   故在这里(第一处 throw 之前)先存,退出时按原样还原:没设过就删掉,设过就写回。
+$script:prevOpencodeChannel = $env:OPENCODE_CHANNEL
+$script:prevOpencodeVersion = $env:OPENCODE_VERSION
+function Restore-DeskFoxBuildEnv {
+    if ($null -eq $script:prevOpencodeChannel) { Remove-Item Env:OPENCODE_CHANNEL -ErrorAction SilentlyContinue }
+    else { $env:OPENCODE_CHANNEL = $script:prevOpencodeChannel }
+    if ($null -eq $script:prevOpencodeVersion) { Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue }
+    else { $env:OPENCODE_VERSION = $script:prevOpencodeVersion }
+}
+# FORK-END
+
 $scriptDir   = $PSScriptRoot
 $brandingDir = Split-Path -Parent $scriptDir                       # packages/branding/
 $repoRoot    = Split-Path -Parent (Split-Path -Parent $brandingDir) # opencode-fork/
@@ -202,7 +225,7 @@ $env:OPENCODE_VERSION = $opencodeVersion
 #    且 `0.0.0-prod-202608190542` / `latest` **被真的注入**;REQ-132 整道防线失效,
 #    它要拦的那个坏值反而进了构建。加 break 后恢复 exit=1 且不注入。]
 #   `break` 让 trap 在清理后把终止性错误继续抛出去,fail-fast 才成立。
-trap { Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue; break }
+trap { Restore-DeskFoxBuildEnv; break }
 Write-Host "[deskfox] REQ-132: 注入 OPENCODE_VERSION=$opencodeVersion(上游基线;与 DeskFox 日历号是两条独立号线)"
 # FORK-END
 if (-not $env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/" }
@@ -278,10 +301,10 @@ if ($useDir) {
         ForEach-Object { Write-Host "  $($_.FullName)" }
 }
 
-# FORK 2026-09-18:REQ-132 注入的 OPENCODE_VERSION 在这里收尾清理。
+# FORK 2026-09-18:REQ-132 注入的 OPENCODE_VERSION **与** OPENCODE_CHANNEL 在这里收尾还原。
 #   上面那个 trap 只管**出错**路径(PowerShell 的 trap 正常结束时不触发 —— Win 实测:
 #   脚本正常 return 后调用方 shell 里该变量仍在),而构建成功恰恰是最常见的路径。
 #   .ps1 按路径调用是在调用方会话内跑,不清理就会让同会话后续调
 #   finalize-latest-{yml,json}.ts 的流程静默拿到上游基线号(1.18.x)而非 DeskFox 日历号。
 #   放在最末尾:此处 bun run build 与 electron-builder 都已消费完该变量,清掉不影响构建。
-Remove-Item Env:OPENCODE_VERSION -ErrorAction SilentlyContinue
+Restore-DeskFoxBuildEnv

@@ -26,7 +26,7 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "bun test src --only-failures"
+    "test": "bun test --conditions=browser src --only-failures"
   },
   "devDependencies": {
     "@tsconfig/node22": "catalog:",
@@ -64,5 +64,8 @@
     "solid-js": "catalog:",
     "solid-list": "catalog:",
     "strip-ansi": "7.1.2"
+  },
+  "_fork_notes": {
+    "conditions=browser": "FORK 必需(2026-09-19):缺了它 bun 会把 solid-js 解析到 **server** 构建,凡是走 createRoot / createEffect 的测试当场报 `getNextContextId cannot be used under non-hydrating context`,报错内容完全不提示是本参数丢了,极易被误诊成被测代码的问题。packages/app/package.json 有同款说明(它 2026-08-09 踩过一次,表现更隐蔽:effect 变 no-op、只挂两条且指向业务逻辑)。上游 merge 撞到本文件时务必保留。"
   }
 }

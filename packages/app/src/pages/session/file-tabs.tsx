@@ -444,6 +444,31 @@ export function FileTabContent(props: {
     const p = path()
     if (p) void file.load(p)
   })
+
+  // FORK 2026-09-18 第三轮 code-review:onMount 只覆盖"挂载那一刻",覆盖不到**运行中被 LRU 回收**。
+  // [bug-repro: file.tsx 的 evictContent 把已加载条目改成 `content=undefined, loaded=false`,
+  //  而 loading 仍为 false、error 仍为 undefined —— 形态与"没加载过"**完全一致**。
+  //  于是 state() 已存在、三条分支都不成立 → 一个**好端端开着**的文件被渲染成「无法显示此文件」。
+  //  tab 越多越容易触发。]
+  // 回收本身是对的(省内存),缺的是没人把它拉回来。load() 幂等且**同步**置 loading,故无重入循环。
+  //
+  // 顺带给出「真不可用」的判据:load() 对无效路径会直接 resolve、一个字段都不改。
+  // 调用后状态仍原样 = 这条路径压根加载不了 —— 只有这种情况才配显示「无法显示此文件」。
+  const [unavailable, setUnavailable] = createSignal(false)
+  createEffect(() => {
+    const p = path()
+    if (!p) return
+    const current = file.get(p)
+    if (!current) return
+    if (current.loaded || current.loading || current.error) {
+      setUnavailable(false)
+      return
+    }
+    void file.load(p)
+    // load() 对任何有效路径都会同步 setLoading;没动 = 它拒绝了这条路径
+    const after = file.get(p)
+    setUnavailable(!after?.loading && !after?.loaded && !after?.error)
+  })
   // FORK-END
 
   const contents = createMemo(() => state()?.content?.content ?? "")
@@ -1851,12 +1876,14 @@ export function FileTabContent(props: {
               [feat: release-closeout-2026-09] 2026-09-17 */}
           {/* FORK 2026-09-18 修正:首帧 state() 必为 undefined(file.load 要等 onMount,
               而 onMount 在首帧之后),若把它当「文件不可用」会导致**每次打开未缓存的 tab 都闪一下
-              错误文案** —— 比原来的纯白更像真出错。故未初始化时按 loading 渲染,
-              兜底只接「state 已存在、但三条分支都不成立」这一种真异常。 */}
-          <Match when={state() === undefined}>
+              错误文案** —— 比原来的纯白更像真出错。故未初始化时按 loading 渲染。
+              2026-09-18 第三轮再修:**被 LRU 回收**的条目形态与"没加载过"完全一致,
+              同样不能谎报不可用;上面那个 effect 已在重新拉取,这里按 loading 渲染即可。
+              只有 effect 判定 load() 拒绝了这条路径(unavailable)才显示真错误文案。 */}
+          <Match when={!unavailable() && (state() === undefined || (!state()?.loaded && !state()?.loading && !state()?.error))}>
             <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
           </Match>
-          <Match when={state() !== undefined && !state()?.loaded && !state()?.loading && !state()?.error}>
+          <Match when={unavailable()}>
             <div class="px-6 py-4 flex flex-col gap-1">
               <div class="text-text-strong">{language.t("fileViewer.unavailable.title")}</div>
               <div class="text-text-weak text-12-regular">{language.t("fileViewer.unavailable.description")}</div>

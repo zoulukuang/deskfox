@@ -51,8 +51,16 @@
   - View 清单硬门槛**等 e2e 基础设施 setup 后**生效(opencode sidecar 或前端 mock mode)
 - **测试 fail 绝不 retry / skip 一键掩盖** — flaky 测试 48 小时内修或移除
 - **R8 测试用例清单**(2026-06-01):Medium+ 的 `1-spec.md` 必须**在动工前**列出逐条可勾选的测试用例(验什么 / 哪个层级 / 预期),运行时·native 风险点显式列入(对照"CDP 自测 ≠ 真桌面 QA")
-- **R9 分支内验收闸**(2026-06-01):开发完按 R8 清单跑全套 + 旧测试全绿、问题在 feat 分支内解决干净,**才向 user 提 merge**;`pre-push` 在 push 含 main 时跑 fork 包单元测试(media-gen/adapter-feishu-lark/app)作自动 backstop
-- **第 1 期实施时机由 user 单独决定**;`pre-push` 守门现状:typecheck(任何 push)+ fork 包单元测试 + Phase 1 e2e(后两者仅 push 含 main 时)
+- **R9 分支内验收闸**(2026-06-01):开发完按 R8 清单跑全套 + 旧测试全绿、问题在 feat 分支内解决干净,**才向 user 提 merge**;`pre-push` 跑 fork 包单元测试作自动 backstop
+- **第 1 期实施时机由 user 单独决定**;`pre-push` 守门现状(**2026-09-19 按 hook 实况订正**,以 `.husky/pre-push` 为准):
+  - **每次 push 都跑,没有任何分支条件**(旧版写「仅 push 含 main 时」—— 那是 Tauri 仓口径,换基座后已改为无条件,见《自动化测试规范》v6)
+  - 内容 = fork 范围 typecheck(`--filter='!./packages/console/*'`)+ **6 处包级单测**:
+    app(`bun run test` = unit + happydom browser)/ media-gen / adapter-feishu-lark / branding /
+    desktop(`src/main/deskfox` 子集)/ session-ui(`bun run test`,该 script 带 `--conditions=browser`)
+  - **闸内没有 e2e**(旧版写「+ Phase 1 e2e」是错的):playwright 全套不在 hook 里,
+    原因与处置见《自动化测试规范》R9 段的「上下文卡核心流程 e2e」条目
+  - 推论:这个闸**只依赖 bun** —— 不需要 chromium、不需要起 dev server。往里加任何
+    浏览器类测试前先想清楚这条会被打破
 
 完整规范:[`docs/governance/自动化测试规范.md`](docs/governance/自动化测试规范.md)
 长期规划(5 期分级 + KPI):[需求池](file:../OPENCODE-PLAN/需求池/自动化测试-长期规划.md)

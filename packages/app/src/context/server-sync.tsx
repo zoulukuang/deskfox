@@ -46,7 +46,11 @@ import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
-import { collectMissingBusySessions, collectStaleBusySessions } from "./global-sync/stale-busy"
+import {
+  collectMissingBusySessions,
+  collectStaleBusySessions,
+  collectUnresolvedBusySessions,
+} from "./global-sync/stale-busy"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
 import type { ServerApi } from "@/utils/server"
@@ -334,22 +338,44 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     const remote: Record<string, boolean> = {}
     const covered = new Set<string>()
 
-    await Promise.all(
-      [...directories].map(async (directory) => {
-        try {
-          // 目录由 sdkFor(directory) 建出来的 client 自身携带,不另传参 ——
-          // 与 bootstrap.ts:395 既有的 `input.sdk.session.status()` 同一写法,两种协议通用。
-          const statuses = (await sdkFor(directory).session.status()).data ?? {}
-          for (const [sessionID, status] of Object.entries(statuses)) {
-            if (status?.type !== "idle") remote[sessionID] = true
+    // 🔴 2026-09-18 第三轮 code-review 修正:上一版把**协议分流删掉了**,无条件走 v1 的
+    //   `sdkFor(directory).session.status()`。而 `sdkFor` → `serverSDK.createClient` 造的是 legacy v1 client,
+    //   于是 v2 连接下每个目录都抛错、被下面的 `catch {}` 吞掉 → `covered` 恒空 →
+    //   **正反两个方向全部空转,REQ-100 在 v2 上完全失效**,还每 60 秒对每个目录打一轮必失败的 HTTP。
+    //   当时那句注释「与 bootstrap.ts:395 同一写法,两种协议通用」是错的 ——
+    //   bootstrap.ts 紧挨着那行的上一行正是 `if ((await input.protocol) !== "v1") return`,
+    //   即它本身就只在 v1 下执行。(本仓自带 sidecar 有 /global/health 判为 v1,所以自带包不受影响;
+    //   受影响的是连远端 v2 服务端的场景。)
+    if ((await serverSDK.protocol) === "v1") {
+      // v1:`/session/status` 挂在 routes/instance/ 下,**按 directory 分桶**(见 stale-busy.ts 头部证据链),
+      //     必须逐个目录查;目录由 sdkFor(directory) 建出的 client 自身携带,不另传参。
+      await Promise.all(
+        [...directories].map(async (directory) => {
+          try {
+            const statuses = (await sdkFor(directory).session.status()).data ?? {}
+            for (const [sessionID, status] of Object.entries(statuses)) {
+              if (status?.type !== "idle") remote[sessionID] = true
+            }
+            // 只有**查成功**的目录才进覆盖集:查失败时宁可不动,也不能误判成空闲
+            covered.add(directory)
+          } catch {
+            // 单个目录查不动(后端半死 / 目录已不可服务)不影响其他目录,本轮跳过它
           }
-          // 只有**查成功**的目录才进覆盖集:查失败时宁可不动,也不能误判成空闲
-          covered.add(directory)
-        } catch {
-          // 单个目录查不动(后端半死 / 目录已不可服务)不影响其他目录,本轮跳过它
-        }
-      }),
-    )
+        }),
+      )
+    } else {
+      // v2:`GET /api/session/active` 的生成签名里**没有 directory / workspace 参数**
+      //     (packages/client/src/generated/client.ts 的 `active: (requestOptions?) => ...`),
+      //     按构造就是该服务器全局的 —— 一次调用即覆盖本轮所有目录,不存在 v1 那种分桶问题。
+      //     这也正是改动前 v2 分支的原样语义,此处只是把它恢复回来。
+      try {
+        const active = await serverSDK.api.session.active()
+        for (const sessionID of Object.keys(active)) remote[sessionID] = true
+        for (const directory of directories) covered.add(directory)
+      } catch {
+        // 查不动就整轮跳过:covered 保持空,两个方向都不会下结论
+      }
+    }
 
     const args = {
       local: session.data.session_status,
@@ -366,6 +392,20 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     //   反向不需要 coveredDirectories 守卫:remote 里的条目**本来就只来自查成功的目录**,
     //   是"后端明确说它在忙"的正面证据;而正向清理是从本地表反推"后端没说它忙",
     //   缺席既可能是真 idle、也可能是这个目录压根没查 —— 那才需要守卫。
+    // 🔴 2026-09-19 第四轮 code-review:反向方向要求 `directoryOf` 能定位(stale-busy.ts 第 ③ 条),
+    //   而 REQ-100 ① 那条链路恰好让它恒为 undefined —— 停止兜底把状态写成 idle 后,
+    //   server-session 的 LRU `preserve` 只钉住非 idle 的会话,该会话当场失去保护、从 data.info
+    //   被挤掉,`session.get()` 从此返回 undefined;唯一会重新 resolve 的 loadActiveSessionsQuery
+    //   是 staleTime: Infinity + refetchOn* 全 false,不会再跑第二次。净效果:后端还在跑,
+    //   前端永久自认 idle,下一条消息绕过队列与它并发(= 反向对账本来要消灭的形态)。
+    //   所以先把这批「后端说忙、本地却不认识」的会话 resolve 回来,再下判定 ——
+    //   补进来后状态非 idle,LRU 会重新钉住它,正向清理也就有目录可依,不变量仍成立。
+    //   resolve 失败(会话已删 / 后端仍不可达)就保持原样跳过,与改动前同。
+    const unresolved = collectUnresolvedBusySessions(args)
+    if (unresolved.length > 0) {
+      await Promise.all(unresolved.map((sessionID) => session.resolve(sessionID).catch(() => {})))
+    }
+    // `args.local` 是 store 代理、`directoryOf` 是闭包 —— 两者都读实时值,resolve 后重跑即可生效。
     const missing = collectMissingBusySessions(args)
     for (const sessionID of missing) session.set("session_status", sessionID, { type: "busy" })
   }

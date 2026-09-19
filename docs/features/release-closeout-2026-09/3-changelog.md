@@ -486,3 +486,241 @@ Windows 没有 `SIGSTOP`,等价手段是 ntdll 的 **`NtSuspendProcess`** 冻住
    实为 `selection` 形状传错(`{start,end}` 而非 `{startLine,startChar,endLine,endChar}`,日志里 `lines NaN through NaN`
    就是证据)。用正确形状复测,4 种 CRLF 组合全部 `HIT / roundtrip OK`,反斜杠路径也正确取到文件名。
    **报缺陷前先证伪自己的探针。**
+
+---
+
+## 九、发版前三轮 code-review(2026-09-18)
+
+本批在「已合 main、准备 /ship」之后又跑了三轮 review,**每一轮都查出上一轮修复自己引入的回归**。
+三轮合计 4 笔修复 commit,全部在发版前闭环。这一节按轮次记账,便于回看是哪一步开始走偏的。
+
+### 第一轮 —— 七条(commit `c1719f9244`)
+
+🔴 周期对账丢了**目录作用域**。首版基于一个错误前提「后端 SessionStatus 是一张全局表」;
+实际它建在 `InstanceState` 上、按 directory 分桶(`instance-state.ts:47`)。
+后果:拿 A 目录的表去清 B 目录的 busy,把别的项目里**正在生成**的会话打成 idle ——
+比它要修的原 bug 更糟(原 bug 是"该清的没清",首版成了"不该清的也清")。
+另 🟠 停止兜底定时器从不取消、文件预览兜底在首帧命中;🟡 `/command` 两处缺送达超时、
+`isCommentItem` 判据不一致、PS1 注入块 env 泄漏、`comment-card-v2` 硬编码中文兜底。
+
+### 第二轮 —— Windows 端实测(commit `55f26ca483`,Win 端提交)
+
+🔴 我为修 env 泄漏加的 `trap { Remove-Item ... }` **没有 `break`**。
+PowerShell 的 trap 默认「跑完处理器继续往下执行」,于是两道 fail-fast 的 `throw` 被吞,
+执行流直落到注入行 —— Win 实测 8 场景,**6 种坏值全部 exit=0**,
+且 `0.0.0-prod-202608190542` / `latest` **被真的注入**。REQ-132 整道防线不是失效,是**反向失效**。
+这条正是我标了 ⚠️「未在 Windows 实测」却仍按 🟡 低危合进 main 的那一条。
+教训记在下面第十节。配套 commit `64071d81a0` 补了跨平台防回归闸(Win 专属真执行组在 mac 上整体跳过,
+而这个脚本的改动十有八九发生在 mac)。
+
+### 第三轮 —— 十四条(本轮)
+
+4 个 🔴,其中 **3 个是第一轮修复自己引入的**:
+
+| 级别 | 位置 | 问题 | 归属 |
+|---|---|---|---|
+| 🔴 | `stale-busy.ts` | 反向对账把 **`retry` 碾成 `busy`** —— 限流倒计时横幅、配额超限升级 CTA、时间线 retry 行当场消失。`SessionStatus` 是三态,`retry` 带 `attempt`/`action` 负载;退避常达数分钟而对账 60 秒一轮,几乎必中。`seedActiveSessionStatuses` 早有同款不变量(且有专门测试),反向对账绕过了它 | 第一/二轮引入 |
+| 🔴 | `server-sync.tsx` | **v1/v2 协议分流被删掉**,无条件走 v1 的 `session.status()`。v2 连接下每目录都抛错被 `catch {}` 吞 → `covered` 恒空 → **两个方向全部空转**,REQ-100 在 v2 上完全失效。当时注释写的「两种协议通用」是错的:`bootstrap.ts` 同款调用紧挨着就有 `!== "v1" return` | 第一轮引入 |
+| 🔴 | `submit.ts` | 主 `/command` 路径**根本没套送达超时**,commit message 声称的"三处同待遇"只落了一处。该路径先 `clearInput()` 又置 busy 再裸 `.catch` → 后端半死时斜杠命令连同附件**直接蒸发**、状态永久 busy | 第一轮声称已修,实际未修 |
+| 🔴 | `submit.ts` | 停止兜底被**提前撤销**(撤销在队列分支之前)→ 点停止后 4s 内再输入 → 命中队列但兜底已撤 → 永久 busy + **队列永不排干**。修复前兜底会在 4s 后置 idle 并排干队列,故这是引入的回归且比原 bug 更重 | 第一轮引入 |
+
+🟠/🟡 另七条:followup 路径不撤停止兜底;历史快照判据与 `replaceComments` 移除侧分叉(翻一次历史
+就永久丢掉无注释的卡);文件预览兜底在 **LRU 回收**后误报「文件不可用」;队列路径的未送达文案未分流
+(用户看到内部英文串);59 份 i18n 兜底副本仍是旧的断然措辞;`OPENCODE_CHANNEL` 同样泄漏进调用方会话
+(比 VERSION 更危险 —— 配置在它缺省时兜底成 `dev`,被污染则**静默改判**产物身份);
+PS1 的 trap 会删掉脚本自己没设过的变量。
+
+**修法要点**
+- `collectMissingBusySessions` 的判据从「本地已 busy」改为**「本地已非 idle」** —— 钉语义不枚举状态,
+  将来新增第四态自动受保护;并要求 `directoryOf` 能定位,保证**凡是补得进来的就必须清得掉**
+  (否则反向方向会自造出正向永远够不着的幻影 busy,还被 LRU `preserve` 永久钉住)。
+- `historyComments` 与 v2 composer 里**逐行重复的两份**产出实现收口成 `contextItemsToHistoryComments`
+  纯函数(正是 REQ-123 当年「两边一起漏掉 kind」的同款结构),并让快照能表达全部 file 卡。
+- PS1 的 env 清理改为**存 / 还原**而非一律删除,两个变量收进同一个 `Restore-DeskFoxBuildEnv`,
+  trap 与收尾共用它。
+
+**测试**:新增 23 条(retry 族 / 目录可达性对称 / 历史往返 / `/command` 送达超时 /
+协议分流结构闸 / 兜底撤销时机结构闸 / PS1 还原语义)。对其中 5 条做了**反证**(把修复退回去确认变红)。
+两处结构闸自己踩过「注释里的关键词被当成代码」的坑,已改为先剥注释再做位置断言。
+
+**回归**:typecheck 29/29 · app 1165 · session-ui 121 · ui 99 · branding 82(+8 skip),全部 0 fail。
+
+## 十、这三轮的方法论账
+
+同一个形态重复了三次:**读码觉得对 → 合进去 → 下一轮 review 发现它引入了更重的问题**。
+共性不是粗心,是三件具体的事:
+
+1. **把"我以为的语义"当成既成事实**。「SessionStatus 是全局表」「trap 会终止脚本」
+   「两种协议通用」—— 三条都是没验证就写进注释、再据此改代码的断言。
+   注释写得越笃定,后面的人(包括我自己)越不会回去查。
+2. **声称与事实脱节**。commit message 写「抽成 helper 三处同待遇」,实际只落一处;
+   写「注册退出时清理」,而 trap 正常结束根本不触发。**写下的话没有被任何闸检验。**
+3. **测试只钉我想到的那条路径**。第一轮 100+ 条全绿却没拦住 🔴,因为一条多目录用例都没有;
+   第三轮之前 21 条 stale-busy 全绿,因为一条 `retry` 用例都没有。
+
+对应的做法已落在本轮:断言型注释必须有闸钉住它的**前提**(如「bootstrap 同款调用确实带 v1 守卫」
+这条测试,上游哪天变了会先红);覆盖面声明改成可数的结构闸;
+新增用例优先补**我原本没想到的那一类**(三态而非两态、多目录而非单目录、回收态而非首帧)。
+
+⚠️ 仍然未消除的一类:`0.0.0` 那种「注释里出现关键词被结构闸误判为代码」的脆弱性 ——
+本轮两处结构闸各踩一次。现在靠剥注释规避,不是根治。
+
+## 十一、第四轮 code-review(2026-09-19,分支 `fix/preflight-round3-reconcile-and-delivery`)
+
+三条,**全部来自第三轮自己的修复** —— 与 §十 记的形态第四次重合:两条是"修法本身带进来的新缺陷",
+一条是"声称已分流、实际只分流了一半"。
+
+| 级别 | 位置 | 问题 | 归属 |
+|---|---|---|---|
+| 中 | `prompt-input/history.ts` | 快照产出侧写 `id: item.commentID ?? item.key`,给**本来没有批注的卡**塞了个伪 commentID,回填时又当真 ID 写回 → **历史往返不恒等**。而三处下游都按「有无 commentID」分流,全被击穿:① `contextItemKey` 从 `file:/a.ts:3:5` 变成 `file:/a.ts:3:5:c=file:/a.ts:3:5`,与重新添加同一选区算出的 key 不等 → `context.add()` 去重失效,输入框出现**两张同源卡**并一起发给模型(REQ-116 白烧 token 那一族)② `build-request-parts.ts` 有 commentID 的分支不写 url 集,「prompt 已 @mention 同路径则丢重复卡」对历史找回的卡失效 ③ `openComment` 的 `if (!item.commentID) return` 守卫被绕过 → 点这张卡去 focus 一条**不存在**的批注,还顺手撑开评审面板 / 切走 tab(改动前点它是 no-op) | 第三轮引入 |
+| 中 | `global-sync/stale-busy.ts` | 反向对账新加的 `if (!directoryOf(id)) continue` **恰好把 REQ-100 ① 要救的那一类永久关在门外**,链条是闭合的:`submit.ts` 停止兜底 4s 后把状态写成 idle → `server-session.ts` 的 LRU `preserve` 只钉住非 idle 的会话,它当场失去保护、从 `data.info` 被挤掉 → `session.get()` 返回 undefined → `directoryOf` 恒为 undefined → 反向对账永久跳过它;而唯一会重新 `resolve` 的 `loadActiveSessionsQuery` 是 `staleTime: Infinity` + 三个 `refetchOn*: false`,不会再跑第二次,后端半死也不推事件。净效果:后端还在跑,前端永久自认 idle,`queueEnabled` 判为不忙 → 用户下一条消息**绕过队列**与仍在运行的那轮并发 —— 正是首版反向对账要消灭的形态 | 第三轮引入 |
+| 低 | `pages/session.tsx` | 队列路径只分流了 description,title 仍复用通用的「这条可能没发出去,**已放回输入框**」,而这条路径明确不回输入框(正文自己写的是「仍在队列里」)。同一个 toast 标题与正文互相矛盾 → 用户照标题去输入框找原文,那里是空的,以为内容彻底丢了、重新手打一遍 | 第三轮只修了一半 |
+
+**修法要点**
+
+- **快照只承载真批注 ID**:`PromptHistoryComment.id` 放开成可选,没有批注就缺席 ——
+  store 的 dedup key 是**派生值**,回填后由 `contextItemKey` 按原样重算,不需要被持久化。
+  两个 composer 的回填侧同步要求 `item.id`(批注 store 按 id 索引,没真 id 的条目不属于它)。
+  文件头新增第二条不变量:**往返恒等**。原有的「判据同源」只保证"不丢",恒等才保证"不变形"。
+- **守卫不删,改成可满足**:新增 `collectUnresolvedBusySessions`(与 `collectMissingBusySessions`
+  严格互补,只差 `!directoryOf` 那一支),调用方拿这份名单先 `session.resolve()` 再下判定。
+  补进来后状态变非 idle → LRU `preserve` 重新钉住它 → 正向清理有目录可依,
+  「凡是补得进来的就必须清得掉」这个不变量**仍然成立**。
+  (直接删守卫会退回第三轮修掉的"自造幻影 busy";这是两难里的第三条路。)
+- **queued 专属 title**:新增 `prompt.toast.promptNotDelivered.queued.title`,en/zh 各自落地、
+  其余 60 份走 en 兜底(共 62 份字典)。
+
+**测试**:新增 19 条。
+- `history.test.ts` +4(往返恒等族:无注释选区卡 / 无选区附件卡不得被造 ID、真批注照旧带回、
+  快照里不得残留 store dedup key)
+- `prompt-state.test.ts` +3(**用户可见现象的端到端闸**,跨 `history.ts` × `prompt-state.ts`:
+  加卡 → 快照 → 回填 → 再加同一选区,仍只有一张卡)
+- `stale-busy.test.ts` +6(前置名单与反向判定严格互补 / **resolve 后重跑就补得上**的两段式闭环 /
+  补进来仍清得掉 / 富状态与乐观消息护栏 / 目录已知时名单为空)
+- `server-sync-reconcile-protocol.test.ts` +3(结构闸:resolve 必须在判定**之前**、必须 `await`、
+  单条失败不得掀翻整轮)
+- `pages/session-queued-toast.test.ts` 新建 +5(结构闸 + 字典不变量:queued title 不得复用通用键、
+  两条文案必须真的不同、queued title 不得声称「已放回输入框」且要点明「仍在队列里」)
+
+**反证**:三个 🔴 修复各自退回去确认变红 —— `history.ts` 退回 → history 3 条 + prompt-state 2 条红;
+`session.tsx` 退回 → 文案闸 1 条红。`stale-busy` 的两段式闭环在纯函数层由
+「resolve 之后重跑」那条用例直接钉住(同一 input 下 resolve 前为空、resolve 后有值)。
+
+**回归**:typecheck 33/33 · app 1186 pass / 0 fail(148 文件),全绿。
+
+**回退方法**:三笔各自独立可 `git revert`(P4)——
+`42e961bed5`(历史快照身份)/ `61be8a5176`(反向对账 resolve 前置)/ 本记录所在的这一笔(queued 文案 + 62 份字典)。
+revert 第一笔会让无注释的卡重新拿到伪 ID(去重失效);revert 第二笔会让停止兜底后被 LRU 挤掉的
+会话重新永久自认 idle;第三笔纯文案,revert 无功能影响。
+
+### 本地版真机验证(2026-09-19,`DeskFox 本地版.app` 2026.11.2 arm64)
+
+产物:`packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app`
+(`bash packages/branding/scripts/build-deskfox-electron.sh -Env local`,appId `ai.deskfox.app.local`)。
+**全程与 user 的正式版共存**,只杀本地版;为免踩 GUI 自动化坑 9(local 只隔离 DB 与身份、
+不隔离 `~/.opencode` 配置 → 测试实例会连上真飞书桥、抢消息路由),本轮用
+`XDG_CONFIG_HOME=<临时目录>` 起,配置由 local 那份拷贝而来并**摘掉 feishu-bridge plugin**;
+启动日志确认无 `[wss] connected`。
+
+| 检查 | 结果 |
+|---|---|
+| 全量冒烟 `smoke.py`(供应商 / 面板 / 设置 / 文件预览 / 启动) | 24 / 24 通过,0 崩溃 0 警告 |
+| 冷启动健康检查 ×2(真 kill + 真冷启) | 两次都 **CLEAN**(无 error toast / JS 异常 / 致命 console) |
+| 定向:引用卡历史往返保真(加卡 → 发送 → ↑ 翻历史) | 通过 —— 1 张进、1 张原样回来,卡面文字一致 |
+| 定向:点历史找回的卡 | 通过 —— 不崩、无空白 tab、tabs 数不变 |
+| 产物层:`renderer/assets/main-*.js` 不再含 `commentID ?? *.key` | 0 命中 ✓ |
+| 产物层:`promptNotDelivered.queued.title` 已进 bundle + zh 分包含新中文标题 | ✓ |
+| 双轮验收(stale 实例 + 冷启动后干净实例各跑一遍冒烟 + 定向) | 两轮均全绿 |
+
+探针脚本:`packages/branding/smoke/round4_review_check.py`(文件头写明验什么 / 不验什么)。
+
+**GUI 到不了、只由自动化闸覆盖的三处**(写清楚,免得下次把绿灯读成"三条都真机过了"):
+
+1. **无 commentID 卡的去重(现象 A)** —— 唯一产生它的真实入口是命令「将所选内容添加到上下文」,
+   而它 gated on `file.selectedLines`:需要代码/diff 视图的**行选区 UI**,markdown 预览区的纯文本
+   选中不设这个状态(实测该命令在命令面板里不出现);另一入口「附加文件」走 native 文件选择框,
+   CDP 不能驱动。→ 由 `context/prompt-state.test.ts` 的端到端闸覆盖(加卡 → 快照 → 回填 → 再加同一选区)。
+   真机验到的是**同一条往返代码路径的带 commentID 分支**,即本次改动最大的回归面。
+2. **反向对账(②)** —— 要"后端半死 + 停止兜底写 idle + 会话被 LRU 挤出"三件同时成立,GUI 造不出来。
+   → `global-sync/stale-busy.test.ts` 两段式闭环 + `server-sync-reconcile-protocol.test.ts` 顺序结构闸。
+3. **队列 toast 文案(③)** —— 要后端半死并等满 120s 超时。
+   → `pages/session-queued-toast.test.ts` 结构闸 + 字典不变量,产物侧另有 bundle 扫描(见上表)。
+
+顺带发现一处**文档过期**(未改):根 `CLAUDE.md` 验证约定段仍写「Mac wrapper(`.sh`)暂未集成 local」,
+实际 `build-deskfox-electron.sh` 早已支持 `-Env local`(本轮就是用它打的)。
+
+### 用 e2e 工具回测这三条的结论(2026-09-19,`e2e-context-flow-harness` 落地后)
+
+工具做出来之后,把三条修复各自拿回 GUI 层实测了一遍。**结论:一条都不能靠 GUI 钉住**,
+原因各不相同,逐条记清楚,免得以后误以为"有 e2e 了就都覆盖了"。
+
+| 修复 | GUI 可覆盖? | 实测依据 |
+|---|---|---|
+| ① 历史快照身份(伪 commentID) | **否** | 把修复退回(`id: item.commentID ?? item.key`)再跑 `context-card-flows`,**10 条照样全绿**。根因:GUI 能产出的卡**全都带 commentID**(右键两条路径给 `md-sel-*` / `quote-*`,编辑还原给 `quote-*`),而那个 fallback 只在 commentID 缺席时才触发 |
+| ② 反向对账 directoryOf 守卫 | **否** | 触发要"后端半死 + 停止兜底写 idle + 会话被 LRU 挤出"三件同时成立,且周期对账 60s 一轮;mock 能控 `/session/status`,但**造不出 LRU 逐出** |
+| ③ 队列 toast 文案 | **否(代价不值)** | 送达超时 `PROMPT_DELIVERY_TIMEOUT_MS = 120_000`;注入口 `deliveryTimeoutMs` 只是**单测 seam**,e2e 拿不到 → GUI 版要真等 120s,还要同时把会话做成 busy 让消息进队列 |
+
+**① 的唯一入口为什么够不到**:能产出无 commentID 卡的只有命令
+`addSelectionToContext`(`context.addSelection` / ⌘⇧L),它 gated on `file.selectedLines`。
+两条路都试过并失败:
+- 文件预览区:代码视图的行选区 UI 已于 2026-08-13 按 user 拍板移除 → 恒不可用;
+- 评审面板 diff:mock 出 `1 Change` 并点开 diff 后,拖行号区 + ⌘⇧L → **仍然 0 张卡**。
+
+**订正一处我先前的说法**:上一批 commit message 与 1-spec 写「首次把现象 A 搬进 GUI 层」——
+**不准确**。那条 e2e(`round-trips a card through history without changing its identity`)
+守的是「往返映射不得丢字段」这个**真**不变量(变异实测:把 `historyCommentToContextItem` 的
+`commentID: item.id` 改成 `undefined`,该用例立刻红 → 它不是空转),但它**守不住 ① 那个具体回归**。
+现象 A 至今只由 `context/prompt-state.test.ts` 的端到端单测覆盖。
+
+**推论(给以后看)**:e2e 的价值在"用户真能走到的路径";这三条恰好都落在
+**用户走不到、或走到要等两分钟**的地方 —— 这类不变量就该留在单测/结构闸,别硬往 GUI 搬。
+硬搬的代价是:写出一条看起来在覆盖、实际退回修复也不会红的用例(① 就差点变成这样)。
+
+### 方法论账(接 §十)
+
+§十 立的三条做法这轮**都生效了**:两处断言型注释因为带了前提闸而没再骗人,
+新增用例仍然优先补"我原本没想到的那一类"。但形态本身第四次重复,说明还缺一条:
+
+4. **修 A 时要问「这道守卫会不会恰好在 A 的链路上恒为假」**。
+   第三轮给反向对账加 `directoryOf` 守卫时,推理是"不认识的会话补了没收益";
+   漏掉的是"**它为什么不认识** —— 恰恰因为 A 那条路径刚把它挤出缓存"。
+   守卫与它要保护的场景共享同一个因果链时,守卫会静默地把场景一起挡掉。
+   同款:第三轮为了让快照"能表达全部 file 卡"而给 id 找了个 fallback,
+   没问"塞进去的这个值,下游会不会当成别的语义用"。
+
+## 十二、收尾(2026-09-19)
+
+- **人工验收清单**:[`4-人工验收清单.md`](./4-人工验收清单.md) —— 只列自动化盖不住、必须真人操作的场景
+  (P0 两条约 5 分钟:队列未送达文案 / 停止键+对账;P1 两条:引用卡真实观感 / 非 md 文件右键加入聊天)。
+  含**已实测过**的后端冻结/解冻命令(SIGSTOP/SIGCONT,只命中本地版)。
+- **被测产物**:`packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app`(2026-09-19 13:42,与 HEAD 一致)。
+- **可达性订正(2026-09-19,写人工清单时查出)**:第四轮 ③ 修的那条队列 toast,
+  **当前产品里用户触发不到** —— 上游 commit `ae7e2eb3fb`(2026-04-03,
+  "chore(app): remove queued follow-ups for now")用三处强制改写把
+  `settings.general.followup` 钉死成 `steer`(createEffect 回写 + getter 映射 + setter 映射),
+  于是 `session.tsx` 的 `queueEnabled` 恒为 false、消息永远不进队列。
+  连带:第三轮那批「停止兜底的撤销时机 + 队列排干」也落在同一条不可达路径上。
+  修复与结构闸留着(上游哪天把排队放回来就生效),但**别再把它当成用户可见收益**。
+  人工清单里原定的 P0-1 因此换成**主路径**的送达超时(会话空闲 + 后端冻结 → 120s →
+  「已放回输入框」且原文与引用卡真的回来)—— 那条才是用户真会遇到的。
+- **严重度订正**:第四轮 ② 反向对账的完整触发形态需要 `sessionInfoLimit = 2_048` 被撑满
+  (即加载过 2000+ 会话)才会发生 —— 实际触发概率远低于我最初标的「中」,它是**防御性修复**。
+  这一点在提出时没算清楚,记在这里。
+
+### 人工验收结果(2026-09-19,user 实测本地版 2026.11.2)
+
+- **停止键链路(REQ-100 ① + REQ-049 L1/L3)—— 通过**。持续冻结后端(拦截看门狗 3 次重启)下
+  实测四段咬合:停止请求未送达如实提示 → 约 4s 本地兜底复位按钮 → 看门狗重启提示 →
+  恢复后不诈尸、会话可用不串台。三条提示全中文、无静默失败。
+- **送达超时 120s —— 撤销测试,前提不可达**。看门狗 5s ping、3 次失败即重启,
+  实测冻结只维持 37~41 秒,等不到 120 秒。该闸是「看门狗也救不回来时的最后兜底」,
+  逻辑由单测覆盖。**这条修正了本批对 REQ-100 ④ 用户可见收益的估计**。
+- **顺带验到**:后端不可用时在新会话发送 → 有提示且**原文与引用卡都保住**,无静默蒸发 ✅;
+  但提示里 `Failed to fetch` 是浏览器原生英文串直透用户(非本批引入,建议单独排期)。
+- **中文输入法(P1-1)—— 通过**。右键浮层里 IME 组合态按 Enter 不提交、而是上屏候选内容,
+  再按一次才提交(`isImeComposingEvent` 分支,REQ-082)。**自动化绝对测不到这条**(无真 IME)。
+- **非 md 文件(P1-2)—— 通过**。PDF / .docx / .csv / 代码文件四类右键加入聊天均正常,
+  补上了 e2e 只覆盖 `.md` + `.txt` 两类留下的洞。
+
+**人工验收至此全部完成。** 本批 GUI 侧结论:核心失败处理链(停止 / 未送达 / 看门狗重启)
+表现符合设计且提示口径一致;唯一修正是 REQ-100 ④ 的 120s 闸在实际路径上轮不到。

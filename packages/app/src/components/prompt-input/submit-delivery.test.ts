@@ -133,3 +133,70 @@ describe("isPromptNotDelivered", () => {
     expect(isPromptNotDelivered({ notDelivered: true })).toBe(true)
   })
 })
+
+// [bug-repro: `/command` 分支首版没把 input.deliveryTimeoutMs 传给 withDeliveryDeadline,
+//  恒取生产值 120s —— 测试注入的 30ms 对它完全无效,于是这条路径**在单测里根本覆盖不到**。
+//  同一批里 prompt 路径也没真的共用 helper,而 commit message 已声称"三处同待遇"。]
+// 2026-09-18 第三轮 code-review · [feat: release-closeout-2026-09]
+describe("sendFollowupDraft · /command 路径同样受送达超时约束", () => {
+  function commandHarness(command: (input: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>) {
+    const status: Record<string, StatusRecord> = {}
+    const draft: FollowupDraft = {
+      sessionID: "ses_1",
+      sessionDirectory: "/tmp/project",
+      prompt: [{ type: "text", content: "/compact 收一下" } as never],
+      context: [],
+      agent: "build",
+      model: { providerID: "anthropic", modelID: "claude-opus-5" },
+    }
+    return {
+      status,
+      run: () =>
+        sendFollowupDraft({
+          api: { command } as never,
+          sync: { data: { command: [{ name: "compact" }] }, session: { optimistic: { add() {}, remove() {} } } } as never,
+          serverSync: {
+            session: {
+              set: (_k: string, id: string, value: StatusRecord) => {
+                status[id] = value
+              },
+            },
+          } as never,
+          draft,
+          optimisticBusy: true,
+          deliveryTimeoutMs: 30,
+        }),
+    }
+  }
+
+  test("🔴 后端挂住 → 超时抛 PromptNotDeliveredError(此前恒等 120s,等于没闸)", async () => {
+    const h = commandHarness(() => new Promise(() => {}))
+    const err = await h.run().then(
+      () => undefined,
+      (e) => e,
+    )
+    expect(isPromptNotDelivered(err)).toBe(true)
+  })
+
+  test("🔴 超时后 busy 回滚成 idle —— 命令没发出去,不该留着转圈", async () => {
+    const h = commandHarness(() => new Promise(() => {}))
+    await h.run().catch(() => {})
+    expect(h.status["ses_1"]).toEqual({ type: "idle" })
+  })
+
+  test("超时会 abort 请求本身", async () => {
+    let seen: AbortSignal | undefined
+    const h = commandHarness((_i, options) => {
+      seen = options?.signal
+      return new Promise(() => {})
+    })
+    await h.run().catch(() => {})
+    expect(seen?.aborted).toBe(true)
+  })
+
+  test("正常返回 → 不触发超时路径", async () => {
+    const h = commandHarness(async () => ({ ok: true }))
+    await expect(h.run()).resolves.toBe(true)
+    expect(h.status["ses_1"]).toEqual({ type: "busy" })
+  })
+})

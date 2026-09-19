@@ -83,17 +83,82 @@ export function collectStaleBusySessions(input: StaleBusyInput): string[] {
  *  `session.tsx` 的 `queueEnabled` 读同一个 store 判为不忙 → 用户下一条消息**绕过队列直接 prompt**,
  *  与仍在运行的那一轮并发。]
  *
- * 两条不恢复的情形:
- *   ① 本地已经是 busy —— 没什么可恢复
+ * 🔴 2026-09-18 第三轮 code-review 修正 —— 首版这两道守卫都不够:
+ *
+ *   (a) 只跳过 `type === "busy"`,于是把 **retry** 也当成「本地不忙」补成 busy。
+ *       `SessionStatus` 是三态,`retry` 还带 `attempt` / `message` / `action` / `next` 负载,
+ *       被倒计时横幅、配额超限升级 CTA、时间线 retry 行消费;调用方是 `{type:"busy"}` **整体覆盖**,
+ *       一补就把负载抹光 → 限流提示与升级入口当场消失,退化成普通转圈。
+ *       退避常达数分钟而对账 60 秒一轮 —— 几乎必中。
+ *       改为判「本地已非 idle」:语义是「本地已经显示它在动」,**不枚举具体状态**,
+ *       将来新增第四态自动受保护。`seedActiveSessionStatuses` 早有同款不变量
+ *       (跳过一切已定义的键),这里补齐到同一水位。
+ *
+ *   (b) 对**前端不认识**的会话(CLI 起的 / 子 agent 的 / 尚未加载 info)也照补 busy,
+ *       而正向清理第一道守卫就是 `if (!directory) continue` —— 正向永远够不着它。
+ *       后端转 idle 后这条 busy 再也清不掉,还因非 idle 被 `server-session.ts` 的 LRU
+ *       `preserve` 永久钉住:**反向方向自己造出了 REQ-100 要消灭的那种幻影 busy**。
+ *       改为要求 `directoryOf` 能定位 —— 两个方向的可达性必须对称:
+ *       **凡是补得进来的,就必须清得掉**。不认识的会话本来也不渲染在任何界面上,补了无收益、只有风险。
+ *
+ * 🔴 2026-09-19 第四轮 code-review —— 上面 (b) 那道守卫**恰好把 REQ-100 ① 要救的那一类关在门外**:
+ * [bug-repro: 链条是闭合的 —— `submit.ts` 的停止兜底 4s 后把 session_status 写成 idle
+ *  → `server-session.ts` 的 LRU `preserve` 只钉住 `status.type !== "idle"` 的会话,该会话**当场**
+ *  失去保护、从 `data.info` 被挤掉 → `session.get(id)` 返回 undefined → `directoryOf` 恒为 undefined
+ *  → 反向对账**永久跳过它**;而唯一会重新 `session.resolve()` 的 `loadActiveSessionsQuery`
+ *  配的是 `staleTime: Infinity` + 三个 `refetchOn*: false`,不会再跑第二次,后端半死也不推事件。
+ *  净效果:后端其实还在跑,前端永久自认 idle,`queueEnabled` 判为不忙 → 用户下一条消息绕过队列
+ *  与仍在运行的那一轮并发 —— 与首版反向对账要消灭的形态一模一样。]
+ *
+ * 修法**不是**删掉 (b) 的守卫(那会退回「补得进来、清不掉」的幻影 busy),而是让它**可满足**:
+ * 调用方先对这批会话补一次 `session.resolve()`,把 info 拉回本地,再跑本函数。
+ * 补进来后状态变非 idle → LRU `preserve` 重新钉住它 → 正向清理有目录可依,
+ * 「凡是补得进来的就必须清得掉」这个不变量仍然成立。需要 resolve 的名单由
+ * `collectUnresolvedBusySessions` 给出(与本函数同一套判据,只差最后一道)。
+ *
+ * 三条不恢复的情形:
+ *   ① 本地已经不是 idle —— 已经在显示"它在动"了,别拿粗状态去覆盖细状态
  *   ② 有未确认的乐观消息 —— 与上面同一道竞态护栏,该会话状态正在飞,别插手
+ *   ③ 查不出它属于哪个目录 —— 补进来就再也清不掉(见上 (b));调用方应先按
+ *      `collectUnresolvedBusySessions` 补 resolve,resolve 也拿不到才真的放过
+ *
+ * 注:这里**不**需要 `coveredDirectories` 守卫,那是正向专属的。
+ * `remote` 条目本就只来自查成功的目录,「后端说它忙」是正面证据;
+ * 正向是从本地表反推「后端没说它忙」,缺席才存在「没查过」的歧义。
  */
 export function collectMissingBusySessions(input: StaleBusyInput): string[] {
   const missing: string[] = []
   for (const [sessionID, isBusy] of Object.entries(input.remote)) {
     if (!isBusy) continue
-    if (input.local[sessionID]?.type === "busy") continue
+    const local = input.local[sessionID]?.type
+    if (local && local !== "idle") continue
     if (input.pending(sessionID)) continue
+    if (!input.directoryOf(sessionID)) continue
     missing.push(sessionID)
   }
   return missing
+}
+
+/**
+ * 反向对账的**前置**名单:后端说忙、本地不忙、没有在飞的乐观消息 —— 但**查不出目录**的会话。
+ *
+ * 即 `collectMissingBusySessions` 里因第 ③ 条被放过的那一批。它们并非"不该补",
+ * 而是"本地还不认识它":典型成因见上面 2026-09-19 那条 bug-repro(停止兜底写 idle →
+ * LRU 撤掉保护 → info 被挤掉)。调用方拿这份名单去 `session.resolve()`,
+ * 然后**重跑** `collectMissingBusySessions` —— 这次 `directoryOf` 就有值了。
+ *
+ * 判据与 `collectMissingBusySessions` 严格互补:同样跳过 ①②,唯一差别是这里要的正是
+ * `!directoryOf(id)` 的那一支。两个函数共用同一个 input,保证不会一个补一个漏。
+ */
+export function collectUnresolvedBusySessions(input: StaleBusyInput): string[] {
+  const unresolved: string[] = []
+  for (const [sessionID, isBusy] of Object.entries(input.remote)) {
+    if (!isBusy) continue
+    const local = input.local[sessionID]?.type
+    if (local && local !== "idle") continue
+    if (input.pending(sessionID)) continue
+    if (input.directoryOf(sessionID)) continue
+    unresolved.push(sessionID)
+  }
+  return unresolved
 }

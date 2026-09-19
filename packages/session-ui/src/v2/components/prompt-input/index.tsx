@@ -395,7 +395,17 @@ export function PromptInputV2Attachments(props: {
         >
           <For each={props.comments ?? []}>
             {(comment) => (
-              <div class="relative group shrink-0">
+              // FORK: e2e 测试契约 —— 断言卡片**身份**(路径 / 有无注释 / 真批注 ID),
+              //   不只数个数。没有它就只能靠 Tailwind class 拼选择器,一次样式调整就断。
+              //   2026-09-19 [feat: e2e-context-flow-harness]
+              <div
+                class="relative group shrink-0"
+                data-context-card=""
+                data-path={comment.path}
+                data-has-comment={comment.comment?.trim() ? "true" : "false"}
+                data-comment-id={comment.commentID ?? undefined}
+                data-kind={comment.kind ?? "file"}
+              >
                 <TooltipV2
                   value={comment.comment}
                   placement="top"

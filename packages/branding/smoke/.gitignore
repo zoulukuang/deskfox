@@ -1,5 +1,6 @@
 # 扫描工件(一次性产出,不入库)
 smoke-report.md
 smoke-report.json
+round4-report.json
 
 __pycache__/

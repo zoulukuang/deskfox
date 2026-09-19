@@ -30,8 +30,9 @@
   被 OpenCode Zen 免费档按 semver 拒(`1.17.0 or newer is required`)。两份构建 wrapper 补注入 +
   取值失败 fail-fast + `0.0.0-*` 显式拦截(该坏值本身是合法 semver,只做格式校验拦不住)。
 - **REQ-100(P1,唯一会丢数据)** 后端不可达时消息静默蒸发 + 停止键空转。回吐路径其实早已存在,
-  只是请求挂住时既不 resolve 也不 reject、catch 永远等不到 → 加 20s 送达超时(abort + 独立 deadline
-  双保险);忙闲对账改后端权威全量表,不再按目录切。
+  只是请求挂住时既不 resolve 也不 reject、catch 永远等不到 → 加送达超时(abort + 独立 deadline
+  双保险,阈值 **120s**;初定 20s,2026-09-18 放宽以压低"其实已送达却报没送达"的误报);
+  忙闲对账改为**按目录逐个查后端权威表 + 双向**(后端 SessionStatus 按 directory 分桶,不是全局表)。
 - **REQ-131** 引用提交后看不到原文 · **REQ-125** 加入聊天新建会话标题清一色相同(🔴 本批唯一
   R4 override,`prompt.ts` 3 行)· **REQ-130** 点 × 关标签把预览区整个收起 · **REQ-128** 工具折叠行
   整行可点致误触 · **REQ-123** 纯引用消息撤回验收归档 · **REQ-133** 文件预览 tab 内容区静默空白。
@@ -42,8 +43,17 @@
 0 残留、命中区 960px→126px、残留 busy 25s 自愈、坏值注入构建退出码 1。Win:自动闸 10 项逐项对照、
 e2e 142/142、冒烟 22/22、GUI 11/11、冷启动 2×CLEAN,并补上 mac 侧测不到的 PS1 注入块真执行 8 场景。
 
-**回归**:typecheck 29/29 · app 1129+41 · e2e 142 · core 1147 · session-ui 121 · media-gen 140 ·
-adapter-feishu-lark 792 · branding 77(+Win 8)· desktop 169 —— 全部 0 fail。新增测试 100+ 条。
+⚠️ **证据口径**:「冻后端 18s 回吐」取自 **20s 闸**时期;阈值改 120s 后未复表,现预期为约 2 分钟回吐。
+
+**发版前三轮 code-review(2026-09-18)**:合 main 后又跑三轮,**每轮都查出上一轮修复自己引入的回归**,
+合计 4 笔修复 commit 全部在发版前闭环 —— ① 对账丢目录作用域(把别的项目正在生成的会话打成 idle);
+② PS1 的 `trap` 缺 `break` 吞掉 REQ-132 两道 fail-fast,Win 实测 6 种坏值 exit=0 且坏值**被真的注入**
+(防线反向失效);③ 反向对账把 `retry` 碾成 `busy`(限流横幅与配额升级 CTA 消失)+ v1/v2 协议分流被删
+(v2 下对账完全空转)+ 主 `/command` 路径根本没套送达超时(斜杠命令连同附件蒸发)+ 停止兜底提前撤销
+(永久 busy 且队列永不排干)。详见 `docs/features/release-closeout-2026-09/3-changelog.md` 第九、十节。
+
+**回归**:typecheck 29/29 · app 1165 · e2e 142 · core 1147 · session-ui 121 · media-gen 140 ·
+adapter-feishu-lark 792 · branding 82(+8 skip)· desktop 169 —— 全部 0 fail。新增测试 120+ 条。
 
 **installer 路径**:(ship 后回填)
 
