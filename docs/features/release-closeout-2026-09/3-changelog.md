@@ -782,3 +782,32 @@ revert 第一笔会让无注释的卡重新拿到伪 ID(去重失效);revert 第
    但 `directories` 的另一来源 `Object.keys(children.children)` 若在 Win 上是反斜杠或盘符大小写
    不同的表示,会让 idle→busy 方向的覆盖面打折。非本批引入、本批只是复用,但 **Win 是唯一会同时
    存在两种路径写法的平台**,故记一笔。未实测坐实(本机未找到对应 `opencode.db`),不作结论。
+
+## 十四、Mac 侧对 §十三 的补测:本轮**新增**的三个结构闸也验过 CRLF(2026-09-19)
+
+§十三 扫的是**当时存在**的那批结构闸。而第四轮(§十一)之后又新增/改动了三处,
+Win 侧那次检查覆盖不到:
+
+- `packages/app/src/pages/session-queued-toast.test.ts` —— 全新文件(读 `session.tsx` 原文)
+- `packages/app/src/context/server-sync-reconcile-protocol.test.ts` —— 新增 3 条断言
+  (resolve 必须在判定之前 / 必须 await / 单条失败不掀翻整轮)
+- `packages/app/src/pages/session/file-viewer-fallback.test.ts` —— 顺带一并回归
+
+**没有读代码推断,而是把被读的源码真转成 CRLF 再跑**(与 §十三 同一口径:实跑而非阅读式审查):
+
+| 结构闸 | 被转成 CRLF 的源码 | CRLF 行数 | 结果 |
+|---|---|---|---|
+| `session-queued-toast` | `pages/session.tsx` | 2594 | ✅ 仍通过 |
+| `server-sync-reconcile-protocol` | `context/server-sync.tsx` | 910 | ✅ 仍通过 |
+| `file-viewer-fallback` | `pages/session/file-tabs.tsx` | 2027 | ✅ 仍通过 |
+
+免疫的原因:这三处用的是 `indexOf` 子串匹配与**不含换行**的正则
+(如 `/session\.resolve\([^)]*\)\.catch\(/`),没有 §十三 那条
+`/\n\s*return\n/` 式的"以 `\n` 起止"写法。
+
+**给后续加结构闸的人**:判据是「正则里有没有 `\n` 作为起止锚点」——
+有就必须先归一化行尾(照 `submit-structure.test.ts` 在读取处 `.replace(/\r\n/g, "\n")` 的做法),
+否则 mac 绿、Win 必红,且 pre-push 无分支条件 → **Win 侧任何 push 全被挡**。
+
+Mac 侧同批回归:typecheck 33/33 · 完整 `sh .husky/pre-push` exit 0(7 处包级测试全 0 fail)·
+全量 e2e 152/152。
