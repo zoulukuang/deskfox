@@ -649,6 +649,33 @@ revert 第一笔会让无注释的卡重新拿到伪 ID(去重失效);revert 第
 顺带发现一处**文档过期**(未改):根 `CLAUDE.md` 验证约定段仍写「Mac wrapper(`.sh`)暂未集成 local」,
 实际 `build-deskfox-electron.sh` 早已支持 `-Env local`(本轮就是用它打的)。
 
+### 用 e2e 工具回测这三条的结论(2026-09-19,`e2e-context-flow-harness` 落地后)
+
+工具做出来之后,把三条修复各自拿回 GUI 层实测了一遍。**结论:一条都不能靠 GUI 钉住**,
+原因各不相同,逐条记清楚,免得以后误以为"有 e2e 了就都覆盖了"。
+
+| 修复 | GUI 可覆盖? | 实测依据 |
+|---|---|---|
+| ① 历史快照身份(伪 commentID) | **否** | 把修复退回(`id: item.commentID ?? item.key`)再跑 `context-card-flows`,**10 条照样全绿**。根因:GUI 能产出的卡**全都带 commentID**(右键两条路径给 `md-sel-*` / `quote-*`,编辑还原给 `quote-*`),而那个 fallback 只在 commentID 缺席时才触发 |
+| ② 反向对账 directoryOf 守卫 | **否** | 触发要"后端半死 + 停止兜底写 idle + 会话被 LRU 挤出"三件同时成立,且周期对账 60s 一轮;mock 能控 `/session/status`,但**造不出 LRU 逐出** |
+| ③ 队列 toast 文案 | **否(代价不值)** | 送达超时 `PROMPT_DELIVERY_TIMEOUT_MS = 120_000`;注入口 `deliveryTimeoutMs` 只是**单测 seam**,e2e 拿不到 → GUI 版要真等 120s,还要同时把会话做成 busy 让消息进队列 |
+
+**① 的唯一入口为什么够不到**:能产出无 commentID 卡的只有命令
+`addSelectionToContext`(`context.addSelection` / ⌘⇧L),它 gated on `file.selectedLines`。
+两条路都试过并失败:
+- 文件预览区:代码视图的行选区 UI 已于 2026-08-13 按 user 拍板移除 → 恒不可用;
+- 评审面板 diff:mock 出 `1 Change` 并点开 diff 后,拖行号区 + ⌘⇧L → **仍然 0 张卡**。
+
+**订正一处我先前的说法**:上一批 commit message 与 1-spec 写「首次把现象 A 搬进 GUI 层」——
+**不准确**。那条 e2e(`round-trips a card through history without changing its identity`)
+守的是「往返映射不得丢字段」这个**真**不变量(变异实测:把 `historyCommentToContextItem` 的
+`commentID: item.id` 改成 `undefined`,该用例立刻红 → 它不是空转),但它**守不住 ① 那个具体回归**。
+现象 A 至今只由 `context/prompt-state.test.ts` 的端到端单测覆盖。
+
+**推论(给以后看)**:e2e 的价值在"用户真能走到的路径";这三条恰好都落在
+**用户走不到、或走到要等两分钟**的地方 —— 这类不变量就该留在单测/结构闸,别硬往 GUI 搬。
+硬搬的代价是:写出一条看起来在覆盖、实际退回修复也不会红的用例(① 就差点变成这样)。
+
 ### 方法论账(接 §十)
 
 §十 立的三条做法这轮**都生效了**:两处断言型注释因为带了前提闸而没再骗人,
