@@ -52,5 +52,9 @@ echo "[pre-push] fork 包单测 backstop…"
 #   写了测试也不会被自动跑。REQ-128 尤其需要:它是纯 CSS 作用域覆盖,有静默失效形态 ——
 #   覆盖被删或被挪进上游全局 CSS,整行又变回可点且没有任何报错。
 #   该包 121 条跑完 < 0.1s,零成本。
-(cd packages/session-ui && bun test)
+# ⚠️ 必须走 `bun run test`(而非裸 `bun test`):该 script 带 `--conditions=browser`,
+#   缺了它 bun 把 solid-js 解析到 server 构建,凡是 createRoot/createEffect 的测试当场报
+#   `getNextContextId cannot be used under non-hydrating context`,且报错不提示是参数丢了。
+#   2026-09-19 补:此前本行是裸 `bun test`,新增的 v2 判据闸在这里会红。
+(cd packages/session-ui && bun run test)
 # FORK-END

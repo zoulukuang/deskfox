@@ -230,17 +230,66 @@ heading** → 整组经典布局用例卡在 bootstrap,报错只说「找不到 
 仍未覆盖:R8-3 聊天区选区、R8-5/9(需要无 commentID 的卡)——
 **user 2026-09-19 拍板不补**,见 §十。
 
-## 十、已关闭的两项(user 2026-09-19 拍板:都不做)
+## 十、两项的最终处理(user 2026-09-19:**都做**)
 
-1. **v2 判据修复的去留** → **留着不撤,不再处理**。
-   `session-ui/.../interaction.ts` 那两处(1-spec §三)修的是 v2 composer,
-   而 DeskFox 只用经典布局 —— 因此它**没有任何测试覆盖**,这是已知且被接受的状态。
-   上游哪天真退役经典布局时,这 2 行是现成的;在那之前不要再为它补用例,也不要提议撤。
+> ⚠️ 上一版本节写的是「都不做」—— 那是**语音识别把「都做了」听成了「不做了」**,
+> user 当场订正。留痕于此,别再按旧版读。
 
-2. **两类未覆盖用例** → **不补**。
-   - R8-3 聊天区选区(helper `selectTextInChat` 已实现,缺一条带正文的 mock 消息)
-   - R8-5 / R8-9 需要**无 commentID 的卡**,其唯一入口(命令「将所选内容添加到上下文」)
-     因 §二.3 实际不可达(代码视图行选区 UI 2026-08-13 已移除)——
-     即命令面板里那条命令用户点不到。**这条也不处理**,记录在案即可。
+### 1. v2 判据修复:补单测覆盖(不撤)
 
-以上两项已关闭,后续盘点不要当作待办重开。
+`session-ui/src/v2/components/prompt-input/interaction-context-predicates.test.ts` —— 4 条,
+**直接构造真 controller 跑**,不在测试里复刻判据(复刻 = 测逻辑副本,本仓踩过多次):
+- 🔴 渲染侧不得按「有没有注释」筛卡(四张:有注释 / 空串 / 无字段 / 全空格,全要出现)
+- 🔴 只有一张无注释卡时也算「有东西可发」
+- 🔒 什么都没有时仍不可发(别把守卫放宽到永远为真)
+- 🔒 纯文本 / 纯图片的既有语义不变
+
+配套修了**两处闸的连带问题**:
+- `packages/session-ui/package.json` 的 `test` script 补 `--conditions=browser` ——
+  缺了它 bun 把 solid-js 解析到 **server** 构建,凡走 `createRoot/createEffect` 的测试当场报
+  `getNextContextId cannot be used under non-hydrating context`,**报错完全不提示是参数丢了**
+  (`packages/app/package.json` 有同款 `_fork_notes`,它 2026-08-09 踩过一次)。
+- `.husky/pre-push` 的 session-ui 那行从裸 `bun test` 改成 `bun run test` ——
+  裸命令不走 script、拿不到该参数,新增的判据闸在闸里会红。
+
+### 2. 两类未覆盖用例:一条补上,一条定性
+
+**R8-3 聊天区选区 → 已补**(`adds a chat quote card from a message selection`)。
+过程里挖到两条新事实:
+- 聊天区右键是**另一套菜单** `[data-slot="context-menu-host"]`(host.tsx),与预览区的
+  `md-selection-menu` 结构相同、slot 名不同 → 工具的菜单 helper 已泛化成两处共用。
+- mock 消息必须用仓里的 `fixtures.ts` builder;**assistant 消息的 `parentID` 悬空时整条不渲染
+  且无任何报错**(实测 rows=0)—— 工具现在会直接抛错点名这件事。
+
+**R8-5 / R8-9(需要无 commentID 的卡)→ 确认无法覆盖,原因已定性**:
+产品里**没有任何可达入口**能产出无 commentID 的卡 ——
+- `extractCommentsFromParts`(编辑消息还原)**总是**赋 `quoteCommentID(...)`;
+- 右键加入聊天两条路径都赋 `md-sel-*` / `quote-*`;
+- 唯一不赋的是 `addSelectionToContext`,见下。
+
+**「将所选内容添加到上下文」不是死命令,是条件命令**(我上一版说法不准,订正):
+`disabled: !canAddSelectionContext()`,判据要 `file.selectedLines(path) != null`;
+而代码视图的行选区 UI 已于 2026-08-13 拿掉(user 拍板「统一成右键加入聊天」),
+于是普通预览里它恒不可用,剩下能设该状态的只有评审面板的行评论交互。
+**不动它**,改为加一条闸钉住现状(`the add-selection command stays gated without a line selection`,
+带反面对照:同一选区走右键路径能产卡,证明"没反应"是门挡住而非选区没做出来)——
+防止有人看到"搜不到"就去"修好"它,那等于复活 2026-08-13 拿掉的交互。
+
+## 十一、当前覆盖(2026-09-19,经典布局实跑,10 条 / 17.8s)
+
+| # | 用例 |
+|---|---|
+| R8-1 | .md(light DOM)选中 → 右键 → 加入聊天(带注释) |
+| R8-2 | .txt(shadow DOM)同上 |
+| R8-3 | **聊天区**选中 → 右键 → 加入聊天(kind=chat + quote-* ID) |
+| R8-4 | @ 引用文件(且不产生引用卡) |
+| R8-8 | 不填注释也落卡且可见 |
+| R8-6+7 | 发送 → ↑ 翻历史 → 身份逐字段不变 |
+| R8-10 | 删卡 |
+| R8-11 | 浮层 Esc 取消不落卡 |
+| — | 点历史找回的卡不崩 / 不开空白 tab |
+| — | 「将所选内容添加到上下文」保持被门挡住(带反面对照) |
+
+回归:typecheck 33/33 · **全量 e2e 152/152(2.4m)** · app 1186 · session-ui 125,全 0 fail。
+
+仍未定的唯一一件:这 10 条(17.8s)是否纳入 `pre-push` 闸 —— 目前**未纳入**。

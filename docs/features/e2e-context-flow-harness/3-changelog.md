@@ -43,9 +43,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 |---|---|
 | `bun run typecheck` | 33 / 33 |
 | `packages/app` 单测 | 1186 pass / 0 fail |
-| `packages/session-ui` 单测 | 121 pass / 0 fail |
-| 新增 e2e `context-card-flows.spec.ts` | **8 pass / 0 fail(15.3s,经典布局)** |
-| **全量 e2e** | **150 pass / 0 fail(2.2m)** |
+| `packages/session-ui` 单测 | 125 pass / 0 fail |
+| 新增 e2e `context-card-flows.spec.ts` | **10 pass / 0 fail(17.8s,经典布局)** |
+| 新增单测 `interaction-context-predicates.test.ts` | 4 pass / 0 fail |
+| **全量 e2e** | **152 pass / 0 fail(2.4m)** |
 | 反证 | 把 `interaction.ts` 两处判据退回 → 用例「adds a visible card even without a comment」立刻红(0 张卡) |
 
 ## 回退方法
@@ -57,10 +58,12 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 遗留
 
-**已全部关闭**(user 2026-09-19 拍板,见 1-spec §十):
-- 经典布局覆盖 → 已成为唯一覆盖面,8 条用例全绿
-- @ 引用用例 → 已补
-- v2 判据修复的去留 / 聊天区选区 / 「将所选内容添加到上下文」不可达 → **都不做**
+**已全部处理**(user 2026-09-19 订正为「都做」,见 1-spec §十):
+- 经典布局覆盖 → 唯一覆盖面,10 条全绿
+- @ 引用 / 聊天区选区 → 都已补
+- v2 判据修复 → 补了 4 条 session-ui 单测(并修了 test script 与 pre-push 两处拿不到
+  `--conditions=browser` 的连带问题)
+- 「将所选内容添加到上下文」→ 定性为**条件命令**(非死命令),不动它,加闸钉住现状
 
 唯一仍未定的只剩:这 8 条(15.3s)是否纳入 `pre-push` 闸 —— 目前**未纳入**
 (该闸现为 typecheck + 各包单测,不含 e2e)。

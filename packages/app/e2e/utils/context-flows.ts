@@ -29,6 +29,7 @@
 
 import { expect, type Locator, type Page } from "@playwright/test"
 import { base64Encode } from "@opencode-ai/core/util/encode"
+import { assistantMessage, userMessage } from "./fixtures"
 import { mockOpenCodeServer, type MockServerConfig } from "./mock-server"
 
 const T0 = 1_700_000_000_000
@@ -40,7 +41,9 @@ export type BootstrapOptions = {
   files: ContextFlowFile[]
   directory?: string
   sessionTitle?: string
-  /** 直接透传给 mock-server 的额外配置(如 pageMessages / vcsDiff) */
+  /** 预置到会话里的消息(给「聊天区选区」这类用例用);不传则空会话 */
+  messages?: { id: string; role: "user" | "assistant"; text: string }[]
+  /** 直接透传给 mock-server 的额外配置(如 findFiles / vcsDiff) */
   mock?: Partial<MockServerConfig>
 }
 
@@ -112,7 +115,32 @@ export async function bootstrapContextFlow(page: Page, options: BootstrapOptions
             ignored: false,
           })),
     fileContent: (path) => ({ type: "text", content: byName.get(path.replace(/\\/g, "/")) ?? "" }),
-    pageMessages: () => ({ items: [] }),
+    // 用仓里现成的 fixtures builder,不手搓消息结构(手搓的第一版 rows=0,渲染不出来)
+    pageMessages: () => ({
+      items: (options.messages ?? []).map((message, index) =>
+        message.role === "user"
+          ? userMessage({ id: message.id, sessionID, text: message.text })
+          : assistantMessage({
+              id: message.id,
+              sessionID,
+              // assistant 消息必须挂在**真实存在**的 user 消息上:parentID 悬空时整条不渲染
+              // (实测 rows=0,且没有任何报错)。所以这里只认前面最近的一条 user 消息。
+              parentID: (() => {
+                const parent = (options.messages ?? [])
+                  .slice(0, index)
+                  .reverse()
+                  .find((m) => m.role === "user")
+                if (!parent) {
+                  throw new Error(
+                    `bootstrapContextFlow: assistant 消息 "${message.id}" 前面没有 user 消息 —— parentID 会悬空,整条不渲染`,
+                  )
+                }
+                return parent.id
+              })(),
+              parts: [{ id: `${message.id}_text`, type: "text", text: message.text }],
+            }),
+      ),
+    }),
     ...options.mock,
   })
 
@@ -229,24 +257,32 @@ async function readProductSelection(page: Page) {
   })
 }
 
+/**
+ * 选区右键菜单有两个来源,结构相同、slot 名不同:
+ *   · 文件预览区 → `[data-slot="md-selection-menu"]`(file-tabs.tsx)
+ *   · 聊天区     → `[data-slot="context-menu-host"]`(utils/context-menu-host/host.tsx)
+ * 两者都是「菜单项 Add to Chat → 输入浮层 → 提交」两步,且两个按钮同名。
+ */
+const MENU_SLOTS = '[data-slot="md-selection-menu"], [data-slot="context-menu-host"]'
+
 /** 在刚选中的位置右键,停在「菜单已弹出」。 */
 export async function rightClickSelection(page: Page, box: { x: number; y: number; width: number; height: number }) {
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2)
   await page.mouse.down({ button: "right" })
   await page.mouse.up({ button: "right" })
-  const menu = page.locator('[data-slot="md-selection-menu"]')
+  const menu = page.locator(MENU_SLOTS).first()
   await expect(menu).toBeVisible()
   return menu
 }
 
 /**
- * 菜单「加入聊天」→ 输入浮层 → 提交。
+ * 菜单「加入聊天」→ 输入浮层 → 提交。预览区与聊天区共用。
  *
- * `comment` 留空即「不填注释直接加」。提交手势用 Enter(与按钮等价,实测 2×2 一致),
- * 因为浮层的提交按钮与菜单项同名,用键盘路径可读性更好。
+ * `comment` 留空即「不填注释直接加」。提交手势用 Enter(与点按钮等价,2×2 实测一致),
+ * 因为浮层的提交按钮与菜单项同名,键盘路径可读性更好。
  */
-export async function addToChatFromViewer(page: Page, options: { comment?: string } = {}) {
-  const menu = page.locator('[data-slot="md-selection-menu"]')
+export async function addToChatFromMenu(page: Page, options: { comment?: string } = {}) {
+  const menu = page.locator(MENU_SLOTS).first()
   await menu.getByRole("button", { name: "Add to Chat" }).click()
   const textarea = menu.locator("textarea")
   await expect(textarea).toBeVisible()
@@ -254,6 +290,9 @@ export async function addToChatFromViewer(page: Page, options: { comment?: strin
   await textarea.press("Enter")
   await expect(menu).toBeHidden()
 }
+
+/** 预览区专用别名(语义更直白;实现与聊天区共用)。 */
+export const addToChatFromViewer = addToChatFromMenu
 
 /** 输入区所有引用卡的身份快照(两套 composer 共用 `[data-context-card]` 契约)。 */
 export function contextCards(page: Page): Locator {
@@ -330,16 +369,27 @@ export async function mentionFile(page: Page, name: string) {
   await expect(editor).toContainText(name)
 }
 
-/** 聊天区(消息气泡)里选中一段文字并右键,复用预览区那套机制。 */
+/**
+ * 聊天区(消息气泡)里选中一段文字。
+ *
+ * 与预览区同一套机制(真鼠标拖选 → 产品从 selection 读),差别只在 scope:
+ * 消息行锚点是 `[data-message-id]`(见 session.tsx / find/dom-highlight.ts),
+ * 不 scope 会撞到右侧会话列表里的同名标题文本。
+ */
 export async function selectTextInChat(page: Page, needle: string) {
-  const target = page.locator('[data-component="session-messages"], main').getByText(needle, { exact: false }).first()
+  const target = page.locator("[data-message-id]").getByText(needle, { exact: false }).first()
   await expect(target).toBeVisible()
   const box = await target.boundingBox()
   if (!box) throw new Error(`selectTextInChat: 拿不到 "${needle}" 的 boundingBox`)
   const y = box.y + box.height / 2
-  await page.mouse.move(box.x + 2, y)
+  await page.mouse.move(box.x + 4, y)
   await page.mouse.down()
   await page.mouse.move(box.x + box.width * 0.6, y, { steps: 10 })
   await page.mouse.up()
-  return { box }
+  let selected = await readProductSelection(page)
+  if (!selected.trim()) {
+    await target.click({ clickCount: 3 })
+    selected = await readProductSelection(page)
+  }
+  return { text: selected, box }
 }
