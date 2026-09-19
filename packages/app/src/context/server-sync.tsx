@@ -46,7 +46,11 @@ import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
-import { collectMissingBusySessions, collectStaleBusySessions } from "./global-sync/stale-busy"
+import {
+  collectMissingBusySessions,
+  collectStaleBusySessions,
+  collectUnresolvedBusySessions,
+} from "./global-sync/stale-busy"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
 import type { ServerApi } from "@/utils/server"
@@ -388,6 +392,20 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     //   反向不需要 coveredDirectories 守卫:remote 里的条目**本来就只来自查成功的目录**,
     //   是"后端明确说它在忙"的正面证据;而正向清理是从本地表反推"后端没说它忙",
     //   缺席既可能是真 idle、也可能是这个目录压根没查 —— 那才需要守卫。
+    // 🔴 2026-09-19 第四轮 code-review:反向方向要求 `directoryOf` 能定位(stale-busy.ts 第 ③ 条),
+    //   而 REQ-100 ① 那条链路恰好让它恒为 undefined —— 停止兜底把状态写成 idle 后,
+    //   server-session 的 LRU `preserve` 只钉住非 idle 的会话,该会话当场失去保护、从 data.info
+    //   被挤掉,`session.get()` 从此返回 undefined;唯一会重新 resolve 的 loadActiveSessionsQuery
+    //   是 staleTime: Infinity + refetchOn* 全 false,不会再跑第二次。净效果:后端还在跑,
+    //   前端永久自认 idle,下一条消息绕过队列与它并发(= 反向对账本来要消灭的形态)。
+    //   所以先把这批「后端说忙、本地却不认识」的会话 resolve 回来,再下判定 ——
+    //   补进来后状态非 idle,LRU 会重新钉住它,正向清理也就有目录可依,不变量仍成立。
+    //   resolve 失败(会话已删 / 后端仍不可达)就保持原样跳过,与改动前同。
+    const unresolved = collectUnresolvedBusySessions(args)
+    if (unresolved.length > 0) {
+      await Promise.all(unresolved.map((sessionID) => session.resolve(sessionID).catch(() => {})))
+    }
+    // `args.local` 是 store 代理、`directoryOf` 是闭包 —— 两者都读实时值,resolve 后重跑即可生效。
     const missing = collectMissingBusySessions(args)
     for (const sessionID of missing) session.set("session_status", sessionID, { type: "busy" })
   }

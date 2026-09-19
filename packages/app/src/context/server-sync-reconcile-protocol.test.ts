@@ -75,3 +75,31 @@ describe("周期对账 · 协议分流", () => {
     expect(RECONCILE).toContain("Object.keys(children.children)")
   })
 })
+
+// FORK 2026-09-19 第四轮 code-review —— 两段式反向对账的结构闸。
+// [bug-repro: 反向对账要求 directoryOf 能定位,而 REQ-100 ① 那条链路(停止兜底写 idle →
+//  LRU preserve 撤掉保护 → info 被挤掉)让它恒为 undefined,于是那一类会话永久补不回 busy,
+//  用户下一条消息绕过队列与仍在跑的那轮并发。修法是补判定**之前**先 resolve 一次。]
+//
+// 同样是结构闸而非行为测:纯逻辑部分已在 global-sync/stale-busy.test.ts 覆盖
+// (含「resolve 之后重跑就补得上」的两段式闭环),这里只钉调用侧的顺序不被再次拆掉。
+describe("周期对账 · 反向补状态前的 resolve", () => {
+  test("🔴 resolve 必须发生在 collectMissingBusySessions **之前**", () => {
+    const unresolved = CODE.indexOf("collectUnresolvedBusySessions(")
+    const resolve = CODE.indexOf("session.resolve(", unresolved)
+    const missing = CODE.indexOf("collectMissingBusySessions(")
+    expect(unresolved).toBeGreaterThan(-1)
+    expect(resolve).toBeGreaterThan(unresolved)
+    expect(missing).toBeGreaterThan(resolve)
+  })
+
+  test("🔴 必须 await —— 不然判定跑在 info 回来之前,等于没修", () => {
+    const window = CODE.slice(CODE.indexOf("collectUnresolvedBusySessions("), CODE.indexOf("collectMissingBusySessions("))
+    expect(window).toContain("await Promise.all(")
+  })
+
+  test("🔒 单个会话 resolve 失败不得掀翻整轮对账", () => {
+    const window = CODE.slice(CODE.indexOf("collectUnresolvedBusySessions("), CODE.indexOf("collectMissingBusySessions("))
+    expect(window).toMatch(/session\.resolve\([^)]*\)\.catch\(/)
+  })
+})

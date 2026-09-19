@@ -9,7 +9,12 @@
 //    **当时 100+ 条测试全绿也没拦住,因为一条多目录用例都没有。** 本文件补齐该族。
 
 import { describe, expect, test } from "bun:test"
-import { collectMissingBusySessions, collectStaleBusySessions, type StaleBusyInput } from "./stale-busy"
+import {
+  collectMissingBusySessions,
+  collectStaleBusySessions,
+  collectUnresolvedBusySessions,
+  type StaleBusyInput,
+} from "./stale-busy"
 
 const never = () => false
 const DIR_A = "/proj/a"
@@ -235,5 +240,74 @@ describe("collectMissingBusySessions —— 不得碾掉 retry 等非 idle 的�
   test("本地 idle / 缺席 → 仍然要补(别把守卫收得连正事都不干了)", () => {
     expect(collectMissingBusySessions(args({ local: { a: { type: "idle" } }, remote: { a: true } }))).toEqual(["a"])
     expect(collectMissingBusySessions(args({ remote: { b: true } }))).toEqual(["b"])
+  })
+})
+
+// FORK 2026-09-19 第四轮 code-review。
+// [bug-repro: 反向对账的 `if (!directoryOf(id)) continue` 恰好把 REQ-100 ① 要救的那一类
+//  永久关在门外,链条是闭合的 —— submit.ts 的停止兜底 4s 后把 session_status 写成 idle
+//  → server-session.ts 的 LRU `preserve` 只钉住 `type !== "idle"` 的会话,它当场失去保护、
+//  从 data.info 被挤掉 → session.get(id) 返回 undefined → directoryOf 恒为 undefined
+//  → 反向对账永久跳过它;唯一会重新 resolve 的 loadActiveSessionsQuery 是
+//  staleTime: Infinity + 三个 refetchOn* false,不会再跑第二次,后端半死也不推事件。
+//  净效果:后端还在跑,前端永久自认 idle,queueEnabled 判为不忙 → 用户下一条消息绕过队列
+//  与仍在运行的那一轮并发 —— 正是首版反向对账要消灭的形态。
+//  修法不是删守卫(那会退回"补得进来、清不掉"的幻影 busy),而是让它可满足:
+//  调用方先按 collectUnresolvedBusySessions 补一次 session.resolve(),再下判定。]
+describe("collectUnresolvedBusySessions —— 反向对账的 resolve 前置名单", () => {
+  const unknown = args({ remote: { ses_a: true }, directoryOf: () => undefined })
+
+  test("🔴 后端说忙、本地查不出目录 → 必须进名单(否则这条会话永远等不到对账)", () => {
+    expect(collectUnresolvedBusySessions(unknown)).toEqual(["ses_a"])
+  })
+
+  test("🔴 与 collectMissingBusySessions 严格互补 —— 同一 input 下两份名单无交集、且合起来不漏", () => {
+    const input = args({
+      local: { known: { type: "idle" }, unknown: { type: "idle" }, retrying: { type: "retry" } },
+      remote: { known: true, unknown: true, retrying: true },
+      directoryOf: (id) => (id === "unknown" ? undefined : DIR_A),
+    })
+    const missing = collectMissingBusySessions(input)
+    const unresolved = collectUnresolvedBusySessions(input)
+    expect(missing).toEqual(["known"])
+    expect(unresolved).toEqual(["unknown"])
+    // retry 两边都不要(富状态护栏);两份名单不得重叠
+    for (const id of unresolved) expect(missing).not.toContain(id)
+  })
+
+  test("resolve 之后重跑 → 这条会话终于补得上(两段式闭环)", () => {
+    // 模拟调用方:先拿名单去 session.resolve(),info 回到本地后 directoryOf 开始有值。
+    const resolved = new Set<string>()
+    const input = args({
+      local: { ses_a: { type: "idle" } },
+      remote: { ses_a: true },
+      directoryOf: (id) => (resolved.has(id) ? DIR_A : undefined),
+    })
+    expect(collectMissingBusySessions(input)).toEqual([])
+    for (const id of collectUnresolvedBusySessions(input)) resolved.add(id)
+    expect(collectMissingBusySessions(input)).toEqual(["ses_a"])
+  })
+
+  test("🔒 补进来之后必须清得掉 —— 不变量仍成立(否则就是自造幻影 busy)", () => {
+    // resolve 成功 → 目录已知 → 该目录在覆盖集内 → 后端转 idle 后正向清得掉。
+    const input = args({ local: { ses_a: { type: "busy" } }, remote: {} })
+    expect(collectStaleBusySessions(input)).toEqual(["ses_a"])
+  })
+
+  test("本地已非 idle / 有在飞的乐观消息 → 不进名单(与反向对账同一套护栏)", () => {
+    expect(
+      collectUnresolvedBusySessions(
+        args({ local: { s: { type: "retry" } }, remote: { s: true }, directoryOf: () => undefined }),
+      ),
+    ).toEqual([])
+    expect(
+      collectUnresolvedBusySessions(
+        args({ remote: { s: true }, pending: () => true, directoryOf: () => undefined }),
+      ),
+    ).toEqual([])
+  })
+
+  test("目录本来就查得到 → 不必 resolve,名单为空(别每轮都去打没必要的请求)", () => {
+    expect(collectUnresolvedBusySessions(args({ remote: { ses_a: true } }))).toEqual([])
   })
 })
