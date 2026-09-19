@@ -793,7 +793,14 @@ export function createPromptSubmit(input: PromptSubmitInput) {
           sync().set("session_status", session.id, { type: "idle" })
         }
         removeOptimisticMessage()
-        if (restoreInput()) restoreCommentItems(submission.target(), commentItems)
+        // FORK 2026-09-19 发版前 review:与下方 catch 分支同源 ——
+        // [bug-repro: 原先写成 `if (restoreInput()) restoreCommentItems(...)`。等 worktree 期间点停止时
+        //  输入框早已被 clearInput() 清空,用户很可能已开始打新内容 → restoreInput() 返 false →
+        //  整个分支短路,引用卡/附件卡**就地蒸发且无任何提示**。
+        //  本批已在 catch 分支修掉同一形态并写明理由,这条兄弟路径漏改。]
+        // 引用卡是**追加**语义、不覆盖正文,所以无论原文还不还得回去,卡都要还。
+        restoreInput()
+        restoreCommentItems(submission.target(), commentItems)
       }
 
       pending.set(pendingKey(session.id), { abort: controller, cleanup })
