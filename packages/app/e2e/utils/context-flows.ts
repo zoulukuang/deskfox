@@ -59,6 +59,14 @@ export type ContextCardSnapshot = {
   hasComment: boolean
   commentID: string | null
   kind: string
+  /**
+   * 卡面上的行号标签(`:3` / `:3-5`),没有选区时为 null。
+   * 2026-09-19 review 补:只有 path/hasComment/commentID/kind 时,
+   * 「有选区的引用卡」与「无选区的附件卡」在 e2e 里**无法区分** ——
+   * `submitMdSelection` 的 selection 若退化成恒 undefined(正是第三轮关心的形态),
+   * 一条 e2e 都不会红。legacy 卡片已经渲染了行号文本,直接读它。
+   */
+  selectionLabel: string | null
 }
 
 const SERVER = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
@@ -190,9 +198,10 @@ export async function bootstrapContextFlow(page: Page, options: BootstrapOptions
  * 左侧栏有「所有文件 / N 更改」两个 tab,先确保停在「所有文件」。
  */
 export async function openFileInPreview(page: Page, name: string, needle: string) {
-  const allFilesTab = page.getByRole("tab", { name: "All files" })
-  if (await allFilesTab.isVisible().catch(() => false)) await allFilesTab.click()
-
+  // 左侧栏默认就停在「所有文件」(layout 默认 tab = "all"),不需要再点一次。
+  // 2026-09-19 review 修正:原先有一段 `if (await tab.isVisible().catch(()=>false)) click()` ——
+  // 瞬时判定、不 auto-wait(AGENTS.md 禁把可见当就绪),实测从未生效过,
+  // 但默认值一改就会变成"只在慢机器上红"的 flake。去掉。
   const row = page.locator('[data-component="filetree"]').getByText(name, { exact: true }).first()
   await expect(row).toBeVisible()
   await row.click()
@@ -217,26 +226,58 @@ export async function selectTextInPreview(page: Page, needle: string) {
   await expect(target).toBeVisible()
   const box = await target.boundingBox()
   if (!box) throw new Error(`selectTextInPreview: 拿不到 "${needle}" 的 boundingBox`)
-  const y = box.y + box.height / 2
+  const text = await dragSelect(page, target, box, needle)
+  return { text, box }
+}
 
-  // 先按用户最常见的动作拖选;拖选对 padding / 行内换行敏感,失败就退到三击整段选中
-  // (也是真实用户动作,且对布局不敏感)。两者都走真鼠标事件 —— 产品只认这一种。
+/**
+ * 真鼠标拖选,并**断言产品读到的选区确实含 needle**。
+ *
+ * 2026-09-19 review 修正:原实现只断言 `text.length > 3`,而定位用的是
+ * `getByText(..., {exact:false}).first()` —— 匹配到的可能是包裹容器而非目标那一行,
+ * 于是 y 落在容器竖直中点、拖中别的片段,卡照样落、10 条用例照样全绿(选错文字还全绿)。
+ * 现在两条路径(拖选 / 三击兜底)受同一个断言约束:选区必须真的包含 needle。
+ */
+async function dragSelect(
+  page: Page,
+  target: Locator,
+  box: { x: number; y: number; width: number; height: number },
+  needle: string,
+) {
+  const y = box.y + box.height / 2
   await page.mouse.move(box.x + 4, y)
   await page.mouse.down()
   await page.mouse.move(box.x + box.width * 0.55, y, { steps: 10 })
   await page.mouse.up()
-  let selected = await readProductSelection(page)
-  if (!selected.trim()) {
+
+  // 拖选对 padding / 行内换行敏感;失败退到三击整段选中(同样是真实用户动作、对布局不敏感)。
+  // 注:这是对"选区"这一状态的重试,但两条路都必须通过下面同一条内容断言,
+  // 不存在"换条路悄悄选了别的东西"的空间。
+  if (!(await readProductSelection(page)).includes(needle)) {
     await target.click({ clickCount: 3 })
-    selected = await readProductSelection(page)
   }
-  return { text: selected, box }
+
+  await expect
+    .poll(async () => (await readProductSelection(page)).replace(/\s+/g, " "), {
+      message: `选区里必须包含 "${needle}" —— 否则后续右键/加入聊天验的就不是这段文字`,
+      timeout: 5_000,
+    })
+    .toContain(needle)
+
+  return readProductSelection(page)
 }
 
-/** 按产品 selection-history.ts 的同一套策略读选区:先问各 shadow root,再问 document。 */
+/**
+ * 按产品 selection-history.ts 的同一套策略读选区:先问各 shadow root,再问 document。
+ *
+ * 2026-09-19 review 修正:原实现用 `for (i<10) { requestAnimationFrame }` 轮询,
+ * 违反 e2e/AGENTS.md「禁止用 animation-frame counts 同步」,且 10 帧后读不到就
+ * **静默返回空串** —— 本该硬失败的「选区没做出来」被降级成一次悄悄的行为分叉。
+ * 改为 Playwright 的 expect.poll(有超时、失败即红)。
+ */
 async function readProductSelection(page: Page) {
-  return page.evaluate(async () => {
-    const read = () => {
+  const read = () =>
+    page.evaluate(() => {
       const roots = [...document.querySelectorAll("*")]
         .map((el) => (el as Element & { shadowRoot?: ShadowRoot | null }).shadowRoot)
         .filter((root): root is ShadowRoot => !!root)
@@ -246,15 +287,8 @@ async function readProductSelection(page: Page) {
       }
       const win = window.getSelection()
       return win ? win.toString() : ""
-    }
-    // 选区是同步状态,但 shadow 宿主的 getSelection 在 mouseup 后可能晚一帧可见
-    for (let i = 0; i < 10; i++) {
-      const value = read()
-      if (value.trim()) return value
-      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
-    }
-    return read()
-  })
+    })
+  return read()
 }
 
 /**
@@ -306,15 +340,24 @@ export async function contextCardSnapshots(page: Page): Promise<ContextCardSnaps
       hasComment: el.getAttribute("data-has-comment") === "true",
       commentID: el.getAttribute("data-comment-id"),
       kind: el.getAttribute("data-kind") ?? "file",
+      selectionLabel: ((el.textContent ?? "").match(/:\d+(?:-\d+)?/) ?? [null])[0],
     })),
   )
 }
 
-/** 删掉第 index 张卡(卡片右上角 ✕;legacy 与 v2 的 aria-label 不同,两个都试)。 */
+/**
+ * 删掉第 index 张卡(卡片右上角 ✕)。
+ *
+ * 2026-09-19 review 修正:原实现 `card.locator("button").last()` 是**纯为绕 strict 模式**
+ * (AGENTS.md 禁),且注释说「两个 aria-label 都试」而代码只试了一个。
+ * ✕ 本来就有稳定 aria-label(`prompt.context.removeFile` / `removeChatQuote`),按 role+name 点。
+ */
 export async function removeContextCard(page: Page, index = 0) {
   const card = contextCards(page).nth(index)
   await card.hover()
-  await card.locator("button").last().click()
+  const remove = card.getByRole("button", { name: /Remove (file|chat quote)/i })
+  await expect(remove).toBeVisible()
+  await remove.click()
 }
 
 const composerEditor = (page: Page) => page.locator('[data-component="prompt-input"][contenteditable]').first()
@@ -351,22 +394,30 @@ export async function historyDown(page: Page) {
 }
 
 /**
- * @ 引用文件:输入 `@` + 文件名,从建议列表选中。
+ * @ 引用文件:输入 `@` + 文件名,用**键盘 Enter** 接受高亮的建议项。
  *
- * 建议列表**没有 role=option / role=listbox**(实测),项就是带文件路径文本的普通按钮 ——
- * 所以只能按文本点;scope 不能放宽到全页,否则会撞到左侧文件树里的同名行。
+ * 2026-09-19 review 修正(finding 4 实锤):原实现用**全页范围**的
+ * `page.locator("button, li").filter({hasText: /^\/?name$/})` 点建议项 ——
+ * 而左侧文件树里有同名行(实测同时匹配到建议项 `/notes.md` 与树行 `notes.md`),
+ * 点到树行不会插入 mention,编辑器里只剩**纯文本** `@notes.md`;
+ * 而当时唯一的断言是「没有引用卡」→ **什么都没引用也照样绿**。
+ * 改用键盘路径(无歧义),并断言真的生成了 mention pill。
+ *
+ * pill 的 DOM 契约(经典编辑器,prompt-input.tsx:847):
+ *   `<span data-type="file" data-path="..." contenteditable="false">@name</span>`
  */
 export async function mentionFile(page: Page, name: string) {
   const editor = composerEditor(page)
   await editor.click()
   await page.keyboard.type(`@${name}`)
-  const option = page
-    .locator("button, li")
-    .filter({ hasText: new RegExp(`^/?${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) })
-    .first()
-  await expect(option).toBeVisible()
-  await option.click()
-  await expect(editor).toContainText(name)
+  // 必须等建议项真的出现再按 Enter:列表是异步查出来的,打完字立刻 Enter 会落空
+  // (实测:pill 不生成,编辑器里只剩纯文本)。不能用 waitForTimeout(AGENTS.md 硬规),
+  // 要等的是**这个具体状态**。
+  // 怎么把建议项和左侧文件树的同名行区分开:建议项文本带**前导斜杠**(`/notes.md`),
+  // 树行没有(`notes.md`)—— 实测如此。
+  await expect(page.getByText(`/${name}`, { exact: true }).first()).toBeVisible()
+  await page.keyboard.press("Enter")
+  await expect(page.locator(`[data-component="prompt-input"] [data-type="file"][data-path="${name}"]`)).toBeVisible()
 }
 
 /**
@@ -381,15 +432,8 @@ export async function selectTextInChat(page: Page, needle: string) {
   await expect(target).toBeVisible()
   const box = await target.boundingBox()
   if (!box) throw new Error(`selectTextInChat: 拿不到 "${needle}" 的 boundingBox`)
-  const y = box.y + box.height / 2
-  await page.mouse.move(box.x + 4, y)
-  await page.mouse.down()
-  await page.mouse.move(box.x + box.width * 0.6, y, { steps: 10 })
-  await page.mouse.up()
-  let selected = await readProductSelection(page)
-  if (!selected.trim()) {
-    await target.click({ clickCount: 3 })
-    selected = await readProductSelection(page)
-  }
-  return { text: selected, box }
+  // 与预览区共用 dragSelect —— 含「选区必须真的包含 needle」的硬断言(见该函数注释)。
+  // 2026-09-19 review 修正:此前这里是一份重复实现,且同样只有弱断言。
+  const text = await dragSelect(page, target, box, needle)
+  return { text, box }
 }

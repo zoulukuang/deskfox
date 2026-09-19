@@ -43,13 +43,20 @@ test.describe("context cards", () => {
     await bootstrapContextFlow(page, { files })
     await openFileInPreview(page, MD, NEEDLE)
     const { text, box } = await selectTextInPreview(page, NEEDLE)
-    expect(text.trim().length).toBeGreaterThan(3)
+    expect(text).toContain(NEEDLE)
     await rightClickSelection(page, box)
     await addToChatFromViewer(page, { comment: "why this line" })
 
     await expect(contextCards(page)).toHaveCount(1)
     expect(await contextCardSnapshots(page)).toEqual([
-      { path: MD, hasComment: true, commentID: expect.stringMatching(/^md-sel-/), kind: "file" },
+      {
+        path: MD,
+        hasComment: true,
+        commentID: expect.stringMatching(/^md-sel-/),
+        kind: "file",
+        // 行号标签必须真的有 —— selection 退化成 undefined 时这里会红(review finding 7)
+        selectionLabel: expect.stringMatching(/^:\d+(-\d+)?$/),
+      },
     ])
   })
 
@@ -58,7 +65,7 @@ test.describe("context cards", () => {
     await bootstrapContextFlow(page, { files })
     await openFileInPreview(page, TXT, NEEDLE)
     const { text, box } = await selectTextInPreview(page, NEEDLE)
-    expect(text.trim().length).toBeGreaterThan(3)
+    expect(text).toContain(NEEDLE)
     await rightClickSelection(page, box)
     await addToChatFromViewer(page, { comment: "shadow path" })
 
@@ -66,10 +73,13 @@ test.describe("context cards", () => {
     expect((await contextCardSnapshots(page))[0]).toMatchObject({ path: TXT, hasComment: true })
   })
 
-  // R8-8:不填注释也必须落卡且可见 —— 2026-09-19 修的就是这条
-  // [bug-repro: 上游 interaction.ts 的 comments()/canSubmit() 都以 `!!item.comment?.trim()` 为判据,
-  //  而 fork 侧 2026-09-17 已把「无注释卡也能发」放宽 → v2 下无注释卡进了 store 却不渲染、
-  //  也不算「有东西可发」,用户看到的是**零反应**;那张卡之后还会跟着下一条消息发给模型。]
+  // R8-8:不填注释也必须落卡且可见(经典布局)。
+  //
+  // ⚠️ 2026-09-19 review 订正:本条**不守**上游 `interaction.ts` 那两处判据 ——
+  // 那是 v2 composer,而本套件写死经典布局(legacy `PromptContextItems` 从不按注释筛卡),
+  // 把那两处退回本条照样绿(实测)。v2 判据由
+  // `session-ui/.../interaction-context-predicates.test.ts` 单测守。
+  // 本条真正守的是:经典布局下「不填注释直接提交」这条用户路径能落卡、且卡片可见。
   test("adds a visible card even without a comment", async ({ page }) => {
     await bootstrapContextFlow(page, { files })
     await openFileInPreview(page, MD, NEEDLE)
@@ -95,7 +105,10 @@ test.describe("context cards", () => {
     await historyUp(page)
 
     await expect(contextCards(page)).toHaveCount(1)
-    // 往返恒等:逐字段相同(第四轮那条「伪 commentID」就是在这里变形的)
+    // 往返恒等:逐字段相同(含行号标签 —— selection 退化成 undefined 也会在这里红)。
+    // ⚠️ 2026-09-19 review 订正:本条**不守**第四轮 ① 的伪 commentID 回归(GUI 卡恒带 md-sel-*,
+    // fallback 不触发,退回修复本条照绿 —— 已实测)。它守的是「往返映射不丢字段」,
+    // 变异验证过:把 historyCommentToContextItem 的 commentID 改成 undefined,本条立刻红。
     expect(await contextCardSnapshots(page)).toEqual(before)
   })
 
@@ -120,7 +133,7 @@ test.describe("context cards", () => {
       messages: [{ id: "msg_1", role: "user", text: `intro ${CHAT_QUOTE} outro` }],
     })
     const { text, box } = await selectTextInChat(page, CHAT_QUOTE)
-    expect(text.trim().length).toBeGreaterThan(3)
+    expect(text).toContain(CHAT_QUOTE)
     await rightClickSelection(page, box)
     await addToChatFromMenu(page, { comment: "about this reply" })
 
@@ -135,7 +148,13 @@ test.describe("context cards", () => {
   test("mentions a file from the composer", async ({ page }) => {
     await bootstrapContextFlow(page, { files, mock: { findFiles: () => [MD] } })
     await mentionFile(page, MD)
-    // @ 引用走 prompt 里的 file part,**不产生引用卡** —— 两条路径不得互相串
+    // 正面断言:编辑器里真的出现了 file mention 节点。
+    // 2026-09-19 review 补:原先只有「没有引用卡」这条**缺席断言** ——
+    // 若 @ 引用退化成只插一段纯文本(文件压根没发给模型),本条照样绿。
+    // 经典编辑器的 mention pill 属性是 `data-type`(prompt-input.tsx:847 `pill.setAttribute("data-type", part.type)`);
+    // `data-mention` 是 v2 编辑器的写法 —— 第一版写错了,强断言当场把它抓了出来。
+    await expect(page.locator('[data-component="prompt-input"] [data-type="file"]').first()).toBeVisible()
+    // 再断言它**不产生引用卡** —— 两条路径不得互相串
     await expect(contextCards(page)).toHaveCount(0)
   })
 
@@ -153,7 +172,8 @@ test.describe("context cards", () => {
     const tabsBefore = await page.getByRole("tab").count()
     await contextCards(page).first().click()
     await expect(page.locator('[data-component="error-page"]')).toHaveCount(0)
-    expect(await page.getByRole("tab").count()).toBeLessThanOrEqual(tabsBefore + 1)
+    // 「不多开 tab」就该是**不多开**:原先写 +1 等于把这半句断言放空了
+    expect(await page.getByRole("tab").count()).toBe(tabsBefore)
     const blank = await page.evaluate(
       () =>
         [...document.querySelectorAll("[role=tab]")].filter(
@@ -163,15 +183,16 @@ test.describe("context cards", () => {
     expect(blank).toBe(0)
   })
 
-  // 「将所选内容添加到上下文」(⌘⇧L / context.addSelection)的**可用性闸**。
+  // 「将所选内容添加到上下文」(⌘⇧L / context.addSelection)的**行为闸**。
   //
-  // 它不是死命令,是**条件命令**:`disabled: !canAddSelectionContext()`,而该判据要
-  // `file.selectedLines(path) != null` —— 代码视图的行选区 UI 已于 2026-08-13 拿掉
-  // (user 拍板「统一成右键加入聊天」,file-tabs.tsx renderDefault 的 FORK 注释),
-  // 于是普通预览里它恒不可用;剩下能设这个状态的只有评审面板的行评论交互。
+  // ⚠️ 2026-09-19 review 订正:本条**守不住** `use-session-commands.tsx` 那行
+  // `disabled: !canAddSelectionContext()` —— 因为 `addSelection()` 自己还有第二道守卫
+  // (`if (!range) { showToast(...); return }`),把 `disabled:` 删掉本条照样绿。
   //
-  // 钉住现状的意义:防止有人看到「命令面板里搜不到」就去"修好"它 ——
-  // 那等于把 2026-08-13 拿掉的交互复活。真要改,先回去看那次决策。
+  // 它真正守的是**现状本身**:普通预览区里有文本选区、但没有 app 级行选区时,
+  // 这个入口产不出卡。代码视图的行选区 UI 已于 2026-08-13 拿掉(user 拍板「统一成右键加入聊天」),
+  // 所以这是当前设计的一部分,不是 bug。留着是为了:若哪天有人复活那套交互,
+  // 这条会红,提醒他回去看 2026-08-13 那次决策。
   test("the add-selection command stays gated without a line selection", async ({ page }) => {
     await bootstrapContextFlow(page, { files })
     await openFileInPreview(page, MD, NEEDLE)

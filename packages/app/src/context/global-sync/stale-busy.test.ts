@@ -271,7 +271,10 @@ describe("collectUnresolvedBusySessions —— 反向对账的 resolve 前置名
     const unresolved = collectUnresolvedBusySessions(input)
     expect(missing).toEqual(["known"])
     expect(unresolved).toEqual(["unknown"])
-    // retry 两边都不要(富状态护栏);两份名单不得重叠
+    // retry 两边都不要(富状态护栏);两份名单不得重叠。
+    // 注(2026-09-19 review):「反向补进来的一定正向清得掉」这个对称性由本文件
+    // 「🔴 补进来的会话下一轮正向必须够得着」那条守;此前还有一条只调 collectStaleBusySessions
+    // 的同义反复用例(与文件开头第一条断言完全相同),删掉不损失任何覆盖。
     for (const id of unresolved) expect(missing).not.toContain(id)
   })
 
@@ -286,12 +289,6 @@ describe("collectUnresolvedBusySessions —— 反向对账的 resolve 前置名
     expect(collectMissingBusySessions(input)).toEqual([])
     for (const id of collectUnresolvedBusySessions(input)) resolved.add(id)
     expect(collectMissingBusySessions(input)).toEqual(["ses_a"])
-  })
-
-  test("🔒 补进来之后必须清得掉 —— 不变量仍成立(否则就是自造幻影 busy)", () => {
-    // resolve 成功 → 目录已知 → 该目录在覆盖集内 → 后端转 idle 后正向清得掉。
-    const input = args({ local: { ses_a: { type: "busy" } }, remote: {} })
-    expect(collectStaleBusySessions(input)).toEqual(["ses_a"])
   })
 
   test("本地已非 idle / 有在飞的乐观消息 → 不进名单(与反向对账同一套护栏)", () => {
