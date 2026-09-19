@@ -724,3 +724,61 @@ revert 第一笔会让无注释的卡重新拿到伪 ID(去重失效);revert 第
 
 **人工验收至此全部完成。** 本批 GUI 侧结论:核心失败处理链(停止 / 未送达 / 看门狗重启)
 表现符合设计且提示口径一致;唯一修正是 REQ-100 ④ 的 120s 闸在实际路径上轮不到。
+
+## 十三、Win 侧发版前适配性检查(2026-09-19,分支 `fix/win-crlf-structure-gate`)
+
+拉取 main 最新后在 Windows 上做发版前适配性检查,**逐项实跑**而非阅读式审查。
+
+### 结论:1 红,且它会卡死发版
+
+`packages/app/src/components/prompt-input/submit-structure.test.ts:39` 的
+`expect(window).toMatch(/\n\s*return\n/)` 在 Windows 上**必红**。
+
+- **根因**:CRLF。本仓 `core.autocrlf=true`,`.gitattributes` 只对 `packages/app/src/i18n/*.ts`
+  强制 LF,所以 `submit.ts` 在 Win 工作区是 CRLF;而该结构闸用 `Bun.file().text()` 读**源码原文**。
+  正则里 `\s*` 恰好吃掉了 `return` 前面那个 `\r`,但结尾的 `\n` 撞上 `\r` 匹配不到。
+  实测坐实:同一断言对内容 `.replace(/\r\n/g, "\n")` 后立刻转绿,被测代码 `submit.ts` 完全正常。
+- **来源**:`7d3ef60214`(mac 侧第三轮 code-review),**从未在 Windows 上跑过**;
+  mac/Linux 是 LF checkout,那边一直是绿的。
+- **为什么它卡发版**(这条是本次检查最重要的发现):`.husky/pre-push` **无分支条件、每次 push 都跑**,
+  且闸内含 `packages/app` 单测 → 实测 `sh .husky/pre-push` 退出码 **1**。
+  而 `/ship` 有三处 push(步骤 6 推 chore 分支、步骤 6 推 tag、步骤 8 推 main),
+  **第一次 push 就会被挡下,tag 都推不上去**。产物本身不受影响 —— 坏的只是测试断言的写法。
+  唯一的绕过是 `--no-verify`,那等于在最需要闸的发版时刻把 typecheck + 6 个包单测全关掉,不可取。
+- **修法**:在读取处一次性归一化(而不是逐条正则加 `\r?`),后续往该文件新增断言的人不必再想起这件事。
+
+### 其余全绿(Win 实跑)
+
+| 项 | 结果 |
+|---|---|
+| typecheck(fork 范围,排除 console) | exit 0 |
+| app | 1184 pass / 1 fail(即上条)→ 修复后 0 fail |
+| session-ui | 125 / 0 fail |
+| media-gen · adapter-feishu-lark | 140 · 792 |
+| branding(含新增 PS1 注入闸 29 条) | 90 / 0 fail |
+| desktop `src/main/deskfox` | 169 / 0 fail |
+| **新增 e2e** `context-card-flows.spec.ts` | **10/10**(1.1 min) |
+| `sh .husky/pre-push` 整闸 | 修复前 exit 1 → 修复后 **exit 0** |
+
+两项单独确认:
+
+- **`pre-push` 改 `bun run test` 这笔是对的且必需**。按旧写法跑裸 `bun test`,Win 上如实红 4 条
+  (`getNextContextId cannot be used under non-hydrating context`);换回带 `--conditions=browser`
+  的 script 后 125 全绿。§十二 那笔修复在 Win 侧得到独立复现与验证。
+- **PS1 的 env 存/还原改动在 PowerShell 5.1 下语义正确**。按脚本结构做最小复现,实测 6 场景
+  (调用方有无预设 × 正常路径 / trap 语句**之前** throw / 之后 throw):trap 确实能捕获文本位置在它
+  之前的 `throw`;有预设时按原值写回、无预设时删除;`break` 保住 fail-fast。注释声称与实测逐条一致。
+- `branding` 那 29 条 PS1 注入测试在 mac 上是 skip、**Win 上是真跑** —— 这一档覆盖只有 Win 侧能验。
+
+### 顺带记下,未在本 commit 处理(不影响发版,已另记需求池)
+
+1. `packages/branding/smoke/round4_review_check.py` 文件头用法写 `python3 ...`,
+   而 Win 上 `python3` 是 WindowsApps 假别名(实测 exit=9009),`python` 才是真解释器。
+   脚本本身无 Win 问题(显式 `encoding="utf-8"`、无硬编码路径、`uiprobe.py` 在、产出已进 `.gitignore`)。
+2. `docs/installer-versions.md` 回填的回归数字(`app 1165` / `session-ui 121`)与当前实况
+   (1185 / 125)对不上 —— 后续 commit 又加了测试未回填。拿它当基线会误判。
+3. **待观察**:按目录对账里 `covered: Set<string>` 与 `directoryOf()` 比对的是**未归一化的
+   directory 字符串**(`server-sync.tsx:329-384`)。正向清理安全(两边同源 `session.get().directory`);
+   但 `directories` 的另一来源 `Object.keys(children.children)` 若在 Win 上是反斜杠或盘符大小写
+   不同的表示,会让 idle→busy 方向的覆盖面打折。非本批引入、本批只是复用,但 **Win 是唯一会同时
+   存在两种路径写法的平台**,故记一笔。未实测坐实(本机未找到对应 `opencode.db`),不作结论。

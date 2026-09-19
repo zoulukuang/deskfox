@@ -9,7 +9,15 @@
 
 import { describe, expect, test } from "bun:test"
 
-const SRC = await Bun.file(new URL("./submit.ts", import.meta.url)).text()
+// 🔴 行尾归一化 —— 不是可选的。Win 工作区是 CRLF(`core.autocrlf=true`,而 .gitattributes
+//   只对 packages/app/src/i18n/*.ts 强制 LF),而本文件的断言读的是**源码原文**:
+//   任何以 `\n` 开头或结尾的正则在 Win 上都会撞上 `\r` 而**假红** —— 被测代码完全正常。
+//   [bug-repro: `/\n\s*return\n/` 那条在 mac 上绿、在 Win 上必红 —— `\s*` 吃掉了 `return` 前面
+//    那个 `\r`,但结尾的 `\n` 撞上 `\r` 匹配不到。而 pre-push 无分支条件地跑 packages/app 单测,
+//    于是 **Win 侧任何 push 全被挡**,含 /ship 步骤 6 推 chore 分支与 tag —— 发版卡死在第一次 push。]
+//   归一化放在这里、而不是逐条正则加 `\r?`:后续往本文件新增断言的人不必再想起这件事。
+//   2026-09-19
+const SRC = (await Bun.file(new URL("./submit.ts", import.meta.url)).text()).replace(/\r\n/g, "\n")
 
 /** 取 handleSubmit 函数体(到下一个同缩进的顶层定义为止,足够覆盖本文件断言的范围) */
 const HANDLE_SUBMIT = (() => {
