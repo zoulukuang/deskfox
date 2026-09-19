@@ -613,6 +613,42 @@ PS1 的 trap 会删掉脚本自己没设过的变量。
 revert 第一笔会让无注释的卡重新拿到伪 ID(去重失效);revert 第二笔会让停止兜底后被 LRU 挤掉的
 会话重新永久自认 idle;第三笔纯文案,revert 无功能影响。
 
+### 本地版真机验证(2026-09-19,`DeskFox 本地版.app` 2026.11.2 arm64)
+
+产物:`packages/desktop/dist-deskfox/mac-arm64/DeskFox 本地版.app`
+(`bash packages/branding/scripts/build-deskfox-electron.sh -Env local`,appId `ai.deskfox.app.local`)。
+**全程与 user 的正式版共存**,只杀本地版;为免踩 GUI 自动化坑 9(local 只隔离 DB 与身份、
+不隔离 `~/.opencode` 配置 → 测试实例会连上真飞书桥、抢消息路由),本轮用
+`XDG_CONFIG_HOME=<临时目录>` 起,配置由 local 那份拷贝而来并**摘掉 feishu-bridge plugin**;
+启动日志确认无 `[wss] connected`。
+
+| 检查 | 结果 |
+|---|---|
+| 全量冒烟 `smoke.py`(供应商 / 面板 / 设置 / 文件预览 / 启动) | 24 / 24 通过,0 崩溃 0 警告 |
+| 冷启动健康检查 ×2(真 kill + 真冷启) | 两次都 **CLEAN**(无 error toast / JS 异常 / 致命 console) |
+| 定向:引用卡历史往返保真(加卡 → 发送 → ↑ 翻历史) | 通过 —— 1 张进、1 张原样回来,卡面文字一致 |
+| 定向:点历史找回的卡 | 通过 —— 不崩、无空白 tab、tabs 数不变 |
+| 产物层:`renderer/assets/main-*.js` 不再含 `commentID ?? *.key` | 0 命中 ✓ |
+| 产物层:`promptNotDelivered.queued.title` 已进 bundle + zh 分包含新中文标题 | ✓ |
+| 双轮验收(stale 实例 + 冷启动后干净实例各跑一遍冒烟 + 定向) | 两轮均全绿 |
+
+探针脚本:`packages/branding/smoke/round4_review_check.py`(文件头写明验什么 / 不验什么)。
+
+**GUI 到不了、只由自动化闸覆盖的三处**(写清楚,免得下次把绿灯读成"三条都真机过了"):
+
+1. **无 commentID 卡的去重(现象 A)** —— 唯一产生它的真实入口是命令「将所选内容添加到上下文」,
+   而它 gated on `file.selectedLines`:需要代码/diff 视图的**行选区 UI**,markdown 预览区的纯文本
+   选中不设这个状态(实测该命令在命令面板里不出现);另一入口「附加文件」走 native 文件选择框,
+   CDP 不能驱动。→ 由 `context/prompt-state.test.ts` 的端到端闸覆盖(加卡 → 快照 → 回填 → 再加同一选区)。
+   真机验到的是**同一条往返代码路径的带 commentID 分支**,即本次改动最大的回归面。
+2. **反向对账(②)** —— 要"后端半死 + 停止兜底写 idle + 会话被 LRU 挤出"三件同时成立,GUI 造不出来。
+   → `global-sync/stale-busy.test.ts` 两段式闭环 + `server-sync-reconcile-protocol.test.ts` 顺序结构闸。
+3. **队列 toast 文案(③)** —— 要后端半死并等满 120s 超时。
+   → `pages/session-queued-toast.test.ts` 结构闸 + 字典不变量,产物侧另有 bundle 扫描(见上表)。
+
+顺带发现一处**文档过期**(未改):根 `CLAUDE.md` 验证约定段仍写「Mac wrapper(`.sh`)暂未集成 local」,
+实际 `build-deskfox-electron.sh` 早已支持 `-Env local`(本轮就是用它打的)。
+
 ### 方法论账(接 §十)
 
 §十 立的三条做法这轮**都生效了**:两处断言型注释因为带了前提闸而没再骗人,
