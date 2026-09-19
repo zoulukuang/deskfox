@@ -17,6 +17,51 @@
 
 
 
+## [Windows] 2026.11.1 - 2026-09-19 18:06
+
+**主题**:「对外发版收口批」**Windows 侧首次进 prod**,并含发版前第四轮 code-review 与
+引用/选区核心流程 e2e。自 `ship-prod-2026.11.0` 起 **82 commits / 169 文件 / +9712 −406**。
+
+**为什么是 patch**:全批为缺陷修复,零新功能(台账规则:补号 = bugfix / 适配补丁)。
+mac 侧同一批已于 2026.11.2 发出,Win 号线独立故为 2026.11.1。
+
+**本次内容**(feat: `release-closeout-2026-09` / `e2e-context-flow-harness`):
+
+- **REQ-100(P1,唯一会丢数据)** 后端不可达时消息静默蒸发 + 停止键空转。请求挂住时既不
+  resolve 也不 reject、catch 永远等不到 → 加送达超时(abort + 独立 deadline 双保险,阈值 **120s**);
+  忙闲对账改为**按目录逐个查后端权威表 + 双向**(既清残留 busy,也补回被误写成 idle 的在跑会话)。
+- **REQ-132(本批发版动因)** 构建从未注入 `OPENCODE_VERSION`,正式版对外自称 `0.0.0-prod-<ts>`,
+  被 OpenCode Zen 免费档按 semver 拒。本次产物实测注入 `OPENCODE_VERSION=1.18.16`。
+- **REQ-131 / 123 / 125 / 130 / 128 / 133**:引用卡片看得见引文原文(不再印 `<chat selection>`
+  伪路径)· 纯引用消息可撤回 · 「加入聊天」新建会话标题不再清一色相同(🔴 R4 override,
+  `prompt.ts` 3 行)· 点 × 关标签不再把预览区整个收起 · 工具折叠行命中区收窄(960px→126px)·
+  文件预览 tab 内容区静默空白。
+- 另修 user 真机反馈 8 条体感问题(引用卡统一「[图标] 引用:<引文>」、纯引用可提交、
+  发送后卡片不残留、tab × hover 等)。
+
+**发版前四轮 code-review**:前三轮见 mac 2026.11.2 条目;**第四轮(2026-09-19)**又查出
+反向对账的目录守卫把 REQ-100 ① 要救的那类永久关在门外、队列路径 toast 标题与正文互相矛盾、
+历史快照塞伪 commentID 击穿三处下游 —— 均在发版前闭环。
+
+**Win 侧发版前适配性检查(2026-09-19)**:逐项实跑,查出并修掉 1 条**会卡死发版**的缺陷 ——
+`submit-structure.test.ts` 的结构闸断言对 CRLF 敏感(mac 上绿、Win 上必红),而 `pre-push`
+无分支条件地跑 `packages/app` 单测,实测整闸 `exit=1`,**/ship 第一次 push 就会被挡下**;
+产物本身不受影响。修法为读源码处一次性归一化行尾。详见
+`docs/features/release-closeout-2026-09/3-changelog.md` 第十三节。
+
+**回归**(Win 实跑):fork 范围 typecheck exit 0 · app 1185 · session-ui 125 · media-gen 140 ·
+adapter-feishu-lark 792 · branding 90(含 PS1 注入闸 29 条,mac 上 skip / Win 上真跑)·
+desktop 169 · 新增 e2e `context-card-flows` 10/10 —— 全部 0 fail;`sh .husky/pre-push` 整闸 exit 0。
+
+**构建闸**:plugin dist 就绪且无 `Bun.serve` 残留 ✓ · post-build 最终包含 soffice.exe + 非空 presets ✓ ·
+产物 324 MB(与 2026.10.0 / 2026.11.0 一致)。
+
+**Release**:https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.11.1
+**国内 CDN**:https://dl.clawtray.com/DeskFox-2026.11.1-win-x64.exe
+**installer**:`D:\project\opencode-fork\packages\desktop\dist-deskfox\DeskFox-2026.11.1-win-x64.exe`
+
+---
+
 ## [macOS] 2026.11.2 - 2026-09-17
 
 **主题**:对外发版收口批 —— 构建版本号注入 + 消息不丢 + 引用回看 + 三簇高频误触
