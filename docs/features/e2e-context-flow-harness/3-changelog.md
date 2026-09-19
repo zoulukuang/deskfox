@@ -1,5 +1,5 @@
 feat-id: e2e-context-flow-harness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实际改动记录
@@ -57,5 +57,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 遗留
 
-见 1-spec §七「后续项」:经典布局覆盖 / 聊天区与 @ 引用用例 / 命令
-「将所选内容添加到上下文」实际不可达(需单独评估是恢复入口还是摘掉命令)/ 是否进 pre-push 闸。
+**已全部关闭**(user 2026-09-19 拍板,见 1-spec §十):
+- 经典布局覆盖 → 已成为唯一覆盖面,8 条用例全绿
+- @ 引用用例 → 已补
+- v2 判据修复的去留 / 聊天区选区 / 「将所选内容添加到上下文」不可达 → **都不做**
+
+唯一仍未定的只剩:这 8 条(15.3s)是否纳入 `pre-push` 闸 —— 目前**未纳入**
+(该闸现为 typecheck + 各包单测,不含 e2e)。
