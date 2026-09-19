@@ -8,7 +8,10 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 | # | commit | 内容 | 行数 |
 |---|---|---|---|
-| 1 | 本记录所在这一笔 | 工具 + 首批用例 + 产品侧判据同源与测试契约 | +约 560 / −3 |
+| 1 | `95a64d945a` | 1-spec + 2-plan | +226 |
+| 2 | `590e0c4aa7` | 工具 `utils/context-flows.ts` | +330 |
+| 3 | `899eb63f7a` | v2 判据同源 + 测试契约 + 首批 6 条用例 | +227 / −4 |
+| 4 | `2299e4756f` | **收口到经典布局** + 用例 6→8 | +175 / −136 |
 
 ## 改动清单
 
@@ -41,7 +44,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 | `bun run typecheck` | 33 / 33 |
 | `packages/app` 单测 | 1186 pass / 0 fail |
 | `packages/session-ui` 单测 | 121 pass / 0 fail |
-| 新增 e2e `context-card-flows.spec.ts` | **6 pass / 0 fail(13.1s)** |
+| 新增 e2e `context-card-flows.spec.ts` | **8 pass / 0 fail(15.3s,经典布局)** |
+| **全量 e2e** | **150 pass / 0 fail(2.2m)** |
 | 反证 | 把 `interaction.ts` 两处判据退回 → 用例「adds a visible card even without a comment」立刻红(0 张卡) |
 
 ## 回退方法

@@ -188,3 +188,53 @@ sendPrompt(page, text) / historyUp(page) / historyDown(page)
    即命令面板里有一条**用户永远点不到的命令**。需单独评估:要么恢复入口,要么摘掉命令。
 6. **是否进 pre-push 闸**:本批 6 条约 13s,但 e2e 全套目前不在 pre-push(只有 typecheck + 单测)。
    待 user 定。
+
+## 八、布局收口(user 2026-09-19 拍板,推翻 §七 的分档)
+
+**DeskFox 只用经典布局**(`settings.general.newLayoutDesigns=false`):左侧栏文件树
+(`[data-component="filetree"]`,行上无 data-*)+ legacy composer
+(`[data-component="prompt-agent-control"]` 是它的特征标记)+ 「所有文件 / N 更改」两个 tab。
+本地版真产物实测确认:`prompt-input-v2` 标记不存在、`prompt-agent-control` 存在。
+
+工具与用例**都去掉 newLayout 维度**,只服务这一套。§七 的「经典布局覆盖」后续项作废
+(已成为唯一覆盖面);反过来,v2 不再被任何用例覆盖。
+
+### 上一版为什么错误地收口到 v2(教训)
+
+`e2e/utils/waits.ts` 的 `expectSessionTitle` 找 `role=heading`,而**经典布局的会话标题不是
+heading** → 整组经典布局用例卡在 bootstrap,报错只说「找不到 heading」。我把这读成了
+"经典布局跑不起来",于是收口到 v2 —— **把工具的缺陷当成了产品的边界**。
+现在就绪信号改成 `[data-component="session-prompt-dock"]`(两套布局都有)。
+
+### 又一条新坑:路由形式决定发送成不成
+
+`/server/<b64 server>/session/<id>` 进页面时,发送走"新建会话"路径 → mock 报
+`Failed to create session` / `Unable to retrieve session`,卡片不清空;
+`/<b64 directory>/session/<id>` 则正常。两种形式仓里都有 spec 在用,差别此前没人写下来。
+
+## 九、当前覆盖(2026-09-19,经典布局实跑)
+
+| # | 用例 | 状态 |
+|---|---|---|
+| R8-1 | .md(light DOM)选中 → 右键 → 加入聊天(带注释) | ✅ |
+| R8-2 | .txt(shadow DOM)同上 | ✅ |
+| R8-8 | 不填注释也落卡且可见 | ✅ |
+| R8-6+7 | 发送 → ↑ 翻历史 → 身份逐字段不变 | ✅ |
+| R8-10 | 删卡 | ✅ |
+| R8-4 | @ 引用文件(且不产生引用卡) | ✅ |
+| — | 点历史找回的卡不崩 / 不开空白 tab(第四轮发现 3 的 GUI 版) | ✅ |
+| R8-11 | 浮层 Esc 取消不落卡 | ✅ |
+
+8 条,15.3s。全量 e2e 150/150。
+
+仍未覆盖(与 §七 一致):R8-3 聊天区选区(helper 已实现,待 mock 一条带正文的消息)、
+R8-5/9 需要**无 commentID 的卡**,而产品里唯一入口(命令「将所选内容添加到上下文」)
+因 §二.3 不可达。
+
+## 十、一个待 user 定的遗留
+
+`session-ui/.../interaction.ts` 那两处判据修复(1-spec §三)**现在没有任何测试覆盖** ——
+它修的是 v2 composer,而我们不用 v2。两个选择:
+(a) 留着(2 行,防上游哪天退役经典布局时冒出来),但承认无覆盖;
+(b) 撤掉(减少上游侵入面 / merge 冲突面)。
+建议 (a),但请 user 一句话定。
