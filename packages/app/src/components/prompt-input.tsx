@@ -463,8 +463,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     comments.replace(
       // 批注 store 只收「有选区且有注释」的;无选区的附件卡 / 无注释的引用卡不属于它,
       // 但它们仍会经下面的 replaceComments 原样回到输入框 —— 这正是本次要保住的那部分。
+      // FORK 2026-09-19:`id` 现在可选(无批注的卡不再被塞伪 ID,见 history.ts)。
+      // 批注 store 按 id 索引,没有真 id 的条目不属于它 —— 判据里一并要求 item.id。
       items.flatMap((item) =>
-        item.selection && item.comment
+        item.id && item.selection && item.comment
           ? [
               {
                 id: item.id,

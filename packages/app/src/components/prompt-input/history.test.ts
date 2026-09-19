@@ -326,3 +326,49 @@ describe("contextItemsToHistoryComments —— 历史快照必须能原样带回
     })
   })
 })
+
+// FORK 2026-09-19 第四轮 code-review 复现闸:往返必须**恒等**。
+// 上一版 `id: item.commentID ?? item.key` 给无批注的卡塞了个伪 commentID,
+// 而 contextItemKey / build-request-parts / openComment 三处都按「有无 commentID」分流。
+describe("contextItemsToHistoryComments —— 往返恒等(不得伪造 commentID)", () => {
+  const snapshot = (item: Parameters<typeof contextItemsToHistoryComments>[0]["items"][number]) => {
+    const [entry] = contextItemsToHistoryComments({ items: [item], comments: [], now: () => 1 })
+    expect(entry).toBeDefined()
+    return entry!
+  }
+
+  test("🔴 无注释的选区卡:快照不得凭 store key 造出 commentID", () => {
+    const entry = snapshot({
+      key: "file:/a.ts:3:5",
+      type: "file",
+      path: "/a.ts",
+      selection: { startLine: 3, endLine: 5 } as never,
+    })
+    expect(entry.id).toBeUndefined()
+    expect(historyCommentToContextItem(entry).commentID).toBeUndefined()
+  })
+
+  test("🔴 无选区的附件卡:同样不得被塞 commentID", () => {
+    const entry = snapshot({ key: "file:/img.png:undefined:undefined", type: "file", path: "/img.png" })
+    expect(entry.id).toBeUndefined()
+    expect(historyCommentToContextItem(entry).commentID).toBeUndefined()
+  })
+
+  test("🔒 真批注的 commentID 照旧原样带回(别为了修上面把这条也清了)", () => {
+    const entry = snapshot({
+      key: "file:/a.ts:3:5:c=c1",
+      type: "file",
+      path: "/a.ts",
+      commentID: "c1",
+      comment: "note",
+      selection: { startLine: 3, endLine: 5 } as never,
+    })
+    expect(entry.id).toBe("c1")
+    expect(historyCommentToContextItem(entry).commentID).toBe("c1")
+  })
+
+  test("🔒 快照里不残留 store 的 dedup key —— 它是派生值,回填时重算", () => {
+    const entry = snapshot({ key: "file:/a.ts:3:5", type: "file", path: "/a.ts" })
+    expect(Object.values(entry)).not.toContain("file:/a.ts:3:5")
+  })
+})

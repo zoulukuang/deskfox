@@ -181,8 +181,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
 
   const restoreHistoryComments = (items: PromptHistoryComment[]) => {
     comments.replace(
+      // FORK 2026-09-19:同 legacy composer —— 批注 store 按 id 索引,要求 item.id(见 history.ts)
       items.flatMap((item) =>
-        item.selection && item.comment
+        item.id && item.selection && item.comment
           ? [{ id: item.id, file: item.path, selection: { ...item.selection }, comment: item.comment, time: item.time }]
           : [],
       ),
