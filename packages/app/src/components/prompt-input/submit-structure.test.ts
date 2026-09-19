@@ -79,3 +79,34 @@ describe("送达超时的覆盖面", () => {
     expect(occurrences).toBeGreaterThanOrEqual(2)
   })
 })
+
+// FORK 2026-09-19 发版前 review:防「兄弟路径漏改」复发。
+// [bug-repro: catch 分支已把 `if (restoreInput()) restoreCommentItems(...)` 改成无条件还原
+//  (原写法在用户已另起输入时会让引用卡就地蒸发且无提示),但 waitForWorktree 的 abort cleanup
+//  仍是旧写法 —— 同一个缺陷在两条路径上,只修了一条。发版前 code-review 抓出。]
+//
+// 判据写成「全文件不得再出现这种写法」,而不是逐条点名某一行:
+// 将来再加第三条清理路径时,写错同样会红。
+describe("引用卡还原:不得挂在 restoreInput() 的条件下", () => {
+  // 🔴 必须在**剥掉注释**的视图上断言:两处 bug-repro 注释里就写着
+  // `if (restoreInput()) restoreCommentItems(...)` 这段示例原文,直接对 SRC 匹配会恒红 ——
+  // 本仓 §十 记过这类「注释里的关键词被结构闸误判为代码」的脆弱性,这里第一次写就踩到了。
+  const CODE = SRC.split("\n")
+    .filter((line) => {
+      const trimmed = line.trim()
+      return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*")
+    })
+    .join("\n")
+
+  test("🔴 代码里不存在 `if (restoreInput()) restoreCommentItems(...)` 形态", () => {
+    // restoreInput() 返 false 只说明"原文不覆盖用户正在打的字";
+    // 引用卡是**追加**语义,两件事不能绑在一起。
+    expect(CODE).not.toMatch(/if\s*\(\s*restoreInput\(\)\s*\)\s*restoreCommentItems/)
+    expect(CODE).not.toMatch(/if\s*\(\s*restoreInput\(\)\s*\)\s*\{[^}]*restoreCommentItems/)
+  })
+
+  test("🔒 两条清理路径都调了 restoreCommentItems(worktree abort / 送达失败 catch)", () => {
+    const calls = CODE.match(/restoreCommentItems\(/g) ?? []
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+  })
+})
