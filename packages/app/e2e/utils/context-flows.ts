@@ -18,15 +18,18 @@
 //    菜单项与浮层提交按钮**同名**(`fileViewer.menu.addToChat` / `.input.submit` 都是
 //    "Add to Chat"),靠 `.first()/.last()` 区分极脆 —— 一律用 `data-slot="md-selection-menu"`
 //    把作用域收到浮层内部。
-// 4. **两套 composer**:`settings.general.newLayoutDesigns` 决定用 legacy `PromptInput`
-//    还是 `PromptInputV2Composer`,两者卡片 DOM 完全不同。工具靠统一的
-//    `[data-context-card]` 契约屏蔽差异(该属性 2026-09-19 为此补的)。
+// 4. **只服务 DeskFox 当前布局(经典布局)**:`settings.general.newLayoutDesigns=false`,
+//    即 legacy `PromptInput` + 左侧栏文件树(`[data-component="filetree"]`)+
+//    `[data-component="prompt-agent-control"]` 那套。user 2026-09-19 拍板「以后只用这种布局」,
+//    工具不再兼容 v2 composer —— 少一个维度,少一处错。
+// 6. **就绪信号必须与布局无关**:`waits.ts` 的 `expectSessionTitle` 找的是 `role=heading`,
+//    而经典布局的会话标题**不是 heading** —— 第一版用它,整组用例卡在 bootstrap,
+//    报错却只说「找不到 heading」,极易误读成"会话没打开"。这里等输入区 dock。
 // 5. **不要 waitForTimeout**(e2e/AGENTS.md 硬规):每个动作等它自己那一步的可观察状态。
 
 import { expect, type Locator, type Page } from "@playwright/test"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { mockOpenCodeServer, type MockServerConfig } from "./mock-server"
-import { expectSessionTitle } from "./waits"
 
 const T0 = 1_700_000_000_000
 
@@ -35,8 +38,6 @@ export type ContextFlowFile = { name: string; content: string }
 export type BootstrapOptions = {
   /** 文件树里放哪些文件(名字即相对路径,内容按名字返回) */
   files: ContextFlowFile[]
-  /** true = 新版界面(v2 composer);false = 经典布局(legacy composer) */
-  newLayout?: boolean
   directory?: string
   sessionTitle?: string
   /** 直接透传给 mock-server 的额外配置(如 pageMessages / vcsDiff) */
@@ -46,7 +47,7 @@ export type BootstrapOptions = {
 export type BootstrapResult = {
   directory: string
   sessionID: string
-  newLayout: boolean
+  title: string
 }
 
 /** 输入区里的引用卡(两套 composer 共用契约) */
@@ -65,7 +66,6 @@ export async function bootstrapContextFlow(page: Page, options: BootstrapOptions
   const projectID = "proj_context_flows"
   const sessionID = "ses_context_flows"
   const title = options.sessionTitle ?? "Context flows"
-  const newLayout = options.newLayout ?? true
   const byName = new Map(options.files.map((file) => [file.name, file.content]))
 
   await mockOpenCodeServer(page, {
@@ -90,7 +90,15 @@ export async function bootstrapContextFlow(page: Page, options: BootstrapOptions
       default: { providerID: "opencode", modelID: "test" },
     },
     sessions: [
-      { id: sessionID, slug: sessionID, projectID, directory, title, version: "dev", time: { created: T0, updated: T0 } },
+      {
+        id: sessionID,
+        slug: sessionID,
+        projectID,
+        directory,
+        title,
+        version: "dev",
+        time: { created: T0, updated: T0 },
+      },
     ],
     vcsDiff: [],
     fileList: (path) =>
@@ -109,14 +117,18 @@ export async function bootstrapContextFlow(page: Page, options: BootstrapOptions
   })
 
   await page.addInitScript(
-    ({ directory, server, sessionID, newLayout }) => {
+    ({ directory, server, sessionID }) => {
       localStorage.setItem(
         "settings.v3",
-        JSON.stringify({ general: { newLayoutDesigns: newLayout, shouldDisplayTabsToast: false } }),
+        // 经典布局:DeskFox 唯一在用的布局(user 2026-09-19 拍板)
+        JSON.stringify({ general: { newLayoutDesigns: false, shouldDisplayTabsToast: false } }),
       )
       localStorage.setItem(
         "opencode.global.dat:server",
-        JSON.stringify({ projects: { local: [{ worktree: directory, expanded: true }] }, lastProject: { local: directory } }),
+        JSON.stringify({
+          projects: { local: [{ worktree: directory, expanded: true }] },
+          lastProject: { local: directory },
+        }),
       )
       localStorage.setItem(
         "opencode.global.dat:layout",
@@ -131,37 +143,31 @@ export async function bootstrapContextFlow(page: Page, options: BootstrapOptions
         JSON.stringify([{ type: "session", server, sessionId: sessionID }]),
       )
     },
-    { directory, server: SERVER, sessionID, newLayout },
+    { directory, server: SERVER, sessionID },
   )
 
-  await page.goto(`/server/${base64Encode(SERVER)}/session/${sessionID}`)
-  await expectSessionTitle(page, title)
-  return { directory, sessionID, newLayout }
+  await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
+  // 就绪信号必须与布局无关:`expectSessionTitle` 找的是 role=heading,
+  // **经典布局的会话标题不是 heading** —— 第一版用它,整组经典布局用例全部卡在 bootstrap,
+  // 而报错只说「找不到 heading」,极易被误读成"会话没打开"。改等输入区 dock(两套布局都有)。
+  await expect(page.locator('[data-component="session-prompt-dock"]')).toBeVisible({ timeout: 30_000 })
+  return { directory, sessionID, title }
 }
 
-const reviewPanel = (page: Page) => page.locator("#review-panel")
-
 /**
- * 文件树 → 打开文件预览,停在「内容已可见」。
+ * 左侧栏文件树 → 打开文件预览,停在「内容已可见」。
  *
- * 两套布局的文件树是**两套 DOM**:
- *   · 新版:评审面板内 `[data-slot="file-tree-v2-row"][data-path=...]`(有测试契约)
- *   · 经典:侧栏 `[data-component="filetree"]`,行上**没有任何 data-***,只能按文件名文本点
- * 工具吃掉这个差异,spec 侧只管 `openFileInPreview(page, name, needle)`。
+ * 经典布局的文件树在 `[data-component="filetree"]` 里,行上**没有任何 data-***,
+ * 只能按文件名文本点(scope 到树容器内,避免撞到 tab 标题或会话列表里的同名文本)。
+ * 左侧栏有「所有文件 / N 更改」两个 tab,先确保停在「所有文件」。
  */
 export async function openFileInPreview(page: Page, name: string, needle: string) {
-  const v2Row = reviewPanel(page).locator(`[data-slot="file-tree-v2-row"][data-path="${name}"]`)
-  const openFileTab = reviewPanel(page).getByRole("button", { name: "Open file" })
-  if (await openFileTab.isVisible().catch(() => false)) await openFileTab.click()
+  const allFilesTab = page.getByRole("tab", { name: "All files" })
+  if (await allFilesTab.isVisible().catch(() => false)) await allFilesTab.click()
 
-  if (await v2Row.isVisible().catch(() => false)) {
-    await v2Row.click()
-  } else {
-    // 经典布局:侧栏文件树按文件名点(无 data-*;scope 到 filetree 容器避免撞到 tab 标题)
-    const legacyRow = page.locator('[data-component="filetree"]').getByText(name, { exact: true }).first()
-    await expect(legacyRow).toBeVisible()
-    await legacyRow.click()
-  }
+  const row = page.locator('[data-component="filetree"]').getByText(name, { exact: true }).first()
+  await expect(row).toBeVisible()
+  await row.click()
 
   await expect(page.getByRole("tab", { name }).first()).toHaveAttribute("data-selected", "")
   // getByText 穿 open shadow root —— 代码类文件的内容在 <diffs-container> 的 shadow 里
@@ -305,14 +311,23 @@ export async function historyDown(page: Page) {
   await editor.press("ArrowDown")
 }
 
-/** @ 引用文件:输入 `@` + 文件名,从建议列表选中。 */
+/**
+ * @ 引用文件:输入 `@` + 文件名,从建议列表选中。
+ *
+ * 建议列表**没有 role=option / role=listbox**(实测),项就是带文件路径文本的普通按钮 ——
+ * 所以只能按文本点;scope 不能放宽到全页,否则会撞到左侧文件树里的同名行。
+ */
 export async function mentionFile(page: Page, name: string) {
   const editor = composerEditor(page)
   await editor.click()
   await page.keyboard.type(`@${name}`)
-  const suggestion = page.getByRole("option", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first()
-  await expect(suggestion).toBeVisible()
-  await suggestion.click()
+  const option = page
+    .locator("button, li")
+    .filter({ hasText: new RegExp(`^/?${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) })
+    .first()
+  await expect(option).toBeVisible()
+  await option.click()
+  await expect(editor).toContainText(name)
 }
 
 /** 聊天区(消息气泡)里选中一段文字并右键,复用预览区那套机制。 */
