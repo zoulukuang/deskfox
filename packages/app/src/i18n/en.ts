@@ -356,6 +356,8 @@ export const dict = {
     "The backend engine did not respond within 2 minutes. Your text and quoted cards are intact. Check the conversation before resending — in rare cases the backend did accept it.",
   "prompt.toast.promptNotDelivered.inputBusy.description":
     "The backend engine did not respond within 2 minutes. Your input box already had new content so it was left untouched; the quoted cards were put back. Check the conversation before resending.",
+  // FORK 2026-09-19 第四轮 code-review:队列路径不回输入框,不能复用通用 title(见 session.tsx)
+  "prompt.toast.promptNotDelivered.queued.title": "Message may not have been sent — kept in the queue",
   "prompt.toast.promptNotDelivered.queued.description":
     "The backend engine did not respond within 2 minutes. This message is still in the queue and marked as failed, so you can send it again — check the conversation first, in case the backend did accept it.",
 

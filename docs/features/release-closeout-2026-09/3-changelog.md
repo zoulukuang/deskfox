@@ -564,3 +564,63 @@ PS1 的 trap 会删掉脚本自己没设过的变量。
 
 ⚠️ 仍然未消除的一类:`0.0.0` 那种「注释里出现关键词被结构闸误判为代码」的脆弱性 ——
 本轮两处结构闸各踩一次。现在靠剥注释规避,不是根治。
+
+## 十一、第四轮 code-review(2026-09-19,分支 `fix/preflight-round3-reconcile-and-delivery`)
+
+三条,**全部来自第三轮自己的修复** —— 与 §十 记的形态第四次重合:两条是"修法本身带进来的新缺陷",
+一条是"声称已分流、实际只分流了一半"。
+
+| 级别 | 位置 | 问题 | 归属 |
+|---|---|---|---|
+| 中 | `prompt-input/history.ts` | 快照产出侧写 `id: item.commentID ?? item.key`,给**本来没有批注的卡**塞了个伪 commentID,回填时又当真 ID 写回 → **历史往返不恒等**。而三处下游都按「有无 commentID」分流,全被击穿:① `contextItemKey` 从 `file:/a.ts:3:5` 变成 `file:/a.ts:3:5:c=file:/a.ts:3:5`,与重新添加同一选区算出的 key 不等 → `context.add()` 去重失效,输入框出现**两张同源卡**并一起发给模型(REQ-116 白烧 token 那一族)② `build-request-parts.ts` 有 commentID 的分支不写 url 集,「prompt 已 @mention 同路径则丢重复卡」对历史找回的卡失效 ③ `openComment` 的 `if (!item.commentID) return` 守卫被绕过 → 点这张卡去 focus 一条**不存在**的批注,还顺手撑开评审面板 / 切走 tab(改动前点它是 no-op) | 第三轮引入 |
+| 中 | `global-sync/stale-busy.ts` | 反向对账新加的 `if (!directoryOf(id)) continue` **恰好把 REQ-100 ① 要救的那一类永久关在门外**,链条是闭合的:`submit.ts` 停止兜底 4s 后把状态写成 idle → `server-session.ts` 的 LRU `preserve` 只钉住非 idle 的会话,它当场失去保护、从 `data.info` 被挤掉 → `session.get()` 返回 undefined → `directoryOf` 恒为 undefined → 反向对账永久跳过它;而唯一会重新 `resolve` 的 `loadActiveSessionsQuery` 是 `staleTime: Infinity` + 三个 `refetchOn*: false`,不会再跑第二次,后端半死也不推事件。净效果:后端还在跑,前端永久自认 idle,`queueEnabled` 判为不忙 → 用户下一条消息**绕过队列**与仍在运行的那轮并发 —— 正是首版反向对账要消灭的形态 | 第三轮引入 |
+| 低 | `pages/session.tsx` | 队列路径只分流了 description,title 仍复用通用的「这条可能没发出去,**已放回输入框**」,而这条路径明确不回输入框(正文自己写的是「仍在队列里」)。同一个 toast 标题与正文互相矛盾 → 用户照标题去输入框找原文,那里是空的,以为内容彻底丢了、重新手打一遍 | 第三轮只修了一半 |
+
+**修法要点**
+
+- **快照只承载真批注 ID**:`PromptHistoryComment.id` 放开成可选,没有批注就缺席 ——
+  store 的 dedup key 是**派生值**,回填后由 `contextItemKey` 按原样重算,不需要被持久化。
+  两个 composer 的回填侧同步要求 `item.id`(批注 store 按 id 索引,没真 id 的条目不属于它)。
+  文件头新增第二条不变量:**往返恒等**。原有的「判据同源」只保证"不丢",恒等才保证"不变形"。
+- **守卫不删,改成可满足**:新增 `collectUnresolvedBusySessions`(与 `collectMissingBusySessions`
+  严格互补,只差 `!directoryOf` 那一支),调用方拿这份名单先 `session.resolve()` 再下判定。
+  补进来后状态变非 idle → LRU `preserve` 重新钉住它 → 正向清理有目录可依,
+  「凡是补得进来的就必须清得掉」这个不变量**仍然成立**。
+  (直接删守卫会退回第三轮修掉的"自造幻影 busy";这是两难里的第三条路。)
+- **queued 专属 title**:新增 `prompt.toast.promptNotDelivered.queued.title`,en/zh 各自落地、
+  其余 60 份走 en 兜底(共 62 份字典)。
+
+**测试**:新增 19 条。
+- `history.test.ts` +4(往返恒等族:无注释选区卡 / 无选区附件卡不得被造 ID、真批注照旧带回、
+  快照里不得残留 store dedup key)
+- `prompt-state.test.ts` +3(**用户可见现象的端到端闸**,跨 `history.ts` × `prompt-state.ts`:
+  加卡 → 快照 → 回填 → 再加同一选区,仍只有一张卡)
+- `stale-busy.test.ts` +6(前置名单与反向判定严格互补 / **resolve 后重跑就补得上**的两段式闭环 /
+  补进来仍清得掉 / 富状态与乐观消息护栏 / 目录已知时名单为空)
+- `server-sync-reconcile-protocol.test.ts` +3(结构闸:resolve 必须在判定**之前**、必须 `await`、
+  单条失败不得掀翻整轮)
+- `pages/session-queued-toast.test.ts` 新建 +5(结构闸 + 字典不变量:queued title 不得复用通用键、
+  两条文案必须真的不同、queued title 不得声称「已放回输入框」且要点明「仍在队列里」)
+
+**反证**:三个 🔴 修复各自退回去确认变红 —— `history.ts` 退回 → history 3 条 + prompt-state 2 条红;
+`session.tsx` 退回 → 文案闸 1 条红。`stale-busy` 的两段式闭环在纯函数层由
+「resolve 之后重跑」那条用例直接钉住(同一 input 下 resolve 前为空、resolve 后有值)。
+
+**回归**:typecheck 33/33 · app 1186 pass / 0 fail(148 文件),全绿。
+
+**回退方法**:三笔各自独立可 `git revert`(P4)——
+`42e961bed5`(历史快照身份)/ `61be8a5176`(反向对账 resolve 前置)/ 本记录所在的这一笔(queued 文案 + 62 份字典)。
+revert 第一笔会让无注释的卡重新拿到伪 ID(去重失效);revert 第二笔会让停止兜底后被 LRU 挤掉的
+会话重新永久自认 idle;第三笔纯文案,revert 无功能影响。
+
+### 方法论账(接 §十)
+
+§十 立的三条做法这轮**都生效了**:两处断言型注释因为带了前提闸而没再骗人,
+新增用例仍然优先补"我原本没想到的那一类"。但形态本身第四次重复,说明还缺一条:
+
+4. **修 A 时要问「这道守卫会不会恰好在 A 的链路上恒为假」**。
+   第三轮给反向对账加 `directoryOf` 守卫时,推理是"不认识的会话补了没收益";
+   漏掉的是"**它为什么不认识** —— 恰恰因为 A 那条路径刚把它挤出缓存"。
+   守卫与它要保护的场景共享同一个因果链时,守卫会静默地把场景一起挡掉。
+   同款:第三轮为了让快照"能表达全部 file 卡"而给 id 找了个 fallback,
+   没问"塞进去的这个值,下游会不会当成别的语义用"。
