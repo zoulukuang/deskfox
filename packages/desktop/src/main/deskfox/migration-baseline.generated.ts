@@ -9,7 +9,7 @@
 // 本清单是 append-only 并集:**只增不减**。上游删掉/改名的旧 id 也要留着 ——
 // 老用户库的 migration 表里仍有它,从基线拿掉就等于把那些好库判成超前。
 
-/** 本 fork core 已知的全部 migration id(共 38 条)。 */
+/** 本 fork core 已知的全部 migration id(共 39 条)。 */
 export const MIGRATION_BASELINE: string[] = [
   "20260127222353_familiar_lady_ursula",
   "20260211171708_add_project_commands",
@@ -49,4 +49,5 @@ export const MIGRATION_BASELINE: string[] = [
   "20260622142730_simplify_session_context_epoch",
   "20260622170816_reset_v2_session_state",
   "20260622202450_simplify_session_input",
+  "20261012052604_share-source",
 ]

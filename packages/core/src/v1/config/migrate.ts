@@ -40,6 +40,7 @@ export function migrate(info: typeof ConfigV1.Info.Type) {
     default_agent: info.default_agent,
     autoupdate: info.autoupdate,
     share: info.share ?? (info.autoshare ? "auto" : undefined),
+    share_target: info.share_target, // FORK: preserve explicit automatic-sharing region 2026-10-12
     enterprise: info.enterprise,
     username: info.username,
     permissions: permissions(info.permission, info.tools),
