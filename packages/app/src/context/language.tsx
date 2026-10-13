@@ -1,3 +1,5 @@
+// FORK: scoped feature bundle with explicit en fallback [feat: attachment-cost-guard]
+import { attachmentCostDict } from "@/i18n/attachment-cost"
 import * as i18n from "@solid-primitives/i18n"
 import { createEffect, createMemo, createResource } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -8,6 +10,7 @@ import { dict as en } from "@/i18n/en"
 import { dict as uiEn } from "@opencode-ai/ui/i18n/en"
 // FORK: i18n 品牌替换层 — 全语言统一把 "OpenCode" 文案换成 "DeskFox"(保留 OpenCode Zen)[feat: ui-brand-deskfox] 2026-06-06
 import { rebrandDict } from "@/i18n/rebrand"
+import { shareRoutingDict } from "@/i18n/share-routing" // FORK: reviewed feature bundle with explicit English fallback
 import {
   createDesktopNativeBundle,
   detectDesktopNativeLocale,
@@ -28,7 +31,7 @@ function localeDirection(locale: Locale): Direction {
   return RTL_LOCALES.has(locale) ? "rtl" : "ltr"
 }
 
-type RawDictionary = typeof en & typeof uiEn
+type RawDictionary = typeof en & typeof uiEn & ReturnType<typeof attachmentCostDict> & ReturnType<typeof shareRoutingDict> // FORK: typed feature bundles
 type Dictionary = i18n.Flatten<RawDictionary>
 type PluralKey =
   | UiI18nPluralKey
@@ -50,7 +53,7 @@ const LOCALES: readonly Locale[] = DESKTOP_NATIVE_LOCALES
 const INTL = DESKTOP_NATIVE_LOCALE_TAGS
 
 // FORK: 出口统一过品牌替换层 [feat: ui-brand-deskfox] 2026-06-06
-const base = rebrandDict(i18n.flatten({ ...en, ...uiEn }))
+const base = rebrandDict(i18n.flatten({ ...en, ...uiEn, ...attachmentCostDict("en"), ...shareRoutingDict("en") })) // FORK: feature fallback
 const dicts = new Map<Locale, Dictionary>([["en", base]])
 
 const merge = (app: Promise<Source>, ui: Promise<Source>) =>
@@ -129,8 +132,9 @@ function loadDict(locale: Locale) {
   if (locale === "en") return Promise.resolve(base)
   const load = loaders[locale]
   return load().then((next: Dictionary) => {
-    dicts.set(locale, next)
-    return next
+    const translated = { ...next, ...attachmentCostDict(locale), ...shareRoutingDict(locale) } // FORK: reviewed feature translations
+    dicts.set(locale, translated)
+    return translated
   })
 }
 

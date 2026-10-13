@@ -33,20 +33,24 @@ test("reports a divergent native offset once and ignores equal offsets and unrel
     },
   } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
   const calls: [number, boolean][] = []
+  const delivered = Promise.withResolvers<void>() // FORK: wait for observable delivery, not a guessed frame count 2026-10-12
   const cleanup = observeElementOffsetReconnectAware(instance, (offset, isScrolling) => {
     calls.push([offset, isScrolling])
     instance.scrollOffset = offset
+    delivered.resolve() // FORK: MutationObserver scheduling varies under the full suite
   })
 
   document.body.append(unrelated)
   unrelated.remove()
   await frames(2)
+  // FORK: observers must survive GC while mounted; catches Happy DOM weak callback loss. 2026-10-12
+  Bun.gc(true)
   expect(calls).toEqual([])
 
   route.remove()
   document.body.append(route)
   await new Promise((resolve) => setTimeout(resolve, 0))
-  await frames(3)
+  await delivered.promise // FORK: synchronize on the behavior asserted below
   expect(calls).toEqual([[0, false]])
 
   route.remove()

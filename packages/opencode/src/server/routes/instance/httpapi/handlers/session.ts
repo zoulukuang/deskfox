@@ -86,9 +86,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     })
 
     // FORK-BEGIN: REQ-095 会话内容搜索 [feat: session-content-search]
-    const search = Effect.fn("SessionHttpApi.search")(function* (ctx: {
-      query: typeof SessionSearchQuery.Type
-    }) {
+    const search = Effect.fn("SessionHttpApi.search")(function* (ctx: { query: typeof SessionSearchQuery.Type }) {
       const { db } = yield* Database.Service
       const scope = ctx.query.scope ?? "project"
       const projectID = scope === "project" ? (yield* InstanceState.context).project.id : undefined
@@ -288,9 +286,14 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     // (matches the legacy route behavior which routed any failure through
     // ErrorMiddleware → NamedError.Unknown 500) instead of blanket-mapping
     // every failure to a 400 BadRequest.
-    const share = Effect.fn("SessionHttpApi.share")(function* (ctx: { params: { sessionID: SessionID } }) {
+    const share = Effect.fn("SessionHttpApi.share")(function* (ctx: {
+      params: { sessionID: SessionID }
+      query: { shareTarget?: "cn" | "global" }
+    }) {
       yield* requireSession(ctx.params.sessionID)
-      yield* shareSvc.share(ctx.params.sessionID).pipe(Effect.mapError(() => new HttpApiError.InternalServerError({})))
+      yield* shareSvc
+        .share(ctx.params.sessionID, ctx.query.shareTarget)
+        .pipe(Effect.mapError(() => new HttpApiError.InternalServerError({}))) // FORK: pass the captured target unchanged 2026-10-12
       return yield* requireSession(ctx.params.sessionID)
     })
 
@@ -442,35 +445,37 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       return yield* session.updatePart(payload)
     })
 
-    return handlers
-      .handle("list", list)
-      // FORK: REQ-095 会话内容搜索 [feat: session-content-search]
-      .handle("search", search)
-      .handle("status", status)
-      .handle("get", get)
-      .handle("children", children)
-      .handle("todo", todo)
-      .handle("diff", diff)
-      .handle("messages", messages)
-      .handle("message", message)
-      .handleRaw("create", createRaw)
-      .handle("remove", remove)
-      .handle("update", update)
-      .handleRaw("fork", forkRaw)
-      .handle("abort", abort)
-      .handle("init", init)
-      .handle("share", share)
-      .handle("unshare", unshare)
-      .handle("summarize", summarize)
-      .handle("prompt", prompt)
-      .handle("promptAsync", promptAsync)
-      .handle("command", command)
-      .handle("shell", shell)
-      .handle("revert", revert)
-      .handle("unrevert", unrevert)
-      .handle("permissionRespond", permissionRespond)
-      .handle("deleteMessage", deleteMessage)
-      .handle("deletePart", deletePart)
-      .handle("updatePart", updatePart)
+    return (
+      handlers
+        .handle("list", list)
+        // FORK: REQ-095 会话内容搜索 [feat: session-content-search]
+        .handle("search", search)
+        .handle("status", status)
+        .handle("get", get)
+        .handle("children", children)
+        .handle("todo", todo)
+        .handle("diff", diff)
+        .handle("messages", messages)
+        .handle("message", message)
+        .handleRaw("create", createRaw)
+        .handle("remove", remove)
+        .handle("update", update)
+        .handleRaw("fork", forkRaw)
+        .handle("abort", abort)
+        .handle("init", init)
+        .handle("share", share)
+        .handle("unshare", unshare)
+        .handle("summarize", summarize)
+        .handle("prompt", prompt)
+        .handle("promptAsync", promptAsync)
+        .handle("command", command)
+        .handle("shell", shell)
+        .handle("revert", revert)
+        .handle("unrevert", unrevert)
+        .handle("permissionRespond", permissionRespond)
+        .handle("deleteMessage", deleteMessage)
+        .handle("deletePart", deletePart)
+        .handle("updatePart", updatePart)
+    )
   }),
 )

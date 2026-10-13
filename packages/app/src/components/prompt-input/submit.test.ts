@@ -317,6 +317,44 @@ beforeEach(() => {
 })
 
 describe("prompt submit worktree selection", () => {
+  // FORK-BEGIN: confirmation must precede creation/history for both prompt and command [feat: attachment-cost-guard]
+  for (const text of ["inspect", "/review inspect"]) {
+    test(`large attachment cancellation has no creation or history side effects: ${text}`, async () => {
+      promptValue = [{ type: "text", content: text, start: 0, end: text.length }]
+      commands.push({ name: "review" })
+      const history: Prompt[] = []
+      const submit = guardedSubmit(async () => "cancel", history)
+      await submit.handleSubmit(new Event("submit"))
+      expect(createdSessions).toEqual([])
+      expect(createdClients).toEqual([])
+      expect(sentPrompts).toEqual([])
+      expect(sentCommands).toEqual([])
+      expect(optimistic).toEqual([])
+      expect(history).toEqual([])
+      expect(promptValue[0]).toMatchObject({ content: text })
+    })
+  }
+
+  test("pending confirmation coalesces clicks and rejects a changed model variant", async () => {
+    const opened = Promise.withResolvers<void>()
+    const decision = Promise.withResolvers<"send">()
+    let confirmations = 0
+    const submit = guardedSubmit(() => {
+      confirmations++
+      opened.resolve()
+      return decision.promise
+    }, [])
+    const pending = submit.handleSubmit(new Event("submit"))
+    await opened.promise
+    await submit.handleSubmit(new Event("submit"))
+    variant = "changed"
+    decision.resolve("send")
+    await pending
+    expect(confirmations).toBe(1)
+    expect(createdSessions).toEqual([])
+    expect(sentPrompts).toEqual([])
+  })
+  // FORK-END
   test("reads the latest worktree accessor value per submit", async () => {
     const submit = createPromptSubmit({
       prompt,
@@ -616,3 +654,39 @@ describe("prompt submit worktree selection", () => {
     expect(optimisticSeeded).toEqual([true])
   })
 })
+
+// FORK: exercise the real submitter with its existing service fixture; only the dialog decision is injected.
+function guardedSubmit(
+  confirm: NonNullable<Parameters<typeof createPromptSubmit>[0]["confirmAttachments"]>,
+  history: Prompt[],
+) {
+  return createPromptSubmit({
+    prompt,
+    info: () => undefined,
+    imageAttachments: () => [
+      {
+        type: "image",
+        id: "large",
+        filename: "large.pdf",
+        mime: "application/pdf",
+        blob: { id: "large", url: "data:application/pdf," + "x".repeat(205_000) },
+      },
+    ],
+    commentCount: () => 0,
+    contextCount: () => 0,
+    autoAccept: () => false,
+    mode: () => "normal",
+    working: () => false,
+    editor: () => undefined,
+    queueScroll: () => undefined,
+    promptLength: () => 0,
+    addToHistory: (value) => {
+      history.push(value)
+    },
+    resetHistoryNavigation: () => undefined,
+    setMode: () => undefined,
+    setPopover: () => undefined,
+    newSessionWorktree: () => "create",
+    confirmAttachments: confirm,
+  })
+}

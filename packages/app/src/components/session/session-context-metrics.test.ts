@@ -61,7 +61,7 @@ describe("getSessionContext", () => {
 
     expect(ctx?.message.id).toBe("a2")
     expect(ctx?.total).toBe(500)
-    expect(ctx?.input).toBe(300)
+    expect(ctx?.input).toBe(350) // FORK: includes 25 read + 25 write
     expect(ctx?.usage).toBe(50)
     expect(ctx?.providerLabel).toBe("OpenAI")
     expect(ctx?.modelLabel).toBe("GPT-4.1")

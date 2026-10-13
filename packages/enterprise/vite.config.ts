@@ -18,9 +18,11 @@ const nitroConfig: any = (() => {
 })()
 
 export default defineConfig({
+  // FORK: resolve SolidStart's injected imports from the host app across workspace UI modules 2026-10-12
+  resolve: { dedupe: ["@solidjs/start"] },
   plugins: [
     tailwindcss(),
-    solidStart() as PluginOption,
+    solidStart({ middleware: "./src/deskfox/middleware.ts" }) as PluginOption, // FORK: revoke before SSR streaming 2026-10-12
     nitro({
       ...nitroConfig,
       baseURL: process.env.OPENCODE_BASE_URL,

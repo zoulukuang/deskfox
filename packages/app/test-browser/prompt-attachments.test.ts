@@ -5,6 +5,32 @@ import { createPromptAttachmentsCore } from "@/components/prompt-input/attachmen
 import { createPromptState } from "@/context/prompt"
 import { createPromptInputV2Attachments } from "../../session-ui/src/v2/components/prompt-input/attachments"
 import type { PromptInputV2Prompt } from "../../session-ui/src/v2/components/prompt-input/types"
+import { setCursorPosition } from "@/components/prompt-input/editor-dom"
+
+// FORK: native picker must capture caret moves that do not edit the draft 2026-10-12
+test("captures the current editor caret before a native picker blurs it", async () => {
+  await createRoot(async (dispose) => {
+    const prompt = createPromptState()
+    prompt.set([{ type: "text", content: "BEFORE AFTER", start: 0, end: 12 }], 12)
+    const editor = document.createElement("div")
+    editor.contentEditable = "true"
+    editor.textContent = "BEFORE AFTER"
+    document.body.append(editor)
+    setCursorPosition(editor, 7)
+    const attachments = createPromptAttachmentsCore({
+      capture: prompt.capture,
+      editor: () => editor,
+      referenceDirectory: () => "/project",
+      getPathForFile: (file) => `/project/${file.name}`,
+    })
+    const selected = attachments.captureAttachment()
+    window.getSelection()?.removeAllRanges()
+    await selected(new File(["sample"], "a.txt", { type: "text/plain" }))
+    expect(prompt.current().flatMap((part) => part.type === "image" ? [] : [part.content]).join("")).toBe("BEFORE @a.txt AFTER")
+    editor.remove()
+    dispose()
+  })
+})
 
 describe("prompt attachment session ownership", () => {
   test("adds an asynchronously read image to the session where the read started", async () => {

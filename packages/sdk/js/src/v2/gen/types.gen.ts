@@ -1926,6 +1926,7 @@ export type Config = {
   >
   share?: "manual" | "auto" | "disabled"
   autoshare?: boolean
+  share_target?: "cn" | "global"
   /**
    * Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications
    */
@@ -10249,6 +10250,7 @@ export type SessionShareData = {
   query?: {
     directory?: string
     workspace?: string
+    shareTarget?: "cn" | "global"
   }
   url: "/session/{sessionID}/share"
 }

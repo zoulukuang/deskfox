@@ -5,10 +5,12 @@ import { Effect, Layer, Scope, Context } from "effect"
 import { Config } from "@/config/config"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ShareNext } from "./share-next"
+import type { ShareSource } from "./source" // FORK: explicit public target 2026-10-12
+import { EventV2Bridge } from "@/event-v2-bridge"
 
 export interface Interface {
   readonly create: (input?: Session.CreateInput) => Effect.Effect<Session.Info>
-  readonly share: (sessionID: SessionID) => Effect.Effect<{ url: string }, unknown>
+  readonly share: (sessionID: SessionID, target?: ShareSource.ShareTarget) => Effect.Effect<{ url: string }, unknown>
   readonly unshare: (sessionID: SessionID) => Effect.Effect<void, unknown>
 }
 
@@ -22,18 +24,16 @@ const layer = Layer.effect(
     const shareNext = yield* ShareNext.Service
     const scope = yield* Scope.Scope
     const flags = yield* RuntimeFlags.Service
+    const events = yield* EventV2Bridge.Service // FORK: automatic share failures are visible
 
-    const share = Effect.fn("SessionShare.share")(function* (sessionID: SessionID) {
+    const share = Effect.fn("SessionShare.share")(function* (sessionID: SessionID, target?: ShareSource.ShareTarget) {
       const conf = yield* cfg.get()
       if (conf.share === "disabled") throw new Error("Sharing is disabled in configuration")
-      const result = yield* shareNext.create(sessionID)
-      yield* session.setShare({ sessionID, share: { url: result.url } })
-      return result
+      return yield* shareNext.create(sessionID, target) // FORK: projection is serialized with publication/cancellation
     })
 
     const unshare = Effect.fn("SessionShare.unshare")(function* (sessionID: SessionID) {
       yield* shareNext.remove(sessionID)
-      yield* session.setShare({ sessionID, share: undefined })
     })
 
     const create = Effect.fn("SessionShare.create")(function* (input?: Session.CreateInput) {
@@ -41,7 +41,35 @@ const layer = Layer.effect(
       if (result.parentID) return result
       const conf = yield* cfg.get()
       if (!(flags.autoShare || conf.share === "auto")) return result
-      yield* share(result.id).pipe(Effect.ignore, Effect.forkIn(scope))
+      // FORK-BEGIN: automatic publication has no click locale and must never silently fall back.
+      if (flags.client === "desktop" && !conf.share_target) {
+        yield* events.publish(Session.Event.Error, {
+          sessionID: result.id,
+          error: {
+            name: "UnknownError",
+            data: {
+              message:
+                "Automatic public sharing requires an explicit share_target (cn or global). This session was not shared.",
+            },
+          },
+        })
+        return result
+      }
+      yield* share(result.id, flags.client === "desktop" ? conf.share_target : undefined).pipe(
+        Effect.catchCause(() =>
+          events.publish(Session.Event.Error, {
+            sessionID: result.id,
+            error: {
+              name: "UnknownError",
+              data: {
+                message: "Automatic sharing failed. Publish manually to retry; no successful share has been confirmed.",
+              },
+            },
+          }),
+        ),
+        Effect.forkIn(scope),
+      )
+      // FORK-END
       return result
     })
 
@@ -52,7 +80,7 @@ const layer = Layer.effect(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [Config.node, Session.node, ShareNext.node, RuntimeFlags.node],
+  deps: [Config.node, Session.node, ShareNext.node, RuntimeFlags.node, EventV2Bridge.node], // FORK: visible automatic-share failure events
 })
 
 export * as SessionShare from "./session"

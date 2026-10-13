@@ -1,3 +1,7 @@
+// FORK: attachment policy and confirmation [feat: attachment-cost-guard] 2026-10-12
+import { useServerSDK } from "@/context/server-sdk"
+import { ServerConnection } from "@/context/server"
+import { useAttachmentCostDialog } from "./prompt-input/attachment-cost-dialog"
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import {
@@ -230,7 +234,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const command = useCommand()
   const permission = usePermission()
   const language = useLanguage()
+  const confirmAttachments = useAttachmentCostDialog() // FORK: capture dialog owner
   const platform = usePlatform()
+  const attachmentServer = useServerSDK() // FORK: tab connection identity
   const tabs = () => props.controls.session.tabs
   let editorRef!: HTMLDivElement
   let fileInputRef: HTMLInputElement | undefined
@@ -521,7 +527,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       picker: platform.openAttachmentPickerDialog,
       directory: () => sdk().directory,
       fallback: () => fileInputRef?.click(),
-      onFile: addAttachment,
+      onFile: captureAttachment(), // FORK: bind native picker to this draft 2026-10-12
       onError: (error) =>
         showToast({
           variant: "error",
@@ -1250,7 +1256,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     return true
   }
 
-  const { addAttachment, addAttachments, removeAttachment, handlePaste } = createPromptAttachments({
+  const { captureAttachment, addAttachments, removeAttachment, handlePaste } = createPromptAttachments({
     prompt,
     editor: () => editorRef,
     isDialogActive: () => !!dialog.active,
@@ -1291,6 +1297,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const { abort, handleSubmit } =
     props.submission ??
     createPromptSubmit({
+      // FORK: confirmation must run in the shared submitter before any side effects.
+      confirmAttachments,
+      localAttachmentReferences: () =>
+        platform.platform === "desktop" && ServerConnection.builtin(attachmentServer().server),
       prompt,
       info,
       imageAttachments,

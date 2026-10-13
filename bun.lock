@@ -522,6 +522,7 @@
       "version": "1.18.16",
       "dependencies": {
         "@hono/standard-validator": "catalog:",
+        "@opencode-ai/branding": "workspace:*",
         "@opencode-ai/core": "workspace:*",
         "@opencode-ai/session-ui": "workspace:*",
         "@opencode-ai/ui": "workspace:*",
@@ -1047,6 +1048,7 @@
       "version": "1.18.16",
       "dependencies": {
         "@kobalte/core": "catalog:",
+        "@opencode-ai/core": "workspace:*",
         "@pierre/diffs": "catalog:",
         "@shikijs/stream": "catalog:",
         "@shikijs/transformers": "3.9.2",
@@ -1153,6 +1155,7 @@
     "@silvia-odwyer/photon-node@0.3.4": "patches/@silvia-odwyer%2Fphoton-node@0.3.4.patch",
     "@npmcli/agent@4.0.2": "patches/@npmcli%2Fagent@4.0.2.patch",
     "solid-js@1.9.10": "patches/solid-js@1.9.10.patch",
+    "happy-dom@20.9.0": "patches/happy-dom@20.9.0.patch",
     "@ai-sdk/google@3.0.73": "patches/@ai-sdk%2Fgoogle@3.0.73.patch",
     "pacote@21.5.0": "patches/pacote@21.5.0.patch",
     "@dnd-kit/dom@0.5.0": "patches/@dnd-kit%2Fdom@0.5.0.patch",

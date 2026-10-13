@@ -10,10 +10,11 @@ import { assertExternalDirectoryEffect } from "./external-directory"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
 
-const DEFAULT_READ_LIMIT = 2000
-const MAX_LINE_LENGTH = 2000
-const MAX_LINE_SUFFIX = `... (line truncated to ${MAX_LINE_LENGTH} chars)`
-const MAX_BYTES = 50 * 1024
+// FORK-BEGIN: share legacy text limits; preserve streaming pagination [feat: attachment-cost-guard]
+import { limitReadLine, TEXT_MAX_BYTES, TEXT_MAX_LINES } from "@opencode-ai/core/util/attachment-text"
+const DEFAULT_READ_LIMIT = TEXT_MAX_LINES
+const MAX_BYTES = TEXT_MAX_BYTES
+// FORK-END
 const MAX_BYTES_LABEL = `${MAX_BYTES / 1024} KB`
 const SAMPLE_BYTES = 4096
 const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"])
@@ -159,7 +160,7 @@ export const ReadTool = Tool.define<
               return
             }
 
-            const line = text.length > MAX_LINE_LENGTH ? text.substring(0, MAX_LINE_LENGTH) + MAX_LINE_SUFFIX : text
+            const line = limitReadLine(text) // FORK: avoid splitting surrogate pairs 2026-10-12
             const size = Buffer.byteLength(line, "utf-8") + (raw.length > 0 ? 1 : 0)
             if (flags.bytes + size <= MAX_BYTES) {
               raw.push(line)

@@ -59,6 +59,37 @@ const readLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
 
 const it = testEffect(Layer.mergeAll(readLayer(), testInstanceStoreLayer))
 
+// FORK: C0 baseline of the existing read contract [feat: attachment-cost-guard] 2026-10-12
+it.instance("C0 baseline: legacy read caps lines, bytes and individual lines", () =>
+  Effect.gen(function* () {
+    const instance = yield* TestInstance
+    const fs = yield* FSUtil.Service
+    const samples = [
+      { name: "lines", text: "a\n".repeat(3_000) },
+      { name: "bytes", text: ("x".repeat(1_000) + "\n").repeat(100) },
+      { name: "long-line", text: "x".repeat(60_000) },
+    ]
+    for (const sample of samples) {
+      const file = path.join(instance.directory, `${sample.name}.txt`)
+      yield* fs.writeWithDirs(file, sample.text)
+      const result = yield* run({ filePath: file })
+      expect(result.output.length).toBeLessThan(sample.text.length + 15_000)
+      if (sample.name === "lines") expect(result.output).toContain("2000")
+      if (sample.name === "bytes") expect(result.output).toContain("Output capped at 50 KB")
+      if (sample.name === "long-line") expect(result.output).toContain("line truncated to 2000 chars")
+      console.log(
+        JSON.stringify({
+          probe: "C0-legacy-read",
+          sample: sample.name,
+          inputBytes: Buffer.byteLength(sample.text),
+          outputBytes: Buffer.byteLength(result.output),
+          tail: result.output.slice(-170),
+        }),
+      )
+    }
+  }),
+)
+
 const init = Effect.fn("ReadToolTest.init")(function* () {
   const info = yield* ReadTool
   return yield* info.init()
