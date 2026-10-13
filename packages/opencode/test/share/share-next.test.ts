@@ -1057,3 +1057,84 @@ it.live("publishes historical messages whose model is no longer configured", () 
     }).pipe(Effect.provide(integrationLayer(client)))
   }),
 )
+
+// FORK: the cancellation budget includes response bodies and error-finalizer cleanup.
+for (const compensate of [false, true]) {
+  it.live(
+    `cancellation body deadline releases the session lock (${compensate ? "compensation" : "manual"})`,
+    () =>
+      provideTmpdirInstance(() => {
+        const deletes: HttpClientRequest.HttpClientRequest[] = []
+        const client = HttpClient.make((req) => {
+          if (req.method !== "DELETE")
+            return Effect.succeed(
+              json(
+                req,
+                req.url.endsWith("/api/share") ? publicShare : {},
+                compensate && req.url.endsWith("/sync") ? 503 : 200,
+              ),
+            )
+          deletes.push(req)
+          if (deletes.length > 1) return Effect.succeed(json(req, { code: "ShareNotFound" }, 404))
+          // Headers arrive at once. Deliver the body after the product's deadline so the
+          // pre-fix case finishes deterministically instead of leaving an immortal test.
+          const timer: { value?: ReturnType<typeof setTimeout> } = {}
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              req,
+              new Response(
+                new ReadableStream({
+                  start(controller) {
+                    timer.value = setTimeout(() => {
+                      controller.enqueue(new TextEncoder().encode(JSON.stringify({ code: "ShareNotFound" })))
+                      controller.close()
+                    }, 35_000)
+                  },
+                  cancel() {
+                    clearTimeout(timer.value)
+                  },
+                }),
+                { status: 404, headers: { "content-type": "application/json" } },
+              ),
+            ),
+          )
+        })
+        return Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const sharing = yield* ShareNext.Service
+          const database = yield* Database.Service
+          const info = yield* sessions.create({ title: "bounded cancellation" })
+          if (!compensate) yield* sharing.create(info.id, "cn")
+          const started = Date.now()
+          const result = yield* Effect.exit(compensate ? sharing.create(info.id, "cn") : sharing.remove(info.id))
+          expect(Exit.isFailure(result)).toBe(true)
+          expect(Date.now() - started).toBeGreaterThanOrEqual(29_000)
+          expect(Date.now() - started).toBeLessThan(34_000)
+          const pending = yield* database.db
+            .select()
+            .from(ShareOperationTable)
+            .where(eq(ShareOperationTable.session_id, info.id))
+            .get()
+          expect(pending?.status).toBe("cleanup-required")
+          expect(pending?.secret).toBe(publicShare.secret)
+          expect(pending?.base_url).toBe("https://deskfox.cn")
+          expect(Exit.isFailure(yield* Effect.exit(sharing.create(info.id, "global")))).toBe(true)
+          yield* sharing.remove(info.id).pipe(Effect.timeout("2 seconds"))
+          expect(yield* share(info.id)).toBeUndefined()
+          expect((yield* sessions.get(info.id)).share).toBeUndefined()
+          expect(
+            yield* database.db
+              .select()
+              .from(ShareOperationTable)
+              .where(eq(ShareOperationTable.session_id, info.id))
+              .get(),
+          ).toBeUndefined()
+          expect(deletes.map((req) => req.url)).toEqual([
+            `https://deskfox.cn/api/share/${publicShare.id}`,
+            `https://deskfox.cn/api/share/${publicShare.id}`,
+          ])
+        }).pipe(Effect.provide(integrationLayer(client)))
+      }),
+    45_000,
+  )
+}
