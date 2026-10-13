@@ -152,3 +152,85 @@ test("malformed renderer fields are rejected without changing the published snap
     expect(await (await api.request(`/api/share/${share.id}/data`)).json()).toHaveLength(2)
   }
 })
+
+test("configured provider IDs survive user, assistant and model sharing", async () => {
+  const api = await fixture()
+  const created = await api.request("/api/share", {
+    method: "POST",
+    body: JSON.stringify({ sessionID: "ses_test" }),
+    headers: { "content-type": "application/json" },
+  })
+  const share = (await created.json()) as { id: string; secret: string }
+  const providerID = "gateway.example/自定义:1"
+  const tokens = { input: 1, output: 1, reasoning: 0, cache: { read: 0, write: 0 } }
+  const response = await api.request(`/api/share/${share.id}/sync`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      secret: share.secret,
+      data: [
+        session,
+        {
+          type: "message",
+          data: {
+            id: "msg_user",
+            sessionID: "ses_test",
+            role: "user",
+            time: { created: 1 },
+            agent: "build",
+            model: { providerID, modelID: "test" },
+          },
+        },
+        {
+          type: "message",
+          data: {
+            id: "msg_assistant",
+            sessionID: "ses_test",
+            role: "assistant",
+            time: { created: 2 },
+            parentID: "msg_user",
+            agent: "build",
+            mode: "build",
+            providerID,
+            modelID: "test",
+            path: { cwd: "/test", root: "/test" },
+            cost: 0,
+            tokens,
+          },
+        },
+        {
+          type: "model",
+          data: [
+            {
+              id: "test",
+              name: "Custom",
+              providerID,
+              api: { id: "test", url: "https://private.example", npm: "@ai-sdk/openai-compatible" },
+              cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+              limit: { context: 1000, output: 100 },
+              capabilities: {},
+              options: {},
+              headers: { Authorization: "private-test-token" },
+              status: "active",
+              release_date: "2026-10-13",
+            },
+          ],
+        },
+      ],
+    }),
+  })
+  expect(response.status).toBe(200)
+  const data = await (await api.request(`/api/share/${share.id}/data`)).text()
+  expect(data.split(providerID)).toHaveLength(4)
+  expect(data).not.toContain("private-test-token")
+  expect(data).not.toContain("private.example")
+  const invalid = await api.request(`/api/share/${share.id}/sync`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      secret: share.secret,
+      data: [{ ...session, data: { ...session.data, id: "../ses_test" } }],
+    }),
+  })
+  expect(invalid.status).toBe(400)
+})

@@ -342,9 +342,9 @@ const layer = Layer.effect(
         ),
         // FORK: sharing saved history must not require its old provider to remain configured.
         (item) =>
-          provider.getModel(ProviderV2.ID.make(item.providerID), ModelV2.ID.make(item.modelID)).pipe(
-            Effect.catchTag("ProviderModelNotFoundError", () => Effect.succeed(undefined)),
-          ),
+          provider
+            .getModel(ProviderV2.ID.make(item.providerID), ModelV2.ID.make(item.modelID))
+            .pipe(Effect.catchTag("ProviderModelNotFoundError", () => Effect.succeed(undefined))),
         { concurrency: 8 },
       )
 
@@ -484,62 +484,68 @@ const layer = Layer.effect(
         }),
       )
 
-    const cleanup = Effect.fn("ShareNext.cleanup")(function* (sessionID: SessionID) {
-      if (disabled) return
-      const s = yield* InstanceState.get(state)
-      s.queue.delete(sessionID)
-      const share = yield* get(sessionID)
-      if (!share) {
-        const pending = yield* db
-          .select()
-          .from(ShareOperationTable)
-          .where(eq(ShareOperationTable.session_id, sessionID))
-          .get()
-        if (!pending) return
-        if (!pending.base_url || !["https://deskfox.cn", "https://deskfox.ai"].includes(pending.base_url))
-          throw new Error("Unknown legacy create outcome cannot be retried safely")
-        const req = yield* request(undefined, ShareSource.recordedSource({ ...pending, id: "", url: "" }))
-        const result = yield* allocate(sessionID, req, pending.operation_id)
+    const cleanup = Effect.fn("ShareNext.cleanup")(
+      function* (sessionID: SessionID) {
+        if (disabled) return
+        const s = yield* InstanceState.get(state)
+        s.queue.delete(sessionID)
+        const share = yield* get(sessionID)
+        if (!share) {
+          const pending = yield* db
+            .select()
+            .from(ShareOperationTable)
+            .where(eq(ShareOperationTable.session_id, sessionID))
+            .get()
+          if (!pending) return
+          if (!pending.base_url || !["https://deskfox.cn", "https://deskfox.ai"].includes(pending.base_url))
+            throw new Error("Unknown legacy create outcome cannot be retried safely")
+          const req = yield* request(undefined, ShareSource.recordedSource({ ...pending, id: "", url: "" }))
+          const result = yield* allocate(sessionID, req, pending.operation_id)
+          yield* db
+            .update(ShareOperationTable)
+            .set({ status: "cleanup-required", remote_id: result.id, secret: result.secret, url: result.url })
+            .where(eq(ShareOperationTable.session_id, sessionID))
+            .run()
+        }
+        const owned = share ?? (yield* get(sessionID))
+        if (!owned) throw new Error("Share recovery record is missing")
         yield* db
           .update(ShareOperationTable)
-          .set({ status: "cleanup-required", remote_id: result.id, secret: result.secret, url: result.url })
+          .set({ status: "cleanup-required" })
           .where(eq(ShareOperationTable.session_id, sessionID))
           .run()
-      }
-      const owned = share ?? (yield* get(sessionID))
-      if (!owned) throw new Error("Share recovery record is missing")
-      yield* db
-        .update(ShareOperationTable)
-        .set({ status: "cleanup-required" })
-        .where(eq(ShareOperationTable.session_id, sessionID))
-        .run()
-      const req = yield* request(undefined, ShareSource.recordedSource(owned))
-      const response = yield* HttpClientRequest.delete(`${req.baseUrl}${req.api.remove(owned.id)}`).pipe(
-        HttpClientRequest.setHeaders(req.headers),
-        HttpClientRequest.bodyJson({ secret: owned.secret }),
-        Effect.flatMap(execute),
-      )
-      const absent =
-        response.status === 404 &&
-        ["https://deskfox.cn", "https://deskfox.ai"].includes(req.baseUrl) &&
-        response.headers["content-type"]?.startsWith("application/json") &&
-        (yield* HttpClientResponse.schemaBodyJson(Schema.Struct({ code: Schema.String }))(response)).code ===
-          "ShareNotFound"
-      if (!absent && (response.status < 200 || response.status >= 300))
-        throw new Error(`Share cancellation failed (${response.status})`)
-      const existing = yield* db
-        .select({ id: SessionTable.id })
-        .from(SessionTable)
-        .where(eq(SessionTable.id, sessionID))
-        .get()
-      if (existing) yield* session.setShare({ sessionID, share: undefined })
-      yield* db.transaction((tx) =>
-        Effect.gen(function* () {
-          yield* tx.delete(SessionShareTable).where(eq(SessionShareTable.session_id, sessionID)).run()
-          yield* tx.delete(ShareOperationTable).where(eq(ShareOperationTable.session_id, sessionID)).run()
-        }),
-      )
-    })
+        const req = yield* request(undefined, ShareSource.recordedSource(owned))
+        const response = yield* HttpClientRequest.delete(`${req.baseUrl}${req.api.remove(owned.id)}`).pipe(
+          HttpClientRequest.setHeaders(req.headers),
+          HttpClientRequest.bodyJson({ secret: owned.secret }),
+          Effect.flatMap(execute),
+        )
+        const absent =
+          response.status === 404 &&
+          ["https://deskfox.cn", "https://deskfox.ai"].includes(req.baseUrl) &&
+          response.headers["content-type"]?.startsWith("application/json") &&
+          (yield* HttpClientResponse.schemaBodyJson(Schema.Struct({ code: Schema.String }))(response)).code ===
+            "ShareNotFound"
+        if (!absent && (response.status < 200 || response.status >= 300))
+          throw new Error(`Share cancellation failed (${response.status})`)
+        const existing = yield* db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, sessionID))
+          .get()
+        if (existing) yield* session.setShare({ sessionID, share: undefined })
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx.delete(SessionShareTable).where(eq(SessionShareTable.session_id, sessionID)).run()
+            yield* tx.delete(ShareOperationTable).where(eq(ShareOperationTable.session_id, sessionID)).run()
+          }),
+        )
+      },
+      // FORK: bound the whole cleanup, including recovery allocation and response bodies.
+      // Error compensation runs masked; restore interruptibility so its deadline can stop I/O.
+      Effect.interruptible,
+      Effect.timeout("30 seconds"),
+    )
     const remove = (sessionID: SessionID) => ShareCoordinator.serialize(sessionID, cleanup(sessionID))
     // FORK-END
 

@@ -18,3 +18,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 复现两处构建解析失败，补 UI Core 依赖、宿主 dedupe SolidStart 后生产构建和 enterprise typecheck 通过。
 - Node 产物已能监听 loopback，但 `/api/doc` 因既有 `z.custom` 无法生成 JSON Schema 返回 500。新请求 schema 必须解决该问题，不能把“构建成功”视为接口通过。
 - user 已确认 D-A/B/C；D-D/E/F 按本规格实验验证。D-G 的联系/保留/备份删除政策、Windows 可用入口仍待答复。先推进不依赖这些参数的本地实现。
+
+
+### 2026-10-13 合并后复核修复
+
+Code Review 的两个 P2 已按用户指令修复：providerID 对齐原协议字符串；取消及补偿清理统一限时并释放会话锁。先写 API 与两条生命周期复现，再修复；完成完整合并闸、两站部署和 local 更新。逐文件 R4 论证、失败原因与完整结果见 3-changelog 同日条目。
