@@ -7,6 +7,7 @@ import { cors } from "hono/cors"
 import { Share } from "~/core/share"
 import { Resource } from "sst"
 import { timingSafeEqual } from "node:crypto"
+import { localShares, shareService } from "~/deskfox/runtime" // FORK: isolated same-origin share service 2026-10-12
 
 const app = new Hono()
 
@@ -155,17 +156,23 @@ app
   })
 
 export function GET(event: APIEvent) {
-  return app.fetch(event.request)
+  return dispatch(event) // FORK: keep cloud service behavior separate 2026-10-12
 }
 
 export function POST(event: APIEvent) {
-  return app.fetch(event.request)
+  return dispatch(event) // FORK: isolated share API 2026-10-12
 }
 
 export function PUT(event: APIEvent) {
-  return app.fetch(event.request)
+  return dispatch(event) // FORK: isolated share API 2026-10-12
 }
 
 export async function DELETE(event: APIEvent) {
+  return dispatch(event) // FORK: isolated share API 2026-10-12
+}
+
+// FORK: local service has no SST admin endpoint or cloud storage fallback 2026-10-12
+async function dispatch(event: APIEvent) {
+  if (localShares) return (await shareService()).api.fetch(event.request)
   return app.fetch(event.request)
 }

@@ -1,0 +1,32 @@
+[Unit]
+Description=DeskFox regional public sharing
+After=network.target
+
+[Service]
+Type=simple
+User=deskfox-share
+Group=deskfox-share
+WorkingDirectory=/opt/deskfox-share/current
+EnvironmentFile=/etc/deskfox-share.env
+Environment=HOST=127.0.0.1
+Environment=OPENCODE_STORAGE_ADAPTER=filesystem
+StateDirectory=deskfox-share
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/flock --exclusive --nonblock /var/lib/deskfox-share/writer.lock /opt/deskfox-share/node/bin/node /opt/deskfox-share/current/server/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/deskfox-share
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=768M
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

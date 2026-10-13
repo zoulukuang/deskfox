@@ -231,9 +231,29 @@ export default {
           \`id\` text NOT NULL,
           \`secret\` text NOT NULL,
           \`url\` text NOT NULL,
+          \`base_url\` text,
+          \`api_resource\` text,
+          \`account_id\` text,
+          \`org_id\` text,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL,
           CONSTRAINT \`fk_session_share_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`share_operation\` (
+          \`session_id\` text PRIMARY KEY,
+          \`operation_id\` text NOT NULL UNIQUE,
+          \`status\` text NOT NULL,
+          \`base_url\` text,
+          \`api_resource\` text,
+          \`account_id\` text,
+          \`org_id\` text,
+          \`remote_id\` text,
+          \`secret\` text,
+          \`url\` text,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL
         );
       `)
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)

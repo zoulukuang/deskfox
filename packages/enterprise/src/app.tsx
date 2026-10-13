@@ -11,7 +11,8 @@ import { dict as uiZh } from "@opencode-ai/ui/i18n/zh"
 import { createEffect, createMemo, Suspense, type ParentProps } from "solid-js"
 import { getRequestEvent } from "solid-js/web"
 import "./app.css"
-import { Favicon } from "@opencode-ai/ui/favicon"
+import "@opencode-ai/branding/theme.css" // FORK: public share logo tokens 2026-10-12
+import { shareBrand } from "@opencode-ai/branding/share" // FORK: public site favicon 2026-10-12
 
 function resolveTemplate(text: string, params?: UiI18nParams) {
   if (!params) return text
@@ -81,7 +82,7 @@ export default function App() {
         <MetaProvider>
           <DialogProvider>
             <MarkedProvider>
-              <Favicon />
+              <link rel="icon" type="image/png" href={shareBrand.image} /> {/* FORK: regional brand asset */}
               <Font />
               <UiI18nBridge>
                 <Suspense>{props.children}</Suspense>

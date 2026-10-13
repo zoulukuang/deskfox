@@ -297,7 +297,10 @@ export const SessionApi = HttpApi.make("session")
         ),
         HttpApiEndpoint.post("share", SessionPaths.share, {
           params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
+          query: Schema.Struct({
+            ...WorkspaceRoutingQueryFields,
+            shareTarget: Schema.optional(Schema.Literals(["cn", "global"])),
+          }), // FORK: explicit public target and capability contract 2026-10-12
           success: described(Session.Info, "Successfully shared session"),
           error: [HttpApiError.InternalServerError, ApiNotFoundError],
         }).annotateMerge(

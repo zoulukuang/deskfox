@@ -6,22 +6,21 @@ import { FileComponentProvider } from "@opencode-ai/ui/context/file"
 import { WorkerPoolProvider } from "@opencode-ai/ui/context/worker-pool"
 import { createAsync, query, useParams } from "@solidjs/router"
 import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
-import { Share } from "~/core/share"
-import { Logo, Mark } from "@opencode-ai/ui/logo"
-import { IconButton } from "@opencode-ai/ui/icon-button"
+import { publicShare } from "~/deskfox/public-share" // FORK: local atomic repository 2026-10-12
+import { Logo, Mark } from "@opencode-ai/branding/logo" // FORK: share site identity 2026-10-12
+import { shareBrand } from "@opencode-ai/branding/share"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { iife } from "@opencode-ai/core/util/iife"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { DateTime } from "luxon"
 import { createStore } from "solid-js/store"
-import NotFound from "../[...404]"
+import NotFound from "~/deskfox/not-found" // FORK: public missing/revoked share page 2026-10-12
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { MessageNav } from "@opencode-ai/session-ui/message-nav"
 import { FileSSR } from "@opencode-ai/session-ui/file-ssr"
 import { clientOnly } from "@solidjs/start"
 import { Meta, Title } from "@solidjs/meta"
-import { Base64 } from "js-base64"
 import { getRequestEvent } from "solid-js/web"
 
 const ClientOnlyWorkerPoolProvider = clientOnly(() =>
@@ -57,9 +56,18 @@ class SessionDataMissingError extends NamedError {
 
 const getData = query(async (shareID) => {
   "use server"
-  const share = await Share.get(shareID)
-  if (!share) throw new SessionDataMissingError({ sessionID: shareID })
-  const data = await Share.data(shareID)
+  getRequestEvent()?.response.headers.set("Cache-Control", "no-store") // FORK: no cached RPC snapshots 2026-10-12
+  const share = await publicShare.get(shareID)
+  if (!share) {
+    const event = getRequestEvent()
+    if (event) {
+      event.response.status = 404
+      // FORK: SolidStart drops the RPC status when wrapping its serialized stream.
+      event.response.headers.set("X-DeskFox-Share-Missing", "1")
+    }
+    throw new SessionDataMissingError({ sessionID: shareID })
+  }
+  const data = await publicShare.data(shareID)
   const result: {
     sessionID: string
     shareID: string
@@ -124,7 +132,7 @@ const getData = query(async (shareID) => {
 export default function () {
   getRequestEvent()?.response.headers.set(
     "Cache-Control",
-    "public, max-age=30, s-maxage=300, stale-while-revalidate=86400",
+    "no-store", // FORK: revocation must not serve stale snapshots 2026-10-12
   )
 
   const params = useParams()
@@ -139,15 +147,10 @@ export default function () {
         if (SessionDataMissingError.isInstance(error)) {
           return <NotFound />
         }
-        console.error(error)
-        const details = error instanceof Error ? (error.stack ?? error.message) : String(error)
+        console.error("Share rendering failed") // FORK: do not expose server paths or payload errors 2026-10-12
         return (
           <div class="min-h-screen w-full bg-background-base text-text-base flex flex-col items-center justify-center gap-4 p-6 text-center">
             <p class="text-16-medium">Unable to render this share.</p>
-            <p class="text-14-regular text-text-weaker">Check the console for more details.</p>
-            <pre class="text-12-mono text-left whitespace-pre-wrap break-words w-full max-w-200 bg-background-stronger rounded-md p-4">
-              {details}
-            </pre>
           </div>
         )
       }}
@@ -158,36 +161,16 @@ export default function () {
           const match = createMemo(() => Binary.search(data().session, data().sessionID, (s) => s.id))
           if (!match().found) throw new Error(`Session ${data().sessionID} not found`)
           const info = createMemo(() => data().session[match().index])
-          const ogImage = createMemo(() => {
-            const models = new Set<string>()
-            const messages = data().message[data().sessionID] ?? []
-            for (const msg of messages) {
-              if (msg.role === "assistant" && msg.modelID) {
-                models.add(msg.modelID)
-              }
-            }
-            const modelIDs = Array.from(models)
-            const encodedTitle = encodeURIComponent(Base64.encode(encodeURIComponent(info().title.substring(0, 700))))
-            let modelParam: string
-            if (modelIDs.length === 1) {
-              modelParam = modelIDs[0]
-            } else if (modelIDs.length === 2) {
-              modelParam = encodeURIComponent(`${modelIDs[0]} & ${modelIDs[1]}`)
-            } else if (modelIDs.length > 2) {
-              modelParam = encodeURIComponent(`${modelIDs[0]} & ${modelIDs.length - 1} others`)
-            } else {
-              modelParam = "unknown"
-            }
-            const version = `v${info().version}`
-            return `https://social-cards.sst.dev/opencode-share/${encodedTitle}.png?model=${modelParam}&version=${version}&id=${data().shareID}`
-          })
+          const ogImage = () => shareBrand.image // FORK: same-origin card, no session titles sent to third parties 2026-10-12
 
           return (
             <>
               <Show when={info().title}>
-                <Title>{info().title} | OpenCode</Title>
+                <Title>
+                  {info().title} | {shareBrand.name}
+                </Title>
               </Show>
-              <Meta name="description" content="opencode - The AI coding agent built for the terminal." />
+              <Meta name="description" content={shareBrand.description} />
               <Meta property="og:image" content={ogImage()} />
               <Meta name="twitter:image" content={ogImage()} />
               <ClientOnlyWorkerPoolProvider>
@@ -221,33 +204,34 @@ export default function () {
                       const diffs = createMemo(() => data().session_diff[data().sessionID] ?? [])
                       const [diffStyle, setDiffStyle] = createSignal<"unified" | "split">("unified")
 
+                      // FORK: keep the pinned share header compact; wrap metadata instead of reserving empty height.
                       const title = () => (
-                        <div class="flex flex-col gap-4">
-                          <div class="flex flex-col gap-2 sm:flex-row sm:gap-4 sm:items-center sm:h-8 justify-start self-stretch">
-                            <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base w-fit">
+                        <div class="flex min-w-0 w-full flex-col gap-1">
+                          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 justify-start self-stretch">
+                            <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base w-fit shrink-0">
                               <Mark class="shrink-0 w-3 my-0.5" />
                               <div class="text-12-mono text-text-base">v{info().version}</div>
                             </div>
-                            <div class="flex gap-4 items-center">
-                              <div class="flex gap-2 items-center">
-                                <Show when={provider()}>
-                                  <ProviderIcon id={provider()!} class="size-3.5 shrink-0 text-icon-strong-base" />
-                                </Show>
-                                <div class="text-12-regular text-text-base">{model()?.name ?? modelID()}</div>
-                              </div>
-                              <div class="text-12-regular text-text-weaker">
-                                {DateTime.fromMillis(info().time.created).toFormat("dd MMM yyyy, HH:mm")}
+                            <div class="flex min-w-0 max-w-full gap-2 items-center">
+                              <Show when={provider()}>
+                                <ProviderIcon id={provider()!} class="size-3.5 shrink-0 text-icon-strong-base" />
+                              </Show>
+                              <div class="text-12-regular text-text-base wrap-anywhere min-w-0">
+                                {model()?.name ?? modelID()}
                               </div>
                             </div>
+                            <div class="text-12-regular text-text-weaker whitespace-nowrap shrink-0">
+                              {DateTime.fromMillis(info().time.created).toFormat("dd MMM yyyy, HH:mm")}
+                            </div>
                           </div>
-                          <div class="text-left text-16-medium text-text-strong">{info().title}</div>
+                          <div class="text-left text-16-medium text-text-strong wrap-anywhere">{info().title}</div>
                         </div>
                       )
 
                       const turns = () => (
-                        <div class="relative mt-2 pb-8 min-w-0 w-full h-full overflow-y-auto no-scrollbar">
-                          <div class="px-4 py-6">{title()}</div>
-                          <div class="flex flex-col gap-15 items-start justify-start mt-4">
+                        <div class="relative pb-8 min-w-0 w-full h-full overflow-y-auto no-scrollbar">
+                          <div class="px-4 py-3">{title()}</div>
+                          <div class="flex flex-col gap-15 items-start justify-start">
                             <For each={messages()}>
                               {(message) => (
                                 <SessionTurn
@@ -272,28 +256,14 @@ export default function () {
 
                       return (
                         <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
-                          <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
+                          <header class="h-8 shrink-0 px-4 sm:px-6 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
                             <div class="">
-                              <a href="https://opencode.ai">
+                              <a href={shareBrand.home}>
                                 <Mark />
                               </a>
                             </div>
-                            <div class="flex gap-3 items-center">
-                              <IconButton
-                                as={"a"}
-                                href="https://github.com/anomalyco/opencode"
-                                target="_blank"
-                                icon="github"
-                                variant="ghost"
-                              />
-                              <IconButton
-                                as={"a"}
-                                href="https://opencode.ai/discord"
-                                target="_blank"
-                                icon="discord"
-                                variant="ghost"
-                              />
-                            </div>
+                            {/* FORK: public site navigation stays on its regional DeskFox site. */}
+                            <a href={shareBrand.home}>{shareBrand.name}</a>
                           </header>
                           <div class="select-text flex flex-col flex-1 min-h-0">
                             <div
@@ -305,12 +275,15 @@ export default function () {
                             >
                               <div
                                 classList={{
-                                  "@container relative shrink-0 pt-14 flex flex-col gap-10 min-h-0 w-full": true,
+                                  // FORK: leave room for the review pane; w-full + shrink-0 pushed it outside the viewport.
+                                  "@container relative pt-3 flex flex-col gap-3 min-h-0 min-w-0": true,
+                                  "w-full": wide(),
+                                  "w-1/2 shrink-0": !wide(),
                                 }}
                               >
                                 <div
                                   classList={{
-                                    "w-full flex justify-start items-start min-w-0 px-6": true,
+                                    "w-full shrink-0 flex justify-start items-start min-w-0 px-6": true,
                                   }}
                                 >
                                   {title()}
@@ -347,7 +320,7 @@ export default function () {
                                 </div>
                               </div>
                               <Show when={diffs().length > 0}>
-                                <div class="@container relative grow pt-14 flex-1 min-h-0 border-l border-border-weak-base">
+                                <div class="@container relative pt-3 flex-1 min-w-0 min-h-0 border-l border-border-weak-base">
                                   <SessionReview
                                     diffs={diffs()}
                                     diffStyle={diffStyle()}
@@ -380,7 +353,7 @@ export default function () {
                                     {turns()}
                                   </Tabs.Content>
                                   <Tabs.Content value="review" class="!overflow-hidden hidden data-[selected]:block">
-                                    <div class="relative h-full pt-8 overflow-y-auto no-scrollbar">
+                                    <div class="relative h-full pt-3 overflow-y-auto no-scrollbar">
                                       <SessionReview
                                         diffs={diffs()}
                                         classes={{
@@ -395,7 +368,11 @@ export default function () {
                               </Match>
                               <Match when={true}>
                                 <div
-                                  classList={{ "!overflow-hidden": true, "md:hidden": wide(), "lg:hidden": !wide() }}
+                                  classList={{
+                                    "!overflow-hidden flex-1 min-h-0": true,
+                                    "md:hidden": wide(),
+                                    "lg:hidden": !wide(),
+                                  }}
                                 >
                                   {turns()}
                                 </div>

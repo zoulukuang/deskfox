@@ -8,6 +8,7 @@
   "exports": {
     "./package.json": "./package.json",
     "./logo": "./src/logo.tsx",
+    "./share": "./src/share.ts",
     "./theme.css": "./src/theme.css",
     "./installer-versions.json": "./installer-versions.json"
   },

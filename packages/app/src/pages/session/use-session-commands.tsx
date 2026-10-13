@@ -22,6 +22,7 @@ import { Message, Part, UserMessage } from "@opencode-ai/sdk/v2"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionOwnership } from "./session-ownership"
 import { useLocal } from "@/context/local"
+import { usePublicShare } from "./use-public-share" // FORK: regional share contract 2026-10-12
 
 export type SessionCommandContext = {
   navigateMessageByOffset: (offset: number) => void
@@ -46,6 +47,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const permission = usePermission()
   const prompt = usePrompt()
   const sdk = useSDK()
+  const publishShare = usePublicShare() // FORK: capture locale and validate server capability
   const settings = useSettings()
   const sync = useSync()
   const terminal = useTerminal()
@@ -197,20 +199,21 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       return
     }
 
-    const url = await sdk()
-      .client.session.share({ sessionID })
+    // FORK-BEGIN: preserve actionable capability errors before publication
+    const result = await publishShare(sessionID)
       .then((res) => res.data?.share?.url)
-      .catch(() => undefined)
-    if (!url) {
+      .catch((error: unknown) => (error instanceof Error ? error : undefined))
+    if (!result || result instanceof Error) {
       showToast({
         title: language.t("toast.session.share.failed.title"),
-        description: language.t("toast.session.share.failed.description"),
+        description: result instanceof Error ? result.message : language.t("toast.session.share.failed.description"),
         variant: "error",
       })
       return
     }
 
-    await copyShare(url, false)
+    await copyShare(result, false)
+    // FORK-END
   }
 
   const unshare = async () => {

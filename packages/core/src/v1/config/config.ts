@@ -61,6 +61,9 @@ export const Info = Schema.Struct({
   autoshare: Schema.optional(Schema.Boolean).annotate({
     description: "@deprecated Use 'share' field instead. Share newly created sessions automatically",
   }),
+  share_target: Schema.optional(Schema.Literals(["cn", "global"])).annotate({
+    description: "Explicit region for desktop automatic public sharing",
+  }), // FORK: no locale guess for automatic sharing 2026-10-12
   autoupdate: Schema.optional(Schema.Union([Schema.Boolean, Schema.Literal("notify")])).annotate({
     description:
       "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications",

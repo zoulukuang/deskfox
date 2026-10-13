@@ -47,6 +47,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   share: Schema.Literals(["manual", "auto", "disabled"]).pipe(Schema.optional).annotate({
     description: "Control whether sessions may be shared manually, automatically, or not at all",
   }),
+  share_target: Schema.optional(Schema.Literals(["cn", "global"])).annotate({
+    description: "Explicit region for desktop automatic public sharing",
+  }), // FORK: explicit region 2026-10-12
   enterprise: Schema.Struct({
     url: Schema.String.pipe(Schema.optional),
   })

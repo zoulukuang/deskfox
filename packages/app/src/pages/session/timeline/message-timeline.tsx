@@ -75,6 +75,7 @@ import { useSettings } from "@/context/settings"
 import { useTabs } from "@/context/tabs"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useSDK } from "@/context/sdk"
+import { usePublicShare } from "../use-public-share" // FORK: regional share contract 2026-10-12
 import { useSync } from "@/context/sync"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { sessionTitle } from "@/utils/session-title"
@@ -278,6 +279,7 @@ export function MessageTimeline(props: {
   const navigate = useNavigate()
   const serverSDK = useServerSDK()
   const sdk = useSDK()
+  const publishShare = usePublicShare() // FORK: shared routing and capability check
   const sync = useSync()
   const settings = useSettings()
   const tabs = useTabs()
@@ -711,16 +713,26 @@ export function MessageTimeline(props: {
   }
 
   const shareMutation = useMutation(() => ({
-    mutationFn: (id: string) => serverSDK().client.session.share({ sessionID: id }),
+    mutationFn: publishShare, // FORK: unsupported servers cannot silently reroute publication
     onError: (err) => {
-      console.error("Failed to share session", err)
+      // FORK: publication failures must be visible, including unsupported remote servers.
+      showToast({
+        title: language.t("toast.session.share.failed.title"),
+        description: errorMessage(err),
+        variant: "error",
+      })
     },
   }))
 
   const unshareMutation = useMutation(() => ({
     mutationFn: (id: string) => serverSDK().client.session.unshare({ sessionID: id }),
     onError: (err) => {
-      console.error("Failed to unshare session", err)
+      // FORK: keep the link and explain why cancellation has not been confirmed.
+      showToast({
+        title: language.t("toast.session.unshare.failed.title"),
+        description: errorMessage(err),
+        variant: "error",
+      })
     },
   }))
 
@@ -1225,7 +1237,11 @@ export function MessageTimeline(props: {
     const isChat = comment.kind === "chat" || isChatSelectionPath(comment.path)
     if (!isChat) {
       const sel = comment.selection
-      const range = sel ? (sel.startLine === sel.endLine ? `:${sel.startLine}` : `:${sel.startLine}-${sel.endLine}`) : ""
+      const range = sel
+        ? sel.startLine === sel.endLine
+          ? `:${sel.startLine}`
+          : `:${sel.startLine}-${sel.endLine}`
+        : ""
       parts.push(getFilename(comment.path) + range)
     }
     return parts.join("\n\n") || undefined
