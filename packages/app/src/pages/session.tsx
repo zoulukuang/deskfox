@@ -1,3 +1,5 @@
+// FORK: one monitor per hydrated session page [feat: attachment-cost-guard] 2026-10-12
+import { useAttachmentCostMonitor } from "@/components/session/use-attachment-cost-monitor"
 import type { FilePart, Project, UserMessage, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -659,6 +661,7 @@ export default function Page() {
   const lastUserMessage = timeline.lastUserMessage
   const messages = timeline.messages
   const messagesReady = timeline.ready
+  useAttachmentCostMonitor(messagesReady) // FORK: initialize after history hydration
   const sessionSync = timeline.resource
   const userMessages = timeline.userMessages
   const visibleUserMessages = timeline.visibleUserMessages

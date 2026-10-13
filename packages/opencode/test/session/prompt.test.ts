@@ -242,6 +242,100 @@ function makeHttpNoLLMServer(input?: { mcpInstructions?: MCP.ServerInstructions[
 }
 
 const it = testEffect(makeHttp())
+// FORK-BEGIN: C0 characterization of attachment admission and replay [feat: attachment-cost-guard]
+// C0 reproduced full replay; this now asserts bounded admission and subsequent HTTP requests.
+it.instance(
+  "attachment guard: inline text stays capped on the next model request",
+  () =>
+    Effect.gen(function* () {
+      const setup = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const chat = yield* sessions.create({ title: "Attachment baseline" })
+      const text = "row,attachment-c0-marker,1234567890\n".repeat(24_000)
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        noReply: true,
+        parts: [
+          { type: "text", text: "Inspect the attachment" },
+          {
+            type: "file",
+            mime: "text/plain",
+            filename: "baseline.csv",
+            url: `data:text/plain;base64,${Buffer.from(text).toString("base64")}`,
+          },
+        ],
+      })
+      const admitted = yield* sessions.messages({ sessionID: chat.id })
+      const attachment = admitted
+        .flatMap((message) => message.parts)
+        .filter((part) => part.type === "text" && part.synthetic && part.text.includes("attachment-c0-marker"))
+      expect(attachment).toHaveLength(1)
+      const body = attachment[0]
+      if (body.type !== "text") throw new Error("Missing attachment text")
+      expect(Buffer.byteLength(body.text)).toBeLessThanOrEqual(51200)
+      expect(body.text).toContain("Attachment truncated")
+      expect(body.text).not.toContain("offset=")
+      expect(body.metadata).toEqual({ deskfoxAttachment: { version: 1, source: "inline-text" } })
+      expect(
+        admitted
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text.includes("Called the Read tool")),
+      ).toBe(false)
+      yield* setup.llm.text("First answer")
+      yield* prompt.loop({ sessionID: chat.id })
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        noReply: true,
+        parts: [{ type: "text", text: "Continue" }],
+      })
+      yield* setup.llm.text("Second answer")
+      yield* prompt.loop({ sessionID: chat.id })
+      const hits = yield* setup.llm.hits
+      expect(hits).toHaveLength(2)
+      expect(hits.every((hit) => JSON.stringify(hit.body).includes(JSON.stringify(text).slice(1, -1)))).toBe(false)
+      expect(hits.every((hit) => JSON.stringify(hit.body).includes(JSON.stringify(body.text).slice(1, -1)))).toBe(true)
+      console.log(
+        JSON.stringify({
+          probe: "C0-legacy",
+          attachmentBytes: Buffer.byteLength(text),
+          syntheticMatches: attachment.length,
+          modelRequests: hits.length,
+          fullReplays: 0,
+        }),
+      )
+    }),
+  30_000,
+)
+it.instance("attachment guard: historical synthetic and genuine user text remain unchanged", () =>
+  Effect.gen(function* () {
+    const setup = yield* useServerConfig(providerCfg)
+    const sessions = yield* Session.Service
+    const prompt = yield* SessionPrompt.Service
+    const chat = yield* sessions.create({ title: "Historical attachment" })
+    const text = "historical-full-text\n".repeat(4000)
+    const message = yield* user(chat.id, text)
+    yield* sessions.updatePart({
+      id: PartID.ascending(),
+      messageID: message.id,
+      sessionID: chat.id,
+      type: "text",
+      text,
+      synthetic: true,
+    })
+    yield* setup.llm.text("Answer")
+    yield* prompt.loop({ sessionID: chat.id })
+    const hits = yield* setup.llm.hits
+    expect(JSON.stringify(hits[0].body)).toContain(JSON.stringify(text).slice(1, -1))
+    const saved = yield* sessions.messages({ sessionID: chat.id })
+    expect(
+      saved.flatMap((entry) => entry.parts).filter((part) => part.type === "text" && part.text === text),
+    ).toHaveLength(2)
+  }),
+)
+// FORK-END
 const noLLMServer = testEffect(makeHttpNoLLMServer())
 const raceNoLLMServer = testEffect(makeHttpNoLLMServer({ processor: "blocking" }))
 const withMcpInstructions = testEffect(

@@ -16,10 +16,14 @@ import { attachmentMime } from "./files"
 import { parseMultiPathDropPaths, toMentionPath } from "./multi-path-drop"
 // FORK: 外部拖入路由(非图片走路径引用)[feat: external-drop-path-ref] 2026-08-14
 import { rejectionToastKind, routeExternalDrop, shouldBlockAsImage } from "./external-drop"
+// FORK: shared routing for picker, paste and drop [feat: attachment-cost-guard] 2026-10-12
+import { useServerSDK } from "@/context/server-sdk"
+import { ServerConnection } from "@/context/server"
+import { insertAttachmentReference } from "./attachment-reference"
 import { normalizePaste, pasteMode } from "./paste"
 
 type PromptTarget = Pick<ReturnType<ReturnType<typeof usePrompt>["capture"]>, "current" | "cursor" | "set">
-type AttachmentTarget = { prompt: PromptTarget; cursor: number | undefined }
+type AttachmentTarget = { prompt: PromptTarget; cursor: number | undefined; directory?: string; local?: boolean }
 
 type PromptAttachmentsCoreInput = {
   capture: () => PromptTarget
@@ -33,6 +37,7 @@ type PromptAttachmentsCoreInput = {
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
   draftStore?: DraftStore
+  referenceDirectory?: () => string | undefined
 }
 
 export type PromptAttachmentsInput = {
@@ -51,7 +56,14 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
     const prompt = input.capture()
     const editor = input.editor()
     if (!editor) return
-    return { prompt, cursor: prompt.cursor() ?? getCursorPosition(editor) }
+    const selection = editor.ownerDocument.getSelection()
+    return {
+      prompt,
+      // FORK: arrow/mouse caret moves do not update the persisted draft cursor 2026-10-12
+      cursor: selection?.rangeCount && editor.contains(selection.anchorNode) ? getCursorPosition(editor) : prompt.cursor(),
+      directory: input.referenceDirectory?.(),
+      local: input.referenceDirectory?.() !== undefined,
+    }
   }
 
   const add = async (file: File, toast = true, target = capture()) => {
@@ -71,6 +83,19 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
       return false
     }
 
+    // FORK-BEGIN: route only normalized text with verified shared filesystem before creating a blob.
+    const route = routeExternalDrop({ type: mime, path: input.getPathForFile?.(file), local: target.local })
+    if (route.kind === "path") {
+      const next = insertAttachmentReference(
+        target.prompt.current(),
+        toMentionPath(route.path, target.directory),
+        target.cursor,
+      )
+      target.prompt.set(next.parts, next.cursor)
+      target.cursor = next.cursor
+      return true
+    }
+    // FORK-END
     const attachment: ImageAttachmentPart = {
       type: "image",
       id: uuid(),
@@ -87,18 +112,20 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
 
   const addAttachments = async (files: File[], toast = true, target = capture()) => {
     let found = false
+    const rejected: File[] = [] // FORK: partial success must still report rejected files
 
     for (const file of files) {
       const ok = await add(file, false, target)
       if (ok) found = true
+      if (!ok) rejected.push(file)
     }
 
     // FORK: REQ-026 多文件全被拦时分流提示:模型不支持图片给专属 toast,其余保持原「不支持的粘贴」
     //   [bug-repro: 与上面 `add()` 里同一个毛病 —— 这里也不看文件是不是图片就弹
     //    「模型不支持图片」。一批全是 .txt 被拒时,用户会看到一句莫名其妙的图片提示。
     //    加 `files.some(isImageDrop)` 限定。[feat: external-drop-path-ref] 2026-08-14]
-    if (!found && files.length > 0 && toast) {
-      if (rejectionToastKind(files, input.isImageBlocked?.() ?? false) === "image-unsupported")
+    if (rejected.length > 0 && toast) {
+      if (rejectionToastKind(rejected, input.isImageBlocked?.() ?? false) === "image-unsupported")
         input.warnImageUnsupported?.()
       else input.warn?.()
     }
@@ -167,6 +194,10 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
   }
 
   return {
+    captureAttachment: () => {
+      const target = capture()
+      return (file: File) => add(file, true, target)
+    }, // FORK: native picker ownership
     addAttachment,
     addAttachments,
     addClipboardAttachment,
@@ -182,9 +213,12 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
   // FORK: 多选拖动 abs→rel 需要项目根 [feat: file-tree-multi-drag-to-chat] 2026-05-15
   const sdk = useSDK()
   const platform = usePlatform()
+  const serverSDK = useServerSDK() // FORK: use this tab connection, not the globally selected server
   const attachments = createPromptAttachmentsCore({
     ...input,
     draftStore: platform.draftStore,
+    referenceDirectory: () =>
+      platform.platform === "desktop" && ServerConnection.builtin(serverSDK().server) ? sdk().directory : undefined,
     capture: input.prompt.capture,
     warn: () => {
       showToast({
@@ -268,34 +302,8 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     const dropped = event.dataTransfer?.files
     if (!dropped) return
 
-    // FORK: 外部拖入按类型分流 —— 非图片改走**路径引用**(与文件树内拖一致),
-    //   于是任何类型都拖得进来;图片仍走内联(视觉模型要的是字节)。
-    //   路由规则在 `external-drop.ts`(纯函数,可离线单测 —— 系统级拖放 e2e 覆盖不到)。
-    //   [feat: external-drop-path-ref] 2026-08-14
-    const files = Array.from(dropped)
-    const inline: File[] = []
-    let referenced = false
-    for (const file of files) {
-      const route = routeExternalDrop({
-        type: file.type,
-        name: file.name,
-        path: input.getPathForFile?.(file),
-      })
-      if (route.kind === "path") {
-        // 必须与文件树拖入产出**同一种**路径写法:归一化 Win 反斜杠 + 项目根下转相对。
-        // 不做的话:Windows 上插进去的是 `@C:\Users\…` 反斜杠原样;
-        // 且拖一个本来就在项目里的文件时,访达给绝对路径、文件树给相对路径,
-        // 同一个文件两种引用。 [feat: external-drop-path-ref] 2026-08-14
-        const mention = toMentionPath(route.path, sdk().directory)
-        input.focusEditor()
-        input.addPart({ type: "file", path: mention, content: "@" + mention, start: 0, end: 0 })
-        referenced = true
-        continue
-      }
-      inline.push(file)
-    }
-    // 全部走了引用就别再报「不支持的附件」—— 那条 toast 是内联通道的
-    if (inline.length > 0) await attachments.addAttachments(inline, !referenced)
+    // FORK: all external files use the same captured-draft admission path.
+    await attachments.addAttachments(Array.from(dropped))
   }
 
   onMount(() => {

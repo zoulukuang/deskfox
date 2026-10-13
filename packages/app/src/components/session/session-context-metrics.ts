@@ -1,3 +1,5 @@
+// FORK: input includes provider cache accounting [feat: attachment-cost-guard] 2026-10-12
+import { inputTokens } from "./attachment-cost-monitor"
 import type { AssistantMessage, Message } from "@opencode-ai/sdk/v2/client"
 
 type Provider = {
@@ -54,7 +56,7 @@ const build = (messages: Message[] = [], providers: Provider[] = []): Context | 
     providerLabel: provider?.name ?? message.providerID,
     modelLabel: model?.name ?? message.modelID,
     limit,
-    input: message.tokens.input,
+    input: inputTokens(message), // FORK: include cache read and write
     total,
     usage: limit ? Math.round((total / limit) * 100) : null,
   }

@@ -79,6 +79,14 @@ export type PromptInputV2AttachmentConfig = {
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
   store?: (file: File) => Promise<{ id: string; url: string }>
+  // FORK: app owns connection identity and normalized routing [feat: attachment-cost-guard] 2026-10-12
+  normalizeMime?: (file: File) => Promise<string | undefined>
+  reference?: () => (mime: string, path: string | undefined) => string | undefined
+  insertReference?: (
+    prompt: PromptInputV2Prompt,
+    path: string,
+    cursor?: number,
+  ) => { parts: PromptInputV2Prompt; cursor: number }
 }
 
 export function createPromptInputV2Attachments(
@@ -94,15 +102,24 @@ export function createPromptInputV2Attachments(
     const prompt = input.capture()
     const editor = input.editor()
     if (!editor) return
-    return { prompt, cursor: prompt.cursor() ?? cursorPosition(editor) }
+    return { prompt, cursor: prompt.cursor() ?? cursorPosition(editor), reference: input.reference?.() } // FORK: capture connection with draft
   }
   const add = async (file: File, toast = true, target = capture(), clipboard = false) => {
     if (!target) return false
-    const mime = await attachmentMime(file)
+    const mime = await (input.normalizeMime ?? attachmentMime)(file) // FORK: shared app MIME policy
     if (!mime) {
       if (toast) input.warn()
       return false
     }
+    // FORK-BEGIN: no blob allocation for a verified local text reference.
+    const reference = target.reference?.(mime, input.getPathForFile?.(file))
+    if (reference && input.insertReference) {
+      const next = input.insertReference(target.prompt.current(), reference, target.cursor)
+      target.prompt.set(next.parts, next.cursor)
+      target.cursor = next.cursor
+      return true
+    }
+    // FORK-END
     const blob = input.store ? await input.store(file) : await blobReference(file)
     const sourcePath = input.getPathForFile?.(file) || undefined
     // Native clipboard images arrive with a fresh timestamped filename on every paste, so identical
@@ -133,11 +150,14 @@ export function createPromptInputV2Attachments(
     return true
   }
   const addAttachments = async (files: File[], toast = true, target = capture()) => {
+    const rejected: File[] = [] // FORK: report rejected files even in mixed successful batches
     const found = await files.reduce(async (result, file) => {
       const previous = await result
-      return (await add(file, false, target)) || previous
+      const ok = await add(file, false, target)
+      if (!ok) rejected.push(file)
+      return ok || previous
     }, Promise.resolve(false))
-    if (!found && files.length > 0 && toast) input.warn()
+    if (rejected.length > 0 && toast) input.warn()
     return found
   }
   const handlePaste = async (event: ClipboardEvent) => {
@@ -212,8 +232,9 @@ export function createPromptInputV2Attachments(
         fallback()
         return
       }
+      const target = capture() // FORK: native picker may complete after switching sessions
       void input
-        .picker({ defaultPath: input.directory(), multiple: true, accept: accepted }, (file) => add(file))
+        .picker({ defaultPath: input.directory(), multiple: true, accept: accepted }, (file) => add(file, true, target))
         .catch(input.onError)
     },
   }

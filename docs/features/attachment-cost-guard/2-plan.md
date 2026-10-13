@@ -1,5 +1,5 @@
 feat-id: attachment-cost-guard
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实施计划与 C0 决策记录
@@ -46,3 +46,17 @@ bun test --conditions=browser --preload ./happydom.ts ./src/components/prompt-in
 ```
 
 baseline 测试显式断言当前缺陷，是调查探针，C1/C2 必须替换成保护断言或归档证据后移除，不能留为阻止修复的长期规范。保留 V2 拒绝与小文件行为的回归断言。
+
+## 2026-10-12 实施记录
+
+用户以「继续完成开发并测试」批准具体规格后执行。C1–C3 已实现，自动化验证完成；C4 的真桌面 QA 与 R4 提交复核保留未关闭。
+
+- C1：新 `core/util/attachment-text.ts` 承担纯规则；legacy prompt 在持久化前封顶，read 只复用单行函数与常量。没有 DB 迁移、公开协议变化或 SDK 生成需求。原附件 FilePart 保留供 UI 使用，模型文本限制不等于磁盘占用限制。
+- C2：发现新版输入框实际位于 session-ui，故同时注入 MIME、捕获连接的引用策略与纯插入器；session-ui 不反向导入 app。系统选择器回调绑定打开时的草稿。混合批次部分拒绝仍提示，成功附件保留。只将文本路径化，PDF 和图片内联。
+- C3：新文件实现确认框、字节统计/提交锁、轮次判定与监听；submit 的必要深改约 60 行，原因是确认必须插在既有历史/创建/乐观副作用之前，外围包装不能可靠获得捕获的草稿、模型及转换操作。视图组件只注入回调，避免给提交器新增隐式 UI 服务依赖。
+- 本地化：独立附件功能字典，通过共享 language API 合并；zh/en 提供文案，其他语言明确回退英文，未声称已完成其他语种翻译。这样避免为本批功能改写 60 多份上游字典。新增字典键与占位符测试。
+- C0 的 app 解析失败确认为 ui 的直接依赖漏声明；补齐 `@opencode-ai/core`，lock 只加该 workspace 引用。安装器重排的无关 lock 变更已移除。
+- 全量测试发现既有滚动 observer 用例依赖固定帧数而偶发失败；只把测试同步改为等待真实回调，未改滚动运行代码。初次失败保留在执行记录，不用 retry/skip 掩盖。
+- 深改评估：prompt admission/read 与 submit 的关键顺序不能靠外层 wrapper 改写；其余功能放新模块或可选注入。已清理 formatter 引入的无关上游重排。
+
+后续只在 R4 审签后提交代码；完整分支验收与桌面 QA 通过后另行请求合并，不自动改 main 或推送远端。

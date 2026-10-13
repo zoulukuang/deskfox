@@ -1,3 +1,7 @@
+// FORK: attachment confirmation precedes all submission side effects [feat: attachment-cost-guard] 2026-10-12
+import { ATTACHMENT_CONFIRM_BYTES, inlineAttachmentBytes, singleSubmission } from "./attachment-cost"
+import { insertAttachmentReference } from "./attachment-reference"
+import { toMentionPath } from "./multi-path-drop"
 import type { FileSelection } from "@/context/file"
 import type { Message, Session } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@/utils/toast"
@@ -372,6 +376,9 @@ type PromptSubmitInput = {
   onAbort?: () => void
   onSubmit?: () => void
   model?: ModelSelection
+  // FORK: UI dependencies injected at the composer boundary.
+  confirmAttachments?: (bytes: number, convertible: boolean) => Promise<"send" | "reference" | "cancel">
+  localAttachmentReferences?: () => boolean
 }
 
 type CommentItem = {
@@ -527,6 +534,59 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       })
       return
     }
+
+    // FORK-BEGIN: validate the captured snapshot after every asynchronous preflight.
+    if (mode === "normal" && images.length > 0) {
+      const fingerprint = () =>
+        JSON.stringify([
+          prompt.current(),
+          prompt.context.items(),
+          sdk().scope,
+          sdk().directory,
+          params.id,
+          input.mode(),
+          modelSelection.current()?.id,
+          modelSelection.current()?.provider.id,
+          modelSelection.variant.current(),
+          local.agent.current()?.name,
+          input.newSessionWorktree?.(),
+        ])
+      const before = fingerprint()
+      const bytes = await inlineAttachmentBytes(images).catch(() => undefined)
+      if (bytes === undefined) {
+        showToast({ variant: "error", title: language.t("attachment.cost.unavailable") })
+        return
+      }
+      if (before !== fingerprint() || target !== prompt.capture()) return
+      if (bytes >= ATTACHMENT_CONFIRM_BYTES) {
+        const local = input.localAttachmentReferences?.() === true
+        const convertible = images.filter((item) => local && item.mime === "text/plain" && item.sourcePath)
+        const choice = (await input.confirmAttachments?.(bytes, convertible.length > 0)) ?? "cancel"
+        if (choice === "cancel") return
+        if (before !== fingerprint() || target !== prompt.capture()) {
+          showToast({ title: language.t("attachment.cost.changed") })
+          return
+        }
+        if (choice === "reference") {
+          const next = {
+            parts: currentPrompt.filter((part) => !convertible.includes(part as ImageAttachmentPart)),
+            cursor: target.cursor() ?? 0,
+          }
+          for (const item of convertible) {
+            const inserted = insertAttachmentReference(
+              next.parts,
+              toMentionPath(item.sourcePath!, sdk().directory),
+              next.cursor,
+            )
+            next.parts = inserted.parts
+            next.cursor = inserted.cursor
+          }
+          target.set(next.parts, next.cursor)
+          return
+        }
+      }
+    }
+    // FORK-END
 
     input.addToHistory(currentPrompt, mode)
     input.resetHistoryNavigation()
@@ -890,6 +950,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
   return {
     abort,
-    handleSubmit,
+    handleSubmit: singleSubmission(handleSubmit), // FORK: one pending submission per composer
   }
 }

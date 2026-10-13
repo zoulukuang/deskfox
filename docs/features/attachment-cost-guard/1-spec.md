@@ -1,5 +1,5 @@
 feat-id: attachment-cost-guard
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 附件成本保护施工规格
@@ -65,3 +65,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## 审签范围与风险
 
 待批准本稿的 Large 实施范围及两个建议阈值；旧历史保留风险和 V2 不新增文本媒体能力为明确交付边界。产品实现前落实文件清单与测试位置；blacklist R4 复核发生在测试通过后的 commit 前，不能把本次规格签署当作无条件 override。
+
+### 2026-10-12 审签补记
+
+在呈交本规格、交付边界和两个阈值后，用户明确回复「继续完成开发并测试。」据此锁定本稿并进入 C1–C3；采用 200KiB、增量 100000 且 3 倍的阈值。上文「待批准」保留为签署前历史。实施与验证结论见 3-changelog；R4 提交复核和真桌面 QA 分别记录，不等同于允许合并/发布。

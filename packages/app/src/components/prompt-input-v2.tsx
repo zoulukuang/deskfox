@@ -1,3 +1,11 @@
+// FORK: composer owns attachment confirmation [feat: attachment-cost-guard]
+import { useAttachmentCostDialog } from "./prompt-input/attachment-cost-dialog"
+// FORK: shared attachment policy [feat: attachment-cost-guard] 2026-10-12
+import { attachmentMime } from "./prompt-input/files"
+import { insertAttachmentReference } from "./prompt-input/attachment-reference"
+import { toMentionPath } from "./prompt-input/multi-path-drop"
+import { useServerSDK } from "@/context/server-sdk"
+import { ServerConnection } from "@/context/server"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
@@ -114,7 +122,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
   const command = useCommand()
   const permission = usePermission()
   const language = useLanguage()
+  const confirmAttachments = useAttachmentCostDialog()
   const platform = usePlatform()
+  const attachmentServer = useServerSDK() // FORK: connection of this tab
   const prompt = props.state ?? usePrompt()
   let editor: HTMLDivElement | undefined
 
@@ -198,6 +208,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     return permission.isAutoAccepting(id, sdk().directory)
   })
   const submission = createPromptSubmit({
+    confirmAttachments,
+    localAttachmentReferences: () =>
+      platform.platform === "desktop" && ServerConnection.builtin(attachmentServer().server),
     prompt,
     info,
     imageAttachments: attachments,
@@ -366,6 +379,16 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       return () => command.trigger(selected.id, "slash")
     },
     attachments: {
+      // FORK-BEGIN: policy injection keeps session-ui independent of app services.
+      normalizeMime: attachmentMime,
+      insertReference: insertAttachmentReference,
+      reference: () => {
+        const local = platform.platform === "desktop" && ServerConnection.builtin(attachmentServer().server)
+        const directory = sdk().directory
+        return (mime, path) =>
+          local && mime === "text/plain" && path?.trim() ? toMentionPath(path, directory) : undefined
+      },
+      // FORK-END
       picker: platform.openAttachmentPickerDialog,
       directory: () => sdk().directory,
       isDialogActive: () => !!dialog.active,
