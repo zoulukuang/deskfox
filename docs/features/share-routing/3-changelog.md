@@ -174,3 +174,11 @@ enterprise 包级 bun typecheck、生产构建、git diff --check 通过；最�
 采用 conventional commit、feat、bug-repro、override-blacklist 标记；超过 500 行的功能提交附 large-diff 理由。按仓库 pre-commit 明示的 override 机制提交受保护文件，不更改 hook；另检查 diff whitespace、文件名大小写、loopback 与 browser 测试参数。原主目录两处无关改动不纳入提交。回退按各功能提交撤销；分享数据、墓碑、来源凭据不随代码回退删除。
 
 REQ-148 已实现并部署两站，历史模型兼容及紧凑分享页已验证；Windows/手机真机、运营保留与定时备份及剩余验收待完成。
+
+### 本次提交与合并闸结果
+
+`af056a70c7`（双站分享实现、迁移、服务与回归）；共同依赖修复 `6c9fb6d608`。
+
+2026-10-13 完整运行仓库 `.husky/pre-push`：29/29 typecheck；app 1195 unit +44 browser、media-gen 140、adapter-feishu-lark 792、branding 82 pass/8 skip、desktop 169、session-ui 125，均 0 fail。Branding 8 项既有 skip 不算通过。Client 正式生成无漂移；legacy SDK 正式脚本完整成功，只产生预期的 shareTarget 两处类型/调用增量。上次中断遗留的 SDK 中间格式由完整脚本重生成清除。
+
+提交前 whitespace 检查通过（Happy DOM patch 的上下文行保留依赖原始 tab/空行，不把补丁语法当产品空白错误）；仓库黑名单/大 diff 采用有理由的 override，剩余大小写/网络监听/browser 参数闸通过。最新服务端与分享专项结果沿用上一轮相同源码的 31 pass 与 33 pass/2 live skip；没有把未重跑项记为本轮重新执行。
