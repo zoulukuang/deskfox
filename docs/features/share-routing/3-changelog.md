@@ -182,3 +182,27 @@ REQ-148 已实现并部署两站，历史模型兼容及紧凑分享页已验证
 2026-10-13 完整运行仓库 `.husky/pre-push`：29/29 typecheck；app 1195 unit +44 browser、media-gen 140、adapter-feishu-lark 792、branding 82 pass/8 skip、desktop 169、session-ui 125，均 0 fail。Branding 8 项既有 skip 不算通过。Client 正式生成无漂移；legacy SDK 正式脚本完整成功，只产生预期的 shareTarget 两处类型/调用增量。上次中断遗留的 SDK 中间格式由完整脚本重生成清除。
 
 提交前 whitespace 检查通过（Happy DOM patch 的上下文行保留依赖原始 tab/空行，不把补丁语法当产品空白错误）；仓库黑名单/大 diff 采用有理由的 override，剩余大小写/网络监听/browser 参数闸通过。最新服务端与分享专项结果沿用上一轮相同源码的 31 pass 与 33 pass/2 live skip；没有把未重跑项记为本轮重新执行。
+
+
+## 2026-10-13 合并后 Code Review 修复
+
+用户在审阅两项 P2 后明确要求修复；沿用本期本地主分支集成、两站部署和 local 重启授权。此次只修复分享兼容与清理期限，不改公开接口、数据库结构或客户端生成代码。
+
+- 服务端 schema 的 user.model、assistant、model 三处 providerID 改为协议允许的字符串。包含点号、斜杠和中文的配置供应商 ID 可同步；session/message/part 存储键仍保持原严格校验，秘密字段仍过滤。
+- ShareNext cleanup 整体增加 30 秒期限，覆盖恢复分配、DELETE、404 正文读取与本地收尾。错误补偿在 Effect finalizer 的屏蔽中运行，因此内部显式恢复可中断性；超时保留原站点凭据和 cleanup-required 状态，释放会话锁，重试只向原站点清理。
+
+R4 逐文件复核：`packages/opencode/src/share/share-next.ts` 的 cleanup 位于服务闭包中，且同时被手动取消与 create 的错误补偿调用；HTTP wrapper 只能约束请求头，外层 remove wrapper 无法约束 finalizer，因此必须在现有 cleanup 边界加期限与中断控制。`packages/opencode/test/share/share-next.test.ts` 在现有真实 Session/Database/ShareNext 测试层添加两个回归，避免另造模拟生命周期。enterprise schema/API 测试为 fork 自建文件。风险是期限触发时操作未全部收尾，故验证凭据、状态、原站点、锁释放与再次取消；不提前清除恢复记录。按 pre-commit 明示机制标记 override 并单独执行剩余守门检查。
+
+先红后绿：供应商 API 用例修复前 400（1 fail），两个正文延迟用例修复前均约 35 秒结束并断言失败；修复后分别约 30 秒失败返回，再次取消成功。新增回归与代码同一提交。
+
+本轮验证：
+
+- opencode `bun test test/share`：35 pass /2 live skip /0 fail，174 assertions。两项公网创建测试未运行，不算通过。
+- enterprise 全套首次运行：30 pass /2 fail。原因是本轮误在服务构建完成前启动了依赖产物的生产/重启测试；确认构建成功后只重跑这两项，2 pass /54 assertions。保留首轮失败日志，合计 32 个用例均有通过结果。
+- enterprise、opencode 包级 typecheck，enterprise 生产构建、maintenance CLI、desktop local 构建通过。
+- 完整 `.husky/pre-push`：29/29 typecheck；app 1195 unit +44 browser、media-gen 140、adapter-feishu-lark 792、branding 82 pass/8 skip、desktop 169、session-ui 125；均 0 fail。
+- 两站部署相同制品至 `20261013-6471b429`，SHA-256 `6471b4291414c41785394c41c600cd0c77d8c340d9fd001a25d677e6494e1d4d`；服务 active，loopback 与公网 health 均成功。旧 release 保留，未改生产数据或权限。
+- Chrome 重新打开两站原有合成验收页，确认标题、图片、代码、表格、公式与首轮末尾标记正常，紧凑顶部保持。此次是部署后冒烟，不重复宣称完整长文逐段验收。
+- local 重打校验全部 2511 个 out 文件；app.asar SHA-256 `5d6267af34aba67ebb7737b1bcb7d3333cfe71ad247f0cde199f91107040b0e8`。重启后原生窗口显示 LOCAL、会话与文件列表，lsof 确认主/渲染进程加载交付目录的新包。
+
+证据：交付目录 `batch-20261012-local/evidence/review-fix-20261013/`。回退桌面可恢复 `.previous-review-fix.app/Contents/Resources/`；服务可切回 `20261012-14cd6ccd/.output` 并重启。代码可 revert 本次 fix，不删除恢复凭据或分享数据。Windows 等此前未验项不因此关闭。

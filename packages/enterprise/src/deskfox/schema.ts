@@ -18,6 +18,7 @@ const session = z
 const tokens = z
   .object({ input: number, output: number, reasoning: number, cache: z.object({ read: number, write: number }) })
   .passthrough()
+// Provider IDs are arbitrary strings in the app protocol, not filesystem storage keys.
 const message = z.discriminatedUnion("role", [
   z
     .object({
@@ -26,7 +27,7 @@ const message = z.discriminatedUnion("role", [
       role: z.literal("user"),
       time,
       agent: z.string(),
-      model: z.object({ providerID: id, modelID: z.string() }).passthrough(),
+      model: z.object({ providerID: z.string(), modelID: z.string() }).passthrough(),
     })
     .passthrough(),
   z
@@ -38,7 +39,7 @@ const message = z.discriminatedUnion("role", [
       parentID: id,
       agent: z.string(),
       mode: z.string(),
-      providerID: id,
+      providerID: z.string(),
       modelID: z.string(),
       path: z.object({ cwd: z.string(), root: z.string() }),
       cost: number,
@@ -49,7 +50,7 @@ const message = z.discriminatedUnion("role", [
 const model = z.object({
   id: z.string().min(1).max(512),
   name: z.string(),
-  providerID: id,
+  providerID: z.string(),
   api: z.object({ id: z.string(), url: z.string(), npm: z.string() }),
   cost: z.object({ input: number, output: number, cache: z.object({ read: number, write: number }) }).passthrough(),
   limit: z.object({ context: number, output: number }).passthrough(),
