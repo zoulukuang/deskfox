@@ -39,7 +39,9 @@ param(
     [ValidateSet("dev", "beta", "prod", "local")]
     [string]$Env,
 
-    [switch]$NoBundle
+    [switch]$NoBundle,
+    [switch]$KeepRunning,
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,6 +74,16 @@ $brandingDir = Split-Path -Parent $scriptDir                       # packages/br
 $repoRoot    = Split-Path -Parent (Split-Path -Parent $brandingDir) # opencode-fork/
 $desktop     = Join-Path $repoRoot "packages/desktop"
 $versionsJson = Join-Path $brandingDir "installer-versions.json"
+
+# FORK-BEGIN: isolated candidate output [feat: release-readiness] 2026-10-19
+$defaultOutput = [System.IO.Path]::GetFullPath((Join-Path $desktop "dist-deskfox"))
+$out = if (-not $OutputDirectory) { $defaultOutput } elseif ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
+    [System.IO.Path]::GetFullPath($OutputDirectory)
+} else { [System.IO.Path]::GetFullPath((Join-Path $desktop $OutputDirectory)) }
+if ($KeepRunning -and ($out.TrimEnd('\', '/') -ieq $defaultOutput.TrimEnd('\', '/'))) {
+    throw "[deskfox] KeepRunning requires a separate OutputDirectory; never overwrite a running candidate."
+}
+# FORK-END
 
 $isRelease = -not $NoBundle
 # local 永不发布 → 始终 --dir 出 win-unpacked(不打 NSIS installer),对齐规范 §5.3 与 config 不配 publish。
@@ -122,7 +134,9 @@ try {
 #     三档互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 写坏,设计上不能共存)→ 三档一起杀,但排除 local、
 #     不按通用 electron/opencode-cli 名通杀(误伤别的 Electron 应用 / 别项目 sidecar)。
 # 注:Get-Process -Name 精确匹配(非通配),"DeskFox" 不会误命中 "DeskFox 预览版"/"DeskFox Beta"/"DeskFox 本地版"(空格隔开)。
-if ($Env -eq "local") {
+if ($KeepRunning) {
+    Write-Host "[deskfox] 保留运行中的应用，候选输出到独立目录: $out"
+} elseif ($Env -eq "local") {
     Get-Process -Name 'DeskFox 本地版' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 } else {
     Get-Process -Name 'DeskFox', 'DeskFox 预览版', 'DeskFox Beta' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -249,6 +263,7 @@ foreach ($pv in @("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL
 }
 
 $ebArgs = @("--win", "--publish", "never", "--config", "electron-builder.deskfox.config.ts")
+if ($OutputDirectory) { $ebArgs += @("--config.directories.output", $out) }
 if ($useDir) { $ebArgs = @("--dir") + $ebArgs }
 
 Write-Host "[deskfox] electron-builder $($ebArgs -join ' ')  (绕 Clash 代理直连 npmmirror)…"
@@ -269,7 +284,7 @@ try {
 
 # === 5.5 post-build 验证:最终包内真含 soffice.exe + 非空 presets(挡"LO 没被收进最终包")===
 # 对齐 macOS §5.5。LO 源健康 ≠ 进了最终包(electron-builder 可能漏拷),必须复验。
-$unpacked = Join-Path $desktop "dist-deskfox/win-unpacked"
+$unpacked = Join-Path $out "win-unpacked"
 if ((Test-Path $loSoffice) -and (Test-Path $unpacked)) {
     # extraFiles 落 app 根(与 exe 同级),非 resources/ 下 —— 对齐后端 dirname(execPath)\libreoffice。
     $loDst = Join-Path $unpacked "libreoffice"
@@ -289,7 +304,6 @@ if ((Test-Path $loSoffice) -and (Test-Path $unpacked)) {
 }
 
 # === 6. 产物路径 ===
-$out = Join-Path $desktop "dist-deskfox"
 Write-Host ""
 Write-Host "[deskfox] OK 构建完成,产物:" -ForegroundColor Green
 if ($useDir) {

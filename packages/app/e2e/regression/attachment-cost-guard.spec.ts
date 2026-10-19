@@ -73,7 +73,7 @@ for (const scenario of [
   const zh = scenario.zh
   test(`attachment confirmation cancels without sending then sends once (${modern ? "v2" : "classic"}, ${zh ? "zh" : "en"})`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     await mockOpenCodeServer(page, {
       directory,
       project: makeProject({ id: projectID, directory }),
@@ -119,7 +119,7 @@ for (const scenario of [
     const confirmation = page.getByRole("dialog", { name: zh ? "发送大附件？" : "Send large attachments?" })
     await expect(confirmation).toBeVisible()
     await confirmation.screenshot({
-      path: `/tmp/attachment-confirm-${modern ? "v2" : "classic"}-${zh ? "zh" : "en"}.png`,
+      path: testInfo.outputPath(`attachment-confirm-${modern ? "v2" : "classic"}-${zh ? "zh" : "en"}.png`),
     })
     expect(sent).toHaveLength(0)
     await confirmation.getByRole("button", { name: zh ? "取消" : "Cancel", exact: true }).click()
