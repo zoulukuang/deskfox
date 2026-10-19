@@ -19,6 +19,8 @@ import { Session } from "@/session/session"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+// FORK: exercise model refresh on the shared test transport. 2026-10-19
+import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { ShareNext } from "@/share/share-next"
 import { SessionShare } from "@/share/session"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -66,7 +68,14 @@ function integrationLayer(client: HttpClient.HttpClient) {
 
 function automaticLayer(client: HttpClient.HttpClient, desktop = true) {
   return LayerNode.compile(
-    LayerNode.group([SessionShare.node, EventV2Bridge.node, Session.node, SessionProjector.node, Database.node]),
+    LayerNode.group([
+      SessionShare.node,
+      EventV2Bridge.node,
+      Session.node,
+      SessionProjector.node,
+      Database.node,
+      ModelsDev.node, // FORK: resolve ModelsDev for deterministic transport coverage. 2026-10-19
+    ]),
     [
       [httpClient, Layer.succeed(HttpClient.HttpClient, client)],
       [RuntimeFlags.node, RuntimeFlags.layer({ client: desktop ? "desktop" : "cli" })],
@@ -207,15 +216,23 @@ it.live("desktop auto sharing without a target emits an error and sends no reque
   ),
 )
 
+// FORK-BEGIN: isolate model catalog refresh from exact publication requests. 2026-10-19
 it.live("desktop auto sharing uses only its explicit target", () =>
   provideTmpdirInstance(
     () => {
-      const seen: string[] = []
+      const seen: HttpClientRequest.HttpClientRequest[] = []
       const client = HttpClient.make((req) => {
-        seen.push(req.url)
+        // ModelsDev shares this transport; its background refresh is not publication traffic.
+        if (req.method === "GET" && req.url === "https://models.opencode.ai/api.json")
+          return Effect.promise(async () =>
+            json(req, await Bun.file(new URL("../tool/fixtures/models-api.json", import.meta.url)).json()),
+          )
+        seen.push(req)
         return Effect.succeed(json(req, req.url.endsWith("/api/share") ? publicShare : {}))
       })
       return Effect.gen(function* () {
+        const models = yield* ModelsDev.Service
+        yield* models.refresh(true)
         const sessions = yield* SessionShare.Service
         const info = yield* sessions.create({ title: "automatic" })
         yield* pollWithTimeout(
@@ -223,13 +240,16 @@ it.live("desktop auto sharing uses only its explicit target", () =>
           "auto share not published",
           "3 seconds",
         )
-        expect(seen).toHaveLength(2)
-        expect(seen.every((url) => url.startsWith("https://deskfox.cn/"))).toBe(true)
+        expect(seen.map((req) => `${req.method} ${req.url}`)).toEqual([
+          "POST https://deskfox.cn/api/share",
+          `POST https://deskfox.cn/api/share/${publicShare.id}/sync`,
+        ])
       }).pipe(Effect.provide(automaticLayer(client)))
     },
     { config: { share: "auto", share_target: "cn", enterprise: { url: "https://custom.example" } } },
   ),
 )
+// FORK-END
 
 it.live("CLI auto sharing retains the configured legacy service", () =>
   provideTmpdirInstance(

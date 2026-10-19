@@ -1,0 +1,16 @@
+feat-id: release-readiness
+status: in-progress
+related: ./1-spec.md ./2-plan.md ./3-changelog.md
+
+# 执行与证据
+
+基线 6c840b6ed8，既有 release-validation 分支，fetch 后与 origin/main 无差异。保留原有两个 E2E 调整及 Windows 构建补丁。
+
+1. 分解分享红项的实际 HTTP 请求，先复现再修正测试隔离。
+2. 在各包目录执行完整类型／单元门；默认端到端与生产性能分开运行，原始日志放 logs/release-20261019/。
+3. 原生测试只使用本地版及合成项目，保留旧草稿，不发送真实付费模型请求。
+4. 新增离线备份包装器及 systemd timer；先本机边界测试、Linux 隔离测试，再安装到既有分享服务。
+5. 使用官方 bump 脚本预备 Windows 2026.12.0。用户明确 Mac 由同事内测后，撤回本轮 Mac bump，保持 2026.11.2。候选只记本特性记录；installer 台账遵守“只记录 ship 出去”的原有约定，发布时再登记。
+6. 正式构建输出到独立目录。现有 wrapper 会关闭正在使用的正式版，本轮不直接调用该关闭步骤；保留同一品牌配置、版本注入、插件及 LO 校验。
+
+2026-10-19：用户澄清并确认只有备份保留七天，公开分享保持直到取消。海外 SSH 使用本机已信任的 deskfox.ai；旧部署脚本 IP 不再作为可信入口。大陆 SSH 与隔离系统／跨平台设备已询问，独立工作继续。
