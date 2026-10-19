@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, realpath, writeFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import z from "zod"
@@ -91,6 +91,30 @@ export async function removeShare(directory: string, id: string) {
   if (!value.info) throw new Error("Missing removal credentials")
   const repository = await createRepository({ directory, maxBytes: Number.MAX_SAFE_INTEGER, minimumFreeBytes: 0 })
   await repository.remove(value.info)
+}
+
+// Only complete, same-region archives created by the scheduled backup wrapper are eligible.
+// Validate every candidate before deleting anything; never prune the live deletion ledger.
+export async function pruneBackups(directory: string, origin: string, now = Date.now()) {
+  if (!path.isAbsolute(directory)) throw new Error("Backup root must be absolute")
+  manifestSchema.shape.origin.parse(origin)
+  if ((await realpath(directory)) !== path.resolve(directory)) throw new Error("Symlink backup root rejected")
+  const expired = await Promise.all(
+    (await readdir(directory, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && /^\d{8}T\d{6}Z-[a-f0-9]{8}$/.test(entry.name))
+      .map(async (entry) => {
+        const backup = path.join(directory, entry.name)
+        if ((await realpath(backup)) !== path.resolve(backup)) throw new Error("Symlink backup rejected")
+        const file = path.join(backup, "manifest.json")
+        if ((await realpath(file)) !== path.resolve(file)) throw new Error("Symlink manifest rejected")
+        const manifest = manifestSchema.parse(JSON.parse(await readFile(file, "utf8")))
+        if (manifest.origin !== origin) throw new Error("Cross-region backup pruning rejected")
+        return manifest.created <= now - 7 * 24 * 60 * 60 * 1000 ? backup : undefined
+      }),
+  )
+  const paths = expired.filter((backup) => backup !== undefined)
+  for (const backup of paths) await rm(backup, { recursive: true })
+  return { removed: paths.length }
 }
 
 async function ids(directory: string) {

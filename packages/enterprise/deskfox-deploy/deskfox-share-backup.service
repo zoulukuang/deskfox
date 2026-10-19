@@ -1,0 +1,9 @@
+[Unit]
+Description=DeskFox same-region backup and seven-day retention
+After=network.target
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/local/libexec/deskfox-share-backup
+TimeoutStartSec=10min
