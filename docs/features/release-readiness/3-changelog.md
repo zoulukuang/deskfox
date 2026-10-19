@@ -38,17 +38,23 @@ Linux 隔离实际文件系统验证通过：备份、恢复、七天清理、�
 
 本轮在原有 local 应用中，用 Windows 原生目录／文件选择器打开新的合成项目，混选 1MB CSV、PNG、PDF，观察到 CSV 路径引用及图片／PDF 附件。原窗口激活恢复失败后停止继续操作；没有发送付费模型请求，也没有清空旧草稿。2026-10-16 已通过的成本确认／取消保留、二进制拒绝、复制粘贴证据仍见 share-windows-build/3-changelog.md；外部跨窗口拖放与正式安装升级没有据此标通过。
 
-正式 wrapper 新增 KeepRunning 与独立输出目录，拒绝默认目录及其规范化别名，保留运行中的正式应用；真实 PowerShell 路径测试及 branding 全套 91 pass／258 assertions。Windows 候选版本 2026.12.0，Mac 保持 2026.11.2 由同事验收，真实安装升级仍待验收。
+正式 wrapper 新增 KeepRunning 与独立输出目录，拒绝默认目录及其规范化别名，保留运行中的正式应用；真实 PowerShell 路径测试及 branding 全套 91 pass／258 assertions。Windows 候选版本 2026.12.0，Mac 保持 2026.11.2 由同事验收；实际升级结果见下方 2026-10-20 记录。
 
 Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/DeskFox-2026.12.0-win-x64.exe，339976329 bytes，SHA-256 `2d49b0de5486ae793374fa0e109e3fd319c2bf21aa04f7cb3a1db20867f19982`。包内 name=deskfox、version=2026.12.0、author=DeskFox，Windows 文件产品信息正确，生产更新源为 updates.deskfox.ai/electron/prod；2511 个 out 文件与本轮构建逐字节相同，两个插件与源码构建一致，LibreOffice 存在且 presets 有 13 文件。latest.yml 的 SHA-512／大小和 blockmap 核对通过。按现有策略为未签名包。
 
-未执行安装器；用 7-Zip 检查内部 5264 文件（1478365157 bytes）完整性通过，抽取 app.asar 的 SHA-256 `15bb1bddade9f74ac139021a5873bdfae2a3cf11348b79725c66ae126e04b3e5` 与已验 win-unpacked 相同。这是安装载荷校验，不替代真实升级。日志 windows-build.log、windows-package-verification.json、windows-payload-integrity.log、windows-nsis-verification.json。现有正式应用仍运行；旧 2026.11.1 安装器保留可作回退。
+候选打包阶段先用 7-Zip 检查内部 5264 文件（1478365157 bytes）完整性通过，抽取 app.asar 的 SHA-256 `15bb1bddade9f74ac139021a5873bdfae2a3cf11348b79725c66ae126e04b3e5` 与已验 win-unpacked 相同。这是安装载荷校验，不替代真实升级。日志 windows-build.log、windows-package-verification.json、windows-payload-integrity.log、windows-nsis-verification.json。旧 2026.11.1 安装器保留可作回退。
 
 最终受影响包 enterprise／opencode／app 类型检查及 app E2E 类型检查通过；SolidStart 与备份边界合计 5 pass／14 assertions。维护 CLI 从格式化后的最终源码重建 SHA 仍为 2bb98c73，与线上两站一致。
 
 根目录 `bun install --frozen-lockfile --ignore-scripts --dry-run` 成功（52.45 秒），只读核对锁定安装，无重装运行中的依赖，lockfile-dry-run.log。两站官网／说明／分享 health 均为 HTTP 200，说明日期与七天政策正确；线上 Windows 更新清单仍为 2026.11.1，public-final-verification.json。
 
-升级只读预检确认当前安装为 deskfox 2026.11.1，Roaming/ai.deskfox.app、~/.local/share/deskfox、~/.config/deskfox 三个目录均存在。计划在用户允许关闭应用后，先确保落盘，再将现有安装与这些目录备份到官网同步和仓库以外的位置，然后执行候选 NSIS，核验版本、旧会话／偏好及附件流程；安装动作尚未执行。预检只读版本和目录存在性，不读取聊天正文，windows-upgrade-preflight.json。
+升级只读预检确认原安装为 deskfox 2026.11.1，Roaming/ai.deskfox.app、~/.local/share/deskfox、~/.config/deskfox 三个目录均存在。预检只读版本和目录存在性，不读取聊天正文，windows-upgrade-preflight.json。
+
+2026-10-20 用户从托盘正常退出后确认正式版进程为零。旧安装及三个目录最终备份到 `D:\DeskFoxReleaseBackups\20261020-2026.11.1-before-upgrade`，私有 ACL，仅本机用户与 SYSTEM 可访问；21,207 文件／4,474,660,443 bytes 逐文件 SHA-256 校验通过。排除缓存、日志、其他渠道数据库及可重建的 SQLite SHM，生产数据库与 WAL 另与原件核对。先前 C 盘副本校验仅 SHM 因只读数据库检查而变化；最终备份保留 DB／WAL 并排除 SHM 后通过。清理本轮 C 盘临时副本被自动审批策略拦截，未绕过；副本保留，安装前剩余约 4GB，安装成功后仍约 4GB。私有 inventory 留在备份目录，不提交仓库；摘要 windows-upgrade-backup.json。
+
+重新核对候选 SHA 后执行用户批准的 NSIS，安装器正常结束并自动启动 DeskFox。实际安装为 2026.12.0，Windows ProductVersion=2026.12.0.0；安装后的 app.asar SHA 与候选载荷完全一致。主 EXE、两个插件、生产更新配置、LibreOffice 主程序逐字节一致，13 个 presets 存在，windows-installed-verification.json。
+
+升级前后 SQLite quick_check 均 ok；六张表记录数量完全相同：project 40、session 1027、message 63929、part 190205，session_message／session_input 均零。配置目录及四项桌面偏好共 7,302 文件没有缺失或哈希变化，windows-upgrade-data-verification.json、windows-upgrade-settings-verification.json。只校验数量与哈希，不读取正文或凭据。程序窗口和进程已启动；旧列表／偏好视觉确认及三种合成文件的 Explorer 真正跨窗口拖入已交用户实测，回复前仍保留为待验。
 
 ## 六项当前状态
 
@@ -57,9 +63,9 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 | 分享回归红项 | 精确隔离模型目录请求，35 pass／2 live skip；83d9956360 已本地提交 | 已完成 |
 | Windows SolidStart 补丁 | 锁定安装预演、真实配置／路由、Linux 32 项及本轮正式构建证据齐全；R4 已批准并本地提交 | 已完成本地集成 |
 | 原生 Windows 附件 | 选择器、粘贴、确认取消／拒绝已有证据 | Explorer 真正跨窗口拖放仍待验；Mac 由同事负责 |
-| 正式安装升级 | 2026.12.0 NSIS 与内部载荷校验完成，2026.11.1 回退包在本机 | 用户允许关闭应用、备份并执行候选安装后验收 |
+| 正式安装升级 | 用户已批准并实际完成 2026.11.1→2026.12.0；安装载荷、数据库完整性／数量及 7,302 项配置校验通过，备份及旧包保留 | 旧列表／偏好视觉检查等待用户回执 |
 | 分享运营保障 | 两站每日私有备份／七天清理上线，实际备份成功，公开说明同步 | 已完成本次部署；持续运维按 README |
-| 最终自动门与记录 | 29 包类型、六包单测、159 E2E、65 原速性能及四项 Windows 六倍限速通过 | 源码提交和 Windows 升级结果补入记录 |
+| 最终自动门与记录 | 29 包类型、六包单测、159 E2E、65 原速性能及四项 Windows 六倍限速通过；源码本地提交，实际升级证据已补齐 | 原生拖放回执后关闭验收；公开发布尚未执行 |
 
 ## R4 提交前复核
 
