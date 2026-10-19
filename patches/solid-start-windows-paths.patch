@@ -1,0 +1,36 @@
+diff --git a/dist/config/index.js b/dist/config/index.js
+--- a/dist/config/index.js
++++ b/dist/config/index.js
+@@ -4,1 +4,2 @@
+-import { extname, isAbsolute, join, normalize } from "node:path";
++import { extname, isAbsolute, join } from "node:path";
++import { normalize } from "pathe";
+@@ -117,3 +118,3 @@
+                         "import.meta.env.START_SSR": JSON.stringify(start.ssr),
+-                        "import.meta.env.START_APP_ENTRY": `"${appEntryPath}"`,
++                        "import.meta.env.START_APP_ENTRY": JSON.stringify(appEntryPath),
+                         "import.meta.env.START_CLIENT_ENTRY": `"${handlers.client}"`,
+diff --git a/src/config/index.ts b/src/config/index.ts
+--- a/src/config/index.ts
++++ b/src/config/index.ts
+@@ -4,1 +4,2 @@
+-import { extname, isAbsolute, join, normalize } from "node:path";
++import { extname, isAbsolute, join } from "node:path";
++import { normalize } from "pathe";
+@@ -131,3 +132,3 @@
+             "import.meta.env.START_SSR": JSON.stringify(start.ssr),
+-            "import.meta.env.START_APP_ENTRY": `"${appEntryPath}"`,
++            "import.meta.env.START_APP_ENTRY": JSON.stringify(appEntryPath),
+             "import.meta.env.START_CLIENT_ENTRY": `"${handlers.client}"`,
+diff --git a/dist/config/fs-routes/router.js b/dist/config/fs-routes/router.js
+--- a/dist/config/fs-routes/router.js
++++ b/dist/config/fs-routes/router.js
+@@ -9,1 +9,1 @@
+-import { normalize } from "node:path";
++import { normalize } from "pathe";
+diff --git a/src/config/fs-routes/router.ts b/src/config/fs-routes/router.ts
+--- a/src/config/fs-routes/router.ts
++++ b/src/config/fs-routes/router.ts
+@@ -10,1 +10,1 @@
+-import { normalize } from "node:path";
++import { normalize } from "pathe";
