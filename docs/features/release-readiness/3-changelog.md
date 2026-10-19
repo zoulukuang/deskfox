@@ -78,4 +78,6 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 
 - 83d9956360：Windows 依赖补丁与分享传输回归，R4 已审签，其余原 hook 检查通过；git diff --cached --check 通过。
 - 797abd35f0：两站七天备份、维护 CLI、公开说明及保留边界测试；完整 pre-commit 通过。
-- 候选构建配置、版本及 E2E 证据路径调整由下一笔常规提交保存，结果随后补齐。
+- 50a01953a5：候选构建配置、版本及 E2E 证据路径调整；完整 pre-commit 通过。
+
+收尾发现 Windows core.autocrlf 会把新运维文件改成 CRLF；部署目录增加仅针对这三个 Linux 文件的 LF 属性，避免未来 Windows 签出后直接上传造成 Bash／单元文件字节变化。用真实 checkout-index 验证签出仍为 LF，并检查 Bash 语法，不改变已部署文件内容。

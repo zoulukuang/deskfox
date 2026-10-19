@@ -1,0 +1,3 @@
+deskfox-share-backup.sh text eol=lf
+deskfox-share-backup.service text eol=lf
+deskfox-share-backup.timer text eol=lf
