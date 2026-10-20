@@ -115,3 +115,18 @@ Finder 与 local 已在 Studio Display 左右并排；三种合成文件跨窗�
 `backend-arm64-headless.json`、`backend-x64-headless.json` 保留时间线。`/api/health` 和 `/global/health` 均成功，因此本轮不支持“错误健康接口导致失败”的假设；无前端仍显著变慢，不能仅归因于渲染层。此轮无自动看门狗，也不含完整会话发送，不能据 8 次成功就放行 Intel 桌面。
 
 额外 x64 inspector 采样保存 `backend-x64-inspector.cpuprofile`，仅为诊断（采样本身增加开销），涉及 SQLite、模块/Schema 初始化及运行期多处开销，尚未找到单一已证实根因。最小 node:sqlite 对照的 1000 次插入/查询在 x64 上为毫秒到百毫秒量级，不能用 SQLite 框架栈占比直接解释整个应用数十秒延迟。未修改 JIT、放宽健康阈值或绕过验收。当前仍需继续性能定位，并取得 Intel 真机/可信等效环境结果；正式升级和两次持久化冷启动、Finder 真拖放、最终新候选制品验收继续保持未完成。
+
+## 2026-10-21：真实拖放、持久化升级及最终候选复测
+
+本节覆盖前面对应项目的待办状态，失败记录继续保留。全部诊断日志位于工作树 `logs/mac-release-20261020/`；没有发布或修改线上更新源。
+
+- **Finder 真实跨窗口拖放通过。** 用户明确授权原生鼠标事件后，仅把 `/tmp/deskfox-drag-qa-20261020` 的合成 CSV、PNG、PDF 拖入 r3 专用测试窗口。CSV 成为路径引用，PNG/PDF 成为两份附件。289.9 KiB 提醒取消后，测试文字、路径与附件全部保留，回环模型请求日志逐字节不变；确认发送后完整显示合成回复。证据 `native-finder-drag-final-20261021.json`、`native-finder-drag-sent-20261021.ax.txt`。事件脚本只检查既有系统权限，没有申请新权限。
+- **修复后完整 pre-push 通过。** `package-gate-fixed-20261021.log`，退出码 0；29 个类型检查任务，app 1195 单测及 44 浏览器测试、media-gen 140、飞书 792、branding 90（9 skip）、desktop 176、session-ui 125，均无失败。
+- **持久化旧库升级与续聊通过。** 对生产只读快照制作私有副本，测试安装目录位于仓库外 `/Volumes/ExtSSD/Test-project/.deskfox-mac-release-qa-20261021`，权限 0700。先用旧版 2026.11.2 创建合成会话，再用 2026.12.0 签名候选覆盖该测试安装；迁移 38→39，原 1947 个会话保留，无 incompatible 文件。界面恢复旧合成会话并完成续聊；`persistent-upgraded-continuation.ax.txt`。真实正式版安装与数据库没有替换。
+- **两次持久化 CLEAN 冷启动通过。** 先前退出残留已缩小到测试启动器的 HOME 重写：真实签名应用的 before-quit、will-quit、quit 均触发但主进程残留；空白 Electron 仅设置合成 HOME（内部盘与外部盘均复现）也残留，保留实际 HOME 的对照退出码 0，`quit-home-controls.json`。因此未据此修改产品退出代码。改用显式 XDG 隔离，在主模块执行前仅设置原生 appData/userData/documents 等测试路径，不更改系统 HOME；诊断器断开后再用原生界面操作。两次均恢复原合成会话、成功续聊并正常退出，主进程确实结束；39 条 migration、1947 个会话、无 incompatible 文件，`persistent-upgrade-cold-final.json`、`xdg-clean-cold-one.ax.txt`、`xdg-clean-cold-two.ax.txt`。先前强制清理不计入这两次 CLEAN 结果。报告脚本最初误读遗留 `__drizzle_migrations` 表（16 条），已更正为当前 `migration` 表（39 条）；未修改数据库。
+- **修复后 Intel 正常参数会话发送通过，但性能验收未通过。** 新 x64 候选在 Rosetta 下约 65.8 秒 server ready，观察到 4 次健康失败，无自动重启；合成会话完整回复且停止按钮消失，正常退出后主进程结束。`native-fixed-x64-first-reply-complete.ax.txt`、`native-fixed-x64-summary.json`。这不能替代 Intel 真机结果，不能将启动延迟判定为已解决。
+- **最终制品重建进行中。** 新输出 `mac-release-20261021/candidate` 包含 b4b54a58ad；两架构深签校验通过，arm64 app 公证 Accepted，x64 app 原提交仍 In Progress，未重复提交。通过官方 electron-builder 配置、prepackaged 参数从已公证 app 制作分发包，避免再次签名/重建应用。旧 `mac-release-20261020/candidate` 仍禁止发布。
+
+Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，主程序与内嵌 LO 都是 arm64，版本 2026.12.0；挂载包 app.asar 与已测候选 SHA-256 均为 `97cd031cf738605992cadba6e336bcb8332846c395746b34410935129daf52af`，`fixed-arm64-mounted-payload.json`，验证后已卸载。DMG 原提交上传/公证进行中，未以 app 公证代替 DMG 公证。后处理只在 app 公证与分发打包均完成后继续，已有 DMG 提交按 ID 等待，禁止重复提交；最终仍不得自动发布。
+
+收口检查：正式版飞书认证接口仍 HTTP 200、8 个账号，连接文件哈希保持 `61235a6931705efd8c5937bc7d4b0a8e7808c39341a5ef2051ab55fe7164327b`，未发送飞书消息。主目录两处用户原有修改的 diff SHA-256 仍为 `6f48b412c118096342d4e7717b4233cacbddec347c159de099fb737b8f7190f5`，逐字节保持。
