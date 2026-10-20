@@ -6,6 +6,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 主目录已同步远端 12 个提交至 65b23fca0b。Windows 已发布、备份保留政策和两站 timer 已落实；不继续沿用 10-13 的待办状态。工作在 mac-release-ready，主目录既有 wordmark 和 tray-icons README 改动未纳入。
 
+本轮实现提交 `9a69266beb`，11 文件、267 行新增／11 行删除，正常 pre-commit 五项守卫通过。范围为候选构建脚本、验收环境配置、上游检查脚本、回归测试、Mac 候选号与记录；桌面产品运行逻辑不变。回退实现可在独立分支 `git revert 9a69266beb`；这不会更改已安装应用、线上清单或私有数据库快照。
+
 ## 修复与验证
 
 Mac 官方 wrapper 增加 --keep-running 与 --output-directory，校验真实路径及软链接别名后才进入构建。候选使用外置盘独立目录，不停止当前正式版。干净工作树的图标生成原先调用退役 Tauri 复制脚本，导致构建终止；复现后改用已有 png-to-icns，7 项实际 Bash/图标回归通过，1 项 Windows 专属测试在 Mac 跳过。未更改桌面运行逻辑、公开协议或数据库迁移。
@@ -38,4 +40,27 @@ Enterprise 生产构建完成，test/deskfox 与 test/solid-start-config 共 **3
 
 最终 pre-push 检查完成：29 包类型检查；App 1195 单元 +44 浏览器、media-gen 140、feishu-bridge 792、branding 90（9 平台 skip）、desktop 172、session-ui 125，全无失败，package-gate-final.log。最终日志已走到 hook 最后一个 session-ui 检查，进程正常结束。
 
-正在准备本地双架构候选；尚未生成可交付的已公证安装器，未安装到 /Applications、未发布 Release、未改线上更新清单。后续仍需原生附件和两次冷启动、双架构签名公证与制品哈希。旧库副本迁移已验证，实际安装升级仍需单独验收。完成后按实际结果更新本记录。
+arm64 候选载荷初步核对通过：2,511 个 out 文件与本轮编译字节相同；app.asar SHA-256 `429082213b347e92e218fe9b911418205efb621e02543778f2b4a05a5c33c528`；插件、生产更新源、39 条迁移基线及禁止降级逻辑正确。主程序、LO、pty、msgpackr、watcher 均为 arm64，package-arm64.json。一次 codesign 验证在构建器仍逐文件签名时过早发起，返回资源签名不完整；codesign-arm64.log 保留为未完成阶段诊断，必须待构建完成后重新验证，不能据此判定成品失败或通过。
+
+随后两架构完成应用签名，`codesign --verify --deep --strict` 均通过（codesign-arm64-final.log、codesign-x64-final.log）。x64 候选同样核对 2,511 个编译文件、插件和更新策略，主程序／LO／三种原生模块为 x86_64；app.asar SHA-256 `4fdb27b30584e4b4288404ddd4aefb0f427b5be3e40339e54a3f2b461dc6b39b`。这还不是 DMG 公证结论。
+
+签名后的 arm64 候选用既有 TEST_ONBOARDING 模式独立启动两次，隔离临时数据与文稿目录，生产 2026.11.2 始终保持运行。原生选择器验证正文中间 `LEFT @small.txt RIGHT`；CSV／PNG／PDF 混选验证文本路径引用及二进制内联；289.9 KiB 提醒、中文取消、英文 Escape 均保留草稿／附件，确认前本机模型请求为零。Finder 真实文件复制粘贴得到相同路由，未知二进制显示明确拒绝。确认发送后，只向回环地址的合成模型发出请求，界面完整显示 LOCAL_NATIVE_QA_COMPLETE；请求记录仅含路径、模型、数量和大小，不保存正文。截图与 AX 证据均以 native- 开头。
+
+初次测试配置只有 attachment=true，未声明 image 输入能力，因此图片被正确拒绝；补齐测试模型 modalities 后混选通过，没有改产品代码。Finder 跨窗口拖放两次未可靠落入候选输入框，仅有选择变化、无附件结果，故不计通过。测试 Finder 新窗口已关闭，候选正常退出；真实生产数据未用于模型发送。TEST_ONBOARDING 每次新建临时库并跳过迁移守卫，不能冒充生产数据升级或持久化冷启动验收。升级副本额外 quick_check=ok，database-upgrade-integrity.json。
+
+两架构内嵌 LibreOffice 实际执行 TXT→PDF 均 exit 0，生成可识别的单页 PDF（arm64 15,257 字节、x64 15,252 字节），libreoffice-conversion.json。x64 首次运行耗时明显较长；转换成功不代表桌面启动通过。
+
+Intel 候选在本机 Apple M4／macOS 27.0.1 的 Rosetta 环境验收未通过。首次启动 16:05:27→主进程记录 16:07:21→server ready 16:09:17；16:11:54 连续三次健康检查失败触发 sidecar 重启，16:12:22 报恢复，但界面仍出现 bootstrap 503、发送合成文本未完成。正常退出最终成功，无需强杀。第二次使用全新隔离配置启动，16:17:46→server ready 16:19:20，16:20:03 再有健康检查失败，界面仍处加载状态；该次同样不计通过。采样确认 X86-64 translated，不能据 Rosetta 现象断言 Intel 真机必现，也不能以未取得真机结果放行。native-x64-startup-diagnostic.json、native-x64-second-start.png 保留证据。两次均拒绝线上较低版本更新。测试应用和回环模型服务已退出，正式版 PID 75309 持续运行。
+
+## 发布前尚缺的事项
+
+| 项目 | 当前证据与下一步 |
+| --- | --- |
+| Intel 桌面启动与会话 | Rosetta 两次异常，必须继续定位并取得 Intel 真机或可信等效环境的启动、发送、退出结果；不能只凭架构和签名正确放行。 |
+| 正式升级与持久化冷启动 | 旧库副本真实迁移已通过；仍需完整应用／配置备份、实际安装升级及至少两次 CLEAN 冷启动，验证无新增 incompatible 隔离文件。当前运行中的正式版未被替换。 |
+| Finder 跨窗口拖放 | 原生选择器及 Finder 文件复制粘贴通过；拖放未可靠命中，仍须实测，不记为产品失败或通过。 |
+| 最终分发制品 | app 深签通过，Apple 公证仍待结果；之后还需 DMG 单独公证／staple／Gatekeeper，四个资产最终哈希与双架构更新清单核对。 |
+
+截至 2026-10-20 16:18 的 Apple history，两笔 app 公证均为 In Progress：arm64 `7a1caa9e-ab16-45e5-b422-8cc2707b53c5`、x64 `da28f8de-1b35-40c5-9acd-457501f2a49a`。未重复提交或绕过公证。官方构建继续运行；本地后处理已启动，只有两份 BUILD_EXIT=0 才继续逐项校验、DMG 公证及官方更新清单 dry-run，失败记录到 packaging-status.json 并停止。该后处理不上传分发资产、不改线上更新源、不发布 Release；即使完成，其状态也是 packaging_verified_acceptance_pending，不代表上述验收缺口已关闭。
+
+本地制品根：`/Volumes/ExtSSD/opencode-fork/packages/desktop/dist-deskfox/mac-release-20261020/`。`candidate/` 仅放应用和安装包；`private-backups/` 是生产数据私有快照，严禁整个制品根打包上传。最终安装包未就绪前，不把当前 `.app` 当作正式交付安装器。主目录两处原有修改在收口时重新逐字节核对，保持原样。
