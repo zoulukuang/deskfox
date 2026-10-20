@@ -20,8 +20,8 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [release-readiness](./release-readiness/) | done | Windows 本轮准备完成：R2 已实际安装，更新器禁止降级，1,027 会话及全部消息恢复，用户确认可见；两次独立冷启动均完整、拒绝旧版、无新增隔离。唯一有效候选 windows-candidate-r2，尚未公开发布。 |
-| [share-windows-build](./share-windows-build/) | in-progress | Windows 路径、配置及路由回归与生产构建通过，补丁已集成 83d9956360；2026-10-16 Linux 32 项通过，本机实际升级至 2026.12.0。Windows 选择器／粘贴及用户外拖回执通过；候选未公开发布。 |
+| [release-readiness](./release-readiness/) | done | Windows 2026.12.0 R2 已正式发布：禁止降级、原库恢复及两次冷启动通过；main／tag、GitHub／Gitee、国内 CDN、两种 Windows 更新入口与两站首页链接已上线并验证。Mac 更新清单未变。 |
+| [share-windows-build](./share-windows-build/) | done | Windows 路径、配置及路由补丁已集成，Linux 32 项、Windows 选择器／粘贴／外拖及实际升级通过；禁止降级与两次冷启动补验完成，2026.12.0 R2 已发布。 |
 | [attachment-cost-guard](./attachment-cost-guard/) | in-progress | REQ-142/143/144 已实现，自动化与原生选择器／粘贴检查见记录；本机候选升级、数据校验及用户三种附件外部拖放通过。本次 Windows 准备完成，Mac 由同事内测。用户已授权本地 main 合并。 |
 | [share-routing](./share-routing/) | in-progress | REQ-148 已实现并部署两站；2026-10-19 已确认分享保留到取消、备份七天；两站定时备份上线并实测，公开说明同步。Windows 候选验收见 release-readiness。用户已授权本地 main 合并。 |
 | [voice-preclear-batch](./voice-preclear-batch/) | done | 语音派活前置清障批(REQ-084①/117 + submit.test 修复 + i18n 工程化 + REQ-068 归档,2026-08-18,Large)— 语音派活(REQ-102)动 L0 内核前的地基:S1 迁移污染检测补上 REQ-103 已破硬约束(**勘误:core 1.18.16 自带 `node:sqlite`,方案 A 零 native 依赖,选 A′ 基线比对双点跑**,覆盖历史遗留);S2 performance e2e 6 败复活(**机制发现:自有 config 本就 workers:1,失败只在主 config 混跑口径 → 首选改跑法契约而非调超时**);S3 submit.test.ts 加载即挂(**根因已定位:mock 缺 toaster 具名导出,mock 落后于 v2 toast import 链**);S4 CRLF 归一化 + 23 死 key(逐一核实精确);S5 REQ-068 归档 + stale-path-hardening 文档回填(勘误:非纯台账)。本批不发版。**2026-08-18 spec 收口锁版:D1-D4 全部拍板**(D1/D2 明示同意,D3/D4 授权按推荐采纳;另立发版前上游 schema 漂移检查「信号制」入 S1 + 记忆),待 user 开工令。**2026-08-18 全批交付**:S1 六笔(含真机 12/12)/ S2 六条红全部定位为「测试前提过期」并复活(3 轮全套 65/65,含真 Electron resize 真机复核:重建 1 次 17ms 单帧 = 不闪)/ S3 / S4a / S4b / S5 归档 + 回填;全批验收 typecheck 33/33、默认 Playwright 139/139、单测五包绿(desktop 1 fail 为上游 `node:sqlite` 存量)。[feat: voice-preclear-batch] |

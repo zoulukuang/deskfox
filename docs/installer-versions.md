@@ -36,6 +36,8 @@
 **国内 CDN**：https://dl.clawtray.com/DeskFox-2026.12.0-win-x64.exe
 **installer**：`D:\project\opencode-fork\logs\release-20261019\windows-candidate-r2\DeskFox-2026.12.0-win-x64.exe`
 
+**发布验证**：GitHub 非 draft／非 prerelease，资产 digest 与 CDN 完整下载 SHA 一致；Electron 与旧 Tauri Windows 更新入口均为 2026.12.0。两站首页链接已更新（官网仓 ea9eb08），Mac 2026.11.2 清单逐字节未变。发布 tag 指向 1983d02da3，完整 pre-push 通过，main 与 tag 已推送。
+
 完整变更、风险、备份和验收证据见 [release-readiness](./features/release-readiness/3-changelog.md)。
 
 ---

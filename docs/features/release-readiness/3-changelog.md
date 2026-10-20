@@ -4,6 +4,24 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 2026-10-19 发版准备记录
 
+## 2026-10-20 Windows 正式发布
+
+用户明确要求发布新版本后，按已验收 R2 发布 Windows 2026.12.0，没有重新 bump 或构建。发布前复核最终源码、包内禁止降级策略、39 条迁移及两次冷启动证据；没有额外生产代码改动。release-validation 快进合入 main，发布台账提交 1983d02da3，并建立 `ship-prod-2026.12.0`。正常原子推送 main＋tag 完成，完整 pre-push 通过：29 包类型检查；app unit 1195／browser 44、media-gen 140、adapter-feishu-lark 792、branding 91、desktop 172、session-ui 125，全部零失败。日志 publish/git-push.log。
+
+GitHub Release 已公开且非 draft／非 prerelease，安装包与 blockmap 均上传完成；GitHub 返回安装包 digest 与 R2 SHA-256 一致，匿名下载 HTTP 200。阿里 OSS／CDN 同名新版本资产上传完成，CDN 完整下载 339951837 bytes 后 SHA-256 仍为 `3982605b8a31d4da6c85af89af782fbd2f026e80c49d2d9d04eef90552cff775`。Gitee tag 与 main 已同步到发布提交，另建正式发布页 1220674，正文含国内与 GitHub 下载地址。
+
+- GitHub：https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.0
+- Gitee：https://gitee.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.0
+- 国内安装包：https://dl.clawtray.com/DeskFox-2026.12.0-win-x64.exe
+- Electron 更新源：https://updates.deskfox.ai/electron/prod/latest.yml
+- 旧 Tauri Windows 迁移桥：https://updates.deskfox.ai/v1/latest/desktop/windows/latest.json
+
+两个 Windows 更新入口均部署到 2026.12.0，Electron SHA-512／大小／URL 与 R2 相同，旧客户端清单用既有签名密钥生成且签名回读一致。旧清单保存在服务端私有 `/var/backups/deskfox-releases/20261020-2026.12.0/`。首次部署的严格版本检查发现 Windows Python 输出 CRLF，在替换前停止；将发布清单统一为 LF 后部署成功，未改构建产物或签名。
+
+官网仓 D:/project/Deskfox-site 已同步到现行 deskfox-web 目录结构；按其 AGENTS 完成拉取、相关自检、提交与推送，提交 ea9eb08。仅修改并原子部署两站首页的三处 Windows 链接，来源为已推送提交的 Git archive；部署前核对线上旧哈希、站外保留旧首页，未运行全站 rsync，未覆盖其他产品或分享说明。两站公网首页与提交一致、指向 2026.12.0，分享 `/api/share/health` 均 200。Mac 更新清单逐字节保持 2026.11.2 不变。
+
+线上证据：publish/cdn-verification.json、publish/public-verification.json、publish/gitee-release.json；本地候选及用户数据备份继续保留。本轮 Windows 发布完成。
+
 ## 2026-10-20 再次启动故障：诊断、修复与恢复验证
 
 用户在确认初次视觉／拖放后报告再次启动出现 Session not found，所有项目会话为空。当前程序实际已变成 2026.11.1，并非 local 身份。日志确认：00:30 安装的 2026.12.0 启动后因 allowDowngrade=true，将线上 2026.11.1 判为可用更新、复用已有缓存；09:29:54 运行该旧安装器。09:30 旧版基线 38 条不认识 `20261012052604_share-source`，将原库三件套改名隔离，然后启动空库。2026.12.0 候选载荷本身有完整 39 条基线，源码无遗漏；初步“候选遗漏迁移”推断已否定。
