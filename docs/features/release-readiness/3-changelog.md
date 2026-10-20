@@ -16,7 +16,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 修正候选在独立 windows-candidate-r2 输出构建成功：2026.12.0 NSIS 339951837 bytes，SHA-256 `3982605b8a31d4da6c85af89af782fbd2f026e80c49d2d9d04eef90552cff775`；包内 app.asar SHA-256 `abc4986d9769c2b01ea25f755916b36928d95d56ed31995a4b582d80e12f57e5`。2511 out 文件、两个插件、13 个 LO presets 和更新清单 SHA-512／大小／blockmap 校验通过，windows-r2-package-verification.json。直接抽取包内更新配置函数，驱动真实 NsisUpdater：2026.11.1=false、2026.12.0=false、2026.12.1=true；包内 39 条基线覆盖原库全部 39 条 journal，windows-r2-policy-verification.json。
 
-代码修复已本地提交 68397f2a02，正常 pre-commit 通过。修正 NSIS 内部载荷另由 7-Zip 实测：5264 文件／1478386888 bytes，Everything is Ok，windows-r2-payload-integrity.log。安装器和原库恢复方案均已准备，正在取得该新安装器的操作时确认；尚未恢复生产路径或再次安装，公开发布继续停止。
+代码修复已本地提交 68397f2a02，正常 pre-commit 通过。修正 NSIS 内部载荷另由 7-Zip 实测：5264 文件／1478386888 bytes，Everything is Ok，windows-r2-payload-integrity.log。
+
+用户明确批准恢复原库并安装修正版。确认进程为零后，将当前空库三件套另名保留为 `.empty-before-recovery-20261020095020`，从已校验的私有原库副本复制恢复；被隔离原件未改名／删除。恢复前后 DB SHA-256 为 `405bd96f2542f21e1f7a522c1ae5e1a4cedbd55e844437f439ed59864245a468`，记录数量与完整性保持，windows-original-restored.json、windows-db-restored-before-launch.json。
+
+修正 NSIS 实际安装完成并自动启动，实际安装 app.asar SHA 与 R2 一致，主 EXE、插件、更新配置与 LibreOffice 主程序也与 R2 一致，windows-installed-r2-verification.json。首次冷启动 run=20261020T015215：实际配置 allowDowngrade=false，联网读取线上 2026.11.1 后明确输出 downgrade is disallowed，转 up-to-date，没有下载或准备安装。原库 40 项目／1027 会话／63929 消息／190205 part 均保留，quick_check=ok，无新增隔离，windows-r2-boot1-verification.json／windows-r2-boot1-update.log。等待用户确认旧会话恢复并正常退出后，再启动完成第二次冷启动；公开发布继续停止。
 
 ## 分享红项
 
@@ -79,7 +83,7 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 | 分享回归红项 | 精确隔离模型目录请求，35 pass／2 live skip；83d9956360 已本地提交 | 已完成 |
 | Windows SolidStart 补丁 | 锁定安装预演、真实配置／路由、Linux 32 项及本轮正式构建证据齐全；R4 已批准并本地提交 | 已完成本地集成 |
 | 原生 Windows 附件 | 选择器、粘贴、确认取消／拒绝已有证据；用户确认 CSV／PNG／PDF 的 Explorer 跨窗口拖放成功 | Windows 已完成；Mac 由同事负责 |
-| 正式安装升级 | 初次 2026.11.1→2026.12.0 及数据／配置检查通过；后被更新器错误降级，原库完整保留；修正候选正在构建 | 恢复原库、安装修正候选，补更新检查与两次冷启动 |
+| 正式安装升级 | 修正版已实际安装，原库恢复，首次冷启动保留全部记录并拒绝线上旧版，无新增隔离 | 用户视觉确认及正常退出后，补第二次冷启动 |
 | 分享运营保障 | 两站每日私有备份／七天清理上线，实际备份成功，公开说明同步 | 已完成本次部署；持续运维按 README |
 | 最终自动门与记录 | 既有自动门及原生回执保留；降级复现先红后绿，52 项定向及 172 项桌面回归通过，68397f2a02 本地提交 | 等待修正版实际恢复与重启结果；公开发布暂停 |
 
