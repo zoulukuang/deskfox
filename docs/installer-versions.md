@@ -17,6 +17,29 @@
 
 
 
+## [Windows] 2026.12.0 - 2026-10-20
+
+**主题**：附件成本保护与双区域分享；修复 Windows 服务构建及更新器错误降级。
+
+**本次内容**：
+
+- REQ-142／143／144：附件准入、文本路径引用、图片／PDF 附件、大附件发送确认与成本提醒。
+- REQ-148：按区域发布与取消会话分享；同区域私有定时备份，备份保留七天，恢复应用删除记录；公开分享保留至取消。
+- SolidStart Windows 入口字符串与 URL 路由补丁，分享回归精确隔离模型目录刷新请求。
+- 更新器配置渠道后显式禁止降级，防止较旧线上版本覆盖已安装新版并导致原库被隔离。
+
+**验收**：29 包类型与六包测试、159 项 E2E、65 项原速性能及四项 Windows 六倍限速通过；更新／数据库边界 52 项、桌面专项 172 项通过。实际升级及两次独立冷启动、旧会话恢复视觉确认、CSV／PNG／PDF 外部拖放通过。
+
+**发布产物**：仅使用已验收 `windows-candidate-r2`，339951837 bytes，SHA-256 `3982605b8a31d4da6c85af89af782fbd2f026e80c49d2d9d04eef90552cff775`。原 windows-candidate 已作废。Mac 保持 2026.11.2，本次不发布。
+
+**Release**：https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.0
+**国内 CDN**：https://dl.clawtray.com/DeskFox-2026.12.0-win-x64.exe
+**installer**：`D:\project\opencode-fork\logs\release-20261019\windows-candidate-r2\DeskFox-2026.12.0-win-x64.exe`
+
+完整变更、风险、备份和验收证据见 [release-readiness](./features/release-readiness/3-changelog.md)。
+
+---
+
 ## [Windows] 2026.11.1 - 2026-09-19 18:06
 
 **主题**:「对外发版收口批」**Windows 侧首次进 prod**,并含发版前第四轮 code-review 与
