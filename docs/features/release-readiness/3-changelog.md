@@ -1,10 +1,10 @@
 feat-id: release-readiness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 2026-10-19 发版准备记录
 
-## 2026-10-20 再次启动故障：撤回发版就绪
+## 2026-10-20 再次启动故障：诊断、修复与恢复验证
 
 用户在确认初次视觉／拖放后报告再次启动出现 Session not found，所有项目会话为空。当前程序实际已变成 2026.11.1，并非 local 身份。日志确认：00:30 安装的 2026.12.0 启动后因 allowDowngrade=true，将线上 2026.11.1 判为可用更新、复用已有缓存；09:29:54 运行该旧安装器。09:30 旧版基线 38 条不认识 `20261012052604_share-source`，将原库三件套改名隔离，然后启动空库。2026.12.0 候选载荷本身有完整 39 条基线，源码无遗漏；初步“候选遗漏迁移”推断已否定。
 
@@ -20,7 +20,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 用户明确批准恢复原库并安装修正版。确认进程为零后，将当前空库三件套另名保留为 `.empty-before-recovery-20261020095020`，从已校验的私有原库副本复制恢复；被隔离原件未改名／删除。恢复前后 DB SHA-256 为 `405bd96f2542f21e1f7a522c1ae5e1a4cedbd55e844437f439ed59864245a468`，记录数量与完整性保持，windows-original-restored.json、windows-db-restored-before-launch.json。
 
-修正 NSIS 实际安装完成并自动启动，实际安装 app.asar SHA 与 R2 一致，主 EXE、插件、更新配置与 LibreOffice 主程序也与 R2 一致，windows-installed-r2-verification.json。首次冷启动 run=20261020T015215：实际配置 allowDowngrade=false，联网读取线上 2026.11.1 后明确输出 downgrade is disallowed，转 up-to-date，没有下载或准备安装。原库 40 项目／1027 会话／63929 消息／190205 part 均保留，quick_check=ok，无新增隔离，windows-r2-boot1-verification.json／windows-r2-boot1-update.log。等待用户确认旧会话恢复并正常退出后，再启动完成第二次冷启动；公开发布继续停止。
+修正 NSIS 实际安装完成并自动启动，实际安装 app.asar SHA 与 R2 一致，主 EXE、插件、更新配置与 LibreOffice 主程序也与 R2 一致，windows-installed-r2-verification.json。首次冷启动 run=20261020T015215：实际配置 allowDowngrade=false，联网读取线上 2026.11.1 后明确输出 downgrade is disallowed，转 up-to-date，没有下载或准备安装。原库 40 项目／1027 会话／63929 消息／190205 part 均保留，quick_check=ok，无新增隔离，windows-r2-boot1-verification.json／windows-r2-boot1-update.log。
+
+用户随后明确确认“历史会话已恢复，并已从托盘退出”。只读检查正式版进程为零，再启动已安装的修正版，第二次独立 run=20261020T020149。记录数量与首次完全相同、quick_check=ok，实际联网再次拒绝旧 2026.11.1、状态 up-to-date，无新增数据库隔离；当前安装主 EXE、app.asar、两个插件、更新配置及 LO 仍与 R2 一致。第二次日志未出现 Session not found、uncaughtException 或 app render process gone 签名，应用进程与窗口正常存在。证据 windows-r2-boot2-verification.json、windows-r2-boot2-update.log、windows-installed-r2-boot2-verification.json、windows-r2-boot2-error-check.json。
+
+本次降级故障的复现、修复、原库恢复、用户视觉回执及两次实际冷启动全部完成，Windows 准备重新关闭。后续发布只使用 windows-candidate-r2，原 windows-candidate 为已作废候选；公开 Release、远端推送／合并及线上清单更新均尚未执行。原库、空库和升级前私有备份继续保留。
 
 ## 分享红项
 
@@ -83,9 +87,9 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 | 分享回归红项 | 精确隔离模型目录请求，35 pass／2 live skip；83d9956360 已本地提交 | 已完成 |
 | Windows SolidStart 补丁 | 锁定安装预演、真实配置／路由、Linux 32 项及本轮正式构建证据齐全；R4 已批准并本地提交 | 已完成本地集成 |
 | 原生 Windows 附件 | 选择器、粘贴、确认取消／拒绝已有证据；用户确认 CSV／PNG／PDF 的 Explorer 跨窗口拖放成功 | Windows 已完成；Mac 由同事负责 |
-| 正式安装升级 | 修正版已实际安装，原库恢复，首次冷启动保留全部记录并拒绝线上旧版，无新增隔离 | 用户视觉确认及正常退出后，补第二次冷启动 |
+| 正式安装升级 | R2 已实际安装，原库恢复，用户确认会话恢复；两次独立冷启动均保留全部记录并拒绝线上旧版，无新增隔离 | 本次 Windows 升级及恢复验收完成 |
 | 分享运营保障 | 两站每日私有备份／七天清理上线，实际备份成功，公开说明同步 | 已完成本次部署；持续运维按 README |
-| 最终自动门与记录 | 既有自动门及原生回执保留；降级复现先红后绿，52 项定向及 172 项桌面回归通过，68397f2a02 本地提交 | 等待修正版实际恢复与重启结果；公开发布暂停 |
+| 最终自动门与记录 | 既有自动门及原生回执保留；降级复现先红后绿，52 项定向及 172 项桌面回归通过，修复与两次实际启动证据齐全 | 本轮 Windows 准备完成；公开发布尚未执行 |
 
 ## R4 提交前复核
 

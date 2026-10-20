@@ -1,5 +1,5 @@
 feat-id: release-readiness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 2026.12.0 发版准备

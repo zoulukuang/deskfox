@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [release-readiness](./release-readiness/) | in-progress | 发版暂停：更新器错误降级导致原库隔离。禁止降级已复现修复并实际安装 R2，1,027 会话及全部消息恢复；首次冷启动拒绝线上旧版且无新增隔离，待用户视觉确认与第二次冷启动。 |
+| [release-readiness](./release-readiness/) | done | Windows 本轮准备完成：R2 已实际安装，更新器禁止降级，1,027 会话及全部消息恢复，用户确认可见；两次独立冷启动均完整、拒绝旧版、无新增隔离。唯一有效候选 windows-candidate-r2，尚未公开发布。 |
 | [share-windows-build](./share-windows-build/) | in-progress | Windows 路径、配置及路由回归与生产构建通过，补丁已集成 83d9956360；2026-10-16 Linux 32 项通过，本机实际升级至 2026.12.0。Windows 选择器／粘贴及用户外拖回执通过；候选未公开发布。 |
 | [attachment-cost-guard](./attachment-cost-guard/) | in-progress | REQ-142/143/144 已实现，自动化与原生选择器／粘贴检查见记录；本机候选升级、数据校验及用户三种附件外部拖放通过。本次 Windows 准备完成，Mac 由同事内测。用户已授权本地 main 合并。 |
 | [share-routing](./share-routing/) | in-progress | REQ-148 已实现并部署两站；2026-10-19 已确认分享保留到取消、备份七天；两站定时备份上线并实测，公开说明同步。Windows 候选验收见 release-readiness。用户已授权本地 main 合并。 |
