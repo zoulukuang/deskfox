@@ -1,5 +1,5 @@
 feat-id: release-readiness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 执行与证据
@@ -16,3 +16,5 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 2026-10-19：用户澄清并确认只有备份保留七天，公开分享保持直到取消。海外 SSH 使用本机已信任的 deskfox.ai；旧部署脚本 IP 不再作为可信入口。大陆 SSH 与隔离系统／跨平台设备已询问，独立工作继续。
 
 2026-10-20：按用户明确授权，在当前 Windows 电脑执行实际升级。用户从托盘正常退出后，备份旧安装及三个数据目录；最终备份复制到私有 D 盘目录并逐文件校验。SQLite 可重建的 SHM 不纳入一致性比较，数据库及 WAL 单独复核。安装后仅比较记录数量、完整性和配置哈希，不读取私人聊天正文；Explorer 跨窗口拖放交由用户完成真机检查。
+
+用户随后确认“显示正常，拖放三种文件均成功”，旧项目／会话／偏好视觉检查及 CSV、PNG、PDF 跨窗口拖放通过。本轮 Windows 六项准备关闭；公开发布不属于本次已执行动作。

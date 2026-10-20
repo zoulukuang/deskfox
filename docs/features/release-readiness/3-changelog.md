@@ -1,5 +1,5 @@
 feat-id: release-readiness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 2026-10-19 发版准备记录
@@ -54,7 +54,9 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 
 重新核对候选 SHA 后执行用户批准的 NSIS，安装器正常结束并自动启动 DeskFox。实际安装为 2026.12.0，Windows ProductVersion=2026.12.0.0；安装后的 app.asar SHA 与候选载荷完全一致。主 EXE、两个插件、生产更新配置、LibreOffice 主程序逐字节一致，13 个 presets 存在，windows-installed-verification.json。
 
-升级前后 SQLite quick_check 均 ok；六张表记录数量完全相同：project 40、session 1027、message 63929、part 190205，session_message／session_input 均零。配置目录及四项桌面偏好共 7,302 文件没有缺失或哈希变化，windows-upgrade-data-verification.json、windows-upgrade-settings-verification.json。只校验数量与哈希，不读取正文或凭据。程序窗口和进程已启动；旧列表／偏好视觉确认及三种合成文件的 Explorer 真正跨窗口拖入已交用户实测，回复前仍保留为待验。
+升级前后 SQLite quick_check 均 ok；六张表记录数量完全相同：project 40、session 1027、message 63929、part 190205，session_message／session_input 均零。配置目录及四项桌面偏好共 7,302 文件没有缺失或哈希变化，windows-upgrade-data-verification.json、windows-upgrade-settings-verification.json。只校验数量与哈希，不读取正文或凭据。程序窗口和进程已启动。
+
+用户于本轮升级后明确回复“显示正常，拖放三种文件均成功”：旧项目、会话列表和偏好显示正常；从 Explorer 混选合成 large.csv、image.png、large.pdf 拖入新空白会话，CSV 路径引用及 PNG／PDF 附件均成功。该项为用户真机回执，不冒充自动化观测；无需发送付费请求。本轮限定的 Windows 六项发版准备全部完成，Mac 内测仍按用户分工由同事负责；尚未推送、合并或公开发布。
 
 ## 六项当前状态
 
@@ -62,10 +64,10 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 | --- | --- | --- |
 | 分享回归红项 | 精确隔离模型目录请求，35 pass／2 live skip；83d9956360 已本地提交 | 已完成 |
 | Windows SolidStart 补丁 | 锁定安装预演、真实配置／路由、Linux 32 项及本轮正式构建证据齐全；R4 已批准并本地提交 | 已完成本地集成 |
-| 原生 Windows 附件 | 选择器、粘贴、确认取消／拒绝已有证据 | Explorer 真正跨窗口拖放仍待验；Mac 由同事负责 |
-| 正式安装升级 | 用户已批准并实际完成 2026.11.1→2026.12.0；安装载荷、数据库完整性／数量及 7,302 项配置校验通过，备份及旧包保留 | 旧列表／偏好视觉检查等待用户回执 |
+| 原生 Windows 附件 | 选择器、粘贴、确认取消／拒绝已有证据；用户确认 CSV／PNG／PDF 的 Explorer 跨窗口拖放成功 | Windows 已完成；Mac 由同事负责 |
+| 正式安装升级 | 用户已批准并实际完成 2026.11.1→2026.12.0；安装载荷、数据库完整性／数量及 7,302 项配置校验通过，备份及旧包保留；用户确认旧列表／偏好显示正常 | 已完成本机升级验收 |
 | 分享运营保障 | 两站每日私有备份／七天清理上线，实际备份成功，公开说明同步 | 已完成本次部署；持续运维按 README |
-| 最终自动门与记录 | 29 包类型、六包单测、159 E2E、65 原速性能及四项 Windows 六倍限速通过；源码本地提交，实际升级证据已补齐 | 原生拖放回执后关闭验收；公开发布尚未执行 |
+| 最终自动门与记录 | 29 包类型、六包单测、159 E2E、65 原速性能及四项 Windows 六倍限速通过；源码本地提交，实际升级及用户原生回执已补齐 | 本轮准备已完成；公开发布尚未执行 |
 
 ## R4 提交前复核
 
@@ -85,5 +87,9 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 - 83d9956360：Windows 依赖补丁与分享传输回归，R4 已审签，其余原 hook 检查通过；git diff --cached --check 通过。
 - 797abd35f0：两站七天备份、维护 CLI、公开说明及保留边界测试；完整 pre-commit 通过。
 - 50a01953a5：候选构建配置、版本及 E2E 证据路径调整；完整 pre-commit 通过。
+- ef012db881：Linux 备份部署文件签出固定 LF；完整 pre-commit 通过。
+- a96553fedd：实际 Windows 升级、备份及数据／偏好验证记录；完整 pre-commit 通过。
+
+本笔仅补入用户原生验收回执并关闭 Windows 准备状态，不改产品代码或候选包；执行文档 diff 检查与正常提交 hook，无需重跑已通过的产品测试。
 
 收尾发现 Windows core.autocrlf 会把新运维文件改成 CRLF；部署目录增加仅针对这三个 Linux 文件的 LF 属性，避免未来 Windows 签出后直接上传造成 Bash／单元文件字节变化。用真实 checkout-index 验证签出仍为 LF，并检查 Bash 语法，不改变已部署文件内容。
