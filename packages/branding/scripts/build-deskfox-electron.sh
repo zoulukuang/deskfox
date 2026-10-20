@@ -7,7 +7,7 @@
 #
 # 流程:
 #   1. 预检版本号 key 存在(实际注入由 deskfox config 自读;dev-independent-version-line)
-#   2. 确保 icon.icns 存在(缺则 apply-icons 现场生成)
+#   2. 确保 icon.icns 存在(缺则 png-to-icns 现场生成)
 #   3. electron-vite build(predev 编译 opencode Node 后端 + 三 bundle 到 out/)
 #   4. electron-builder --mac(--dir 当 --no-bundle 时)出 .app / .dmg / .zip 到 dist-deskfox/
 #
@@ -22,6 +22,7 @@
 #   bash .../build-deskfox-electron.sh -Env dev --no-bundle           # 预览版,只出 .app(最快,未签名)
 #   bash .../build-deskfox-electron.sh -Env dev --sign --no-bundle    # 签名 .app(深签含 soffice;不公证,快)
 #   bash .../build-deskfox-electron.sh -Env prod --sign --notarize    # 正式分发:深签 + Apple 公证 + staple
+#   bash .../build-deskfox-electron.sh -Env prod --keep-running --output-directory /tmp/candidate # 隔离候选,保持现有应用运行
 #   bash .../build-deskfox-electron.sh -Env local                     # 本地测试版,独立身份+数据隔离,始终 --dir 出 .app
 #   bash .../build-deskfox-electron.sh -Env local --no-bundle         # 本地测试版最快(额外跳过 LibreOffice)
 #
@@ -40,6 +41,8 @@ ENV=""
 NO_BUNDLE=0
 SIGN=0
 NOTARIZE=0
+KEEP_RUNNING=0
+OUTPUT_DIRECTORY=""
 ARCH="arm64"   # 目标 arch,默认本机 Apple Silicon;Intel 交叉编译传 --arch x64(REQ-081)
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -48,6 +51,8 @@ while [[ $# -gt 0 ]]; do
         --sign|-Sign) SIGN=1; shift ;;
         --notarize|-Notarize) NOTARIZE=1; SIGN=1; shift ;;  # 公证隐含签名
         --arch|-Arch) ARCH="$2"; shift 2 ;;
+        --keep-running) KEEP_RUNNING=1; shift ;;
+        --output-directory) OUTPUT_DIRECTORY="$2"; shift 2 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -81,6 +86,25 @@ REPO_ROOT="$(cd "$BRANDING_ROOT/../.." && pwd)"
 DESKTOP="$REPO_ROOT/packages/desktop"
 CONFIG="$DESKTOP/electron-builder.deskfox.config.ts"
 VERSIONS_JSON="$BRANDING_ROOT/installer-versions.json"
+
+# FORK-BEGIN: isolated candidate output [feat: mac-release-readiness] 2026-10-20
+# Resolve existing symlinks before comparing, including an output that does not exist yet.
+OUT="$(node - "$DESKTOP" "$OUTPUT_DIRECTORY" "$KEEP_RUNNING" <<'NODE'
+const fs = require("node:fs")
+const path = require("node:path")
+function canonical(input) {
+  if (fs.existsSync(input)) return fs.realpathSync(input)
+  return path.join(canonical(path.dirname(input)), path.basename(input))
+}
+const defaultOutput = canonical(path.join(process.argv[2], "dist-deskfox"))
+const output = canonical(path.resolve(process.argv[2], process.argv[3] || "dist-deskfox"))
+if (process.argv[4] === "1" && (output === defaultOutput || defaultOutput.startsWith(output + path.sep) || output === path.parse(output).root)) {
+  throw new Error("--keep-running requires a separate --output-directory")
+}
+process.stdout.write(output)
+NODE
+)"
+# FORK-END
 
 # === 0.5 跨架构原生预编译就绪(REQ-081,仅 x64 交叉打包)===
 # node-pty / @parcel/watcher 走"每平台独立 optional 预编译包"分发(node-pty-darwin-x64 等,各含
@@ -121,12 +145,13 @@ if [[ -z "$APP_VERSION" ]]; then
 fi
 echo "[deskfox] channel=$ENV  version=$APP_VERSION  (key=$VERSION_KEY,实际注入由 deskfox config 自读)"
 
-# === 2. 确保 icon.icns 存在(deskfox config mac.icon 引用;通常已 committed,缺则生成)===
+# === 2. 确保 icon.icns 存在(deskfox config mac.icon 引用;干净工作树现场生成)===
 ICON_ENV="dev"; [[ "$ENV" == "prod" ]] && ICON_ENV="prod"
 ICNS="$BRANDING_ROOT/src/assets/icons/$ICON_ENV/icon.icns"
 if [[ ! -f "$ICNS" ]]; then
-    echo "[deskfox] icon.icns 缺失,apply-icons 现场生成 ($ICON_ENV)…"
-    bash "$SCRIPT_DIR/apply-icons.sh" -Env "$ICON_ENV" || {
+    echo "[deskfox] icon.icns 缺失,png-to-icns 现场生成 ($ICON_ENV)…"
+    # FORK: Electron only needs its own icon; the retired copier requires a deleted src-tauri tree.
+    bash "$SCRIPT_DIR/png-to-icns.sh" "$ICNS" "$BRANDING_ROOT/src/assets/icons/$ICON_ENV/ico-source" || {
         echo "[deskfox] ❌ icon 生成失败" >&2; exit 1; }
 fi
 
@@ -138,7 +163,9 @@ fi
 #     三档互不去重、可同时跑 → 同开一个 SQLite = 锁争用 + session 表写坏,设计上不能共存)→ 三档一起杀,
 #     但仍排除 local(隔离无冲突)、不按通用 electron/opencode-cli 名通杀(误伤别的 Electron 应用/别项目 sidecar)。
 # 注:".app/Contents/" 锚点精确区分三档 —— "DeskFox.app/" 不匹配 "DeskFox 预览版.app/"/"DeskFox 本地版.app/"(空格/中文隔开)。
-if [[ "$ENV" == "local" ]]; then
+if [[ "$KEEP_RUNNING" -eq 1 ]]; then
+    echo "[deskfox] 保持应用运行，候选隔离输出: $OUT"
+elif [[ "$ENV" == "local" ]]; then
     pkill -9 -f "DeskFox 本地版.app/Contents/" 2>/dev/null || true
 else
     pkill -9 -f "DeskFox.app/Contents/" 2>/dev/null || true       # 正式版(含 Helper)
@@ -291,6 +318,7 @@ fi
 
 # === 5. electron-builder 打包(--publish never;--no-bundle → --dir 只出 .app)===
 EB_ARGS=(--mac "--$ARCH" --publish never --config electron-builder.deskfox.config.ts)
+if [[ -n "$OUTPUT_DIRECTORY" ]]; then EB_ARGS+=(--config.directories.output "$OUT"); fi
 # local 永不发布 → 始终 --dir(只出 .app,不打 dmg/installer);--no-bundle 同样 --dir。
 if [[ "$NO_BUNDLE" -eq 1 || "$ENV" == "local" ]]; then EB_ARGS=(--dir "${EB_ARGS[@]}"); fi
 
@@ -328,7 +356,7 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
         x64)   LIPO_ARCH="x86_64" ;;
         arm64) LIPO_ARCH="arm64" ;;
     esac
-    APP_DIR_ABS="$DESKTOP/dist-deskfox/$MAC_APP_DIR"
+    APP_DIR_ABS="$OUT/$MAC_APP_DIR"
     APP_PATH="$(ls -d "$APP_DIR_ABS"/*.app 2>/dev/null | head -1 || true)"
     if [[ -z "$APP_PATH" ]]; then
         echo "[deskfox] ❌ post-build verify: 规范产物目录下没有 .app: $APP_DIR_ABS" >&2
@@ -371,7 +399,6 @@ if [[ -d "$LO_BUNDLE_APP" ]]; then
 fi
 
 # === 6. 产物路径 ===
-OUT="$DESKTOP/dist-deskfox"
 echo ""
 echo "[deskfox] ✅ 构建完成,产物:"
 if [[ "$NO_BUNDLE" -eq 1 || "$ENV" == "local" ]]; then

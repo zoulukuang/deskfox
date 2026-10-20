@@ -60,17 +60,23 @@ ${lines}
 
 /** 从 upstream remote 读 migration 清单。拿不到(无 remote/无网/未 fetch)→ 返回 null,绝不抛。 */
 function readUpstreamIds() {
-  const git = (args) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
+  const git = (args) =>
+    execFileSync("git", args, {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30_000,
+    })
   try {
     git(["remote", "get-url", "upstream"])
   } catch {
     return { ids: null, why: "无 upstream remote" }
   }
   try {
-    // 尽量取最新;失败(离线/代理)不致命,退而用本地已缓存的 upstream ref。
+    // FORK: release checks must not report stale cached refs as a fresh clean result.
     git(["fetch", "upstream", "--quiet"])
   } catch {
-    // 忽略:下面用本地缓存 ref 继续试。
+    return { ids: null, why: "上游拉取失败或超时，缓存不能证明当前上游状态" }
   }
   for (const ref of ["upstream/dev", "upstream/main", "upstream/master"]) {
     try {
