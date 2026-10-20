@@ -64,3 +64,25 @@ Intel 候选在本机 Apple M4／macOS 27.0.1 的 Rosetta 环境验收未通过�
 截至 2026-10-20 16:18 的 Apple history，两笔 app 公证均为 In Progress：arm64 `7a1caa9e-ab16-45e5-b422-8cc2707b53c5`、x64 `da28f8de-1b35-40c5-9acd-457501f2a49a`。未重复提交或绕过公证。官方构建继续运行；本地后处理已启动，只有两份 BUILD_EXIT=0 才继续逐项校验、DMG 公证及官方更新清单 dry-run，失败记录到 packaging-status.json 并停止。该后处理不上传分发资产、不改线上更新源、不发布 Release；即使完成，其状态也是 packaging_verified_acceptance_pending，不代表上述验收缺口已关闭。
 
 本地制品根：`/Volumes/ExtSSD/opencode-fork/packages/desktop/dist-deskfox/mac-release-20261020/`。`candidate/` 仅放应用和安装包；`private-backups/` 是生产数据私有快照，严禁整个制品根打包上传。最终安装包未就绪前，不把当前 `.app` 当作正式交付安装器。主目录两处原有修改在收口时重新逐字节核对，保持原样。
+
+## 2026-10-20 后续原生诊断与修复
+
+本节更新上述结论，前序失败记录保留。local 官方 wrapper 构建成功，独立输出到 `local-qa`，未替换 `/Applications/DeskFox.app`。Finder 三种合成文件（CSV、PNG、PDF）通过多个窗口位置尝试真实拖放；在开发者工具中仅添加事件日志监听，未派发模拟 drop。日志只有 QA_NATIVE_DRAG_READY，未捕获 dragenter/drop，因此仍不能把原生跨窗口拖放计为通过，也不能据此认定附件处理代码故障。后来观察到 local 草稿持续出现用户输入，停止界面操作；后续需要窗口空闲后继续。
+
+Intel 对照结果（Apple M4、macOS 27.0.1；均不算 Intel 真机验收）：
+
+| 对照 | 进程启动至 server ready | 健康检查失败 | 自动重启 |
+| --- | ---: | ---: | ---: |
+| 旧版 2026.11.2，原测试模式 | 67.729 秒 | 4 | 0 |
+| 2026.12.0，OPENCODE_PURE=1 | 84.670 秒 | 6 | 1 |
+| 2026.12.0，pure + jitless 诊断 | 62.342 秒 | 6 | 2 |
+| 2026.12.0，pure + no-opt 诊断 | 49.046 秒 | 1 | 0 |
+| arm64 local，pure 对照 | 3.087 秒 | 0 | 0 |
+
+各轮观察时长不同，计数不是发生率比较。no-opt 对照结束时仍未取得完整智能体/模型就绪与发送成功证据；jitless 会改变运行时能力，不能据其失败证明产品根因。未把这些参数写入应用。旧版和无插件候选均能复现异常，说明不能只归因于本次业务改动或飞书插件；尚未证明 Rosetta 是唯一根因。主进程和后台采样确认 X86-64 translated，保留 `intel-baseline-sidecar-sample.txt`、`intel-pure-sidecar-sample.txt`；汇总 `native-followup-report.json`，界面重启提示截图 `intel-pure-restart.png`。
+
+确定缺陷一：主进程重启 sidecar 后，以一个 30 秒后 resolve 的 Promise 竞争健康检查，即使未健康也会广播 ready。现改为 `waitForSidecarHealth`，超时 reject，成功/失败均清理计时器；看门狗保留 recovering 状态，后续真实健康探测成功才恢复 ready。真实定时器回归先复现 6 pass/1 fail（watchdog-red.log），修复后桌面现有子集 **176 pass/0 fail、665 assertions**，包含“未就绪不可恢复”“原始失败保持”“超时后真实恢复”路径。轮询/启动宽限默认值保持 5 秒/15 秒，健康等待仍为 30 秒；未靠放宽超时使测试通过。
+
+确定缺陷二：TEST_ONBOARDING 的 XDG 隔离不覆盖插件直接使用的 os.homedir()。先前测试确实启动了真实飞书 WSS，并改写共用连接文件；不能再称该模式完全隔离。已关闭这些测试实例，后续诊断显式使用 OPENCODE_PURE=1；代码在 shell 环境合并之后对 TEST_ONBOARDING 强制该开关，普通 local/prod 行为不变。正式版主进程持续运行，但飞书设置入口的连接文件需要恢复，已申请正常重启正式版，尚未获得答复，未擅自重启。未输出连接文件密码，也未主动发送飞书消息。
+
+这些修复改变了桌面代码，先前的完整 pre-push、签名与公证不能证明新代码已验收。`candidate-superseded.json` 明确标记旧 `candidate/` 仅供诊断；其公证完成也不得发布。Apple Silicon 旧候选 app 已 Accepted 并产出 dmg/zip，后处理仍仅做制品验证，不对外分发。修复后的 local 包单独重建；最终两架构候选、正式升级冷启动、Finder 拖放、Intel 正常运行四项仍未关闭。
