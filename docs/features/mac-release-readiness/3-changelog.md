@@ -88,3 +88,30 @@ Intel 对照结果（Apple M4、macOS 27.0.1；均不算 Intel 真机验收）�
 这些修复改变了桌面代码，先前的完整 pre-push、签名与公证不能证明新代码已验收。`candidate-superseded.json` 明确标记旧 `candidate/` 仅供诊断；其公证完成也不得发布。Apple Silicon 旧候选 app 已 Accepted 并产出 dmg/zip，后处理仍仅做制品验证，不对外分发。修复后的 local 包单独重建；最终两架构候选、正式升级冷启动、Finder 拖放、Intel 正常运行四项仍未关闭。
 
 修复提交 `b4b54a58ad`，正常 pre-commit 五项守卫通过；最终桌面 `bun typecheck` 成功。`local-qa-r3/mac-arm64/DeskFox 本地版.app` 官方构建 BUILD_EXIT=0，主程序与内嵌 LO 均为 arm64。包内 2,511 个 out 文件逐项匹配本次编译，确认测试隔离发生于 shell 合并之后，并包含健康超时 reject；app.asar SHA-256 `b3688ddf433ed40c829f453c100f32f055124223f7e3a0e6cbbf3a0f8bc50654`，`local-followup-package.json`。中途的 r2 包编译早于最后的隔离位置调整，不作为交付包。为避免干扰用户正在使用的 local 窗口，r3 尚未启动，不能把载荷核对算成原生验收通过。
+
+## 2026-10-20 深夜：正式版恢复与 r3 原生复验
+
+用户授权后，以正常退出/打开方式重启 `/Applications/DeskFox.app`，版本仍为 2026.11.2，未安装升级。飞书设置页重新列出原有 8 个账号，连接文件指向的认证 `/accounts` 接口 HTTP 200、账号数 8；`production-recovery.json` 只记录状态、数量和文件哈希，不记录凭据。未发送飞书消息。
+
+接管旧 local 前，将原有 44 字草稿另存 `local-user-draft.txt`（0600），正常退出旧包后启动 r3。启动器故意传入 `OPENCODE_PURE=0`，验证 TEST_ONBOARDING 在 shell 合并之后强制隔离。r3 启动并显示测试模型；观察期间无健康检查失败或自动重启、未见真实飞书 WSS 启动。随后再次核对正式连接文件哈希未变，认证接口仍为 HTTP 200、8 个账号，`local-r3-recovery-verification.json`。
+
+Finder 与 local 已在 Studio Display 左右并排；三种合成文件跨窗口拖动仍未形成可见附件结果，继续保持“未验证”，不计通过。Finder 真实复制/粘贴在 r3 上得到 CSV 路径引用及 PNG/PDF 附件。期间专用测试草稿再次出现非测试文字，已另存 `local-r3-interrupted-draft.txt`（0600），停止修改输入框，未点击发送；r3 的取消保留测试尚未完成，不能沿用旧候选的通过结果。已请求暂停可能的全局语音输入后再继续。
+
+旧候选的后台后处理于 20:18 完成 `packaging_verified_acceptance_pending`：两架构 DMG 均完成公证，四个分发文件生成并通过制品检查；`publicRelease=false`。这些制品仍受 `candidate-superseded.json` 约束，缺少 b4b54a58ad 修复，不可发布。
+
+用户随后确认已暂停全局输入，继续 r3 测试。先保存最新非测试文字，再恢复纯合成测试草稿。CSV 路径引用、PNG 与 PDF 混合附件触发 289.9 KiB 提醒；点击取消及按 Escape 均保留全部文字、路径和两份附件，回环模型请求日志逐字节不变。确认发送后界面完整显示 LOCAL_NATIVE_QA_COMPLETE，`local-r3-cancel.ax.txt`、`local-r3-send.ax.txt`。Finder 图标视图重新定位后再尝试真实拖动，仍无附件结果，不计通过。
+
+对 r3 专用后台 PID 49393 注入一次进程终止，未操作正式版进程。23:55:30.602 退出，连续三次失败后 23:55:41.505 触发重启，23:55:43.007 才广播 respawn healthy/ready，新 PID 54022；恢复约 12.405 秒。新建测试会话发送成功，`local-r3-watchdog-utility.log`、`local-r3-watchdog-recovered.ax.txt/.jpg`。旧测试会话续发返回 Session not found，经源码核对 TEST_ONBOARDING 明确设置 OPENCODE_DB=:memory:，后台退出即丢失该测试库；不能据此判定生产持久化故障，也不能把本轮算作历史会话恢复通过。复验结束后正式飞书连接文件哈希仍不变，接口 HTTP 200、8 个账号。
+
+### Intel 无界面后台对照
+
+使用已缓存的官方 Electron 42.3.3 两架构运行最小诊断主进程，只启动旧候选包的真实 sidecar、调用真实健康与智能体接口；无 BrowserWindow、无真实插件、独立临时配置/数据库。测试脚本保存在日志目录，不改产品运行参数。下表起点是诊断脚本开始执行，不含操作系统启动可执行文件前的时间；不与前面的桌面端进程启动耗时混用。
+
+| 同一诊断流程 | sidecar ready | 健康接口 8 次 | 智能体列表 |
+| --- | ---: | --- | ---: |
+| arm64 原生 | 1.155 秒 | 全部 200，1–24 ms | 200，77 ms |
+| x64 / Rosetta | 24.106 秒 | 全部 200，982–2479 ms | 200，11402 ms |
+
+`backend-arm64-headless.json`、`backend-x64-headless.json` 保留时间线。`/api/health` 和 `/global/health` 均成功，因此本轮不支持“错误健康接口导致失败”的假设；无前端仍显著变慢，不能仅归因于渲染层。此轮无自动看门狗，也不含完整会话发送，不能据 8 次成功就放行 Intel 桌面。
+
+额外 x64 inspector 采样保存 `backend-x64-inspector.cpuprofile`，仅为诊断（采样本身增加开销），涉及 SQLite、模块/Schema 初始化及运行期多处开销，尚未找到单一已证实根因。最小 node:sqlite 对照的 1000 次插入/查询在 x64 上为毫秒到百毫秒量级，不能用 SQLite 框架栈占比直接解释整个应用数十秒延迟。未修改 JIT、放宽健康阈值或绕过验收。当前仍需继续性能定位，并取得 Intel 真机/可信等效环境结果；正式升级和两次持久化冷启动、Finder 真拖放、最终新候选制品验收继续保持未完成。
