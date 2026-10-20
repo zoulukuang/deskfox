@@ -86,3 +86,5 @@ Intel 对照结果（Apple M4、macOS 27.0.1；均不算 Intel 真机验收）�
 确定缺陷二：TEST_ONBOARDING 的 XDG 隔离不覆盖插件直接使用的 os.homedir()。先前测试确实启动了真实飞书 WSS，并改写共用连接文件；不能再称该模式完全隔离。已关闭这些测试实例，后续诊断显式使用 OPENCODE_PURE=1；代码在 shell 环境合并之后对 TEST_ONBOARDING 强制该开关，普通 local/prod 行为不变。正式版主进程持续运行，但飞书设置入口的连接文件需要恢复，已申请正常重启正式版，尚未获得答复，未擅自重启。未输出连接文件密码，也未主动发送飞书消息。
 
 这些修复改变了桌面代码，先前的完整 pre-push、签名与公证不能证明新代码已验收。`candidate-superseded.json` 明确标记旧 `candidate/` 仅供诊断；其公证完成也不得发布。Apple Silicon 旧候选 app 已 Accepted 并产出 dmg/zip，后处理仍仅做制品验证，不对外分发。修复后的 local 包单独重建；最终两架构候选、正式升级冷启动、Finder 拖放、Intel 正常运行四项仍未关闭。
+
+修复提交 `b4b54a58ad`，正常 pre-commit 五项守卫通过；最终桌面 `bun typecheck` 成功。`local-qa-r3/mac-arm64/DeskFox 本地版.app` 官方构建 BUILD_EXIT=0，主程序与内嵌 LO 均为 arm64。包内 2,511 个 out 文件逐项匹配本次编译，确认测试隔离发生于 shell 合并之后，并包含健康超时 reject；app.asar SHA-256 `b3688ddf433ed40c829f453c100f32f055124223f7e3a0e6cbbf3a0f8bc50654`，`local-followup-package.json`。中途的 r2 包编译早于最后的隔离位置调整，不作为交付包。为避免干扰用户正在使用的 local 窗口，r3 尚未启动，不能把载荷核对算成原生验收通过。
