@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [release-readiness](./release-readiness/) | done | Windows 六项发版准备完成：分享回归、类型／单测、159 E2E、性能及两站七天备份通过；源码本地提交。实际升级至 2026.12.0，载荷／数据／配置及用户视觉检查、三种附件外部拖放通过；尚未公开发布。 |
+| [release-readiness](./release-readiness/) | in-progress | 发版暂停：初次升级后更新器错误允许退回线上旧 2026.11.1，旧版隔离原库而会话不可见。原库及备份保留完整 1,027 会话；禁止降级已复现修复，正在重建候选、恢复与再次启动验收。 |
 | [share-windows-build](./share-windows-build/) | in-progress | Windows 路径、配置及路由回归与生产构建通过，补丁已集成 83d9956360；2026-10-16 Linux 32 项通过，本机实际升级至 2026.12.0。Windows 选择器／粘贴及用户外拖回执通过；候选未公开发布。 |
 | [attachment-cost-guard](./attachment-cost-guard/) | in-progress | REQ-142/143/144 已实现，自动化与原生选择器／粘贴检查见记录；本机候选升级、数据校验及用户三种附件外部拖放通过。本次 Windows 准备完成，Mac 由同事内测。用户已授权本地 main 合并。 |
 | [share-routing](./share-routing/) | in-progress | REQ-148 已实现并部署两站；2026-10-19 已确认分享保留到取消、备份七天；两站定时备份上线并实测，公开说明同步。Windows 候选验收见 release-readiness。用户已授权本地 main 合并。 |

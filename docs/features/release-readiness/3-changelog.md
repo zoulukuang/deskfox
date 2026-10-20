@@ -1,8 +1,18 @@
 feat-id: release-readiness
-status: done
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 2026-10-19 发版准备记录
+
+## 2026-10-20 再次启动故障：撤回发版就绪
+
+用户在确认初次视觉／拖放后报告再次启动出现 Session not found，所有项目会话为空。当前程序实际已变成 2026.11.1，并非 local 身份。日志确认：00:30 安装的 2026.12.0 启动后因 allowDowngrade=true，将线上 2026.11.1 判为可用更新、复用已有缓存；09:29:54 运行该旧安装器。09:30 旧版基线 38 条不认识 `20261012052604_share-source`，将原库三件套改名隔离，然后启动空库。2026.12.0 候选载荷本身有完整 39 条基线，源码无遗漏；初步“候选遗漏迁移”推断已否定。
+
+只读核对：被隔离原库仍有 project 40、session 1027、message 63929、part 190205，迁移 39 条；新空库 session／message／part 为零，迁移 38 条。升级前私有备份也保留完整记录。此前数量／哈希检查及用户初次回执不能覆盖后续更新降级，撤回准备完成结论；必须补更新检查与再次冷启动。诊断只读取数量和迁移 ID，不读取聊天正文。
+
+修复采用 fork 独立 updater-policy.ts，统一配置 channel 后显式禁止降级；updater.ts 仅接入调用，保留无自动安装策略，不关闭真正超前数据库保护。独立 helper 封装真正影响可更新判定的配置顺序；原 upstream 控制器无需修改，主 updater 仅替换配置调用，无根依赖或黑名单变更。真实 NsisUpdater 版本判断回归先红：旧策略 1 pass／2 fail，确实把 2026.11.1 判为可更新；修正后三项通过。更新器及数据库隔离边界合计 52 pass／141 assertions，desktop 专项 172 pass／660 assertions，desktop 类型检查通过。日志 updater-downgrade-red.log、updater-downgrade-green.log、desktop-incident-regression.log、desktop-incident-typecheck.log。
+
+用户确认点过应用内“更新／安装并重启”，并从托盘正常退出。进程为零后，保留被隔离原库及当前空库至私有 `D:\DeskFoxReleaseBackups\20261020-0930-recovery`，DB／WAL 逐字节校验，原库 quick_check=ok、39 条迁移、记录数量完整。原件与昨晚升级前备份均不删除。修正候选使用独立 windows-candidate-r2 输出，正在重建与验证，尚未恢复生产路径或再次安装；公开发布继续停止。
 
 ## 分享红项
 
