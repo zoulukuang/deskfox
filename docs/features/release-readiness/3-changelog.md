@@ -12,7 +12,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 修复采用 fork 独立 updater-policy.ts，统一配置 channel 后显式禁止降级；updater.ts 仅接入调用，保留无自动安装策略，不关闭真正超前数据库保护。独立 helper 封装真正影响可更新判定的配置顺序；原 upstream 控制器无需修改，主 updater 仅替换配置调用，无根依赖或黑名单变更。真实 NsisUpdater 版本判断回归先红：旧策略 1 pass／2 fail，确实把 2026.11.1 判为可更新；修正后三项通过。更新器及数据库隔离边界合计 52 pass／141 assertions，desktop 专项 172 pass／660 assertions，desktop 类型检查通过。日志 updater-downgrade-red.log、updater-downgrade-green.log、desktop-incident-regression.log、desktop-incident-typecheck.log。
 
-用户确认点过应用内“更新／安装并重启”，并从托盘正常退出。进程为零后，保留被隔离原库及当前空库至私有 `D:\DeskFoxReleaseBackups\20261020-0930-recovery`，DB／WAL 逐字节校验，原库 quick_check=ok、39 条迁移、记录数量完整。原件与昨晚升级前备份均不删除。修正候选使用独立 windows-candidate-r2 输出，正在重建与验证，尚未恢复生产路径或再次安装；公开发布继续停止。
+用户确认点过应用内“更新／安装并重启”，并从托盘正常退出。进程为零后，保留被隔离原库及当前空库至私有 `D:\DeskFoxReleaseBackups\20261020-0930-recovery`，DB／WAL 逐字节校验，原库 quick_check=ok、39 条迁移、记录数量完整。原件与昨晚升级前备份均不删除。
+
+修正候选在独立 windows-candidate-r2 输出构建成功：2026.12.0 NSIS 339951837 bytes，SHA-256 `3982605b8a31d4da6c85af89af782fbd2f026e80c49d2d9d04eef90552cff775`；包内 app.asar SHA-256 `abc4986d9769c2b01ea25f755916b36928d95d56ed31995a4b582d80e12f57e5`。2511 out 文件、两个插件、13 个 LO presets 和更新清单 SHA-512／大小／blockmap 校验通过，windows-r2-package-verification.json。直接抽取包内更新配置函数，驱动真实 NsisUpdater：2026.11.1=false、2026.12.0=false、2026.12.1=true；包内 39 条基线覆盖原库全部 39 条 journal，windows-r2-policy-verification.json。
+
+代码修复已本地提交 68397f2a02，正常 pre-commit 通过。修正 NSIS 内部载荷另由 7-Zip 实测：5264 文件／1478386888 bytes，Everything is Ok，windows-r2-payload-integrity.log。安装器和原库恢复方案均已准备，正在取得该新安装器的操作时确认；尚未恢复生产路径或再次安装，公开发布继续停止。
 
 ## 分享红项
 
@@ -66,7 +70,7 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 
 升级前后 SQLite quick_check 均 ok；六张表记录数量完全相同：project 40、session 1027、message 63929、part 190205，session_message／session_input 均零。配置目录及四项桌面偏好共 7,302 文件没有缺失或哈希变化，windows-upgrade-data-verification.json、windows-upgrade-settings-verification.json。只校验数量与哈希，不读取正文或凭据。程序窗口和进程已启动。
 
-用户于本轮升级后明确回复“显示正常，拖放三种文件均成功”：旧项目、会话列表和偏好显示正常；从 Explorer 混选合成 large.csv、image.png、large.pdf 拖入新空白会话，CSV 路径引用及 PNG／PDF 附件均成功。该项为用户真机回执，不冒充自动化观测；无需发送付费请求。本轮限定的 Windows 六项发版准备全部完成，Mac 内测仍按用户分工由同事负责；尚未推送、合并或公开发布。
+用户于本轮初次升级后明确回复“显示正常，拖放三种文件均成功”：旧项目、会话列表和偏好显示正常；从 Explorer 混选合成 large.csv、image.png、large.pdf 拖入新空白会话，CSV 路径引用及 PNG／PDF 附件均成功。该项为用户真机回执，不冒充自动化观测；无需发送付费请求。当时关闭了 Windows 准备，但后续更新降级故障已重新打开，以上初次回执不能替代修正版复验。Mac 内测仍按用户分工由同事负责；尚未推送、合并或公开发布。
 
 ## 六项当前状态
 
@@ -75,9 +79,9 @@ Windows 正式 NSIS 已构建成功：logs/release-20261019/windows-candidate/De
 | 分享回归红项 | 精确隔离模型目录请求，35 pass／2 live skip；83d9956360 已本地提交 | 已完成 |
 | Windows SolidStart 补丁 | 锁定安装预演、真实配置／路由、Linux 32 项及本轮正式构建证据齐全；R4 已批准并本地提交 | 已完成本地集成 |
 | 原生 Windows 附件 | 选择器、粘贴、确认取消／拒绝已有证据；用户确认 CSV／PNG／PDF 的 Explorer 跨窗口拖放成功 | Windows 已完成；Mac 由同事负责 |
-| 正式安装升级 | 用户已批准并实际完成 2026.11.1→2026.12.0；安装载荷、数据库完整性／数量及 7,302 项配置校验通过，备份及旧包保留；用户确认旧列表／偏好显示正常 | 已完成本机升级验收 |
+| 正式安装升级 | 初次 2026.11.1→2026.12.0 及数据／配置检查通过；后被更新器错误降级，原库完整保留；修正候选正在构建 | 恢复原库、安装修正候选，补更新检查与两次冷启动 |
 | 分享运营保障 | 两站每日私有备份／七天清理上线，实际备份成功，公开说明同步 | 已完成本次部署；持续运维按 README |
-| 最终自动门与记录 | 29 包类型、六包单测、159 E2E、65 原速性能及四项 Windows 六倍限速通过；源码本地提交，实际升级及用户原生回执已补齐 | 本轮准备已完成；公开发布尚未执行 |
+| 最终自动门与记录 | 既有自动门及原生回执保留；降级复现先红后绿，52 项定向及 172 项桌面回归通过，68397f2a02 本地提交 | 等待修正版实际恢复与重启结果；公开发布暂停 |
 
 ## R4 提交前复核
 
