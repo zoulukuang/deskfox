@@ -162,3 +162,11 @@ Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，�
 新 x64 正式候选在 Rosetta 下实际发送 `RUNTIME_FIXED_X64_FUNCTIONAL_20261021` 并获得完整回复，随后通过原生 Quit 菜单正常退出，PID 92404 已结束；server ready 约 65.9 秒、4 次健康失败、0 次重启。`x64-reply.ax.txt`、`x64-runtime-summary.json`。功能验收通过，性能延迟仍存在，按用户本轮授权豁免发布阻断。两站分享 QA 实例 PID 83479 也已正常退出。
 
 发布前再次人工复核 origin/main 至本分支的产品差异：看门狗超时拒绝而非假 ready，晚到健康由后续轮询报告；测试纯净模式在 shell 环境合并后隔离插件；构建输出别名/祖先目录保护与原生架构检查具备回归测试；Electron 及锁文件版本一致且冻结安装通过。未发现新增阻断问题。最新正式库一致性备份约 6.60 GB，连同原生设置仅存于候选外层的私有备份目录，不进入四个上传制品。
+
+### 最终制品与实际推送闸复核
+
+本轮两架构 app/DMG 已全部公证 Accepted，四份日志均 statusCode=0、issues=0；票据、Gatekeeper、四资产哈希和双架构合并清单通过。两架构 DMG 实际挂载、ZIP CRC 与 app.asar 对照均通过，运行时 42.11.15、版本 2026.12.0、架构正确，内容与已测试候选一致。
+
+公证延迟诊断纠正：仅清除环境变量未阻止 macOS CFNetwork 使用系统代理。原 x64 提交 `25bf4074-52f7-4899-950b-7436b0bc2447` 及按一小时规范续发的 `cab02819-8c77-419e-bd7d-994a24901826` 实际仍在代理慢速上传；观察时分别约 329 MB/38 MB，完整档案为 423 MB。编号和 In Progress 不证明上传完成，此前将其描述为 Apple 排队不准确。改用 [Apple 官方 Notary API](https://developer.apple.com/documentation/notaryapi/submitting-software-for-notarization-over-the-web)，HTTP 与 boto3 显式空代理，约 22 秒完成同档案上传；app 有效通过 ID `51e3b1a4-9b6c-408e-b9fd-b21aae6c1f53`，x64 DMG 为 `8e3403cd-fbba-4168-8089-0f98518193a1`。旧上传已按精确进程身份终止；仅从已通过的 sealed app 制作 ZIP/DMG，未重新编译或改写 payload。arm64 app/DMG 有效 ID 分别为 `20a25167-352d-4a85-889f-95ec9f61d201`、`6f96e1c0-c752-443d-a41c-2291ab9494f3`。未修改系统网络/代理/钥匙串设置，临时 AWS 凭据仅在内存使用；本机 ship 操作说明已补充该区别。`notary-transport-diagnosis.json`、`notary-final-reports.json`、`x64-sealed-continuation.json`。
+
+第一次实际 push 的闸在 branding 失败：新增临时 Git 仓库测试继承 GIT_DIR/GIT_IMPLICIT_WORK_TREE，git init 将真实 common config 的 core.bare 改为 true，随后 git add 报非工作树而退出。已恢复 false，HEAD/main 均为 c65e7038e2，主目录原两处改动 diff SHA-256 仍为 `6f48b412c118096342d4e7717b4233cacbddec347c159de099fb737b8f7190f5`。atomic push 未更新远端 main/tag，未公开安装包或切换更新源。新增真实合成父仓库回归先复现同一失败，再给 Git 及 Node 子进程清除继承的 GIT_*、禁用系统/全局 Git 配置；两测试通过，父仓库 HEAD/config/index/工作文件逐字节保持。`git-env-repro-red.log`、`git-env-repro-green.log`；保留第一次失败日志，不跳过用例。后续提交仅含测试和文档，已验收产品代码及四个分发制品不变。
