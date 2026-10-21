@@ -158,3 +158,7 @@ Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，�
 真实 MacUpdater 在新框架下拒绝较低/同版本，仅接受更高版本；arm64/x64 各取正确的 ZIP/DMG，`mac-updater.json`。两站分享用全新合成会话验证：简体中文首次创建 deskfox.cn、英文首次创建 deskfox.ai；Chrome 原生窗口均完整显示测试问题与回复，取消发布后均为 404、不再含测试内容。内置浏览器控制连接两次超时，未将其计为页面故障或验证成功，改用原生 Chrome 完成；`share-{cn,ai}-browser.ax.txt/.png`、`share-{cn,ai}-unpublish.json`。未公开任何用户旧会话。
 
 双架构正式包继续官方 wrapper 完整构建，按流程摘代理公证。新的本地后处理使用文件锁、先持久化提交 ID 再等待，杜绝前轮并行重复提交；上传暂存使用实际普通文件，不依赖 ossutil 对 symlink 的行为。旧两轮候选已另加 superseded 标记，公证通过也不得替代本轮新框架候选。
+
+新 x64 正式候选在 Rosetta 下实际发送 `RUNTIME_FIXED_X64_FUNCTIONAL_20261021` 并获得完整回复，随后通过原生 Quit 菜单正常退出，PID 92404 已结束；server ready 约 65.9 秒、4 次健康失败、0 次重启。`x64-reply.ax.txt`、`x64-runtime-summary.json`。功能验收通过，性能延迟仍存在，按用户本轮授权豁免发布阻断。两站分享 QA 实例 PID 83479 也已正常退出。
+
+发布前再次人工复核 origin/main 至本分支的产品差异：看门狗超时拒绝而非假 ready，晚到健康由后续轮询报告；测试纯净模式在 shell 环境合并后隔离插件；构建输出别名/祖先目录保护与原生架构检查具备回归测试；Electron 及锁文件版本一致且冻结安装通过。未发现新增阻断问题。最新正式库一致性备份约 6.60 GB，连同原生设置仅存于候选外层的私有备份目录，不进入四个上传制品。
