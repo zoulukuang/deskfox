@@ -140,3 +140,13 @@ Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，�
 复查 Apple history 发现后处理缺少单实例保护，DMG 实际各提交两次：arm64 `16f959f6-ca56-4f83-9596-e6f539a701e2`、`7c4a3821-c64b-479c-aac5-b9853d20546a`；x64 `d744b439-bb39-4a42-95d9-4872b7b005e1`、`04e58875-fe17-443a-98ea-9dfed3783c4c`，四笔均 Accepted，`final-notary-submission-audit.json`。这纠正了前文“禁止重复提交”的执行预期，不能据后处理最终成功声称未发生重复提交。已确认没有遗留后处理进程，并给本地后处理加入候选目录级非阻塞 flock；已有提交继续按 ID 等待，不重提。脚本语法校验通过，没有再次运行提交流程。最终票据、Gatekeeper、哈希及清单均是重复处理结束后的真实制品校验结果。
 
 新版制品目录 `/Volumes/ExtSSD/opencode-fork/packages/desktop/dist-deskfox/mac-release-20261021/candidate/`：`DeskFox-2026.12.0-mac-{arm64,x64}.{dmg,zip}`，附 `SHA256SUMS.txt`、`latest-mac-candidate.yml`。`acceptance-status.json` 已更新为制品校验完成、Intel 发布阻断保留、`publicRelease=false`。旧候选仍禁止发布；包含私有数据库快照的目录不得上传。发布准备文档继续保持 in-progress，唯一尚未关闭的验收项为 Intel 运行性能。
+
+### 用户随后报告钥匙串系统弹窗
+
+用户截图显示“找不到用于储存 DeskFox Key 的钥匙串”。只读检查发现当前系统默认钥匙串配置仍指向存在的 `login.keychain-db`；未读密钥内容、未改默认设置、未点击还原。桌面代码没有显式 safeStorage 调用，但固定 Electron 42.3.3。官方 [PR #50419](https://releases.electronjs.org/pr/50419) 说明 ESM 导入曾在 app-ready 未使用 safeStorage 时仍初始化异步密钥提供者，可能触发钥匙串弹窗及 CI 卡住；42 分支修复发布于 42.4.1。这是相关的确定上游缺陷，尚不足以确认截图来自哪个实例或证明它是 Intel 延迟的根因。此前测试 HOME 改写是需要进一步核对的触发条件，不将其当作用户系统钥匙串已损坏。新增发布待验收项，因此上段“唯一 Intel 阻断”不再代表当前状态。
+
+### 钥匙串修复实施
+
+用户要求解决发布前问题并上线，并明确允许缺少 Intel 真机性能结果时先发布。采用 Electron 42.11.15 同主版本维护更新，不修改钥匙串设置、不关闭加密。`bun.lock` 是受保护根文件：运行时来自依赖包，wrapper 不能替换其内置原生修复；仅在构建命令覆盖版本会形成测试与分发版本不一致，因此必须同步锁文件。变更仅包含 Electron 的依赖解析及直接相关布局；包管理器的 registry 批量重写已去除。R4 提交前复核详见 `R4-runtime-review.md`，未确认前不提交受保护文件。
+
+用户随后明确确认提交并继续发布。按 R4 使用 `[override-blacklist: synchronize Electron runtime lockfile]` 标记及 `--no-verify` 提交受保护锁文件；该 bypass 仅用于已批准的黑名单例外，冻结安装、完整 pre-push、diff 检查已通过。新运行时正常 HOME 与合成 HOME 两轮最小对照都退出 0，新 local 完整会话回复成功，日志 `logs/mac-keychain-20261021/`。Intel 真机性能验收未完成，按本轮授权豁免阻断，不计作通过。
