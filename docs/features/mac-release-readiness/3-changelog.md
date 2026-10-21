@@ -1,5 +1,5 @@
 feat-id: mac-release-readiness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 2026-10-20 Mac 发布准备记录
@@ -170,3 +170,23 @@ Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，�
 公证延迟诊断纠正：仅清除环境变量未阻止 macOS CFNetwork 使用系统代理。原 x64 提交 `25bf4074-52f7-4899-950b-7436b0bc2447` 及按一小时规范续发的 `cab02819-8c77-419e-bd7d-994a24901826` 实际仍在代理慢速上传；观察时分别约 329 MB/38 MB，完整档案为 423 MB。编号和 In Progress 不证明上传完成，此前将其描述为 Apple 排队不准确。改用 [Apple 官方 Notary API](https://developer.apple.com/documentation/notaryapi/submitting-software-for-notarization-over-the-web)，HTTP 与 boto3 显式空代理，约 22 秒完成同档案上传；app 有效通过 ID `51e3b1a4-9b6c-408e-b9fd-b21aae6c1f53`，x64 DMG 为 `8e3403cd-fbba-4168-8089-0f98518193a1`。旧上传已按精确进程身份终止；仅从已通过的 sealed app 制作 ZIP/DMG，未重新编译或改写 payload。arm64 app/DMG 有效 ID 分别为 `20a25167-352d-4a85-889f-95ec9f61d201`、`6f96e1c0-c752-443d-a41c-2291ab9494f3`。未修改系统网络/代理/钥匙串设置，临时 AWS 凭据仅在内存使用；本机 ship 操作说明已补充该区别。`notary-transport-diagnosis.json`、`notary-final-reports.json`、`x64-sealed-continuation.json`。
 
 第一次实际 push 的闸在 branding 失败：新增临时 Git 仓库测试继承 GIT_DIR/GIT_IMPLICIT_WORK_TREE，git init 将真实 common config 的 core.bare 改为 true，随后 git add 报非工作树而退出。已恢复 false，HEAD/main 均为 c65e7038e2，主目录原两处改动 diff SHA-256 仍为 `6f48b412c118096342d4e7717b4233cacbddec347c159de099fb737b8f7190f5`。atomic push 未更新远端 main/tag，未公开安装包或切换更新源。新增真实合成父仓库回归先复现同一失败，再给 Git 及 Node 子进程清除继承的 GIT_*、禁用系统/全局 Git 配置；两测试通过，父仓库 HEAD/config/index/工作文件逐字节保持。`git-env-repro-red.log`、`git-env-repro-green.log`；保留第一次失败日志，不跳过用例。后续提交仅含测试和文档，已验收产品代码及四个分发制品不变。
+
+### 2026-10-21 正式发布完成
+
+测试隔离修复 `d7b671a15a` 合入 main 后，实际推送闸通过：29 包类型检查；app 1195+44、media 140、飞书 792、branding 91（9 个既有平台/条件 skip）、desktop 176、session-ui 125 全绿。main/tag 已推送 GitHub，Gitee main/tag 同步核对通过；common core.bare 保持 false。原本仅本地、从未推送的 c65e7038e2 标签已在修复后重建为 d7b671a15a；公开 tag 未被改写。产品运行代码与本轮已测、已公证制品保持一致。
+
+- [GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0)：正式公开且 latest，两份 DMG 的服务端 SHA-256 与本地一致，tag 源提交核对为 d7b671a15a。
+- [Gitee Release](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0)：公开可读，正文含两架构 CDN 链接，不上传大文件附件。
+- [Mac 更新源](https://updates.deskfox.ai/electron/prod/latest-mac.yml)：2026.12.0，四条 files；逐项 SHA-512/大小匹配，CDN 首尾 Range 均 206 且与本地字节一致。Windows latest.yml 与发布前逐字节相同。
+- 官网仓 `e6531fe` 已提交推送；deskfox.cn 首页及 deskfox.ai 首页、zh-cn、zh-tw 三页已定点部署。线上页面与提交逐字节一致，六条官网安装链接均 200，两站分享 health 正常。部署前备份位于两站 `/var/backups/deskfox-web/mac-2026.12.0-e6531fe-{cn,ai}`；原有分享说明、OG 图片保持不变。
+
+| 制品 | bytes | SHA-256 |
+|---|---:|---|
+| DeskFox-2026.12.0-mac-arm64.dmg | 398891064 | `d8dde7d6c2eebcfd86a2bcea1c09d51291b664e6024685ccd8f223493a4762f9` |
+| DeskFox-2026.12.0-mac-arm64.zip | 410831689 | `a18cf988a375221fa3de1049d2ae6e6e83eae3f91d981e5e203a599bfb06a7d1` |
+| DeskFox-2026.12.0-mac-x64.dmg | 417012812 | `45299536f84974ef41cf49766d8c334ee3912c0eae2e2c07b21bb27540d7b599` |
+| DeskFox-2026.12.0-mac-x64.zip | 429086916 | `f1f051e137e4f842c4085d86ccf1d323e3e2c049e28ea85ff1278091304bb01b` |
+
+GitHub 大文件最初经代理出口限速，确认上传进度后仅终止本轮草稿上传，沿用同一 draft 改为命令级直连上传；发布前核对两资产状态、大小、SHA，未改系统代理。公开验收证据在 `logs/mac-keychain-20261021/` 的 `published-runtime-verification.json`、`website-published-verification.json`、`website-final-links.json`、`gitee-published-verification.json`。私有旧库备份与 QA 资料留在本机，不在发布资产中；实际 /Applications 正式安装未被替换。
+
+已知限制按本次授权收口：Intel 真机性能没有验收，Rosetta 下约 65.9 秒启动及 4 次健康失败仍保留记录；对话与正常退出已通过，不将性能豁免写成性能通过。上游迁移检查为本地 39、上游 50、集合差 12，未合并上游：`20260804233008_loose_psylocke`、`20260805200742_import_legacy_credentials`、`20260808023530_workspace_domain`、`20260811161259_execution_claim_attempts`、`20260812181746_session_inbox`、`20260812213948_worktree`、`20260819222447_session_viewed_state`、`20260823191254_nullable_workspace_binding`、`20260910120000_clear_v1_session_permission`、`20260923013825_project_time_active`、`20261007190000_azure_cli_external_credential`、`20261010180456_project_time_archived`。该信号不阻断本轮发布。

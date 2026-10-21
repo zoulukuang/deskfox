@@ -1,5 +1,5 @@
 feat-id: mac-release-readiness
-status: in-progress
+status: done
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 执行计划
@@ -30,3 +30,5 @@ Finder 原生拖放未获得 dragenter/drop 事件证据；随后观察到用户
 验证范围：旧/新运行时的最小启动退出对照、真实 local 冷启动与合成会话发送、旧库私有副本两次冷启动、原生 Finder 混合拖放及取消草稿、后台异常恢复、真实更新检查、完整 pre-push；随后重新构建双架构签名候选，逐一完成 app/DMG 公证、四文件哈希及合并清单，按本机 ship 流程发布并回读两站下载和更新源。旧候选含旧 Electron，不用于本次发布。
 
 最终推送闸发现测试子进程继承 Git hook 的仓库上下文，cwd 无法独立隔离 Git。先恢复 common config 的 core.bare=false，核对 HEAD/main 与用户原有改动；再用合成父仓库重现，清理子进程的 GIT_* 并隔离全局/系统 Git 配置。此修复只改测试与记录，不改变已验收制品中的产品代码，因此保留本轮签名、公证和原生验收结果，修复后重新通过实际推送闸。
+
+2026-10-21 发布收口：tag `ship-mac-prod-2026.12.0` 指向 `d7b671a15a`，修复后的实际 main/tag push 与 Gitee 推送闸通过。两站由官网仓已推送 `e6531fe` 定点部署四个下载页面，备份后原子替换；保留线上与仓库不同的分享说明和图片。Mac 更新清单含四个已验证制品，公开下载及分享服务回读通过，Windows 清单保持不变。后续只回填本轮发布记录，不再改动已发布 tag 或制品。

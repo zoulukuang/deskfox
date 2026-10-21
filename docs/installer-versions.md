@@ -17,6 +17,27 @@
 
 
 
+## [macOS] 2026.12.0 - 2026-10-21
+
+**主题**：REQ-142/143/144 附件成本保护、REQ-148 双区域分享，以及更新安全和发布前稳定性修复。Electron 42.11.15 避免钥匙串过早初始化；后台恢复仅在健康检查通过后报告就绪。
+
+**验收**：完整实际 pre-push 通过（29 包类型、六包测试）；Finder 混合拖放、取消保留草稿、发送回复、后台恢复、原生终端、私有旧库副本两次冷启动与续聊通过；中英文分享在浏览器完整展示并取消发布。两架构 app/DMG 全部公证 Accepted，四份日志无 issues，票据、Gatekeeper、DMG 挂载内容和 ZIP CRC 通过。Intel/Rosetta 实际对话及退出通过；Intel 真机性能未验收、Rosetta 启动延迟保留，按用户本次明确授权豁免发布阻断。
+
+| 安装包 | bytes | SHA-256 |
+|---|---:|---|
+| DeskFox-2026.12.0-mac-arm64.dmg | 398891064 | `d8dde7d6c2eebcfd86a2bcea1c09d51291b664e6024685ccd8f223493a4762f9` |
+| DeskFox-2026.12.0-mac-x64.dmg | 417012812 | `45299536f84974ef41cf49766d8c334ee3912c0eae2e2c07b21bb27540d7b599` |
+
+**Release**：[GitHub](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0)
+
+**国内下载**：[Apple 芯片](https://dl.clawtray.com/DeskFox-2026.12.0-mac-arm64.dmg) / [Intel](https://dl.clawtray.com/DeskFox-2026.12.0-mac-x64.dmg)
+
+**发布验证**：tag 来源 `d7b671a15a`，main/tag 已推送；GitHub 两 DMG digest 与本地一致。Mac latest-mac.yml 为 2026.12.0，包含双架构 ZIP/DMG 四条且 SHA-512/大小匹配、首尾 Range 字节匹配。两站四个下载页面由官网仓已推送 `e6531fe` 定点部署，六条安装链接均 200；分享服务正常，既有分享说明/图片保留。Windows latest.yml 与发布前逐字节相同，SHA-256 `528b06a863f6f5fbe7c3cf3c299700efe32b5efb8d0a538bc39fababaa2647d9`。实际本机正式安装未替换；所有私有备份均未上传。
+
+完整制品哈希、测试及公证续发记录见 [mac-release-readiness](./features/mac-release-readiness/3-changelog.md)。
+
+---
+
 ## [Windows] 2026.12.0 - 2026-10-20
 
 **主题**：附件成本保护与双区域分享；修复 Windows 服务构建及更新器错误降级。

@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [mac-release-readiness](./mac-release-readiness/) | in-progress | Mac 2026.12.0：运行框架、后台恢复及测试隔离修复；原生回归、两次旧库副本冷启动、两站浏览器、双架构 app/DMG 公证与四制品校验通过。修复实际推送闸的 Git 上下文继承问题，继续发布；Intel 性能按授权豁免。 |
+| [mac-release-readiness](./mac-release-readiness/) | done | Mac 2026.12.0 已发布：运行框架、后台恢复和测试隔离修复；原生回归、旧库副本冷启动、两站分享及双架构公证通过。main/tag、GitHub/Gitee/CDN、Mac 更新源及两站下载入口已上线回读，Windows 清单未变；Intel 性能按本次授权豁免。 |
 | [release-readiness](./release-readiness/) | done | Windows 2026.12.0 R2 已正式发布：禁止降级、原库恢复及两次冷启动通过；main／tag、GitHub／Gitee、国内 CDN、两种 Windows 更新入口与两站首页链接已上线并验证。Mac 更新清单未变。 |
 | [share-windows-build](./share-windows-build/) | done | Windows 路径、配置及路由补丁已集成，Linux 32 项、Windows 选择器／粘贴／外拖及实际升级通过；禁止降级与两次冷启动补验完成，2026.12.0 R2 已发布。 |
 | [attachment-cost-guard](./attachment-cost-guard/) | in-progress | REQ-142/143/144 已实现，自动化与原生选择器／粘贴检查见记录；本机候选升级、数据校验及用户三种附件外部拖放通过。本次 Windows 准备完成，Mac 由同事内测。用户已授权本地 main 合并。 |
