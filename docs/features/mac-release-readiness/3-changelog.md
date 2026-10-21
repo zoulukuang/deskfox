@@ -130,3 +130,13 @@ Finder 与 local 已在 Studio Display 左右并排；三种合成文件跨窗�
 Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，主程序与内嵌 LO 都是 arm64，版本 2026.12.0；挂载包 app.asar 与已测候选 SHA-256 均为 `97cd031cf738605992cadba6e336bcb8332846c395746b34410935129daf52af`，`fixed-arm64-mounted-payload.json`，验证后已卸载。DMG 原提交上传/公证进行中，未以 app 公证代替 DMG 公证。后处理只在 app 公证与分发打包均完成后继续，已有 DMG 提交按 ID 等待，禁止重复提交；最终仍不得自动发布。
 
 收口检查：正式版飞书认证接口仍 HTTP 200、8 个账号，连接文件哈希保持 `61235a6931705efd8c5937bc7d4b0a8e7808c39341a5ef2051ab55fe7164327b`，未发送飞书消息。主目录两处用户原有修改的 diff SHA-256 仍为 `6f48b412c118096342d4e7717b4233cacbddec347c159de099fb737b8f7190f5`，逐字节保持。
+
+## 2026-10-21 08:03：公证收口，用户确认 Intel 阻断
+
+用户确认没有可用 Intel Mac 或 Intel macOS CI，先保留 Intel 发布阻断。未将此答复视作性能验收豁免，也未改为单独发布 arm64。
+
+后台后处理于本地时间 04:15 完成 `packaging_verified_acceptance_pending`，两架构 app 与 DMG 全部公证 Accepted、stapler validate 成功、Gatekeeper accepted（Notarized Developer ID）。08:03 复查日志及制品，四个 DMG/ZIP 的 `SHA256SUMS.txt` 全部匹配，合并清单逐项 SHA-512 与真实文件大小匹配（`fixed-final-manifest-verified.json`）。官方 updater dry-run 成功，未上传资产或修改线上更新源；dry-run 中 symlink 的显示字节数是链接自身长度，清单与本轮复查使用真实文件内容及大小，不将显示长度误作制品大小。
+
+复查 Apple history 发现后处理缺少单实例保护，DMG 实际各提交两次：arm64 `16f959f6-ca56-4f83-9596-e6f539a701e2`、`7c4a3821-c64b-479c-aac5-b9853d20546a`；x64 `d744b439-bb39-4a42-95d9-4872b7b005e1`、`04e58875-fe17-443a-98ea-9dfed3783c4c`，四笔均 Accepted，`final-notary-submission-audit.json`。这纠正了前文“禁止重复提交”的执行预期，不能据后处理最终成功声称未发生重复提交。已确认没有遗留后处理进程，并给本地后处理加入候选目录级非阻塞 flock；已有提交继续按 ID 等待，不重提。脚本语法校验通过，没有再次运行提交流程。最终票据、Gatekeeper、哈希及清单均是重复处理结束后的真实制品校验结果。
+
+新版制品目录 `/Volumes/ExtSSD/opencode-fork/packages/desktop/dist-deskfox/mac-release-20261021/candidate/`：`DeskFox-2026.12.0-mac-{arm64,x64}.{dmg,zip}`，附 `SHA256SUMS.txt`、`latest-mac-candidate.yml`。`acceptance-status.json` 已更新为制品校验完成、Intel 发布阻断保留、`publicRelease=false`。旧候选仍禁止发布；包含私有数据库快照的目录不得上传。发布准备文档继续保持 in-progress，唯一尚未关闭的验收项为 Intel 运行性能。
