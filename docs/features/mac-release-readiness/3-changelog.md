@@ -150,3 +150,11 @@ Apple Silicon 新 DMG/ZIP 已生成。只读挂载 DMG 后深签验证成功，�
 用户要求解决发布前问题并上线，并明确允许缺少 Intel 真机性能结果时先发布。采用 Electron 42.11.15 同主版本维护更新，不修改钥匙串设置、不关闭加密。`bun.lock` 是受保护根文件：运行时来自依赖包，wrapper 不能替换其内置原生修复；仅在构建命令覆盖版本会形成测试与分发版本不一致，因此必须同步锁文件。变更仅包含 Electron 的依赖解析及直接相关布局；包管理器的 registry 批量重写已去除。R4 提交前复核详见 `R4-runtime-review.md`，未确认前不提交受保护文件。
 
 用户随后明确确认提交并继续发布。按 R4 使用 `[override-blacklist: synchronize Electron runtime lockfile]` 标记及 `--no-verify` 提交受保护锁文件；该 bypass 仅用于已批准的黑名单例外，冻结安装、完整 pre-push、diff 检查已通过。新运行时正常 HOME 与合成 HOME 两轮最小对照都退出 0，新 local 完整会话回复成功，日志 `logs/mac-keychain-20261021/`。Intel 真机性能验收未完成，按本轮授权豁免阻断，不计作通过。
+
+修复提交 `85052235c6`。新 local 的真实 Finder 混合拖放通过：CSV 路径引用、PNG/PDF 两附件，取消保留全部草稿且回环模型请求日志不变，确认发送完整回复。只对本轮 local sidecar PID 66610 注入 SIGKILL，08:12:38.772 退出、08:12:53.706 触发重启、08:12:55.386 真健康后广播 ready；恢复后新会话发送成功。原生终端显示 `KEYCHAIN_PTY_OK_20261021`，Quit 菜单正常结束应用（最初 CUA 键盘退出未送达，不计作产品失败）。`local-native-summary.json`、`native-pty.png`。
+
+新正式 arm64 候选签名校验后，仅覆盖仓库外私有 QA 安装副本；实际框架 CFBundleVersion 为 42.11.15。两次冷启动均恢复原合成会话并成功续聊、正常 Quit，PID 91706/92073 都确实结束；39 条迁移、1947 个会话、35471 条消息（相对本轮基线仅增加两轮问答共 4 条），无 incompatible 文件，未见钥匙串弹窗。`persistent-runtime-summary.json`。真实正式版尚未替换。
+
+真实 MacUpdater 在新框架下拒绝较低/同版本，仅接受更高版本；arm64/x64 各取正确的 ZIP/DMG，`mac-updater.json`。两站分享用全新合成会话验证：简体中文首次创建 deskfox.cn、英文首次创建 deskfox.ai；Chrome 原生窗口均完整显示测试问题与回复，取消发布后均为 404、不再含测试内容。内置浏览器控制连接两次超时，未将其计为页面故障或验证成功，改用原生 Chrome 完成；`share-{cn,ai}-browser.ax.txt/.png`、`share-{cn,ai}-unpublish.json`。未公开任何用户旧会话。
+
+双架构正式包继续官方 wrapper 完整构建，按流程摘代理公证。新的本地后处理使用文件锁、先持久化提交 ID 再等待，杜绝前轮并行重复提交；上传暂存使用实际普通文件，不依赖 ossutil 对 symlink 的行为。旧两轮候选已另加 superseded 标记，公证通过也不得替代本轮新框架候选。
