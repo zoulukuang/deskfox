@@ -32,7 +32,7 @@
 
 号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
 
-**门 3 候选制品（Windows 电脑）**。`DeskFox-2026.12.1-win-x64.exe`，340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。静态校验通过，隔离实装与覆盖升级待验。
+**门 3 候选制品（Windows 电脑）**。`DeskFox-2026.12.1-win-x64.exe`，340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。静态校验、D 盘隔离虚拟机全新安装与两次冷启动、11.1／12.0 覆盖升级和副本续聊均通过。Windows 门 4 待李哲的电脑放行。
 
 (to be filled: release and download links after ship)
 
