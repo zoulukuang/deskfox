@@ -13,6 +13,8 @@ import { usePlatform } from "@/context/platform"
 import { DialogCustomProvider } from "./dialog-custom-provider"
 import { SettingsList } from "./settings-list"
 import { SettingsServerPicker, SettingsServerScope } from "./settings-server-picker"
+// FORK: 断开配置型供应商的 dispose→refresh 时序 [feat: provider-disconnect-stale] 2026-11-09
+import { disableProviderAndRefresh, nextDisabledProviders } from "./provider-disconnect"
 // FORK: REQ-054 — 刷新 GetBot 模型列表 2026-06-18
 import {
   GETBOT_PROVIDER_ID,
@@ -157,24 +159,32 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
   const disableProvider = async (providerID: string, name: string) => {
     if (protocol() !== "v1") return
     const before = serverSync().data.config.disabled_providers ?? []
-    const next = before.includes(providerID) ? before : [...before, providerID]
+    // FORK-BEGIN: 写完 disabled_providers 后必须等服务端实例销毁再刷新,否则列表撞旧缓存、供应商消失不掉
+    //   [feat: provider-disconnect-stale] 2026-11-09
+    const next = nextDisabledProviders(before, providerID)
     serverSync().set("config", "disabled_providers", next)
-
-    await serverSync()
-      .updateConfig({ disabled_providers: next })
-      .then(() => {
-        showToast({
-          variant: "success",
-          icon: "circle-check",
-          title: language.t("provider.disconnect.toast.disconnected.title", { provider: name }),
-          description: language.t("provider.disconnect.toast.disconnected.description", { provider: name }),
-        })
+    const result = await disableProviderAndRefresh(
+      {
+        updateConfig: (config) => serverSync().updateConfig(config),
+        dispose: () => serverSDK().client.global.dispose(),
+        refresh: () => serverSync().refreshProviders(),
+      },
+      providerID,
+      before,
+    )
+    if (result.ok) {
+      showToast({
+        variant: "success",
+        icon: "circle-check",
+        title: language.t("provider.disconnect.toast.disconnected.title", { provider: name }),
+        description: language.t("provider.disconnect.toast.disconnected.description", { provider: name }),
       })
-      .catch((err: unknown) => {
-        serverSync().set("config", "disabled_providers", before)
-        const message = err instanceof Error ? err.message : String(err)
-        showToast({ title: language.t("common.requestFailed"), description: message })
-      })
+      return
+    }
+    serverSync().set("config", "disabled_providers", before)
+    const message = result.error instanceof Error ? result.error.message : String(result.error)
+    showToast({ title: language.t("common.requestFailed"), description: message })
+    // FORK-END
   }
 
   const disconnect = async (providerID: string, name: string) => {
