@@ -14,6 +14,8 @@ import { track, trackBlocking } from "./deskfox/telemetry"
 const downloadedReported = new Set<string>()
 import { setAppQuitting } from "./windows"
 import { nativeT } from "./native-translations"
+// FORK: Reject older online releases after channel assignment enables downgrades. 2026-10-20
+import { configureReleaseUpdater } from "./deskfox/updater-policy"
 
 const { autoUpdater } = pkg
 const key = "ready"
@@ -21,11 +23,7 @@ const key = "ready"
 export function setupAutoUpdater(stop: () => Promise<void>) {
   const logger = getLogger()
   autoUpdater.logger = logger
-  autoUpdater.channel = "latest"
-  autoUpdater.allowPrerelease = false
-  autoUpdater.allowDowngrade = true
-  autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = false
+  configureReleaseUpdater(autoUpdater)
   logger.log("auto updater configured", {
     channel: autoUpdater.channel,
     allowPrerelease: autoUpdater.allowPrerelease,
