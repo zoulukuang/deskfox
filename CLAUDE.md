@@ -132,6 +132,7 @@ grep `[feat: <id>]` 能反查到对应文档。
 | DeskFox 品牌替换 | `docs/governance/DeskFox-品牌替换.md` | 已落地 |
 | 应用身份命名规则 | `docs/governance/应用身份-命名规则.md` | 两端规则统一:Mac Bundle ID 三档(已落地,与 `deskfox.ai` 域名对齐)+ Win AppId 三档(已落地 2026-04-30,commit `21c3f80f9`),merge upstream 维护规则 |
 | **版本号与发布渠道规范** | `docs/governance/版本号与发布渠道规范.md` | 3-tier 体系:Tier 1 稳定版(prod 无后缀)/ Tier 2 预览版(dev `-dev` 后缀,可对外发)/ Tier 3 本地测试版(raw exe 不发布);版本号 `YYYY.M.D.N[-env-suffix]` + N 序列双维度独立(平台 × env);Tier 1/2 ship 完整 SOP |
+| **测试与发布规范** | `docs/governance/测试与发布规范.md` | 发版正本(2026-11-09):四道门(开发闸 / 候选冻结 / local 候选验收 / 正式制品 / 分级放行)+ 三端分工 + 回退预案 + 台账只追加;起源 2026.12.0 回退教训 |
 | **双端协作 SOP** | `docs/governance/双端协作-SOP.md` | feat 分支生命周期(短命,合 main 即销毁,新项目新名字)+ Win/Mac 同时开发流程(rebase / merge / 删分支)+ 协作约定 |
 | **imbot 定制指南** | `docs/governance/imbot-定制指南.md` | DeskFox 用户怎么编辑 `~/.opencode/imbot-workspace/.opencode/agent/imbot.md` 定制 IM 桥接 bot 能力(2026-05-25 ADR 落地后的 user-facing 配套教程);架构决策详 `OPENCODE-PLAN/架构决策/im桥接-imbot单一架构.md` |
 | 跨平台协作 | `docs/governance/跨平台协作.md` | 三端环境(目前已收口 Win) |
@@ -218,6 +219,17 @@ grep `[feat: <id>]` 能反查到对应文档。
   - 冷启动健康检查:`python ../OPENCODE-PLAN/诊断工具/cold-start-health-check.py`(kill + 真冷启动 + 监控启动期 error toast / JS 异常;**≥2 次 CLEAN 才算过**)
 - **真桌面 QA ≠ CDP 自测**:视觉对齐 + native(对话框/通知/托盘/Dock/深链/文件关联)只能真桌面验;Mac 专属(Dock/托盘/updater)在 Win 上做不了。
 
+## 发版约定(速查 — 发任何版本前必读,2026-11-09 立)
+
+**唯一正本**:[`docs/governance/测试与发布规范.md`](docs/governance/测试与发布规范.md)。下面只是速查。
+
+- **四道门**:门 0 开发闸(feat 内 R5/R8/R9 + pre-push)→ 门 1 候选冻结(李哲定范围,`release/<ver>`,**只有 done 的 feat 进包**,候选头写死)→ 门 2 候选验收(候选头的 **local 版**跑全部运行类验证,按平台归属,含**与上一正式版行为对照**和**测试删改审计**)→ 门 3 正式制品(独立打包环境;静态校验 + 隔离账户 / 虚拟机冒烟 + 副本升级)→ 门 4 分级放行(制品 → 更新清单 → **观察 24 小时** → 官网 → main / tag / 台账)。红了退回上一道,候选头变一行全部重来。
+- **分工**:Mac 全链 = 笑南的电脑;Windows 全链 = Windows 电脑 / 鹏鹏;范围、go / no-go、推 main、切官网、豁免签字 = 李哲。两端同号、各自过门、一端可先发。
+- **冻结后改代码**只走 `fix/<name>` → `--no-ff` 合回 `release/<ver>`;文档可直接提交到 release 分支。
+- **回退**:updater 禁降级,用户不能降级;回退 = 观察期内清单切回备份,或官网切回 + hotfix `补+1` 走完整四道门。预案在门 1 就写进 1-spec。
+- **台账与发布记录只追加**(`docs/installer-versions.md`、`docs/features/release-*/`),树替换式合并必须补回被替换的记录。
+- 证据与回执一律写在 `docs/features/release-<ver>/3-changelog.md`,写执行电脑的统一称呼;需要李哲决定的标「待李哲」。
+
 ## 健康指标(季度自查)
 
 | 指标 | 目标 |
@@ -232,6 +244,7 @@ grep `[feat: <id>]` 能反查到对应文档。
 
 ## 规范修订记录
 
+- **v3.3(2026-11-09)**:新增「发版约定(速查)」段 + 文档表新增《测试与发布规范》。起源:2026.12.0 发布后功能缺失并于 11-03 官网回退,2026.12.1 三端协作发版暴露发版门无正本、候选未冻结、无行为对照、无分级放行、台账被树替换删掉五个缺口;李哲拍板 local 版验收口径与 Mac = 笑南 / Windows = 鹏鹏 分工。详见 `docs/governance/测试与发布规范.md` v1.0。 [feat: release-gate-spec]
 - **v3.2(2026-06-01)**:R5 新增 **R8 测试用例清单**(Medium+ spec 动工前列逐条用例)+ **R9 分支内验收闸**(按 R8 跑全绿、问题分支内解决,才问 merge);`pre-push` 接入 fork 包单元测试自动 backstop(media-gen/adapter-feishu-lark/app);删《自动化测试规范》流程里与三铁律矛盾的过时「ff merge dev → push」步骤。起源:catalog 数据/代码分层后才发现 UI 标签不一致,暴露"测试范围未在动工前定 + 绿了再 merge 未成硬门槛"。详见 `docs/governance/自动化测试规范.md` v5。 [feat: test-gate-and-spec-cases]
 - **v3.1(2026-05-07,选项 C)**:R5 决策 2 单清单 → **双清单**(Logic 行覆盖 80% + View e2e ≥ 1 happy path)。起源:D 系列实施(D1 / D2)发现 SolidJS 组件文件用 unit 测无意义,helper extract 模式自然形成。把这条结构性区分写进规则,长期防止 view layer 测试空白。详见 `docs/governance/自动化测试规范.md` v2 修订段。
 - **v3(2026-05-07)**:R5 测试纪律新增(决策 1/2/3/4/5 一次性固化)。新 feat 必带测试 + 修 bug 必先写复现测试 + 关键模块覆盖率 ≥ 80% + 70/20/10 金字塔比例 + Claude 自审起步。详见 `docs/governance/自动化测试规范.md`。**只定纪律不启动开发**,第 1 期实施时机由 user 单独决定。

@@ -39,6 +39,7 @@ docs/
 | 上手开发,要知道改什么文件能 commit | [governance/改动规则.md](./governance/改动规则.md) |
 | 双端(Win+Mac)同时开发,要知道分支怎么走 | ⭐ [governance/双端协作-SOP.md](./governance/双端协作-SOP.md) |
 | 准备从上游 anomalyco/opencode 拉新版合并 | ⭐ [governance/UPSTREAM-MERGE-GUIDE.md](./governance/UPSTREAM-MERGE-GUIDE.md) |
+| 要发一个版本(Mac / Windows),想知道过哪些门、谁签字、怎么回退 | ⭐ [governance/测试与发布规范.md](./governance/测试与发布规范.md) |
 | 改东西不知道走 fork 路径还是上游路径 | [governance/fork-跟随升级与协作规范.md](./governance/fork-跟随升级与协作规范.md) — R1 三级跳决策 |
 | 改品牌相关(name / icon / 主题色) | [governance/DeskFox-品牌替换.md](./governance/DeskFox-品牌替换.md) + [governance/改动规则.md](./governance/改动规则.md) R3 |
 | 想看某个 feature 的完整来龙去脉 | [features/INDEX.md](./features/INDEX.md) → 对应 feat-id 目录 |
