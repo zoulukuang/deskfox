@@ -11,7 +11,7 @@ related: ./3-changelog.md
 
 **基线是 `ship-mac-prod-2026.11.2`**,不是 2026.12.0。12.0 的附件成本保护(REQ-142/143/144)、Electron 42.11.15、看门狗/钥匙串修复**全部不在**本版;它们留在历史和 `ship-*-2026.12.0` tag 里,待单独评审后再合回。
 
-本版只带四项:
+本版只带五项:
 
 | 项 | 来源 | 说明 |
 |---|---|---|
@@ -19,10 +19,11 @@ related: ./3-changelog.md
 | 配置型供应商断开后列表不刷新 | 新修复 `provider-disconnect-stale` | GetBot 属此类;根因与修法见该 feat 的 3-changelog |
 | updater 禁止降级 | 12.0 的 `68397f2a0` 仅代码三文件 | Windows 12.0 已带,12.1 不倒退 |
 | 干净工作树 icon.icns 生成修复 | 新 `fix/mac-icon-clean-tree` | 全新 clone 打 prod 包第 2 步必失败,已修 |
+| 后台恢复须健康才报就绪 | 12.0 的 `b4b54a58ad` 仅代码三文件(`fix/sidecar-healthy-ready-12.1`,a5c709cc6) | 李哲 2026-11-09 决定纳入;sidecar 重启等待超时不再误报 ready,QA 隔离测试插件。Electron 仍为 42.3.3 |
 
 版本号:macOS `2026.11.2 → 2026.12.1`,Windows `2026.11.0 → 2026.12.1`(两端同号;跳过 12.0 因其已发布且 updater 禁降级)。
 
-**代码位置**:本地 `main` 合并提交链 `06889891f`(发布内容)→ `afee4b9c9`(图标修复)→ 本交接单提交;同一内容已推到远端分支 **`release/2026.12.1`**(main 本身未推,见第四节)。
+**代码位置**:本地 `main` 合并提交链 `06889891f`(发布内容)→ `afee4b9c9`(图标修复)→ 本交接单提交;同一内容已推到远端分支 **`release/2026.12.1`**(main 本身未推,见第四节)。**2026-11-09 更新:候选源码头现为 `ce71d3bd1`**(= `dba9c6035` + 后台恢复修复合并),之前从 `dba9c6035` 构建的未签名 arm64 候选需从新头重建。
 
 ## 二、已经验到哪
 
@@ -44,7 +45,9 @@ related: ./3-changelog.md
 7. 实包升级(第九节第 3 项,按平台归属):Windows 电脑验 `11.1 → 12.1` 与 `12.0 → 12.1`,笑南的电脑验 Mac `11.2 → 12.1` 与 `12.0 → 12.1`;每条路径覆盖应用内升级、两次冷启动、旧会话续聊、GetBot 断开与重连、双站分享与撤销后 404、PDF / 大文本 / 非内置连接的附件行为与 11.2 一致。Intel 真机不可用时在回执写明证据与豁免范围,豁免由李哲确认。
 8. 非内置连接(远端 server)下拖入文件仍走路径引用,与 11.2 一致;大于 50 KiB 的文本附件内容完整送达模型(12.0 的服务端截断不在 12.1)。
 
-## 三、Mac 打包与上传(你来做)
+## 三、Mac 打包与上传(笑南的电脑)
+
+> 2026-11-09 李哲决定:Mac 打包、签名公证、上传、`ship-mac-prod-2026.12.1` tag 与 Mac 台账回填全部由笑南的电脑负责;只在独立打包环境执行,打包机上不运行正式版 DeskFox(脚本会强制结束运行中的 DeskFox,本次不改脚本)。Mac 验收通过可先发,不等 Windows。
 
 本机状态:bun 必须用 **1.3.14**(1.4.x 打不上 photon-node 补丁,安装直接失败);`packages/branding/libreoffice-bundle/macos/` 的 arm64 LO bundle 已就绪;x64 bundle 需 Rosetta。
 
@@ -64,7 +67,9 @@ bash packages/branding/scripts/build-deskfox-electron.sh -Env prod --sign --nota
 
 上传与验证按 12.0 的做法(见 `docs/installer-versions.md` 12.0 条目):GitHub Release `ship-mac-prod-2026.12.1`(两架构 dmg + zip + blockmap + `latest-mac.yml`)、Gitee 镜像、国内 CDN `dl.clawtray.com`、官网仓两站下载页更新;回读 latest-mac.yml 四条 SHA-512/大小、六条安装链接 200。
 
-## 四、Windows 打包(Windows 机器)
+## 四、Windows 打包与发布(Windows 电脑 / 鹏鹏)
+
+> 2026-11-09 李哲决定:Windows 打包、上传、`ship-prod-2026.12.1` tag、Windows 真机 QA 与 Windows 台账回填全部由 Windows 电脑 / 鹏鹏负责,与 Mac 同源同号(候选源码头见第一节)。同样只在独立打包环境执行。
 
 ```powershell
 git fetch origin; git checkout release/2026.12.1
@@ -75,6 +80,8 @@ packages\branding\scripts\build-deskfox-electron.ps1 -Env prod
 产物 `packages/desktop/dist-deskfox/DeskFox-2026.12.1-win-x64.exe` + `latest.yml`;tag `ship-prod-2026.12.1`。真机 QA 同第二节 1–4 条。
 
 ## 五、推 main 与 tag(铁律:推 main 前跟 owner 确认一次)
+
+> 2026-11-09 分工:`ship-mac-prod-2026.12.1` 由笑南的电脑打并推,`ship-prod-2026.12.1` 由 Windows 电脑打并推;`main` 的 ff 合并与推送仍须李哲确认后执行,谁先发完谁先提请。
 
 ```bash
 git checkout main && git merge --ff-only release/2026.12.1
@@ -188,4 +195,16 @@ owner 回退 11.2 时,12.0 写过的库被 11.2 判为"超前"并隔离改名(`o
 - 事实：`build-deskfox-electron.sh` 第 143–147 行 `pkill -9`、`build-deskfox-electron.ps1` 第 126–128 行 `Stop-Process -Force` 会结束运行中的正式版/预览版/Beta/本地版。恢复隔离输出选项是脚本改动，**待李哲决定**；本端建议本次不改脚本，第三、四节明确「只在独立打包环境执行，打包机上不运行正式版」。
 - `latest-mac.yml` 四资产合并与 SHA-512/大小校验、`latest.yml` 与旧 Tauri 迁移桥同步更新、清单回读与恢复：按补回的 12.0 台账（mac-release-readiness / release-readiness 的 3-changelog）照做，Mac 由笑南的电脑回填，Windows 由 Windows 电脑回填。
 - 是否分平台上线、Mac 能否先发：**待李哲**（见前一回执第 2 项）。
+
+### 回执（李哲的电脑，2026-11-09，第三条：李哲的决定与执行）
+
+李哲本人 2026-11-09 在本端会话决定（原话：「你提到的几个都按照你的建议来。Windows 打包由鹏鹏来做，发布也由他来发，笑南只负责 Mac 系统的打包和发布。」）。逐项落实如下：
+
+1. **纳入后台恢复修复**：分支 `fix/sidecar-healthy-ready-12.1`，提交 `a5c709cc6`（`b4b54a58ad` 的三文件代码 + 测试，watchdog 8 项测试通过、desktop typecheck 通过、pre-push 闸全绿），已 `--no-ff` 合入 `release/2026.12.1`，**候选源码头 = `ce71d3bd1`**。第一节内容表加第五项；笑南已建的未签名 arm64 候选需从新头重建。
+2. **Electron 不升级**：保持 42.3.3，`85052235c6` 的 42.11.15 不进 12.1。
+3. **自建分享存量**：李哲未指出存在自建分享服务器的存量，第六节第 1 点维持 12.2 留存项。
+4. **打包脚本不改**：两端只在独立打包环境执行，打包机上不运行正式版（已写进第三、四节）。
+5. **分工**：Windows 打包、上传、`ship-prod-2026.12.1`、Windows 台账 = Windows 电脑 / 鹏鹏；Mac 打包、签名公证、上传、`ship-mac-prod-2026.12.1`、Mac 台账 = 笑南的电脑；推 main 仍须李哲确认（第三、四、五节已改）。
+6. **上线顺序**：Mac 验收通过可先发，不等 Windows。Intel 真机不可用时记录证据后豁免真机性能/体验项，x64 包仍须构建、公证并在 Rosetta 下冷启动验证（此条为本端按 12.0 先例的处理，李哲未单独表态）。
+7. **分享域名核实**（李哲问「12.1 所有分享是否都指向 deskfox.cn / deskfox.ai」）：桌面端手动分享按界面语言选 cn / global，`ShareSource.publicSource` 固定 `https://deskfox.cn` / `https://deskfox.ai`；桌面端自动分享（`share: "auto"`）要求配置 `share_target`，否则报错且不分享、不回退。**例外**：不带 `shareTarget` 的调用（CLI `opencode run --share`、未传参的 SDK / TUI）在无登录账号时仍落到 `enterprise.url ?? https://opncd.ai`（`share-next.ts:230`），有登录账号时走上游账号 API；已分享过的会话重新分享沿用原来源。桌面发行版的用户路径全部是双站；CLI 路径是否也强制双站待李哲（建议留 12.2）。
 

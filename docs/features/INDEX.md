@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [release-2026.12.1](./release-2026.12.1/) | in-progress | 2026.12.1 发布交接单:11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复;第九节补充稳定性修复、分享兼容、实包验收与更新入口，交李哲的电脑 |
+| [release-2026.12.1](./release-2026.12.1/) | in-progress | 2026.12.1 发布交接单:11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪;候选源码头 ce71d3bd1;Mac 交笑南的电脑,Windows 交 Windows 电脑/鹏鹏,Mac 可先发;推 main 待李哲 |
 | [mac-release-readiness](./mac-release-readiness/) | done | Mac 2026.12.0 已发布：运行框架、后台恢复和测试隔离修复；原生回归、旧库副本冷启动、两站分享及双架构公证通过。main/tag、GitHub/Gitee/CDN、Mac 更新源及两站下载入口已上线回读，Windows 清单未变；Intel 性能按本次授权豁免。（2026-11-03 官网下载已回退到 11.2；记录于 2026-11-09 从 08a670659 补回，12.1 不含其 Electron 升级，后台恢复修复待李哲决定是否纳入） |
 | [attachment-cost-guard](./attachment-cost-guard/) | on-hold | REQ-142/143/144 附件成本保护，随 2026.12.0 发布后因拖放/PDF/大文本行为回退导致功能缺失，2026-11-03 官网下载回退；12.1 不含。记录于 2026-11-09 从 08a670659 补回，待单独评审后再合回。 |
 | [provider-disconnect-stale](./provider-disconnect-stale/) | done | 配置型供应商(含 GetBot)断开后设置页列表不刷新:updateConfig 后显式 await global.dispose 再刷新(2026-11-09,Tiny) |

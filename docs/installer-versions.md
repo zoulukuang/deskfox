@@ -27,6 +27,7 @@
 - REQ-148 双站分享(share-routing cherry-pick,含 Windows 路径校验 `83d995636`)
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick;Windows 2026.12.0 已带,12.1 不倒退)
+- 后台恢复须健康才报就绪(`b4b54a58ad` 仅代码三文件 cherry-pick,`fix/sidecar-healthy-ready-12.1` a5c709cc6;李哲 2026-11-09 决定纳入;候选源码头 ce71d3bd1)
 
 号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
 
@@ -39,6 +40,7 @@
 - REQ-148 双站分享(share-routing,`af056a70c7` + 修复 `49442977b` / `83d995636` / `797abd35f` / `ef012db88` cherry-pick)
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick,两端共用)
+- 后台恢复须健康才报就绪(`b4b54a58ad` 仅代码三文件 cherry-pick,`fix/sidecar-healthy-ready-12.1` a5c709cc6;李哲 2026-11-09 决定纳入;候选源码头 ce71d3bd1)
 
 号线直接从 2026.11.2 跳到 2026.12.1:macOS 2026.12.0 已对外发布且其 updater 禁降级,新包必须高于它。
 
