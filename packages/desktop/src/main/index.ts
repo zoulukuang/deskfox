@@ -54,7 +54,7 @@ import {
   type SidecarListener,
 } from "./server"
 // FORK: sidecar 看门狗自动重启(从 Tauri server.rs spawn_watchdog 平移)[feat: sidecar-watchdog-respawn] 2026-06-13
-import { createSidecarWatchdog } from "./deskfox/sidecar-watchdog"
+import { createSidecarWatchdog, waitForSidecarHealth } from "./deskfox/sidecar-watchdog"
 // FORK: REQ-087 renderer 连环崩自愈 [feat: renderer-snapshot-oom] 2026-08-02
 import { handleRendererGone } from "./deskfox/renderer-crash-guard"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
@@ -252,6 +252,9 @@ const main = Effect.gen(function* () {
   }
 
   const shellEnv = preferAppEnv(app.getPath("userData"))
+  // FORK: 在 shell 环境合并之后隔离测试插件，防止飞书使用真实 home 的账号和连接文件。
+  // [feat: mac-release-readiness] 2026-10-20
+  if (TEST_ONBOARDING) process.env.OPENCODE_PURE = "1"
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
     const urls = argv.filter((arg: string) => arg.startsWith("opencode://"))
@@ -527,8 +530,9 @@ const main = Effect.gen(function* () {
       await new Promise((resolve) => setTimeout(resolve, 500)) // 等端口释放
       const next = await spawnLocalServer(hostname, port, password, spawnOptions)
       server = next.listener
-      // 等新实例 healthy(最多 30s);失败不放弃,下一轮 poll 受熔断保护会再判定
-      await Promise.race([next.health.wait, new Promise((resolve) => setTimeout(resolve, 30_000))])
+      // FORK: 超时必须失败，不能广播尚未通过健康检查的 ready；后续轮询仍受熔断保护。
+      // [feat: mac-release-readiness] 2026-10-20
+      await waitForSidecarHealth(next.health.wait)
     }
     sidecarWatchdog?.stop()
     sidecarWatchdog = createSidecarWatchdog({
