@@ -26,7 +26,7 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 
 - **笑南的电脑**:`git pull` 后读指南,确认 `bun run typecheck` 仍绿,在指南第六节「回执」加一行。
 - **Windows 电脑 / 鹏鹏**:按指南 §2.1–2.2 装环境,跑 `build-deskfox-electron.ps1 -Env local -NoBundle` 自检,在指南第六节「回执」加一行。
-- **李哲**:把鹏鹏的 GitHub 账号加为 `zoulukuang/deskfox` 协作者;本 feat 分支合 main、推 main 需你点头(三条铁律)。两人回执齐后把本文 status 改 done。
+- **李哲**:确认鹏鹏的 GitHub 账号已是 `zoulukuang/deskfox` 协作者(没有就加);本 feat 分支合 main、推 main 需你点头(三条铁律)。分工已定:鹏鹏负责 Windows 端开发(指南 §五)。两人回执齐后把本文 status 改 done。
 
 ## 回退
 

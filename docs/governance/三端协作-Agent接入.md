@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **李哲的电脑** | 李哲(owner,本人) | Mac Mini,`ComputerName` 为 `Zhe's Mac Mini`;登录账号 `xiaonan`,代码在 `/Volumes/xiaonan/code` | 开发;合 main / 推 main 的拍板(三条铁律) |
 | **笑南的电脑** | 笑南 | Mac Mini,`ComputerName` 为 `岳笑南的Mac mini` | 开发;Mac 打包 / 签名 / 公证 / 上传(先例:`docs/features/release-2026.12.1/`) |
-| **Windows 电脑** | 鹏鹏(2026-11-09 加入) | Windows 开发电脑 | 开发;Windows 打包(`build-deskfox-electron.ps1`)与 Win 真桌面 QA(`smoke.py` / 冷启动检查) |
+| **Windows 电脑** | 鹏鹏 | Windows 开发电脑 | **Windows 端开发负责人**(2026-11-09 本人定):Win 专属功能与 bug、Windows 打包与上传(`build-deskfox-electron.ps1`)、Win 真桌面 QA(`smoke.py` / 冷启动检查) |
 
 **身份声明**:每个 Agent 接手任务时先核实自己跑在哪台电脑(macOS `scutil --get ComputerName`,Windows `$env:COMPUTERNAME`),在首次进度说明里写「当前身份:李哲的电脑 / 笑南的电脑 / Windows 电脑」之一;核实不了写「待确认」,不猜。不得用 Git 作者、账号名或仓库路径单独判定身份。交接、测试证据、台账一律用统一称呼并注明实际执行电脑。
 
@@ -77,7 +77,9 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 
 ---
 
-## 五、Windows 电脑(鹏鹏)的典型任务
+## 五、Windows 电脑(鹏鹏)的职责与典型任务
+
+**鹏鹏是本仓 Windows 端开发负责人(2026-11-09 本人定)**;同一位同事在 fox-take 仓负责安卓开发。两台 Mac 负责 Mac 端与共享逻辑的主体开发,Mac 打包由笑南的电脑出。
 
 - 每个发版的 **Windows 打包与上传**:`build-deskfox-electron.ps1 -Env prod`,步骤与台账见 `版本号与发布渠道规范.md`;Mac 包由笑南的电脑出,两端同号。
 - **Win 真桌面 QA**:`python packages/branding/smoke/smoke.py`(CDP 冒烟)与冷启动健康检查(路径见 `CLAUDE.md`「验证约定」),结果写进该发版 feat 的 3-changelog。
@@ -91,6 +93,7 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 | 版本 | 日期 | 修订内容 |
 |---|---|---|
 | v1.0 | 2026-11-09 | 初版。起源:user 拍板三人(李哲 / 笑南 / 鹏鹏)跨 Mac / Windows 协作,Agent 之间也要能分工、评审、验收,先在 deskfox / fox-take / deskfox-operations 做样板。本文只做「接入 + Agent 交接协议」,不改既有 SOP。 |
+| v1.1 | 2026-11-09 | 分工写死:鹏鹏 = Windows 端开发负责人(§一表、§五);去掉「2026-11-09 加入」的不准确表述(Windows 电脑 10 月底起已在 fox-take 做安卓开发)。 |
 
 **回执**(接入后各加一行):
 - 笑南的电脑(YYYY-MM-DD):待回填。
