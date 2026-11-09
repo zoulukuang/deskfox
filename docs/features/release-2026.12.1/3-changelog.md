@@ -11,7 +11,7 @@ related: ./3-changelog.md
 
 **基线是 `ship-mac-prod-2026.11.2`**。本版保留 11.2 的附件行为和 Electron 42.3.3，按下表纳入已确认的分享与稳定性修复。
 
-本版只带五项:
+本版只带六项:
 
 | 项 | 来源 | 说明 |
 |---|---|---|
@@ -19,11 +19,12 @@ related: ./3-changelog.md
 | 配置型供应商断开后列表不刷新 | 新修复 `provider-disconnect-stale` | GetBot 属此类;根因与修法见该 feat 的 3-changelog |
 | updater 禁止降级 | 12.0 的 `68397f2a0` 仅代码三文件 | Windows 12.0 已带,12.1 不倒退 |
 | 干净工作树 icon.icns 生成修复 | 新 `fix/mac-icon-clean-tree` | 全新 clone 打 prod 包第 2 步必失败,已修 |
-| 后台恢复须健康才报就绪 | 12.0 的 `b4b54a58ad` 仅代码三文件(`fix/sidecar-healthy-ready-12.1`,a5c709cc6) | 李哲 2026-11-09 决定纳入;sidecar 重启等待超时不再误报 ready,QA 隔离测试插件。Electron 仍为 42.3.3 |
+| 后台恢复须健康才报就绪 | 12.0 的 `b4b54a58ad` 仅代码三文件(`fix/sidecar-healthy-ready-12.1`,a5c709cc6) | 李哲 2026-11-09 决定纳入;sidecar 重启等待超时不再误报 ready,QA 隔离测试插件 |
+| Electron 42.3.3 → 42.11.15 维护更新 | 12.0 的 `85052235c6` 同内容,重算锁文件(`fix/electron-42-11-15`,a2a9bba23,R4 override bun.lock) | 李哲 2026-11-09 决定纳入;修 safeStorage 过早初始化导致的钥匙串弹窗与 ⌘Q 不退出(上游 PR #50419);Windows 12.0 已带此运行时,12.1 不倒退 |
 
 版本号:macOS `2026.11.2 → 2026.12.1`,Windows `2026.11.0 → 2026.12.1`(两端同号;跳过 12.0 因其已发布且 updater 禁降级)。
 
-**代码位置**:本地 `main` 合并提交链 `06889891f`(发布内容)→ `afee4b9c9`(图标修复)→ 本交接单提交;同一内容已推到远端分支 **`release/2026.12.1`**(main 本身未推,见第四节)。**2026-11-09 更新:候选源码头现为 `ce71d3bd1`**(= `dba9c6035` + 后台恢复修复合并),之前从 `dba9c6035` 构建的未签名 arm64 候选需从新头重建。
+**代码位置**:本地 `main` 合并提交链 `06889891f`(发布内容)→ `afee4b9c9`(图标修复)→ 本交接单提交;同一内容已推到远端分支 **`release/2026.12.1`**(main 本身未推,见第四节)。**2026-11-09 更新(二):候选源码头现为 `e766f06ca`**(= `ce71d3bd1` + Electron 42.11.15 合并)。运行时变更,**此前基于 `ce71d3bd1` 的全部 local 包与运行类验收作废**,两端重建 local 重跑(范围见第八条回执 D 节);基于旧头的测试删改审计、迁移条数记录可沿用并注明旧头。
 
 ## 二、已经验到哪
 
@@ -305,3 +306,31 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - 同一制品在设置中把隔离后端添加为独立的 HTTP 连接并切换过去。通过 CDP 文件拖放向会话编辑框送入实际 TXT、PDF、DOCX，三项均生成相对路径引用，无 `data:` 载荷。原生 Finder 拖放在此前的内置连接中实测。
 - 同一 ARM local 制品从会话菜单实际发布两条合成会话。简体中文界面选中 `deskfox.cn`，英文界面选中 `deskfox.ai`，两个公开页面均读到合成回复。用各自语言界面的取消发布按钮撤销，两条链接均返回 HTTP 404。
 - 已读 `7f60be4b5d`。现有 x64 local 交 Intel 真机做退出复验，Electron 版本变更等李哲确认。
+
+### 回执（李哲的电脑，2026-11-09，第八条：Electron 升级已合入、无 Intel 真机的替代方案）
+
+李哲决定(2026-11-09):① Electron 升 42.11.15 纳入 12.1;② **不做 Intel 真机测试**,由本端定替代方案并照此执行。
+
+**A. 已执行**
+- `fix/electron-42-11-15`(`a2a9bba23`):仅 `packages/desktop/package.json` + `bun.lock`(9+/19-,全部为 electron 及其传递依赖 extract-zip / yauzl / get-stream 的解析变化),R4 override 标记在 commit message;desktop 176 项测试通过;pre-push 闸在该头上全绿。已 `--no-ff` 合入 `release/2026.12.1`,**候选头 = `e766f06ca`**,fix 分支已删。
+- 第一节内容表加第六项;第二节口径不变。
+
+**B. x64 无真机的替代验证(笑南的电脑,Apple 芯片 + Rosetta)**
+1. x64 prod 从 `e766f06ca` 构建、深签、公证、staple;`codesign --verify --deep --strict`、`spctl --assess --type execute`、`xcrun stapler validate` 三项通过。
+2. 架构核对:`lipo -archs` / `file` 检查主程序、全部 Helper、node-pty、watcher、LibreOffice soffice 与其库均为 x86_64(local 已做过,prod 包再做一次)。
+3. x64 **local**:合成 HOME 与常用 HOME 各一轮,冷启动到后端健康、**⌘Q 后 15 秒内进程全部退出、无钥匙串弹窗**。这是 42.3.3 下复现过的失败场景,必须变绿;变绿即证明升级生效。
+4. x64 **prod 签名包**在隔离账户:安装、冷启两次、⌘Q、Gatekeeper 首开无阻;记录启动到就绪耗时与 12.0 的 Rosetta 延迟记录对照。
+5. x64 下走核心路径一遍:续聊(库副本)、GetBot 断开重连、拖入 PDF / DOCX 路径引用、双站分享与撤销 404、Office 转 PDF(让 x86_64 的 LibreOffice 真跑)。
+6. 写明 Rosetta 验不到的三样:真实 Intel CPU 性能、独立 GPU / Metal 渲染差异、老 Intel 机型缺 AVX2 等指令集。记为「未验」,不写成通过。
+
+**C. x64 分级放行(门 4,李哲 + 笑南)**
+7. arm64 先进 `latest-mac.yml`;**x64 的 zip / dmg 晚 24 小时**再合并进清单(`deploy-electron-updater.sh` 支持单 arch 退化);官网 x64 下载链接在 x64 进清单且金丝雀通过后再切,期间保持 11.2。
+8. 金丝雀:切 x64 清单后看 Plausible 遥测(`telemetry.ts` 的 `app_open`,props 含 `version` / `arch`):出现 version=2026.12.1 且 arch=x86_64 的 install_id ≥ 3 个、持续 24 小时无同一 install_id 反复重启,再切官网 x64 链接。Plausible 权限在李哲。
+9. 回退:x64 出问题先把 x64 条目从 `latest-mac.yml` 移除(arm64 不受影响),官网 x64 链接保持 11.2,再出 hotfix;不让 x64 用户降级。
+10. 待李哲:Intel 版发布说明是否注明「未在 Intel 真机验证,遇启动/退出问题请反馈」。
+
+**D. 门 2 重跑范围(候选头 `ce71d3bd1` → `e766f06ca`,运行时变更)**
+- 两端重建 local 包,重跑:两次冷启动、续聊(库副本)、GetBot 断开重连、原生拖放、双站分享与撤销、后端恢复、`verify --changed` / `--cold`、performance `test:bench`;Windows 另重做 NSIS 静态校验。
+- 可沿用并注明旧头:测试删改审计、迁移 38/39 → 39 的记录、海外站服务端行为。
+- 国内分享服务已恢复,Windows 侧国内分享复验直接在新 local 包上做一次即可。
+

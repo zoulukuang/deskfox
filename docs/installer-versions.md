@@ -28,6 +28,7 @@
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick;Windows 2026.12.0 已带,12.1 不倒退)
 - 后台恢复须健康才报就绪(`b4b54a58ad` 仅代码三文件 cherry-pick,`fix/sidecar-healthy-ready-12.1` a5c709cc6;李哲 2026-11-09 决定纳入;候选源码头 ce71d3bd1)
+- Electron 42.3.3 → 42.11.15 维护更新(`fix/electron-42-11-15` a2a9bba23,R4 override bun.lock;修 safeStorage 钥匙串弹窗与退出挂起;李哲 2026-11-09 决定纳入;候选源码头 e766f06ca)
 
 号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
 
@@ -41,6 +42,7 @@
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick,两端共用)
 - 后台恢复须健康才报就绪(`b4b54a58ad` 仅代码三文件 cherry-pick,`fix/sidecar-healthy-ready-12.1` a5c709cc6;李哲 2026-11-09 决定纳入;候选源码头 ce71d3bd1)
+- Electron 42.3.3 → 42.11.15 维护更新(`fix/electron-42-11-15` a2a9bba23,R4 override bun.lock;修 safeStorage 钥匙串弹窗与退出挂起;李哲 2026-11-09 决定纳入;候选源码头 e766f06ca)
 
 号线直接从 2026.11.2 跳到 2026.12.1:macOS 2026.12.0 已对外发布且其 updater 禁降级,新包必须高于它。
 
