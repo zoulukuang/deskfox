@@ -19,11 +19,26 @@
 
 
 
+
+
+## [Windows] 2026.12.1 - 2026-11-09
+
+与 macOS 2026.12.1 同源同号(分支 `feat/share-only-on-11.2`)。基线 `ship-prod-2026.11.1` 同代码的 11.2 基线,**不含** 2026.12.0 的附件成本保护 / Electron 升级批次。只带:
+- REQ-148 双站分享(share-routing cherry-pick,含 Windows 路径校验 `83d995636`)
+- 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
+- updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick;Windows 2026.12.0 已带,12.1 不倒退)
+
+号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [macOS] 2026.12.1 - 2026-11-09
 
 基线 `ship-mac-prod-2026.11.2`,**不含** 2026.12.0 的附件成本保护 / Electron 升级 / updater 禁降级批次。只带:
 - REQ-148 双站分享(share-routing,`af056a70c7` + 修复 `49442977b` / `83d995636` / `797abd35f` / `ef012db88` cherry-pick)
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
+- updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick,两端共用)
 
 号线直接从 2026.11.2 跳到 2026.12.1:macOS 2026.12.0 已对外发布且其 updater 禁降级,新包必须高于它。
 
