@@ -376,5 +376,25 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - **x64 Rosetta 替代验证(第八条 B 节)结果**:132 个二进制全为 x86_64;合成 HOME 与常用 HOME 下 ⌘Q 后进程分别 14.75 秒与 7.92 秒全部退出、退出码 0、无钥匙串提示(42.3.3 下为 35 秒不退出),升级目的达成;x86_64 LibreOffice 真跑转换成功。Rosetta 首轮多项有 48–90 秒的装载延迟并有一次超时,记为 Rosetta 时延,不是缺陷;真实 Intel 性能、GPU、旧机型指令集按决定留作未验。
 - 两端一致记录 **deskfox.ai 分享页从国内访问首屏 65–74 秒**(国内站 3 秒)。不阻断 12.1,记入 12.2 运维项:海外站静态资源 / 公开页走国内可达 CDN 或预渲染。
 - 可沿用的旧头证据:测试删改审计(无删除,6 行为 import 替换)、迁移 38/39 → 39。
-- **门 3 待李哲一句放行**。放行后:笑南的电脑出 arm64 + x64 prod(深签 / 公证 / staple,`codesign --verify --deep --strict`、`spctl`、`stapler validate`)、静态校验、隔离账户装包冷启两次与副本升级;Windows 电脑出 prod NSIS、`verify.ts --release --env prod`、隔离账户/虚拟机装包冷启两次与 11.1 / 12.0 副本覆盖升级。制品 SHA-256 与字节数写进 `docs/installer-versions.md` 两条 12.1 条目。**不推 tag、不切清单、不动官网**,那是门 4。
+- **门 3 已由李哲放行(2026-11-09,见第十一条)**。笑南的电脑出 arm64 + x64 prod(深签 / 公证 / staple,`codesign --verify --deep --strict`、`spctl`、`stapler validate`)、静态校验、隔离账户装包冷启两次与副本升级;Windows 电脑出 prod NSIS、`verify.ts --release --env prod`、隔离账户/虚拟机装包冷启两次与 11.1 / 12.0 副本覆盖升级。制品 SHA-256 与字节数写进 `docs/installer-versions.md` 两条 12.1 条目。**不推 tag、不切清单、不动官网**,那是门 4。
 - 其余待李哲:Intel 版发布说明是否注明未在真机验证;国内主机 Docker 日志上限与 logrotate 尚未配置(命令已交李哲)。
+
+### 回执（李哲的电脑，2026-11-09，第十一条：门 3 放行）
+
+李哲原话:「门 3 放行,两端开始打正式包」。候选头 `e766f06ca` 不变,两端按《测试与发布规范》第五节执行,**只出包、校验、隔离冒烟;不推 tag、不切清单、不动官网**(门 4 另行放行)。
+
+**笑南的电脑(Mac)**
+1. 独立打包环境,`build-deskfox-electron.sh -Env prod --sign --notarize`,arm64 与 x64 各一份(x64 需 LO x86_64 bundle)。
+2. 静态校验:版本 2026.12.1、appId `ai.deskfox.app`、Electron 42.11.15、LO presets、插件、迁移 39 条;`codesign --verify --deep --strict`、`spctl --assess --type execute`、`xcrun stapler validate` 对 .app 与 .dmg 均通过;x64 包 `lipo -archs` 复核。
+3. 隔离冒烟:隔离账户安装 arm64 prod,冷启两次、⌘Q 正常退出、无钥匙串提示;用 11.2 prod + 正式库**副本**升级到 12.1 候选(数据目录指向副本),启动续聊;x64 prod 在 Rosetta 隔离账户同样冷启两次与退出。
+4. 用 `deploy-electron-updater.sh --dry-run` 预演四资产合并清单,核对 SHA-512 与大小;**不真部署**。
+5. 制品文件名、字节数、SHA-256 写进本单与 `docs/installer-versions.md` macOS 12.1 条目(链接留 to be filled)。
+
+**Windows 电脑 / 鹏鹏(Windows)**
+1. 独立打包环境,`build-deskfox-electron.ps1 -Env prod`。
+2. 静态校验:`bun run packages/branding/smoke/verify.ts --release --env prod` 🟢;NSIS 载荷、`app.asar` 与核验副本一致、迁移 39 条、Electron 42.11.15、latest.yml 的 SHA-512 / 大小 / blockmap。
+3. 隔离冒烟:干净虚拟机或隔离账户安装 prod,冷启两次、正常退出;用 11.1 与 12.0 的安装 + 库副本分别覆盖安装到 12.1,启动续聊;记录 SmartScreen 表现。
+4. 制品字节数、SHA-256 写进本单与 `docs/installer-versions.md` Windows 12.1 条目。
+
+**两端共同**:每项写执行电脑与结果;红了退回门 2 并在此报告;做不到的项写明原因,豁免由李哲签字。完成后在此回执「门 3 通过」,门 4 等李哲放行。
+
