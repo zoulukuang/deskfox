@@ -521,6 +521,7 @@
       "name": "@opencode-ai/enterprise",
       "version": "1.18.16",
       "dependencies": {
+        "@opencode-ai/branding": "workspace:*",
         "@hono/standard-validator": "catalog:",
         "@opencode-ai/core": "workspace:*",
         "@opencode-ai/session-ui": "workspace:*",
@@ -1046,6 +1047,7 @@
       "name": "@opencode-ai/ui",
       "version": "1.18.16",
       "dependencies": {
+        "@opencode-ai/core": "workspace:*",
         "@kobalte/core": "catalog:",
         "@pierre/diffs": "catalog:",
         "@shikijs/stream": "catalog:",

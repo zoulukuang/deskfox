@@ -21,6 +21,7 @@
     "@solidjs/router": "catalog:",
     "@solidjs/start": "catalog:",
     "@solidjs/meta": "catalog:",
+    "@opencode-ai/branding": "workspace:*",
     "@hono/standard-validator": "catalog:",
     "hono": "catalog:",
     "hono-openapi": "catalog:",
