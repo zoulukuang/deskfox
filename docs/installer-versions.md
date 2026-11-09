@@ -23,7 +23,7 @@
 
 ## [Windows] 2026.12.1 - 2026-11-09
 
-与 macOS 2026.12.1 同源同号(分支 `feat/share-only-on-11.2`)。基线 `ship-prod-2026.11.1` 同代码的 11.2 基线,**不含** 2026.12.0 的附件成本保护 / Electron 升级批次。只带:
+与 macOS 2026.12.1 同源同号，正式候选源码为 `release/2026.12.1` 的 `e766f06cab`。以 11.2 同源代码为基线，保留附件的 11.2 行为，并纳入以下改动。
 - REQ-148 双站分享(share-routing cherry-pick,含 Windows 路径校验 `83d995636`)
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick;Windows 2026.12.0 已带,12.1 不倒退)
@@ -32,7 +32,9 @@
 
 号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
 
-(to be filled: commits / plugin / installer path after ship)
+**门 3 候选制品（Windows 电脑）**。`DeskFox-2026.12.1-win-x64.exe`，340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。静态校验通过，隔离实装与覆盖升级待验。
+
+(to be filled: release and download links after ship)
 
 ---
 ## [macOS] 2026.12.1 - 2026-11-09

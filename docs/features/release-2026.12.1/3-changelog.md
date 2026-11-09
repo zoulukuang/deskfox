@@ -398,3 +398,10 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 
 **两端共同**:每项写执行电脑与结果;红了退回门 2 并在此报告;做不到的项写明原因,豁免由李哲签字。完成后在此回执「门 3 通过」,门 4 等李哲放行。
 
+### 回执（Windows 电脑，2026-11-09，门 3 制品与静态校验）
+
+- 从冻结头 `e766f06cab` 在独立工作树与输出目录生成正式 NSIS。构建沿用隔离包装脚本的 `-KeepRunning` 选项，宿主机已安装的正式版进程在构建期间继续运行。请李哲的电脑确认此构建方式是否满足第五节的构建环境口径。
+- `DeskFox-2026.12.1-win-x64.exe` 为 340,746,094 字节，SHA-256 为 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。门禁命令 `verify.ts --release --env prod` 全绿。Windows 文件版本、x64 PE、`ai.deskfox.app`、Electron 42.11.15、两份插件、13 个 LibreOffice presets 和 39 条迁移均已核对。
+- 7-Zip 26.01 验证 NSIS 外层及 5,244 文件的内层载荷完整。内嵌 `app.asar`、`DeskFox.exe` 与 `app-update.yml` 的 SHA-256 与解包候选一致，ASAR 内 2,511 个构建文件逐一匹配。`latest.yml` 的 SHA-512 与大小正确，blockmap 覆盖整包。安装包 Authenticode 状态为 `NotSigned`，SmartScreen 表现以隔离实装记录为准。
+- 门 3 隔离实装、两次冷启动和 11.1／12.0 覆盖升级待验。两份已发布的旧安装包已按发布摘要校验。Windows 用户要求隔离环境在 D 盘，正准备独立虚拟机。当前状态为正式候选静态通过，等待隔离实装与李哲确认构建环境口径后收口。
+
