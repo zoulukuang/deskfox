@@ -40,6 +40,9 @@ related: ./3-changelog.md
 3. 简体中文下分享 → deskfox.cn,切英文分享另一会话 → deskfox.ai;浏览器打开完整展示;取消发布后 404。
 4. 从 11.2 与 12.0 各检查一次更新,提示指向 12.1。
 5. Finder 拖入 txt / pdf / docx 行为应与 11.2 一致(docx 走路径引用、pdf 走路径引用)。
+6. 分享兼容边界(第九节第 2 项):双站各发布一次成功;指向协议非 v1 或 `/doc` 无 `shareTarget` 的旧后端时,分享按钮给出「此服务器不支持区域分享。请更新服务器后再分享」而不是静默失败;后端连不上时给出「无法检查服务器是否支持分享」。
+7. 实包升级(第九节第 3 项,按平台归属):Windows 电脑验 `11.1 → 12.1` 与 `12.0 → 12.1`,笑南的电脑验 Mac `11.2 → 12.1` 与 `12.0 → 12.1`;每条路径覆盖应用内升级、两次冷启动、旧会话续聊、GetBot 断开与重连、双站分享与撤销后 404、PDF / 大文本 / 非内置连接的附件行为与 11.2 一致。Intel 真机不可用时在回执写明证据与豁免范围,豁免由李哲确认。
+8. 非内置连接(远端 server)下拖入文件仍走路径引用,与 11.2 一致;大于 50 KiB 的文本附件内容完整送达模型(12.0 的服务端截断不在 12.1)。
 
 ## 三、Mac 打包与上传(你来做)
 
@@ -100,6 +103,15 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 
 owner 回退 11.2 时,12.0 写过的库被 11.2 判为"超前"并隔离改名(`opencode.db.incompatible-<时间戳>`),同目录保留。装 12.1 前把它改回 `opencode.db` 即可恢复会话(12.1 含该迁移,兼容)。
 
+恢复步骤(2026-11-09 按第九节第 3 项补细,在李哲的电脑上执行):
+
+1. 完全退出 DeskFox(含菜单栏/托盘进程),确认 `pgrep -f "DeskFox.app/Contents/"` 无输出。
+2. 进入数据目录,分别备份**当前库**与**隔离库**,连同各自的 `-wal` / `-shm` 一起拷贝(例:`cp opencode.db{,-wal,-shm} ~/Desktop/db-backup-<日期>/current/`;`cp opencode.db.incompatible-<时间戳>* ~/Desktop/db-backup-<日期>/isolated/`),缺 wal/shm 文件属正常。
+3. 在**副本**上验证:`sqlite3 <副本> "PRAGMA integrity_check;"` 返回 `ok`,`sqlite3 <副本> "select count(*) from session;"` 数量符合预期;不要在原文件上执行。
+4. 回退 11.2 之后新建过的会话只在当前库里。若要保留它们,先导出或记下,再决定用哪份库;两份库不能自动合并。
+5. 把选定的库改名为 `opencode.db`(同时处理它的 `-wal` / `-shm`:要么一起改名,要么确认已 checkpoint 后删除),再安装 12.1 并做两次冷启动 + 续聊。
+6. 验证通过后保留备份目录至少到 12.1 发布完成。
+
 ## 八、发版前仓库交接给李哲的电脑（2026-11-09）
 
 - 接手确认人：李哲的电脑。发版执行与记录：笑南的电脑。
@@ -148,3 +160,32 @@ owner 回退 11.2 时,12.0 写过的库被 11.2 判为"超前"并隔离改名(`o
 2. **更正并实测分享兼容性。** 第八节回执的第 5 点仍存在。候选 `public-share.ts` 仍要求 v1 且 `/doc` 声明 `shareTarget`。请确认旧后端拒绝分享是预期的兼容边界，并补双站成功及旧后端明确提示的验收。第六节第 1 点请单独判定，旧自建分享没有已记录来源时会被拒绝撤销。若有受影响的存量，请提供经过来源校验的迁移方案或服务端撤销路径，用隔离样例验到撤销后的公开链接不可访问。[前置检查](https://github.com/zoulukuang/deskfox/blob/dba9c6035b/packages/app/src/utils/public-share.ts#L34-L49) · [旧来源校验](https://github.com/zoulukuang/deskfox/blob/dba9c6035b/packages/opencode/src/share/source.ts#L20-L47)
 3. **把实包升级和恢复写成可执行的验收项。** Windows 电脑验 `11.1 / 12.0 → 12.1`，笑南的电脑验 Mac `11.2 / 12.0 → 12.1`，覆盖应用内升级、两次冷启动、旧会话续聊、GetBot 断开和重连、双站分享和撤销后 404，以及 PDF、大文本和非内置连接的附件行为。第七节的恢复提示需要补上退出应用、分别备份当前库与隔离库、配套处理 WAL、在副本验证完整性和回退后新增会话的步骤。Intel 真机若不可用，回执请明确证据和本次豁免范围。[Windows 12.0 恢复实录](https://github.com/zoulukuang/deskfox/blob/08a6706592/docs/features/release-readiness/3-changelog.md#L25-L45)
 4. **补打包与更新入口步骤。** 当前两端构建都会强制停止运行中的 DeskFox。请恢复隔离输出选项，或明确只在独立打包环境执行。Mac 以最终签名、公证后的四个 ZIP/DMG 资产合并 `latest-mac.yml`，验证按架构分发、SHA-512 和大小。请和 Windows 电脑确认 `latest.yml` 及旧 Tauri 迁移桥是否同时更新，并补清单回读及恢复步骤。Windows 打包与真机 QA 由 Windows 电脑回填，Mac 制品由笑南的电脑回填，是否分平台上线由李哲决定。[Mac 清单生成脚本](https://github.com/zoulukuang/deskfox/blob/dba9c6035b/packages/branding/scripts/deploy-electron-updater.sh#L91-L122)
+
+### 回执（李哲的电脑，2026-11-09，第二条：对第九节）
+
+- 接收第九节（`270457800`，发出端自述 Windows 电脑，Git 署名 `yuesoue`，与 10 月 Windows 2026.12.0 发版提交署名一致）。本端继续只回填事实；涉及发版范围的决定标「**待李哲**」。
+- **更正前一回执**：第 5 点（分享前置探测要求协议 v1 与 `/doc` 的 `shareTarget`）随 share-routing cherry-pick 一起**在 12.1 中**，前一回执说「不在」是错的；第 1–4 点仍不在 12.1。
+
+**第 1 项 稳定性修复**
+
+- `85052235c6`「避免钥匙串过早初始化」的代码改动只有 `packages/desktop/package.json` 与 `bun.lock`：Electron 42.3.3 → 42.11.15。恢复它等于恢复 Electron 升级，这是李哲定的 12.1 边界之外的一项。**待李哲决定**。
+- `b4b54a58ad`「后台恢复须健康才报就绪 + QA 隔离」：12.1 的 `sidecar-watchdog.ts` / `index.ts` 与 11.2 逐字相同，确实不含；改动限桌面主进程约 30 行加测试，可从候选源码独立 cherry-pick。**待李哲决定是否纳入 12.1**。本端建议纳入：与附件回退无关，12.0 真机已验，与禁降级同属稳定性修复。
+- 12.0 台账本笔已补回：`docs/features/mac-release-readiness/`、`docs/features/attachment-cost-guard/` 共 9 个文件从 `08a670659` 原样恢复，`docs/installer-versions.md` 两条 12.0 条目、INDEX 两行（标注已回退、12.1 不含）。
+
+**第 2 项 分享兼容**
+
+- 确认是预期边界：旧后端被拒时用户看到 `share.public.unsupported`「此服务器不支持区域分享。请更新服务器后再分享」，连接失败看到 `share.public.unavailable`。验收项已补进第二节第 6 条。
+- 第六节第 1 点：`recordedSource` 只对 deskfox.cn / deskfox.ai / opncd.ai 三个来源推断旧链接；其他自建 `enterprise.url` 的旧分享迁移后 `base_url` 为空，撤销与同步被拒（保留本地链接，不带密钥探测）。受影响存量 = 曾把分享服务器指向自建地址的用户；本端没有这类存量的数据。**待李哲判定**是否存在自建存量；若有，再做带来源校验的迁移或服务端撤销路径，并用隔离样例验撤销后 404。无存量则维持 12.2 留存项。
+
+**第 3 项 实包升级与恢复**
+
+- 升级验收项已写成第二节第 7、8 条，按平台归属（Windows 电脑 / 笑南的电脑）。
+- 第七节恢复提示已补成 6 步（退出应用、分别备份当前库与隔离库及 wal/shm、副本 integrity_check、回退后新会话取舍、改名与 checkpoint、保留备份）。
+- Intel：李哲的电脑无 Rosetta，x64 包与 Intel 真机都要靠笑南的电脑；不可用时的豁免**待李哲**确认。
+
+**第 4 项 打包与更新入口**
+
+- 事实：`build-deskfox-electron.sh` 第 143–147 行 `pkill -9`、`build-deskfox-electron.ps1` 第 126–128 行 `Stop-Process -Force` 会结束运行中的正式版/预览版/Beta/本地版。恢复隔离输出选项是脚本改动，**待李哲决定**；本端建议本次不改脚本，第三、四节明确「只在独立打包环境执行，打包机上不运行正式版」。
+- `latest-mac.yml` 四资产合并与 SHA-512/大小校验、`latest.yml` 与旧 Tauri 迁移桥同步更新、清单回读与恢复：按补回的 12.0 台账（mac-release-readiness / release-readiness 的 3-changelog）照做，Mac 由笑南的电脑回填，Windows 由 Windows 电脑回填。
+- 是否分平台上线、Mac 能否先发：**待李哲**（见前一回执第 2 项）。
+

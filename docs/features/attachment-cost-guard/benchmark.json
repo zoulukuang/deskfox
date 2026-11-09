@@ -1,0 +1,388 @@
+{
+  "before": {
+    "schemaVersion": 2,
+    "runID": "2026-10-12T03-28-48-354Z-26111",
+    "name": "benchmarks cold and hot session tab switching",
+    "status": "passed",
+    "expectedStatus": "passed",
+    "retry": 0,
+    "repeatEachIndex": 0,
+    "context": {
+      "project": "chromium",
+      "platform": "darwin"
+    },
+    "metrics": {
+      "results": {
+        "cold": [
+          {
+            "firstDestinationObservedMs": 39.299999713897705,
+            "firstCorrectObservedMs": 39.299999713897705,
+            "stableObservedMs": 63.799999713897705,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 25.5,
+            "firstCorrectObservedMs": 25.5,
+            "stableObservedMs": 41.69999980926514,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 32.40000009536743,
+            "firstCorrectObservedMs": 32.40000009536743,
+            "stableObservedMs": 54,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 35.5,
+            "firstCorrectObservedMs": 35.5,
+            "stableObservedMs": 56.90000009536743,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 26.700000286102295,
+            "firstCorrectObservedMs": 26.700000286102295,
+            "stableObservedMs": 45,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          }
+        ],
+        "hot": [
+          {
+            "firstDestinationObservedMs": 2.3000001907348633,
+            "firstCorrectObservedMs": 2.3000001907348633,
+            "stableObservedMs": 20.5,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 2,
+            "firstCorrectObservedMs": 2,
+            "stableObservedMs": 20.200000286102295,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 2.6999998092651367,
+            "firstCorrectObservedMs": 2.6999998092651367,
+            "stableObservedMs": 19.199999809265137,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 2.0999999046325684,
+            "firstCorrectObservedMs": 2.0999999046325684,
+            "stableObservedMs": 19.40000009536743,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 2.799999713897705,
+            "firstCorrectObservedMs": 2.799999713897705,
+            "stableObservedMs": 20.59999990463257,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          }
+        ]
+      },
+      "summary": {
+        "cold": {
+          "firstDestinationObservedMs": {
+            "min": 25.5,
+            "median": 32.40000009536743,
+            "max": 39.299999713897705,
+            "missing": 0
+          },
+          "firstCorrectObservedMs": {
+            "min": 25.5,
+            "median": 32.40000009536743,
+            "max": 39.299999713897705,
+            "missing": 0
+          },
+          "stableObservedMs": {
+            "min": 41.69999980926514,
+            "median": 54,
+            "max": 63.799999713897705,
+            "missing": 0
+          }
+        },
+        "hot": {
+          "firstDestinationObservedMs": {
+            "min": 2,
+            "median": 2.3000001907348633,
+            "max": 2.799999713897705,
+            "missing": 0
+          },
+          "firstCorrectObservedMs": {
+            "min": 2,
+            "median": 2.3000001907348633,
+            "max": 2.799999713897705,
+            "missing": 0
+          },
+          "stableObservedMs": {
+            "min": 19.199999809265137,
+            "median": 20.200000286102295,
+            "max": 20.59999990463257,
+            "missing": 0
+          }
+        }
+      }
+    }
+  },
+  "after": {
+    "schemaVersion": 2,
+    "runID": "2026-10-12T03-57-45-794Z-224",
+    "name": "benchmarks cold and hot session tab switching",
+    "status": "passed",
+    "expectedStatus": "passed",
+    "retry": 0,
+    "repeatEachIndex": 0,
+    "context": {
+      "project": "chromium",
+      "platform": "darwin"
+    },
+    "metrics": {
+      "results": {
+        "cold": [
+          {
+            "firstDestinationObservedMs": 23.90000009536743,
+            "firstCorrectObservedMs": 23.90000009536743,
+            "stableObservedMs": 40.5,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 25.299999713897705,
+            "firstCorrectObservedMs": 25.299999713897705,
+            "stableObservedMs": 46.39999961853027,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 27.40000009536743,
+            "firstCorrectObservedMs": 27.40000009536743,
+            "stableObservedMs": 45.69999980926514,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 29.40000009536743,
+            "firstCorrectObservedMs": 29.40000009536743,
+            "stableObservedMs": 45,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 29.5,
+            "firstCorrectObservedMs": 29.5,
+            "stableObservedMs": 56.09999990463257,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          }
+        ],
+        "hot": [
+          {
+            "firstDestinationObservedMs": 2.0999999046325684,
+            "firstCorrectObservedMs": 2.0999999046325684,
+            "stableObservedMs": 19.59999990463257,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 1.8000001907348633,
+            "firstCorrectObservedMs": 1.8000001907348633,
+            "stableObservedMs": 20.90000009536743,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 1.700000286102295,
+            "firstCorrectObservedMs": 1.700000286102295,
+            "stableObservedMs": 21.300000190734863,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 2.0999999046325684,
+            "firstCorrectObservedMs": 2.0999999046325684,
+            "stableObservedMs": 22.199999809265137,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          },
+          {
+            "firstDestinationObservedMs": 1.799999713897705,
+            "firstCorrectObservedMs": 1.799999713897705,
+            "stableObservedMs": 21,
+            "wrongDestinationSamples": 0,
+            "blankSamples": 0,
+            "unknownSamples": 0,
+            "sourceSamples": 0,
+            "reviewFileHostMissingSamples": 0,
+            "reviewFileHostReplacedSamples": 0,
+            "reviewHeaders": [],
+            "reviewReplacedLevels": []
+          }
+        ]
+      },
+      "summary": {
+        "cold": {
+          "firstDestinationObservedMs": {
+            "min": 23.90000009536743,
+            "median": 27.40000009536743,
+            "max": 29.5,
+            "missing": 0
+          },
+          "firstCorrectObservedMs": {
+            "min": 23.90000009536743,
+            "median": 27.40000009536743,
+            "max": 29.5,
+            "missing": 0
+          },
+          "stableObservedMs": {
+            "min": 40.5,
+            "median": 45.69999980926514,
+            "max": 56.09999990463257,
+            "missing": 0
+          }
+        },
+        "hot": {
+          "firstDestinationObservedMs": {
+            "min": 1.700000286102295,
+            "median": 1.8000001907348633,
+            "max": 2.0999999046325684,
+            "missing": 0
+          },
+          "firstCorrectObservedMs": {
+            "min": 1.700000286102295,
+            "median": 1.8000001907348633,
+            "max": 2.0999999046325684,
+            "missing": 0
+          },
+          "stableObservedMs": {
+            "min": 19.59999990463257,
+            "median": 21,
+            "max": 22.199999809265137,
+            "missing": 0
+          }
+        }
+      }
+    }
+  }
+}
