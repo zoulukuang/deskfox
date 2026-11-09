@@ -21,6 +21,7 @@ docs/
 │   ├── 跨平台协作.md               # Win/Linux/Mac 三端环境 + 提拉流程
 │   ├── fork-跟随升级与协作规范.md  # 治理总纲(原则 / SOP / 健康指标)
 │   ├── 双端协作-SOP.md             # ⭐ feat 分支生命周期 + Win/Mac 双端流程
+│   ├── 三端协作-Agent接入.md       # ⭐ 李哲/笑南/鹏鹏 统一称呼 + 第一天接入 + Agent 交接/评审/回执协议
 │   ├── DeskFox-品牌替换.md         # 品牌注入策略(productName / icon / 资源)
 │   ├── 数字签名问题.md             # installer 不签名决策 + SmartScreen 应对
 │   └── UPSTREAM-MERGE-GUIDE.md     # ⭐ 与 anomalyco/opencode 合并的 SOP
@@ -38,6 +39,7 @@ docs/
 | 第一次接手项目,想理解全貌 | [PLANNING-OVERVIEW.md](./PLANNING-OVERVIEW.md) → [STATUS.md](./STATUS.md) |
 | 上手开发,要知道改什么文件能 commit | [governance/改动规则.md](./governance/改动规则.md) |
 | 双端(Win+Mac)同时开发,要知道分支怎么走 | ⭐ [governance/双端协作-SOP.md](./governance/双端协作-SOP.md) |
+| 新同事 / 新 Agent 第一天接入;Agent 之间怎么交接、评审、回执 | ⭐ [governance/三端协作-Agent接入.md](./governance/三端协作-Agent接入.md) |
 | 准备从上游 anomalyco/opencode 拉新版合并 | ⭐ [governance/UPSTREAM-MERGE-GUIDE.md](./governance/UPSTREAM-MERGE-GUIDE.md) |
 | 改东西不知道走 fork 路径还是上游路径 | [governance/fork-跟随升级与协作规范.md](./governance/fork-跟随升级与协作规范.md) — R1 三级跳决策 |
 | 改品牌相关(name / icon / 主题色) | [governance/DeskFox-品牌替换.md](./governance/DeskFox-品牌替换.md) + [governance/改动规则.md](./governance/改动规则.md) R3 |
