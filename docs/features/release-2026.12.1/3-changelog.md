@@ -242,3 +242,15 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - **国内分享写入阻断，交李哲的电脑。** 本地包创建国内分享返回 500，直接请求 `deskfox.cn` 创建接口返回 503 `ShareUnavailable`，健康探测仍为 200。只读核查发现分享 service active，数据所在根文件系统 100% 且可用 0，服务要求至少 1 GiB。Docker 容器日志目录约 23 GiB，New API 日志目录约 7.5 GiB，分享数据目录约 70 MiB。海外站直接创建及撤销为 200。请协调国内主机扩容或按日志留存规则轮转，恢复可用空间后由笑南使用同一 local 包复验发布、展示和撤销。保留现有分享数据与备份。
 - 仓库 `verify:deskfox` 的 L0 全仓类型检查通过，lint 在 `packages/session-ui/src/v2/components/prompt-input/index.tsx:163` 的 JSX Tailwind 类 `\200B` 报过时八进制转义。此行在 11.2 基线和候选间相同。文件读取专项两项超过默认 5 秒超时，单独将诊断上限设为 20 秒后整份 39 项通过，默认超时问题仍保留记录。
 - Intel 原生依赖已就位。按用户顺序，ARM 验收通过后再构建 Intel local，由用户在 Intel 真机执行冷启动、使用和退出验收。
+
+### 回执（李哲的电脑，2026-11-09，第五条：收到国内分享阻断与发版规范）
+
+- 收到笑南的电脑 ARM local 验收回执（`628031eb7`）。ARM local 两次冷启动 CLEAN、pre-push 全绿、Playwright 155 项通过、50 KiB 以上附件完整送达，记为门 2 Mac 侧通过项；国内分享项**阻塞**，归因在服务端不在候选。
+- **国内分享写入阻断（deskfox.cn 返回 503 `ShareUnavailable`，根因根文件系统 100%，Docker 容器日志约 23 GiB、New API 日志约 7.5 GiB，分享数据仅约 70 MiB）**：本端已定位到 SSH 别名 `deskfox-cn`，但本端 Agent 对生产主机的读写操作需李哲授权，**暂未登录、未改动任何东西**。处置建议（交李哲或笑南执行，先只读后清理）：
+  1. 只读确认：`df -h /`、`docker ps`、`du -sh /var/lib/docker/containers/*/*-json.log | sort -h | tail`、New API 日志目录大小。
+  2. 释放空间：对最大的容器 json 日志 `truncate -s 0`（容器不停、不删分享数据）；New API 历史日志压缩或移走；不动 `/var/lib/deskfox-share` 数据与备份（DEPLOYED-20261012 规定不能靠删墓碑释放容量）。
+  3. 防复发：`/etc/docker/daemon.json` 加 `"log-opts": {"max-size": "50m", "max-file": "5"}`（对已存在容器需重建才生效）；New API 日志加 logrotate；给根分区加 85% 告警。
+  4. 恢复后由笑南用同一 local 包复验国内分享发布、展示、撤销后 404；海外站本轮已 200，不受影响。
+  这是服务端运维事项，不改候选头 `ce71d3bd1`，不影响 Windows 侧与 Mac 其余验收项继续。
+- lint 在 `prompt-input/index.tsx:163` 的八进制转义告警在 11.2 基线已存在，不作为本版阻断；记入 12.2 留存。文件读取专项默认 5 秒超时在 20 秒下 39 项全过，同样留存。
+- **发版规范已成文**：`origin/feat/release-gate-spec`（`e48c40494`）新增 `docs/governance/测试与发布规范.md` 与 CLAUDE.md「发版约定（速查）」。12.1 剩余步骤按该文第五节（正式制品：静态校验 + 隔离冒烟）与第六节（分级放行：制品 → 清单 → 观察 24 小时 → 官网 → main/tag/台账）执行；两端请在动手前读一遍第八节 12 条速查。该分支合并待李哲。
