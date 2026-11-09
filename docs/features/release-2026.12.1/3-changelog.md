@@ -135,3 +135,16 @@ owner 回退 11.2 时,12.0 写过的库被 11.2 判为"超前"并隔离改名(`o
 - 两份文档不冲突：三端协作指南（`origin/feat/三端协作-agent接入` v1.1）是分工正本，鹏鹏为 Windows 端开发负责人，含 Windows 打包、上传与真桌面 QA；本单第四节的「Windows 机器」应按指南读作「Windows 电脑 / 鹏鹏」，第三节 Mac 仍由笑南的电脑执行。
 - 现状：三个仓库近三天没有来自 Windows 电脑的提交或回执；鹏鹏的 GitHub 仓库权限仍是李哲待办项，权限未开他推不了回执。
 - **待李哲决定**：① Windows 由鹏鹏打包与验收、笑南统一发布并回填台账，还是笑南接手并自备 Windows 真机；② Windows 验收晚于 Mac 时，Mac 能否先发。本端建议按指南由鹏鹏执行、Mac 不等 Windows（两端 tag、下载入口与 updater 通道按平台独立），以李哲确认为准。
+
+## 九、补充交接给李哲的电脑（2026-11-09）
+
+- **发出端**：Windows 电脑（本机系统已核实）。**接手端**：李哲的电脑。请在 `release-handoff` 追加回执，注明修复提交、验收证据和仍需本人决定的事项。
+- **位置**：交接在 `origin/release-handoff`，已有回执 `6e7a103559`。候选源码是 `origin/release/2026.12.1` 的 `dba9c6035b`。从候选源码另开修复分支，把 PR 指向发布分支。
+- **已验**：按候选提交复跑供应商断开 6 项、更新器版本策略 3 项、分享来源 5 项，全部通过。第二节记录的 macOS arm64 包为未签名候选。最终包、原生升级和两次冷启动待验。
+
+### 请接手处理
+
+1. **区分有意的附件回退与桌面稳定性修复。** 按前一回执的回退原因，保留 11.2 的附件路径行为。请优先评估恢复 `85052235c6` 中的 Electron 钥匙串修复和 `b4b54a58ad` 中的后端进程恢复健康检查。12.1 当前为 Electron 42.3.3，重启等待到 30 秒仍会走就绪路径。验收用最终 Mac 候选，覆盖启动和退出无意外钥匙串弹窗、后端恢复超时不报告就绪、真正健康后恢复就绪。若延后任一修复，请在回执说明原因及放行条件。请补回本分支撤掉的 12.0 发布和验收台账。[Mac 12.0 验收](https://github.com/zoulukuang/deskfox/blob/08a6706592/docs/features/mac-release-readiness/3-changelog.md)
+2. **更正并实测分享兼容性。** 第八节回执的第 5 点仍存在。候选 `public-share.ts` 仍要求 v1 且 `/doc` 声明 `shareTarget`。请确认旧后端拒绝分享是预期的兼容边界，并补双站成功及旧后端明确提示的验收。第六节第 1 点请单独判定，旧自建分享没有已记录来源时会被拒绝撤销。若有受影响的存量，请提供经过来源校验的迁移方案或服务端撤销路径，用隔离样例验到撤销后的公开链接不可访问。[前置检查](https://github.com/zoulukuang/deskfox/blob/dba9c6035b/packages/app/src/utils/public-share.ts#L34-L49) · [旧来源校验](https://github.com/zoulukuang/deskfox/blob/dba9c6035b/packages/opencode/src/share/source.ts#L20-L47)
+3. **把实包升级和恢复写成可执行的验收项。** Windows 电脑验 `11.1 / 12.0 → 12.1`，笑南的电脑验 Mac `11.2 / 12.0 → 12.1`，覆盖应用内升级、两次冷启动、旧会话续聊、GetBot 断开和重连、双站分享和撤销后 404，以及 PDF、大文本和非内置连接的附件行为。第七节的恢复提示需要补上退出应用、分别备份当前库与隔离库、配套处理 WAL、在副本验证完整性和回退后新增会话的步骤。Intel 真机若不可用，回执请明确证据和本次豁免范围。[Windows 12.0 恢复实录](https://github.com/zoulukuang/deskfox/blob/08a6706592/docs/features/release-readiness/3-changelog.md#L25-L45)
+4. **补打包与更新入口步骤。** 当前两端构建都会强制停止运行中的 DeskFox。请恢复隔离输出选项，或明确只在独立打包环境执行。Mac 以最终签名、公证后的四个 ZIP/DMG 资产合并 `latest-mac.yml`，验证按架构分发、SHA-512 和大小。请和 Windows 电脑确认 `latest.yml` 及旧 Tauri 迁移桥是否同时更新，并补清单回读及恢复步骤。Windows 打包与真机 QA 由 Windows 电脑回填，Mac 制品由笑南的电脑回填，是否分平台上线由李哲决定。[Mac 清单生成脚本](https://github.com/zoulukuang/deskfox/blob/dba9c6035b/packages/branding/scripts/deploy-electron-updater.sh#L91-L122)
