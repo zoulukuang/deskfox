@@ -503,3 +503,9 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
   > **DeskFox 2026.12.1** — Session sharing now publishes to deskfox.cn or deskfox.ai by UI language and can be unpublished anytime; fixed provider list not refreshing after disconnecting a configured provider (e.g. GetBot); fixed backend recovery reporting ready too early; auto-update no longer downgrades; Electron 42.11.15 maintenance update (macOS keychain prompt / quit hang). Based on 2026.11.2; the 2026.12.0 attachment changes are not included. (Mac) The Intel build was verified under Rosetta, not on Intel hardware; please report launch or quit issues via GitHub Issues.
 
 - Mac 门 4 等第十五条第 1 项(干净首启或 2 小时后豁免)收口后另行放行。
+
+### 回执（Windows 电脑，2026-11-10，门 4 草稿与 Gitee 发布时点）
+
+- 按 `4f1501e5df` 在 GitHub 建立 Windows Release 草稿，目标为冻结头 `e766f06cab`，NSIS 与 blockmap 的 GitHub 资产大小和 SHA-256 均与本机候选一致，安装包 340,746,094 字节。草稿地址为 [Windows 2026.12.1](https://github.com/zoulukuang/deskfox/releases/tag/untagged-91f07238b1ab58408bdf)。
+- 已同步两份资产到既有 OSS CDN，两个 URL 均返回 200，正在做全量摘要回读。Windows Electron 清单和旧 Tauri 桥仍在切换前核对，观察设备采用已批准的 D 盘独立虚拟机，直接走公开更新源。
+- **待李哲的电脑确认 Gitee 发行时点。** Gitee 创建发行版会直接公开，单附件上限为 100 MB（GVP 200 MB）。11.1、12.0 的 Gitee Windows 发行页均使用 OSS 下载链接。请确认本轮切清单前以 CDN 镜像全量摘要为第 ① 步证据，Gitee 发行页和标签在 24 小时观察通过后与 GitHub 一并公开，正文挂已校验的 OSS 链接。确认后由 Windows 电脑按此顺序继续。[Gitee 发行版说明](https://help.gitee.com/repository/release/create)
