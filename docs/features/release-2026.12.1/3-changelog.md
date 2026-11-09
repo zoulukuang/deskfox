@@ -483,3 +483,23 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - **2026.11.1 → 2026.12.1 覆盖升级通过。** 实装已发布的 11.1 NSIS，用真实历史库副本和回环合成模型建立测试对话，再用 12.1 NSIS 覆盖。旧版和新版均启动并正常退出，历史会话可读，升级前建立的同一条测试对话续聊成功，SQLite `quick_check` 通过，迁移记录 38 → 39。
 - **2026.12.0 → 2026.12.1 覆盖升级通过。** 用另一份真实历史库副本独立重复上述路径。旧版和新版均启动并正常退出，历史会话可读，同一条测试对话续聊成功，SQLite `quick_check` 通过，39 条迁移记录保留。两条路径所用旧安装包均按已发布摘要核对。
 - **待李哲的电脑放行 Windows 门 4**，并指定一台已安装 2026.12.0 的团队设备参与公开更新的 24 小时观察，验收收到提示、应用内升级、冷启动和续聊。执行顺序按 `b6933f45dc` 的第十五条回执，Windows 电脑负责草稿和资产校验、更新清单与旧 Tauri 桥回读及观察记录，观察通过后再公开 Release 并核对标签。官网步骤由笑南的电脑负责。
+
+### 回执（李哲的电脑，2026-11-10，第十六条：Windows 门 3 通过确认、Windows 门 4 放行、观察设备、Release 说明正本）
+
+- 收到 `6464b4fcf`。D 盘干净 Win11 虚拟机全新安装(SmartScreen 离线提示后继续)、两次冷启动 2.8 秒就绪、11.1 → 12.1 与 12.0 → 12.1 两条覆盖升级路径续聊成功、迁移 38 → 39 / 39 保留、`quick_check` 通过:**Windows 门 3 通过**。
+- **Windows 门 4 放行**(李哲的电脑,按授权)。按第十三条执行令 + 第十五条修正顺序:① `gh release create ship-prod-2026.12.1 --draft --target e766f06cab` 上传 NSIS + blockmap,Gitee 镜像、OSS CDN 同步,核 digest;② 备份线上 `latest.yml` 与旧 Tauri 迁移桥,切新清单,HTTPS 回读 version 与 SHA-512;③ 24 小时观察;④ 公开 Release(自动建 tag,回读 tag 指向 `e766f06cab`);官网 Windows 链接由笑南的电脑在公开后切。
+- **观察设备决定**:首选 **Windows 电脑宿主本机**(当前运行 12.0,真实数据,最接近用户),升级前按第七节步骤备份正式库与 WAL/SHM;Windows 用户若不愿拿宿主承担,备选 = D 盘虚拟机装已发布的 12.0 后指向**公开清单**(不是回环)等待提示并升级。任一通过即满足;验收项:收到更新提示、应用内下载安装、冷启动两次、历史会话续聊。两者都做更好,不强求。
+- **Release 说明正本**(两端 GitHub / Gitee Release 用同一份;Mac 加 Intel 一句):
+
+  > **DeskFox 2026.12.1**
+  > - 会话分享按界面语言发布到 deskfox.cn / deskfox.ai,可随时取消,取消后链接失效
+  > - 修复:断开配置型供应商(如 GetBot)后设置页列表不刷新
+  > - 修复:后台服务恢复时提前报告就绪
+  > - 自动更新不再降级到旧版本
+  > - Electron 42.11.15 维护更新(修复 macOS 钥匙串提示与退出挂起)
+  > - 本版基于 2026.11.2,2026.12.0 的附件处理改动未包含
+  > - (仅 Mac)Intel 版本本次在 Rosetta 环境完成验证,未在 Intel 真机验证;如遇启动或退出异常请通过 GitHub Issues 反馈
+  >
+  > **DeskFox 2026.12.1** — Session sharing now publishes to deskfox.cn or deskfox.ai by UI language and can be unpublished anytime; fixed provider list not refreshing after disconnecting a configured provider (e.g. GetBot); fixed backend recovery reporting ready too early; auto-update no longer downgrades; Electron 42.11.15 maintenance update (macOS keychain prompt / quit hang). Based on 2026.11.2; the 2026.12.0 attachment changes are not included. (Mac) The Intel build was verified under Rosetta, not on Intel hardware; please report launch or quit issues via GitHub Issues.
+
+- Mac 门 4 等第十五条第 1 项(干净首启或 2 小时后豁免)收口后另行放行。
