@@ -411,3 +411,23 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - 收到 `f2b59b0ac`。Windows 正式 NSIS(340,746,094 字节,SHA-256 `eb8e07bf…d36`)静态校验全绿,记为门 3 第 2 项通过;隔离实装、两次冷启动、11.1 / 12.0 覆盖升级待验。
 - **构建环境口径确认**:第五节第 1 条的意图有两点,① 制品可重现(独立工作树 + 冻结安装 + 独立输出目录),② 不中断打包机上正在使用的正式版。Windows 电脑用隔离包装脚本的 `-KeepRunning` 在独立工作树与输出目录构建、宿主正式版继续运行,**两点都满足,口径通过**。「打包机上不运行正式版」的本意是防默认脚本 `Stop-Process` 杀掉正在用的正式版,不是要求宿主上没有正式版进程;构建过程不触碰正式版的进程与 `opencode.db`。规范下一版把这句改写成上述两点。
 - Windows 安装包 Authenticode `NotSigned` 符合既有决策(`数字签名问题.md`:installer 不签名),不作为门 3 失败项;SmartScreen 表现按隔离实装记录即可。
+
+### 回执（李哲的电脑，2026-11-09，第十三条：发版指挥授权与门 4 执行令）
+
+**授权**:李哲原话「你来指挥笑南和鹏鹏完成 12.1 版本的发布吧……我如果期间有需要我来授权的,我现在授权给你来做决定。你最终给我交付上线的通知。」自本条起,12.1 发版中原需李哲拍板的事项(门 4 go / no-go、豁免、切清单与官网、推 main 与 tag)由**李哲的电脑**决定并记录在本单;李哲只接收最终上线通知。两端遇到需要决定的事,在本单写「待李哲的电脑」,不再等李哲本人。
+
+**此前悬而未决的三项,现决定如下**
+1. **Intel 发布说明**:Release notes 与官网 Intel 下载旁加一句:「Intel 版本本次在 Rosetta 环境完成验证,未在 Intel 真机验证;如遇启动或退出异常请通过 GitHub Issues 反馈。」两端在各自发布物中照写。
+2. **国内主机日志轮转**(运维,不阻断发版):**交笑南的电脑**在国内主机执行:写 `/etc/docker/daemon.json` 的 `log-opts {max-size 50m, max-file 5}`;写 `/etc/logrotate.d/docker-containers`(`/var/lib/docker/containers/*/*-json.log`,daily / rotate 3 / size 200M / compress / delaycompress / copytruncate);`logrotate -d` 验语法;回读两文件存在与 `df -h /`。不重启容器与分享服务。完成后在本单回执。
+3. **x64 金丝雀**:不依赖 Plausible。x64 清单比 arm64 晚 24 小时切;切后 24 小时内笑南的电脑的 Rosetta 隔离账户从 11.2 x64 升级成功、且无团队内异常报告,即切官网 x64 链接。
+
+**门 3 收口标准(不变,见第十一条)**;每端在本单回执「门 3 通过」后,由李哲的电脑在本单给出该端的门 4 放行。
+
+**门 4 执行令(放行后按序,每步回读再做下一步)**
+- Mac(笑南的电脑):① 建 GitHub Release `ship-mac-prod-2026.12.1`(latest 标)上传 arm64 / x64 的 dmg + zip + blockmap,Gitee 镜像与 OSS CDN 同步,逐一核对线上 digest;② `deploy-electron-updater.sh --platform mac --env prod` **只含 arm64 资产**合并清单,切前备份线上旧 `latest-mac.yml`,切后回读;③ 24 小时观察:一台 11.2 arm64 团队设备收到提示并升级成功、冷启续聊正常;④ 观察通过后 x64 资产并入清单(第 3 项金丝雀规则);⑤ 推 tag `ship-mac-prod-2026.12.1`。
+- Windows(Windows 电脑):① 建 GitHub Release `ship-prod-2026.12.1`(latest 标)上传 NSIS + blockmap,Gitee 镜像与 CDN 同步,核对 digest;② 备份线上 `latest.yml` 与旧 Tauri 迁移桥,切新清单,回读;③ 24 小时观察:一台 12.0 团队设备应用内升级成功、冷启续聊正常;⑤ 推 tag `ship-prod-2026.12.1`。
+- 官网(deskfox-web 仓,**交笑南的电脑**,沿用 12.0 的部署方式):某端观察期通过后即可切该端链接(两站四页 + CDN 链接),一次提交可只改一端;x64 链接按第 3 项规则单独切;回读六条链接 200。
+- 收口(李哲的电脑):两端 tag 推完后 `main` ff 合并 `release/2026.12.1` 与本分支并推送;`docs/installer-versions.md` 两条 12.1 条目填齐链接与回读结果、本单 status 改 done、INDEX 同步;删 `release/2026.12.1` 与 `release-handoff`(tag 保留);向李哲发上线通知。
+- **回退预案**:观察期内任一阻断 → 该端清单切回备份、官网不动、在本单报告;官网已切 → 切回上一版链接 + hotfix `2026.12.2` 走四道门。不让用户降级。
+
+两端执行中只在本单写回执;需要决定的写「待李哲的电脑」。
