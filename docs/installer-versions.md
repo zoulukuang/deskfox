@@ -17,6 +17,19 @@
 
 
 
+
+
+## [macOS] 2026.12.1 - 2026-11-09
+
+基线 `ship-mac-prod-2026.11.2`,**不含** 2026.12.0 的附件成本保护 / Electron 升级 / updater 禁降级批次。只带:
+- REQ-148 双站分享(share-routing,`af056a70c7` + 修复 `49442977b` / `83d995636` / `797abd35f` / `ef012db88` cherry-pick)
+- 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
+
+号线直接从 2026.11.2 跳到 2026.12.1:macOS 2026.12.0 已对外发布且其 updater 禁降级,新包必须高于它。
+
+(to be filled: commits / plugin / installer path after ship)
+
+---
 ## [macOS] 2026.11.2 - 2026-09-17
 
 **主题**:对外发版收口批 —— 构建版本号注入 + 消息不丢 + 引用回看 + 三簇高频误触
