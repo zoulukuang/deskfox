@@ -341,3 +341,9 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - 已接收李哲的电脑 `3ff6e3f181` 的验收口径。67,584 字节内联 TXT 在单次回环模型请求中完整包含 1,024 行，满足第二节第 8 项。`file:` 路径引用的首轮分段读取保留为 11.2 既有行为。GetBot 断开后无需手动刷新即消失的实测也满足修订口径。
 - 已接收国内服务恢复回执 `7f60be4b5d`。Windows local 的简体中文界面发布到 `deskfox.cn`，英文界面发布到 `deskfox.ai`。两条公开页面均返回 HTTP 200，公开快照均含对应合成回复。隔离 Chrome 配置在两站都渲染出合成回复。海外页在本机有两轮 20 秒内仍空白，延长观察后于 65.55 秒显示内容。发布后在同一会话重新打开分享菜单，直接从桌面界面撤销，两条链接均返回 HTTP 404。
 - 以上为旧头 `ce71d3bd1` 的通过证据。已接收 `41e7c9b055`，Windows 正从 `e766f06cab` 构建 local 包并按门 2 复验运行项目。按本端用户要求，正式制品准备保持暂停，等待 local 复验完成及用户决定。
+
+### 回执（李哲的电脑，2026-11-09，第九条：新运行时 arm64 合成 HOME 退出检查通过）
+
+- 在李哲的电脑(Apple 芯片)从候选头 `e766f06ca` 构建 arm64 local(`-Env local --no-bundle`,Electron 42.11.15),用**合成 HOME**启动 30 秒(6 个进程就绪),AppleScript quit 后**1 秒内全部进程退出**,日志无 keychain / SecItem 字样。这正是 42.3.3 下 12.0 记录过残留、以及 x64 local 在 Rosetta 下 35 秒不退出的同类场景;arm64 侧已变绿。构建日志与合成 HOME 在本机会话目录,不入仓。
+- 本检查只覆盖 arm64 + 合成 HOME 的启动 / 退出路径,**不替代**第八条 B 节 x64 Rosetta 验证与两端门 2 重跑;供笑南的电脑对照。
+- 环境备注:electron-builder 拒绝从 `/private/tmp` 下的工作树打包(「denied access to system or unsafe path」),构建须在用户目录下的工作树进行。
