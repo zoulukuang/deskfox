@@ -288,3 +288,13 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - ARM 国内项通过后，从同一提交构建 Intel local。应用标识 `ai.deskfox.app.local`，版本 2026.12.1，主程序、LibreOffice、node-pty 和 watcher 均核对为 x86_64，内置 LibreOffice presets 齐备，ZIP 完整性通过。
 - Intel 真机交付文件 `DeskFox-Local-2026.12.1-mac-x64.zip`，417025780 字节，SHA-256 `fb63798c00b500fb3ce9e520b775f0d181d64763d22ed7b5984d881042eb964b`。
 - 同一 x64 local 在 Apple 芯片机器用 Rosetta 运行，隔离 macOS 配置下两次均启动到后端健康并显示 LOCAL。第一次确认独立 local 库与更新器 disabled。第二次按 ⌘Q，窗口记录退出意图，但进程 35 秒内未结束，采样见 `SecItemCopyMatching` / `SecKeychainItemCopyContent` 等待。第三次使用应用内置 onboarding 隔离，保留原 macOS 用户目录，27.0 秒达到后端健康，⌘Q 后仍在 35 秒内未退出。交 Intel 真机用常用 macOS 用户复验两次冷启动与 ⌘Q，并记录任何钥匙串提示或进程残留。
+
+### 回执（李哲的电脑，2026-11-09，第七条：国内分享已恢复、Intel local 退出挂起的归因）
+
+- **国内分享已恢复**(收到 `425ad75ab`)。本端只读回读:根分区 40G 已用 11G、可用 27G,`new-api` 容器日志已清到 12K,`/opt/new-api/logs` 剩 14 个文件 2.1G,`deskfox-share` active。**但 `/etc/docker/daemon.json` 与 `/etc/logrotate.d/docker-containers` 都不存在**,日志上限与轮转尚未配置;按过去 10 天约 2.3 GB/天的增速,不配置约两周后会再满。配置命令已交李哲在本机执行,完成后在此追加。Windows 电脑可用原 local 包复验国内分享发布 / 展示 / 撤销 404。
+- **Intel(x64)local 在 Rosetta 下 ⌘Q 35 秒不退出,采样停在 `SecItemCopyMatching` / `SecKeychainItemCopyContent`**:这不是新问题。12.0 发版记录(`mac-release-readiness/3-changelog.md`「用户随后报告钥匙串系统弹窗」「钥匙串修复实施」与 `R4-runtime-review.md`)已归因为 **Electron 42.3.3 的 safeStorage 过早初始化缺陷**(上游 PR #50419,42.4.1 回补),症状正是合成 HOME 下进程不退出,并伴随「找不到用于储存 DeskFox Key 的钥匙串」弹窗;12.0 以 Electron 42.11.15 维护更新修复,新旧运行时在正常 HOME 与合成 HOME 的对照退出 0 / 残留。12.1 候选 `ce71d3bd1` 保持 42.3.3,所以该缺陷**在 12.1 中存在**,11.2 同样带着它。
+- 由此产生一个**待李哲**的范围决定(第三条回执第 2 项「Electron 不升级」需要重议):
+  - 保持 42.3.3:Mac 上保留已知的退出挂起 / 钥匙串弹窗风险;**Windows 上 12.0 已发布 42.11.15,12.1 若回到 42.3.3 等于把这个已修的缺陷重新发给 Windows 用户**。
+  - 纳入 `85052235c6`(仅 `packages/desktop/package.json` + `bun.lock`,同一 42 主版本维护线):需 R4 黑名单 override(`bun.lock`)并由李哲二次确认;候选头变更,两端门 2 重做;12.0 已在该运行时上完成原生回归、签名、公证与发布,不是 12.0 回退的原因。
+  - 本端建议纳入。
+- Intel 真机复验(常用 macOS 用户、两次冷启动、⌘Q、钥匙串提示)仍按笑南的电脑交接执行,结果用于判断上面两条路径的实际影响;若选择纳入 Electron 更新,则在新候选头上复验。
