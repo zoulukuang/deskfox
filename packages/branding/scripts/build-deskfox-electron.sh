@@ -7,7 +7,7 @@
 #
 # 流程:
 #   1. 预检版本号 key 存在(实际注入由 deskfox config 自读;dev-independent-version-line)
-#   2. 确保 icon.icns 存在(缺则 apply-icons 现场生成)
+#   2. 确保 icon.icns 存在(缺则 png-to-icns 现场生成)
 #   3. electron-vite build(predev 编译 opencode Node 后端 + 三 bundle 到 out/)
 #   4. electron-builder --mac(--dir 当 --no-bundle 时)出 .app / .dmg / .zip 到 dist-deskfox/
 #
@@ -125,8 +125,9 @@ echo "[deskfox] channel=$ENV  version=$APP_VERSION  (key=$VERSION_KEY,实际注�
 ICON_ENV="dev"; [[ "$ENV" == "prod" ]] && ICON_ENV="prod"
 ICNS="$BRANDING_ROOT/src/assets/icons/$ICON_ENV/icon.icns"
 if [[ ! -f "$ICNS" ]]; then
-    echo "[deskfox] icon.icns 缺失,apply-icons 现场生成 ($ICON_ENV)…"
-    bash "$SCRIPT_DIR/apply-icons.sh" -Env "$ICON_ENV" || {
+    echo "[deskfox] icon.icns 缺失,png-to-icns 现场生成 ($ICON_ENV)…"
+    # FORK: Electron 只需自己的 icns;apply-icons 还会往已删除的 src-tauri 树里拷图标,干净工作树必失败(2026.12.1 发版复现) 2026-11-09
+    bash "$SCRIPT_DIR/png-to-icns.sh" "$ICNS" "$BRANDING_ROOT/src/assets/icons/$ICON_ENV/ico-source" || {
         echo "[deskfox] ❌ icon 生成失败" >&2; exit 1; }
 fi
 
