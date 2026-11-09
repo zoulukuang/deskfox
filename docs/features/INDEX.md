@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南(2026-11-09,Tiny,docs-only)— user 拍板与笑南(Mac)/ 鹏鹏(Windows,新加入)以仓库为公共语言协作;新增 `docs/governance/三端协作-Agent接入.md`:统一称呼与身份声明 / 第一天接入(含 Win 专项)/ 日常规则指针 / Agent 交接-评审-回执-验收协议 / Win 职责(鹏鹏 = Windows 端开发负责人)。交笑南的电脑、Windows 电脑回执;合 main 待李哲。 |
+| [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.1 已由李哲放行合入 main，鹏鹏负责 Windows 端开发。Windows 电脑已回执，交笑南的电脑补接入回执，齐备后交李哲确认收尾。 |
 | [release-2026.12.1](./release-2026.12.1/) | in-progress | 2026.12.1 发布交接单:11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复;Mac/Win 打包上传由笑南接手 |
 | [release-gate-spec](./release-gate-spec/) | done | 测试与发布规范 v1.0:四道门发版正本(候选冻结 / local 候选验收 / 正式制品 / 分级放行)+ CLAUDE.md 发版速查 + 三份治理文档指针(2026-11-09,Tiny,docs-only) |
 | [provider-disconnect-stale](./provider-disconnect-stale/) | done | 配置型供应商(含 GetBot)断开后设置页列表不刷新:updateConfig 后显式 await global.dispose 再刷新(2026-11-09,Tiny) |

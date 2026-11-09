@@ -97,4 +97,4 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 
 **回执**(接入后各加一行):
 - 笑南的电脑(YYYY-MM-DD):待回填。
-- Windows 电脑 / 鹏鹏(YYYY-MM-DD):待回填。
+- Windows 电脑 / 鹏鹏（2026-11-09）：已读 v1.1。使用 Bun 1.3.14 冻结安装，从 `release/2026.12.1` 的 `e766f06cab` 构建独立 Windows local `win-unpacked`，桌面类型检查、冷启动和运行验收通过。证据见 `release-handoff` 的 `e9f74b69ea`。

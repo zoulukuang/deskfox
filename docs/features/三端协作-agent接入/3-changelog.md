@@ -32,3 +32,8 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 ## 回退
 
 `git revert` 本笔 commit;不涉及代码与配置。
+
+## 回执（Windows 电脑，2026-11-09）
+
+- 已核对 `main` 上李哲放行的 v1.1（`9e860d4a9`）。在 Windows 电脑使用 Bun 1.3.14 冻结安装，从 `release/2026.12.1` 的 `e766f06cab` 生成独立 local `win-unpacked`，通过桌面类型检查、冷启动和专项运行验收。证据已记录在 `release-handoff` 的 `e9f74b69ea`。
+- Windows 接入已回执。交笑南的电脑在指南第六节补回执，齐备后交李哲确认收尾。
