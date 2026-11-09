@@ -1,5 +1,3 @@
-// FORK: scoped feature bundle with explicit en fallback [feat: attachment-cost-guard]
-import { attachmentCostDict } from "@/i18n/attachment-cost"
 import * as i18n from "@solid-primitives/i18n"
 import { createEffect, createMemo, createResource } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -31,7 +29,7 @@ function localeDirection(locale: Locale): Direction {
   return RTL_LOCALES.has(locale) ? "rtl" : "ltr"
 }
 
-type RawDictionary = typeof en & typeof uiEn & ReturnType<typeof attachmentCostDict> & ReturnType<typeof shareRoutingDict> // FORK: typed feature bundles
+type RawDictionary = typeof en & typeof uiEn & ReturnType<typeof shareRoutingDict> // FORK: typed feature bundles
 type Dictionary = i18n.Flatten<RawDictionary>
 type PluralKey =
   | UiI18nPluralKey
@@ -53,7 +51,7 @@ const LOCALES: readonly Locale[] = DESKTOP_NATIVE_LOCALES
 const INTL = DESKTOP_NATIVE_LOCALE_TAGS
 
 // FORK: 出口统一过品牌替换层 [feat: ui-brand-deskfox] 2026-06-06
-const base = rebrandDict(i18n.flatten({ ...en, ...uiEn, ...attachmentCostDict("en"), ...shareRoutingDict("en") })) // FORK: feature fallback
+const base = rebrandDict(i18n.flatten({ ...en, ...uiEn, ...shareRoutingDict("en") })) // FORK: feature fallback
 const dicts = new Map<Locale, Dictionary>([["en", base]])
 
 const merge = (app: Promise<Source>, ui: Promise<Source>) =>
@@ -132,7 +130,7 @@ function loadDict(locale: Locale) {
   if (locale === "en") return Promise.resolve(base)
   const load = loaders[locale]
   return load().then((next: Dictionary) => {
-    const translated = { ...next, ...attachmentCostDict(locale), ...shareRoutingDict(locale) } // FORK: reviewed feature translations
+    const translated = { ...next, ...shareRoutingDict(locale) } // FORK: reviewed feature translations
     dicts.set(locale, translated)
     return translated
   })

@@ -17,97 +17,34 @@
 
 
 
-## [macOS] 2026.12.0 - 2026-10-21
 
-**主题**：REQ-142/143/144 附件成本保护、REQ-148 双区域分享，以及更新安全和发布前稳定性修复。Electron 42.11.15 避免钥匙串过早初始化；后台恢复仅在健康检查通过后报告就绪。
 
-**验收**：完整实际 pre-push 通过（29 包类型、六包测试）；Finder 混合拖放、取消保留草稿、发送回复、后台恢复、原生终端、私有旧库副本两次冷启动与续聊通过；中英文分享在浏览器完整展示并取消发布。两架构 app/DMG 全部公证 Accepted，四份日志无 issues，票据、Gatekeeper、DMG 挂载内容和 ZIP CRC 通过。Intel/Rosetta 实际对话及退出通过；Intel 真机性能未验收、Rosetta 启动延迟保留，按用户本次明确授权豁免发布阻断。
 
-| 安装包 | bytes | SHA-256 |
-|---|---:|---|
-| DeskFox-2026.12.0-mac-arm64.dmg | 398891064 | `d8dde7d6c2eebcfd86a2bcea1c09d51291b664e6024685ccd8f223493a4762f9` |
-| DeskFox-2026.12.0-mac-x64.dmg | 417012812 | `45299536f84974ef41cf49766d8c334ee3912c0eae2e2c07b21bb27540d7b599` |
 
-**Release**：[GitHub](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0)
+## [Windows] 2026.12.1 - 2026-11-09
 
-**国内下载**：[Apple 芯片](https://dl.clawtray.com/DeskFox-2026.12.0-mac-arm64.dmg) / [Intel](https://dl.clawtray.com/DeskFox-2026.12.0-mac-x64.dmg)
+与 macOS 2026.12.1 同源同号(分支 `feat/share-only-on-11.2`)。基线 `ship-prod-2026.11.1` 同代码的 11.2 基线,**不含** 2026.12.0 的附件成本保护 / Electron 升级批次。只带:
+- REQ-148 双站分享(share-routing cherry-pick,含 Windows 路径校验 `83d995636`)
+- 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
+- updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick;Windows 2026.12.0 已带,12.1 不倒退)
 
-**发布验证**：tag 来源 `d7b671a15a`，main/tag 已推送；GitHub 两 DMG digest 与本地一致。Mac latest-mac.yml 为 2026.12.0，包含双架构 ZIP/DMG 四条且 SHA-512/大小匹配、首尾 Range 字节匹配。两站四个下载页面由官网仓已推送 `e6531fe` 定点部署，六条安装链接均 200；分享服务正常，既有分享说明/图片保留。Windows latest.yml 与发布前逐字节相同，SHA-256 `528b06a863f6f5fbe7c3cf3c299700efe32b5efb8d0a538bc39fababaa2647d9`。实际本机正式安装未替换；所有私有备份均未上传。
+号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
 
-完整制品哈希、测试及公证续发记录见 [mac-release-readiness](./features/mac-release-readiness/3-changelog.md)。
+(to be filled: commits / plugin / installer path after ship)
 
 ---
+## [macOS] 2026.12.1 - 2026-11-09
 
-## [Windows] 2026.12.0 - 2026-10-20
+基线 `ship-mac-prod-2026.11.2`,**不含** 2026.12.0 的附件成本保护 / Electron 升级 / updater 禁降级批次。只带:
+- REQ-148 双站分享(share-routing,`af056a70c7` + 修复 `49442977b` / `83d995636` / `797abd35f` / `ef012db88` cherry-pick)
+- 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
+- updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick,两端共用)
 
-**主题**：附件成本保护与双区域分享；修复 Windows 服务构建及更新器错误降级。
+号线直接从 2026.11.2 跳到 2026.12.1:macOS 2026.12.0 已对外发布且其 updater 禁降级,新包必须高于它。
 
-**本次内容**：
-
-- REQ-142／143／144：附件准入、文本路径引用、图片／PDF 附件、大附件发送确认与成本提醒。
-- REQ-148：按区域发布与取消会话分享；同区域私有定时备份，备份保留七天，恢复应用删除记录；公开分享保留至取消。
-- SolidStart Windows 入口字符串与 URL 路由补丁，分享回归精确隔离模型目录刷新请求。
-- 更新器配置渠道后显式禁止降级，防止较旧线上版本覆盖已安装新版并导致原库被隔离。
-
-**验收**：29 包类型与六包测试、159 项 E2E、65 项原速性能及四项 Windows 六倍限速通过；更新／数据库边界 52 项、桌面专项 172 项通过。实际升级及两次独立冷启动、旧会话恢复视觉确认、CSV／PNG／PDF 外部拖放通过。
-
-**发布产物**：仅使用已验收 `windows-candidate-r2`，339951837 bytes，SHA-256 `3982605b8a31d4da6c85af89af782fbd2f026e80c49d2d9d04eef90552cff775`。原 windows-candidate 已作废。Mac 保持 2026.11.2，本次不发布。
-
-**Release**：https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.0
-**国内 CDN**：https://dl.clawtray.com/DeskFox-2026.12.0-win-x64.exe
-**installer**：`D:\project\opencode-fork\logs\release-20261019\windows-candidate-r2\DeskFox-2026.12.0-win-x64.exe`
-
-**发布验证**：GitHub 非 draft／非 prerelease，资产 digest 与 CDN 完整下载 SHA 一致；Electron 与旧 Tauri Windows 更新入口均为 2026.12.0。两站首页链接已更新（官网仓 ea9eb08），Mac 2026.11.2 清单逐字节未变。发布 tag 指向 1983d02da3，完整 pre-push 通过，main 与 tag 已推送。
-
-完整变更、风险、备份和验收证据见 [release-readiness](./features/release-readiness/3-changelog.md)。
+(to be filled: commits / plugin / installer path after ship)
 
 ---
-
-## [Windows] 2026.11.1 - 2026-09-19 18:06
-
-**主题**:「对外发版收口批」**Windows 侧首次进 prod**,并含发版前第四轮 code-review 与
-引用/选区核心流程 e2e。自 `ship-prod-2026.11.0` 起 **82 commits / 169 文件 / +9712 −406**。
-
-**为什么是 patch**:全批为缺陷修复,零新功能(台账规则:补号 = bugfix / 适配补丁)。
-mac 侧同一批已于 2026.11.2 发出,Win 号线独立故为 2026.11.1。
-
-**本次内容**(feat: `release-closeout-2026-09` / `e2e-context-flow-harness`):
-
-- **REQ-100(P1,唯一会丢数据)** 后端不可达时消息静默蒸发 + 停止键空转。请求挂住时既不
-  resolve 也不 reject、catch 永远等不到 → 加送达超时(abort + 独立 deadline 双保险,阈值 **120s**);
-  忙闲对账改为**按目录逐个查后端权威表 + 双向**(既清残留 busy,也补回被误写成 idle 的在跑会话)。
-- **REQ-132(本批发版动因)** 构建从未注入 `OPENCODE_VERSION`,正式版对外自称 `0.0.0-prod-<ts>`,
-  被 OpenCode Zen 免费档按 semver 拒。本次产物实测注入 `OPENCODE_VERSION=1.18.16`。
-- **REQ-131 / 123 / 125 / 130 / 128 / 133**:引用卡片看得见引文原文(不再印 `<chat selection>`
-  伪路径)· 纯引用消息可撤回 · 「加入聊天」新建会话标题不再清一色相同(🔴 R4 override,
-  `prompt.ts` 3 行)· 点 × 关标签不再把预览区整个收起 · 工具折叠行命中区收窄(960px→126px)·
-  文件预览 tab 内容区静默空白。
-- 另修 user 真机反馈 8 条体感问题(引用卡统一「[图标] 引用:<引文>」、纯引用可提交、
-  发送后卡片不残留、tab × hover 等)。
-
-**发版前四轮 code-review**:前三轮见 mac 2026.11.2 条目;**第四轮(2026-09-19)**又查出
-反向对账的目录守卫把 REQ-100 ① 要救的那类永久关在门外、队列路径 toast 标题与正文互相矛盾、
-历史快照塞伪 commentID 击穿三处下游 —— 均在发版前闭环。
-
-**Win 侧发版前适配性检查(2026-09-19)**:逐项实跑,查出并修掉 1 条**会卡死发版**的缺陷 ——
-`submit-structure.test.ts` 的结构闸断言对 CRLF 敏感(mac 上绿、Win 上必红),而 `pre-push`
-无分支条件地跑 `packages/app` 单测,实测整闸 `exit=1`,**/ship 第一次 push 就会被挡下**;
-产物本身不受影响。修法为读源码处一次性归一化行尾。详见
-`docs/features/release-closeout-2026-09/3-changelog.md` 第十三节。
-
-**回归**(Win 实跑):fork 范围 typecheck exit 0 · app 1185 · session-ui 125 · media-gen 140 ·
-adapter-feishu-lark 792 · branding 90(含 PS1 注入闸 29 条,mac 上 skip / Win 上真跑)·
-desktop 169 · 新增 e2e `context-card-flows` 10/10 —— 全部 0 fail;`sh .husky/pre-push` 整闸 exit 0。
-
-**构建闸**:plugin dist 就绪且无 `Bun.serve` 残留 ✓ · post-build 最终包含 soffice.exe + 非空 presets ✓ ·
-产物 324 MB(与 2026.10.0 / 2026.11.0 一致)。
-
-**Release**:https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.11.1
-**国内 CDN**:https://dl.clawtray.com/DeskFox-2026.11.1-win-x64.exe
-**installer**:`D:\project\opencode-fork\packages\desktop\dist-deskfox\DeskFox-2026.11.1-win-x64.exe`
-
----
-
 ## [macOS] 2026.11.2 - 2026-09-17
 
 **主题**:对外发版收口批 —— 构建版本号注入 + 消息不丢 + 引用回看 + 三簇高频误触
@@ -146,37 +83,7 @@ e2e 142/142、冒烟 22/22、GUI 11/11、冷启动 2×CLEAN,并补上 mac 侧测
 **回归**:typecheck 29/29 · app 1165 · e2e 142 · core 1147 · session-ui 121 · media-gen 140 ·
 adapter-feishu-lark 792 · branding 82(+8 skip)· desktop 169 —— 全部 0 fail。新增测试 120+ 条。
 
-**产物**(2026-09-19 22:xx ship,双 arch 共享版本号,靠文件名区分):
-
-- `DeskFox-2026.11.2-mac-arm64.dmg` — 397,323,931 bytes,sha256 `a92e2f0e1e0bc168…`
-- `DeskFox-2026.11.2-mac-x64.dmg` — 413,440,668 bytes,sha256 `ace619444b0aba3f…`
-- 本地路径:`packages/desktop/dist-deskfox/`(.app 分别在 `mac-arm64/` 与 `mac/`)
-
-**签名公证**:两个 dmg 均 `Accepted` + staple + `spctl` 门禁 `source=Notarized Developer ID`。
-
-**发布**:
-
-- GitHub Release `ship-mac-prod-2026.11.2`(双 dmg,`--latest`)
-- 国内 CDN `https://dl.clawtray.com/DeskFox-2026.11.2-mac-{arm64,x64}.dmg`
-- Gitee Release(id 1153987,正文挂 CDN 链接,不传附件)
-- 升级源 A 链路 `https://updates.deskfox.ai/electron/prod/latest-mac.yml` —— 单本双 arch,
-  `files[]` 4 条逐条 curl 实测 206 可下载、size 与 manifest 一致
-- 官网 deskfox.ai 已更新并部署(`f442565`),线上 6 条下载链接逐条 curl 核对通过
-
-**ship 过程中的两处非预期**(均已处理,记档备查):
-
-1. `gh release create` 上传 380MB 资产撞工具 10 分钟上限被打断 → **release 停在 draft**,
-   而 draft 不进公开 API 列表 → 官网脚本连跑两次都拿不到本版、一路显示 `nothing to do`
-   (正是 2026-08-12 那条「脚本说成功、官网实际停在旧版」的同族)。
-   `gh release edit --draft=false --latest` 发布后第三次跑才真更新。
-   **给下次**:资产走后台上传,且 publish 前先确认 `gh api .../releases/latest` 已是本版。
-2. x64 资产首次上传卡死 28 分钟(arm64 同等大小只用 48 秒),杀掉重传 30 秒成功。
-
-**发版前 code-review(第四轮,2026-09-19)**:抓出 6 条,无崩溃级。唯一发版前修掉的是
-`waitForWorktree` 的 abort cleanup 仍用 `if (restoreInput()) restoreCommentItems(...)` 旧写法 ——
-本批已在 catch 分支修掉同一形态,这条兄弟路径漏改,会在用户已另起输入时静默丢引用卡。
-已改同源 + 加全文件结构闸防复发(反证过)。其余 5 条排后续,详见
-`docs/features/release-closeout-2026-09/3-changelog.md`。
+**installer 路径**:(ship 后回填)
 
 ---
 ## [macOS] 2026.11.1 - 2026-08-19

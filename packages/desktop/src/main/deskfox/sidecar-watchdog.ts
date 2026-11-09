@@ -19,15 +19,6 @@ export function overRestartBudget(restarts: number[], now: number, windowMs: num
 
 export type WatchdogStatus = "restarting" | "ready" | "gave-up"
 
-export async function waitForSidecarHealth(ready: Promise<void>, timeoutMs = 30_000) {
-  const timeout = Promise.withResolvers<void>()
-  const timer = setTimeout(
-    () => timeout.reject(new Error(`Sidecar did not become healthy within ${timeoutMs}ms`)),
-    timeoutMs,
-  )
-  return Promise.race([ready, timeout.promise]).finally(() => clearTimeout(timer))
-}
-
 export type WatchdogDeps = {
   /** ping sidecar /global/health(带 basic auth),活=true。 */
   checkHealth: () => Promise<boolean>
@@ -38,8 +29,6 @@ export type WatchdogDeps = {
   /** 状态广播(renderer 可订阅 sidecar-watchdog;当前无消费方也用于日志)。 */
   emit?: (status: WatchdogStatus) => void
   log?: (message: string, data?: Record<string, unknown>) => void
-  pollIntervalMs?: number
-  startupGraceMs?: number
 }
 
 /** 看门狗。start() 后等 STARTUP_GRACE 才开始轮询;stop() 清理(stopSidecars 主动停时调)。 */
@@ -48,7 +37,6 @@ export function createSidecarWatchdog(deps: WatchdogDeps) {
   let timer: NodeJS.Timeout | undefined
   let consecutiveFailures = 0
   let restarts: number[] = []
-  let recovering = false
 
   const schedule = (ms: number) => {
     if (stopped) return
@@ -60,16 +48,12 @@ export function createSidecarWatchdog(deps: WatchdogDeps) {
 
     if (await deps.checkHealth()) {
       consecutiveFailures = 0
-      if (recovering) {
-        recovering = false
-        deps.emit?.("ready")
-      }
-      return schedule(deps.pollIntervalMs ?? POLL_INTERVAL_MS)
+      return schedule(POLL_INTERVAL_MS)
     }
 
     consecutiveFailures++
     deps.log?.("sidecar watchdog: health check failed", { consecutiveFailures })
-    if (consecutiveFailures < FAIL_THRESHOLD) return schedule(deps.pollIntervalMs ?? POLL_INTERVAL_MS)
+    if (consecutiveFailures < FAIL_THRESHOLD) return schedule(POLL_INTERVAL_MS)
     if (deps.isShuttingDown()) return
 
     // 熔断:窗口内重启过多则放弃,避免确定性崩溃下的 restart storm
@@ -82,24 +66,22 @@ export function createSidecarWatchdog(deps: WatchdogDeps) {
     }
 
     deps.log?.("sidecar watchdog: sidecar unresponsive, respawning")
-    recovering = true
     deps.emit?.("restarting")
     restarts.push(now)
     consecutiveFailures = 0
     try {
       await deps.respawn()
-      recovering = false
       deps.log?.("sidecar watchdog: respawn healthy")
       deps.emit?.("ready")
     } catch (e) {
       deps.log?.("sidecar watchdog: respawn failed", { error: e instanceof Error ? e.message : String(e) })
     }
-    schedule(deps.pollIntervalMs ?? POLL_INTERVAL_MS)
+    schedule(POLL_INTERVAL_MS)
   }
 
   return {
     start() {
-      schedule(deps.startupGraceMs ?? STARTUP_GRACE_MS)
+      schedule(STARTUP_GRACE_MS)
     },
     stop() {
       stopped = true

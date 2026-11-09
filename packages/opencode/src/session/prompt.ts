@@ -42,8 +42,7 @@ import { ShellID } from "@/tool/shell/id"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
 import { Image } from "@/image/image"
-// FORK: cap new inline text before persistence and replay [feat: attachment-cost-guard] 2026-10-12
-import { attachmentText, decodeAttachmentText } from "@opencode-ai/core/util/attachment-text"
+import { decodeDataUrl } from "@/util/data-url"
 import { Process } from "@/util/process"
 import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
 import { InstanceState } from "@/effect/instance-state"
@@ -796,23 +795,23 @@ const layer = Layer.effect(
           switch (url.protocol) {
             case "data:":
               if (part.mime === "text/plain") {
-                // FORK-BEGIN: untrusted filenames are not proof of a readable local path.
-                const text = yield* Effect.try({
-                  try: () => attachmentText(decodeAttachmentText(part.url)),
-                  catch: (error) => new Error("Invalid text attachment", { cause: error }),
-                }).pipe(Effect.orDie)
                 return [
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
                     synthetic: true,
-                    text,
-                    metadata: { deskfoxAttachment: { version: 1, source: "inline-text" } },
+                    text: `Called the Read tool with the following input: ${JSON.stringify({ filePath: part.filename })}`,
+                  },
+                  {
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text",
+                    synthetic: true,
+                    text: decodeDataUrl(part.url),
                   },
                   { ...part, messageID: info.id, sessionID: input.sessionID },
                 ]
-                // FORK-END
               }
               break
             case "file:": {

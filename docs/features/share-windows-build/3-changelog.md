@@ -1,5 +1,5 @@
 feat-id: share-windows-build
-status: done
+status: in-progress
 related: ./3-changelog.md
 
 # Windows 分享构建与发版前复核
@@ -52,11 +52,3 @@ Windows 原生补验另覆盖英文成本确认及 Escape 取消后草稿保留�
 风险：改变服务端函数生成器的导入路径及入口 define，须保留 Linux/macOS 构建复核。验证：Windows 先红后绿的真实配置回归、完整生产构建、enterprise 类型检查。回退：一起移除补丁声明、lock 对应项、patch 与回归，重新安装锁定依赖。根清单与锁文件涉及 R4，提交前仍需按仓库规范完成审签；本轮不执行 Git commit。
 
 验收结束已停止本轮 loopback 服务及 SSH 隧道，确认远端 14419 无监听，正式 deskfox-share 服务仍为 active。合成测试临时目录与日志保留供复核。
-
-## 2026-10-19 本地集成
-
-用户批准 R4 后，补丁声明、锁文件、patch 及真实配置／路由回归已纳入 83d9956360。正式 Windows 2026.12.0 NSIS 亦已构建并完成载荷校验，159 项端到端通过；安装升级与外部拖放继续验收，详见 ../release-readiness/3-changelog.md。未把候选包登记为已发布版本。
-
-2026-10-20：用户批准并正常退出旧版后，本机实际完成 2026.11.1→2026.12.0 升级。旧安装与三个数据目录备份经 21,207 文件哈希校验；安装载荷与候选一致，数据库完整性及六表数量保持，7,302 项配置／偏好逐字节不变。用户随后确认旧列表／偏好显示正常，CSV、PNG、PDF 的 Explorer 跨窗口拖放均成功，Windows 本轮准备完成；完整证据见 release-readiness，不将安装包视为已公开发布。
-
-后续发现更新器允许错误降级，已修复并生成 R2；恢复原库及两次实际冷启动、更新检查均通过。用户随后授权正式发布，Windows 2026.12.0 已发布到 GitHub／Gitee／国内 CDN，两种 Windows 更新清单与两站下载链接已上线；完整哈希、提交和验证见 release-readiness 的正式发布记录。
