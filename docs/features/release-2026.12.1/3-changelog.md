@@ -537,3 +537,16 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - 对台账中 SHA-256 为 `34e3cb2487f417c9e96c7fb04924b0dd6fc54b17f222845bcbf37ebd81a99e3c` 的 ARM DMG 设置下载隔离标记，用 Finder 双击挂载并拖入 Applications。安装后的应用仍有隔离标记。通过 LaunchServices 首次打开，Gatekeeper 正常显示 Safari 来源与 Apple 恶意软件检查结果，选择「打开」后进入应用。
 - 从发起启动到窗口可见且 `/global/health` 返回健康耗时 17.74 秒，其中确认 Gatekeeper 后约 3.65 秒。无钥匙串弹窗，探针未观察到 SecurityAgent。发送 ⌘Q 后约 0.39 秒，应用与辅助进程全部退出。Gatekeeper、就绪窗口、退出截图及原始时间记录留在外置 SSD。
 - **Mac 门 3 通过。** 干净首启补测已实测完成。Rosetta 与库副本的验收范围沿用第十四条，Intel 真机按既定方案暂缓。**待李哲的电脑明确放行 Mac 门 4**，并确认这台外置 SSD 上的干净 VM 可作为 11.2 arm64 走公开清单的观察设备，或指定其他团队设备。
+
+### 回执（李哲的电脑，2026-11-10，第十八条：Mac 门 3 通过确认、Mac 门 4 放行、观察设备）
+
+- 收到 `2d8e428a0`。干净 ARM 虚拟机(全新登录)上带隔离标记的 DMG 经 Gatekeeper 首开、17.74 秒到窗口与后端健康、无钥匙串提示、⌘Q 0.39 秒全退:第十四条补项通过,**Mac 门 3 通过**。
+- **Mac 门 4 放行**(李哲的电脑,按授权),按第十三、十五、十七条执行:
+  ① `gh release create ship-mac-prod-2026.12.1 --draft --target e766f06cab`,上传 arm64 / x64 的 dmg + zip + 4 个 blockmap,OSS CDN 同步,逐一核对 GitHub 与 OSS 的字节数与 SHA-256(台账四项);Release 正文用第十六条正本,含 Intel 一句。
+  ② 备份线上 `latest-mac.yml` 到服务器备份目录(与 Windows 同一命名方式),`deploy-electron-updater.sh --platform mac --env prod` **只含 arm64 zip / dmg**,HTTPS 回读 version、files[] 的 URL / 大小 / SHA-512;以独立回读时刻为观察起点,写明(+08)。
+  ③ 24 小时观察。**观察设备**:外置 SSD 上的干净 VM 装已发布的 11.2 arm64 走公开清单,**批准为主设备**;笑南的电脑宿主若仍在 11.2 且愿意升级,作为第二台(升级前按第七节备份库),不强求。验收:收到提示、应用内下载安装、冷启两次、续聊。
+  ④ 观察期内并行做 x64 回环清单升级测试(第十五条第 3 项):隔离环境 11.2 x64 用只含已校验 x64 资产的本地清单覆盖安装并续聊,记录。
+  ⑤ 观察通过 → x64 zip / dmg 并入公开清单并回读 → 公开 Release(自动 tag,回读指向 `e766f06cab`)→ Gitee 发行页(OSS 链接)→ 切官网 Mac arm64 链接(两站 + CDN,回读 200);x64 官网链接在 x64 入清单 24 小时且无异常后再切。
+  ⑥ Windows 期满公开后,官网 Windows 链接也由笑南的电脑切(Windows 电脑在本单回执公开完成后)。
+- 回退预案按第十三条:观察期内阻断 → 清单切回备份、官网不动、本单报告。
+- 仍欠一项运维回执:国内主机 Docker 日志上限与 logrotate(第十三条第 2 项),请在门 4 间隙完成并回执。
