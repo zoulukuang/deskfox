@@ -9,7 +9,7 @@ related: ./3-changelog.md
 
 ## 一、发什么(内容边界)
 
-**基线是 `ship-mac-prod-2026.11.2`**,不是 2026.12.0。12.0 的附件成本保护(REQ-142/143/144)、Electron 42.11.15、看门狗/钥匙串修复**全部不在**本版;它们留在历史和 `ship-*-2026.12.0` tag 里,待单独评审后再合回。
+**基线是 `ship-mac-prod-2026.11.2`**。本版保留 11.2 的附件行为和 Electron 42.3.3，按下表纳入已确认的分享与稳定性修复。
 
 本版只带五项:
 
@@ -108,15 +108,15 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 
 ## 七、Owner 本机数据提醒
 
-owner 回退 11.2 时,12.0 写过的库被 11.2 判为"超前"并隔离改名(`opencode.db.incompatible-<时间戳>`),同目录保留。装 12.1 前把它改回 `opencode.db` 即可恢复会话(12.1 含该迁移,兼容)。
+李哲的电脑回退 11.2 时，旧版把 12.0 写过的库和随附文件改名隔离。12.1 含对应迁移，恢复前先在副本上核对完整性和会话数量。
 
 恢复步骤(2026-11-09 按第九节第 3 项补细,在李哲的电脑上执行):
 
 1. 完全退出 DeskFox(含菜单栏/托盘进程),确认 `pgrep -f "DeskFox.app/Contents/"` 无输出。
-2. 进入数据目录,分别备份**当前库**与**隔离库**,连同各自的 `-wal` / `-shm` 一起拷贝(例:`cp opencode.db{,-wal,-shm} ~/Desktop/db-backup-<日期>/current/`;`cp opencode.db.incompatible-<时间戳>* ~/Desktop/db-backup-<日期>/isolated/`),缺 wal/shm 文件属正常。
-3. 在**副本**上验证:`sqlite3 <副本> "PRAGMA integrity_check;"` 返回 `ok`,`sqlite3 <副本> "select count(*) from session;"` 数量符合预期;不要在原文件上执行。
+2. 分别备份当前库与隔离库，连同各自的 WAL 和 SHM 一起复制到独立目录。隔离后缀加在每个文件名的末尾，分别是 `opencode.db.incompatible-<时间戳>`、`opencode.db-wal.incompatible-<时间戳>`、`opencode.db-shm.incompatible-<时间戳>`。只匹配 `opencode.db.incompatible-*` 会漏掉 WAL 和 SHM。复制同一时间戳下实际存在的文件。
+3. 在另一个验证目录为隔离副本恢复配套文件名 `opencode.db`、`opencode.db-wal`、`opencode.db-shm`，再由 SQLite `.backup` 导出单文件快照。对快照运行 `PRAGMA integrity_check;` 和 `select count(*) from session;`，核对完整性与会话数量。
 4. 回退 11.2 之后新建过的会话只在当前库里。若要保留它们,先导出或记下,再决定用哪份库;两份库不能自动合并。
-5. 把选定的库改名为 `opencode.db`(同时处理它的 `-wal` / `-shm`:要么一起改名,要么确认已 checkpoint 后删除),再安装 12.1 并做两次冷启动 + 续聊。
+5. 安装 12.1 后、首次启动前，将当前工作库及其 WAL/SHM 移到单独的保留目录，再把已核验的单文件快照复制为工作库 `opencode.db`。做两次冷启动和续聊，避免把原工作库的 WAL 套到恢复后的库上。
 6. 验证通过后保留备份目录至少到 12.1 发布完成。
 
 ## 八、发版前仓库交接给李哲的电脑（2026-11-09）
@@ -207,4 +207,12 @@ owner 回退 11.2 时,12.0 写过的库被 11.2 判为"超前"并隔离改名(`o
 5. **分工**：Windows 打包、上传、`ship-prod-2026.12.1`、Windows 台账 = Windows 电脑 / 鹏鹏；Mac 打包、签名公证、上传、`ship-mac-prod-2026.12.1`、Mac 台账 = 笑南的电脑；推 main 仍须李哲确认（第三、四、五节已改）。
 6. **上线顺序**：Mac 验收通过可先发，不等 Windows。Intel 真机不可用时记录证据后豁免真机性能/体验项，x64 包仍须构建、公证并在 Rosetta 下冷启动验证（此条为本端按 12.0 先例的处理，李哲未单独表态）。
 7. **分享域名核实**（李哲问「12.1 所有分享是否都指向 deskfox.cn / deskfox.ai」）：桌面端手动分享按界面语言选 cn / global，`ShareSource.publicSource` 固定 `https://deskfox.cn` / `https://deskfox.ai`；桌面端自动分享（`share: "auto"`）要求配置 `share_target`，否则报错且不分享、不回退。**例外**：不带 `shareTarget` 的调用（CLI `opencode run --share`、未传参的 SDK / TUI）在无登录账号时仍落到 `enterprise.url ?? https://opncd.ai`（`share-next.ts:230`），有登录账号时走上游账号 API；已分享过的会话重新分享沿用原来源。桌面发行版的用户路径全部是双站；CLI 路径是否也强制双站待李哲（建议留 12.2）。
+
+### 回执（笑南的电脑，2026-11-09）
+
+- 已接收 `4f968ac3c1`。Mac 筹备以 `origin/release/2026.12.1` 的 `ce71d3bd1` 为准，保留 Electron 42.3.3。旧头 `dba9c6035b` 的 arm64/x64 包只用作对照。新头的后台恢复与更新策略共 11 项专项通过，desktop typecheck 通过。
+- 对照包两架构均已生成，DMG/ZIP 完整性通过。arm64 隔离启动和正常退出通过。x64 第一次在 55 秒观察内未取得完整就绪证据，复测在 Rosetta 下 26.6 秒就绪并正常退出，仍需最终包复验，Intel 真机项另记。旧头的 31 项供应商断开、分享兼容、拖入路径专项通过。两份私有数据库副本分别从 38/39 条迁移打开两次，均收敛到 39 条，完整性通过，项目、会话、消息和分段计数保持一致。此项是数据库层验证，应用内升级和续聊另验。
+- Mac 更新清单已用对照包预演，四个 ZIP/DMG 的 SHA-512 与文件大小逐一核对通过。正式清单以签名、公证和装订后的产物重算。先校验 GitHub/CDN 资产，再按放行顺序更新两站 Mac 下载链接和 `latest-mac.yml`，回读两个架构的资产和更新入口。
+- 正从 `ce71d3bd1` 重打双架构签名候选。用已有支持保留应用运行的包装脚本在独立工作树和输出目录执行，本次发布分支的打包脚本不变。后续补齐 app/DMG 公证与 Gatekeeper、两条实包升级、GetBot 断开重连、双站分享撤销、Finder 附件与后端恢复验证，再提交 Mac 制品及验收回执。请李哲的电脑如有可用 Intel 真机测试渠道，在本分支补充。
+- 第七节已按隔离实现更正 WAL/SHM 备份文件名。李哲的电脑可在副本上先核验，正式库恢复随本机升级验收执行。
 
