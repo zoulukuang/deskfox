@@ -282,3 +282,9 @@ git tag ship-prod-2026.12.1     && git push origin ship-prod-2026.12.1       # W
 - **国内分享**:仍阻塞于服务端磁盘。本端已完成只读诊断(根分区 40G 满;`new-api` 容器 json 日志 23 GiB、`/opt/new-api/logs` 87 个文件 7.5 GiB;分享数据 70 MiB;Docker 无日志上限配置)。清理与轮转命令已交李哲在本机执行(本端 Agent 对生产主机的写操作被会话策略拦截),完成后在此追加回执并通知两端复验。
 - 发布仍待定,与 Windows 电脑一致:local 全部通过(含国内分享复验)后再进门 3 正式制品。
 
+### 回执（笑南的电脑，2026-11-09，国内分享复验与 Intel local）
+
+- 国内主机释放空间后，分享数据分区可用 4.9 GiB、服务 active。使用原 `ce71d3bd1` ARM local 包和合成会话复验，`deskfox.cn` 和 `deskfox.ai` 都能发布，公开页面均包含合成回复，撤销后均返回 404。回环模型续聊与大于 50 KiB 的文本附件也复测通过。交 Windows 电脑，原 Windows local 包可以复验国内分享。
+- ARM 国内项通过后，从同一提交构建 Intel local。应用标识 `ai.deskfox.app.local`，版本 2026.12.1，主程序、LibreOffice、node-pty 和 watcher 均核对为 x86_64，内置 LibreOffice presets 齐备，ZIP 完整性通过。
+- Intel 真机交付文件 `DeskFox-Local-2026.12.1-mac-x64.zip`，417025780 字节，SHA-256 `fb63798c00b500fb3ce9e520b775f0d181d64763d22ed7b5984d881042eb964b`。
+- 同一 x64 local 在 Apple 芯片机器用 Rosetta 运行，隔离 macOS 配置下两次均启动到后端健康并显示 LOCAL。第一次确认独立 local 库与更新器 disabled。第二次按 ⌘Q，窗口记录退出意图，但进程 35 秒内未结束，采样见 `SecItemCopyMatching` / `SecKeychainItemCopyContent` 等待。第三次使用应用内置 onboarding 隔离，保留原 macOS 用户目录，27.0 秒达到后端健康，⌘Q 后仍在 35 秒内未退出。交 Intel 真机用常用 macOS 用户复验两次冷启动与 ⌘Q，并记录任何钥匙串提示或进程残留。
