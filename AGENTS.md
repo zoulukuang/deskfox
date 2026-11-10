@@ -1,3 +1,22 @@
+<!-- FORK-BEGIN: DeskFox 协作规则入口——DeskFox / Codex 只自动读 AGENTS.md,不读 CLAUDE.md [feat: 三端协作-agent接入] 2026-11-10 -->
+# DeskFox fork:任何 Agent 开工先读这一节
+
+本仓是 anomalyco/opencode 的 DeskFox fork。**规则正本是 `CLAUDE.md`**,DeskFox、Codex、Claude Code 都必须先读它,再读:
+
+- `docs/governance/三端协作-Agent接入.md`:三台电脑(李哲的电脑 / 笑南的电脑 / Windows 电脑)的统一称呼、身份声明、交接 / 评审 / 回执协议
+- `docs/governance/测试与发布规范.md`:发版四道门与分工
+- `docs/features/INDEX.md`:in-progress 行写着「交 <称呼>」的就是交给你的任务
+
+**本节以下是上游 opencode 的原文,与 `CLAUDE.md` 冲突时一律以 `CLAUDE.md` 为准。** 已知冲突:
+
+- 默认分支是 `main`,不是 `dev`;对比用 `main` / `origin/main`。
+- 分支名用 `feat/<全小写-kebab>`(另有 `fix/<名>`、`release/<版本>`、`sync/upstream-<日期>`),不用上游「不带斜杠、不带前缀」的写法。
+- 三条铁律:永不在 main 上开发;合并到 main、推送 main 都要李哲同意。
+- 推送前跑 `.husky/pre-push`(bun 版本以根 `package.json` 的 `packageManager` 为准);跳过只限 R4 黑名单例外或 docs-only,并在 commit message 写明。
+
+每次进度说明第一句写「当前身份:李哲的电脑 / 笑南的电脑 / Windows 电脑」;交接与回执写进 `docs/features/<feat-id>/`,不只留在聊天里。
+<!-- FORK-END -->
+
 - To regenerate the legacy JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit `src/generated` or `src/generated-effect` directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk-next` composes Client, Core, and Server.

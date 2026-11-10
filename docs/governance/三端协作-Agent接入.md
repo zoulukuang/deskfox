@@ -1,7 +1,7 @@
 # 三端协作与 Agent 接入(李哲 / 笑南 / 鹏鹏)
 
 > **状态**:活规则,2026-11-09 起生效(user 拍板「以仓库为公共语言」)
-> **适用范围**:DeskFox 三人协作 —— 两台 Mac Mini + 一台 Windows;面向新接入的同事和他们的 Claude Code Agent
+> **适用范围**:DeskFox 三人协作 —— 两台 Mac Mini + 一台 Windows;面向新接入的同事和他们的 Agent(笑南、鹏鹏日常用 **DeskFox** 与 **Codex**;李哲的电脑用 Claude Code)
 > **本文只回答一件事**:新来的人和 Agent 第一天怎么接上,以及三个 Agent 之间怎么交接、评审、验收。分支流程看 [`双端协作-SOP.md`](./双端协作-SOP.md),环境细节看 [`跨平台协作.md`](./跨平台协作.md),硬约束看 [`CLAUDE.md`](../../CLAUDE.md)。**不重复那些内容。**
 
 ---
@@ -33,7 +33,8 @@ bun run typecheck                                      # 全绿 = 环境通
 
 - `bun install` 的 `prepare` 会装 husky,`.husky/pre-commit`(白黑名单 / diff 阈值 / 大小写冲突)与 `.husky/pre-push`(fork 范围 typecheck + 六包单测)自动生效;**不要 `--no-verify`**,要跳过必须在 commit message 里写明。
 - 本机私有文件:`.claude/settings.local.json`、`.claude/commands/` 已 gitignore(双端同名异内容,故意不入仓);不要把它们加进来。
-- 首次打开 Claude Code 的第一句话:**「先读 CLAUDE.md 和 docs/governance/三端协作-Agent接入.md,核实并声明当前电脑身份,再读 docs/features/INDEX.md 看 in-progress 的 feat。」**
+- 首次打开 Agent(DeskFox 或 Codex)的第一句话:**「先读 AGENTS.md 顶部的 DeskFox 节、CLAUDE.md 和 docs/governance/三端协作-Agent接入.md,核实并声明当前电脑身份,再读 docs/features/INDEX.md 看 in-progress 的 feat。」**
+- **工具与规则文件**(2026-11-10 核实):DeskFox 与 Codex 只自动读 `AGENTS.md`,**不读 `CLAUDE.md`**;本仓 `AGENTS.md` 原是上游原文(写着默认分支 `dev`、分支名不带前缀),因此顶部加了 DeskFox 入口节指向 `CLAUDE.md`,冲突以 `CLAUDE.md` 为准。DeskFox 还会自动发现仓库内 `.opencode/skills/`、`.claude/skills/`、`.agents/skills/` 下的技能;Codex 能否发现技能以实测为准,发现不了就照技能文件手工执行。
 
 ### 2.2 Windows 电脑(鹏鹏)额外
 
@@ -42,7 +43,7 @@ git config --global core.longpaths true
 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force   # 管理员一次性
 ```
 
-- Git for Windows 自带 Git Bash,husky 的 `.husky/*` 是 sh 脚本,靠它运行;Claude Code 用 Windows 原生版即可认领「Windows 电脑」,用 WSL 须在进度说明里写明宿主。
+- Git for Windows 自带 Git Bash,husky 的 `.husky/*` 是 sh 脚本,靠它运行;Agent(DeskFox / Codex)用 Windows 原生版即可认领「Windows 电脑」,用 WSL 须在进度说明里写明宿主。
 - 国内镜像:打包 wrapper(`build-deskfox-electron.ps1`)已配好镜像;**不要**全局设 `BUN_CONFIG_REGISTRY=npmmirror`,会撞 `desktop-build-blockers` 记录过的 sidecar 预发布版拉不到的坑。
 - 接入自检:`packages\branding\scripts\build-deskfox-electron.ps1 -Env local -NoBundle` 能出 `win-unpacked` 即算通(local 档独立身份,不打扰正式版)。PS 5.1 若报 `NativeCommandError`,按 `CLAUDE.md`「验证约定」里的 Bash 直调方式。
 
@@ -70,7 +71,7 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 **载体只有一个:`docs/features/<feat-id>/` 目录。** 聊天、微信、飞书只做「去看某个文件」的通知。
 
 1. **交接**:写在该 feat 的 `3-changelog.md`「交接」节,或独立 `N-handoff.md`(先例:`upstream-sync-2026-08/5-handoff.md`、`6-windows-handoff.md`、`release-2026.12.1/3-changelog.md`)。必含五项:**接手人统一称呼 / 代码位置(分支 + commit)/ 已验到哪 / 剩下要做什么 / 怎么算验收**。同时在 `docs/features/INDEX.md` 该行简介末尾写「交 <称呼>」。
-2. **委托评审**:接手方 Agent 用 Claude Code `/code-review <范围>`(例 `main..feat/x`)或人工读 diff,结论写回同一 feat 目录(先例:`release-2026.12.1/3-changelog.md` 第六节「review 留存项」),**不只留在聊天里**。
+2. **委托评审**:接手方用本机 Agent 对指定范围的 diff 做评审(例 `main..feat/x`;DeskFox、Codex 直接让它读 diff,Claude Code 可用 `/code-review`),或人工读 diff,结论写回同一 feat 目录(先例:`release-2026.12.1/3-changelog.md` 第六节「review 留存项」),**不只留在聊天里**。
 3. **回执**:接手方在交接文件末尾加 `## 回执(<称呼>,YYYY-MM-DD)`:做了什么、结果、commit、未做项。回执也是一笔 commit。
 4. **验收**:`1-spec.md` 验收标准 + R8 用例清单全绿 + 真桌面 QA。**平台归属**:Windows 项只认 Windows 电脑的结果,Mac 项只认 Mac;「CDP 自测 ≠ 真桌面 QA」照旧。本人体验项由李哲做,Agent 不代替。
 5. **开工前**:`git fetch` 后看 `docs/features/INDEX.md` 的 in-progress 行和最近 commit,有没有交给自己的事;避免两台电脑同时改同一 feat(`双端协作-SOP.md` §4.3)。
@@ -95,6 +96,8 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 | v1.0 | 2026-11-09 | 初版。起源:user 拍板三人(李哲 / 笑南 / 鹏鹏)跨 Mac / Windows 协作,Agent 之间也要能分工、评审、验收,先在 deskfox / fox-take / deskfox-operations 做样板。本文只做「接入 + Agent 交接协议」,不改既有 SOP。 |
 | v1.1 | 2026-11-09 | 分工写死:鹏鹏 = Windows 端开发负责人(§一表、§五);去掉「2026-11-09 加入」的不准确表述(Windows 电脑 10 月底起已在 fox-take 做安卓开发)。 |
 
+| v1.2 | 2026-11-10 | 工具口径改为 DeskFox / Codex(笑南、鹏鹏实际使用);发现本仓 `AGENTS.md` 是上游原文、DeskFox 与 Codex 读不到 `CLAUDE.md`,在 `AGENTS.md` 顶部加 DeskFox 入口节;评审不再绑定 `/code-review`。 |
+
 **回执**(接入后各加一行):
-- 笑南的电脑(YYYY-MM-DD):待回填。
-- Windows 电脑 / 鹏鹏(YYYY-MM-DD):待回填。
+- 笑南的电脑（2026-11-10）：已读 v1.1。用 Bun 1.3.14 在外置 SSD 上对 `ba66746c72` 执行冻结安装，`app`、`desktop` 和 `opencode` 的包级类型检查均通过。
+- Windows 电脑 / 鹏鹏（2026-11-09）：已读 v1.1。使用 Bun 1.3.14 冻结安装，从 `release/2026.12.1` 的 `e766f06cab` 构建独立 Windows local `win-unpacked`，桌面类型检查、冷启动和运行验收通过。证据见 `release-handoff` 的 `e9f74b69ea`。
