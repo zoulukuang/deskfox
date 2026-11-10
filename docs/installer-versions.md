@@ -58,7 +58,9 @@
 | `DeskFox-2026.12.1-mac-x64.dmg` | 357,580,835 | `e61b348b6ea244fc952a2e9e5092153883ccd0d9f470188d16e868cb80e343e2` |
 | `DeskFox-2026.12.1-mac-x64.zip` | 369,658,606 | `5ab88e3e478c18bfe3ae232b820f5a94b6d84c22a24de6880ed46e0367dcb798` |
 
-下载链接待门 4 放行后补填。
+**发布（2026-11-10 11:42 +08，笑南的电脑）**：[GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.1) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.1)，tag `ship-mac-prod-2026.12.1` → `e766f06cab`。国内下载：[Apple 芯片](https://dl.clawtray.com/DeskFox-2026.12.1-mac-arm64.dmg) / [Intel](https://dl.clawtray.com/DeskFox-2026.12.1-mac-x64.dmg)。更新清单 `latest-mac.yml` 2026-11-10 01:21 先切 arm64，11:42 并入 x64（双架构清单 SHA-256 `6604f22c…18cd`，备份 `/var/backups/deskfox/2026.12.1-mac-dual-20261110T034213Z/`）。官网两站 arm64 链接 11:47 切换（官网仓 `9bf27ecc`），**x64 官网入口保持 11.2，待 2026-11-11 11:42 观察期满后切**。
+
+**李哲的电脑独立回读（2026-11-10 11:50 +08）**：tag 指向 `e766f06ca`；GitHub Release 非草稿、8 份资产大小与 SHA-256 同上表；deskfox.cn 首页与 deskfox.ai 三语产品页 arm64 链接为 2026.12.1、x64 仍 2026.11.2；CDN 与 GitHub arm64 DMG 均 200；线上清单 version 2026.12.1 含四条 OSS 地址。
 
 ---
 > 以下两条 2026.12.0 条目从 origin/main 08a670659 原样补回（2026-11-09，李哲的电脑）。该版本已对外发布，官网下载于 2026-11-03 切回 11.2 / 11.1（官网仓 10d9a10）；其附件成本保护留在 2026.12.0，Electron 维护更新已单独纳入 2026.12.1。

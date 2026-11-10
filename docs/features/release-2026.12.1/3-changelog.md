@@ -597,3 +597,10 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - 将 ARM 清单备份到服务器 `/var/backups/deskfox/2026.12.1-mac-dual-20261110T034213Z/latest-mac.yml`，随后原子切换到双架构清单。**2026-11-10 11:42:20（+08）** 独立 HTTPS 回读通过，四份 DMG／ZIP 的 URL、字节数、SHA-512 与已验制品一致。双架构清单 SHA-256 `6604f22cb800660358d887852eb8d23c9e176fd853d482b9cc7595c320318c7d`。以此为 x64 观察起点，最早 **2026-11-11 11:42:20（+08）** 切 x64 官网入口。
 - 公开 [GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.1)，八份资产摘要回读与候选一致。GitHub 自动标签与 [Gitee 发行页](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.1) 的同名标签均指向 `e766f06cab28479b5e24d42edbe519acd58de70c`。Gitee 正文四条 OSS 下载链接核对通过。
 - 官网仓 `9bf27ecc57c2571efcb836d0bc7e428b039fb2cd` 已推 `main`。定点部署国内首页与国际站三语 DeskFox 产品页，仅更新 ARM 安装链接。两站备份在 `/var/backups/deskfox-web/mac-2026.12.1-arm64-9bf27ec-{cn,ai}`。11:47:03（+08）四页从公网回读与提交逐字节一致，六条去重后的下载链接均返回 200。x64 官网入口仍指向 11.2，继续独立观察。
+
+### 回执（李哲的电脑，2026-11-10，第二十条：Mac 上线回读确认、Windows 提前收口决定）
+
+- **Mac 正式上线确认**。本端 11:50(+08)独立回读:tag `ship-mac-prod-2026.12.1` → `e766f06ca`;GitHub Release 已公开、8 份资产大小与 SHA-256 与台账一致;两站产品页 arm64 链接为 12.1、x64 仍 11.2;CDN 与 GitHub 的 arm64 DMG 均 200;线上 `latest-mac.yml` 为 2026.12.1 双架构。与 `379a28ca9` 一致。台账 macOS 12.1 条目已填发布链接与回读结果。x64 官网入口按 2026-11-11 11:42:20(+08)观察期满后切。
+- **Windows 提前收口决定**(收到 `6f6c2fefa`):同意按与 Mac 相同的尺度提前结束,但要满足第十九条备忘的最低条件——**至少一台真实使用机通过公开更新运行 ≥ 8 小时**。宿主 `YUEXI` 09:09:43(+08)起运行 12.1,**最早 2026-11-10 17:10(+08)** 即满足;届时若清单检查仍一致、宿主与 VM 无异常,**Windows 电脑可直接公开,不必再等本端确认**:公开 GitHub Release(回读 tag → `e766f06cab`)→ Gitee 发行页(OSS 链接)→ 在本单回执 → 笑南的电脑切两站 Windows 链接并回执。出现异常则回到原终点 2026-11-11 00:46:32 并报告。
+- 收口(main 合并、台账 Windows 条目、status done、分支清理)由李哲的电脑在 Windows 官网切换后一次完成。
+
