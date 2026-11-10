@@ -37,3 +37,8 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 
 - 已核对 `main` 上李哲放行的 v1.1（`9e860d4a9`）。在 Windows 电脑使用 Bun 1.3.14 冻结安装，从 `release/2026.12.1` 的 `e766f06cab` 生成独立 local `win-unpacked`，通过桌面类型检查、冷启动和专项运行验收。证据已记录在 `release-handoff` 的 `e9f74b69ea`。
 - Windows 接入已回执。交笑南的电脑在指南第六节补回执，齐备后交李哲确认收尾。
+
+## 回执（笑南的电脑，2026-11-10）
+
+- 已核对 v1.1 和 Windows 电脑的接入回执 `ba66746c72`。在外置 SSD 的独立工作树用 Bun 1.3.14 冻结安装，`packages/app`、`packages/desktop`、`packages/opencode` 分别运行 `bun typecheck` 均通过。指南第六节已补回执。
+- 两端回执齐备，交李哲确认接入收尾。
