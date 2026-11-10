@@ -644,3 +644,9 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 
 - 收到 `f6a539d8b`(Windows 已公开)与 `18c6d1774`(Mac Intel 官网已切)。本端回读:两个 tag 均指向 `e766f06ca`;Windows Release 已公开、资产哈希一致;`latest.yml` 与 `latest-mac.yml` 均为 2026.12.1;两站四页 Mac 两种架构均为 12.1。
 - **唯一未完成项**:两站四页的 Windows 下载链接截至 2026-11-10 15:31 仍为 `DeskFox-2026.11.1-win-x64.exe`。**请笑南的电脑**按 `f6a539d8b` 给出的链接切换(国内首页用 OSS CDN;国际站三语页用 GitHub 下载 + OSS 备用),回读四页与 200 后在本单回执。之后本端一次收口。
+
+### 回执（笑南的电脑，2026-11-10，Windows 官网切换完成）
+
+- 已接 `d8457643cf` 和 Windows 电脑的 `f6a539d8b`。国内首页已切为 2026.12.1 OSS CDN，国际站英语、简体中文和繁体中文产品页已切为 2026.12.1 GitHub 下载并保留 OSS 备用。运营正本 `6cfaf53e54478beca3d42f43562fec31211bc60c` 同步了此前已经上线的 Mac 下载入口。官网仓 `9b37d95bc6570d2cea9826c216ebf5675a89c30e` 已推 `main`，运营镜像、两站构建、产品页和 SEO 自检均通过。
+- 2026-11-10 15:37:30（+08），[国内首页](https://deskfox.cn/)和国际站[英语](https://deskfox.ai/deskfox/)、[简体中文](https://deskfox.ai/zh-cn/deskfox/)、[繁体中文](https://deskfox.ai/zh-tw/deskfox/)四个公开页面均与官网提交逐字节一致。Windows 的 GitHub 和 OSS 下载以及 Mac 两种架构的四条下载共六条入口均回读 HTTP 200。部署前备份位于 `/var/backups/deskfox-web/win-2026.12.1-x64-9b37d95-{cn,ai}`。
+- Windows 电脑 / 鹏鹏可据此核对官网回执。发布交接条件已齐，交李哲的电脑按第二十四条回执做最终收口。

@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [release-2026.12.1](./release-2026.12.1/) | in-progress | 候选 `e766f06cab`，Electron 42.11.15。macOS 和 Windows 正式发行页均已公开。Mac ARM 与 Intel 官网链接已回读通过，Windows 官网链接交笑南的电脑，之后由李哲的电脑收口。 |
+| [release-2026.12.1](./release-2026.12.1/) | in-progress | 候选 `e766f06cab`，Electron 42.11.15。macOS 和 Windows 正式发行页均已公开，两站四页的 Mac ARM、Intel 与 Windows 下载入口已切换并回读通过。交李哲的电脑最终收口。 |
 | [mac-release-readiness](./mac-release-readiness/) | done | Mac 2026.12.0 已发布：运行框架、后台恢复和测试隔离修复；原生回归、旧库副本冷启动、两站分享及双架构公证通过。main/tag、GitHub/Gitee/CDN、Mac 更新源及两站下载入口已上线回读，Windows 清单未变；Intel 性能按本次授权豁免。（2026-11-03 官网下载已回退到 11.2；记录于 2026-11-09 从 08a670659 补回，12.1 不含其 Electron 升级，后台恢复修复待李哲决定是否纳入） |
 | [attachment-cost-guard](./attachment-cost-guard/) | on-hold | REQ-142/143/144 附件成本保护，随 2026.12.0 发布后因拖放/PDF/大文本行为回退导致功能缺失，2026-11-03 官网下载回退；12.1 不含。记录于 2026-11-09 从 08a670659 补回，待单独评审后再合回。 |
 | [provider-disconnect-stale](./provider-disconnect-stale/) | done | 配置型供应商(含 GetBot)断开后设置页列表不刷新:updateConfig 后显式 await global.dispose 再刷新(2026-11-09,Tiny) |
