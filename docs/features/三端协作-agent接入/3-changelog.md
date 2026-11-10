@@ -26,8 +26,19 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 
 - **笑南的电脑**:`git pull` 后读指南,确认 `bun run typecheck` 仍绿,在指南第六节「回执」加一行。
 - **Windows 电脑 / 鹏鹏**:按指南 §2.1–2.2 装环境,跑 `build-deskfox-electron.ps1 -Env local -NoBundle` 自检,在指南第六节「回执」加一行。
-- **李哲**:确认鹏鹏的 GitHub 账号已是 `zoulukuang/deskfox` 协作者(没有就加);本 feat 分支合 main、推 main 需你点头(三条铁律)。分工已定:鹏鹏负责 Windows 端开发(指南 §五)。两人回执齐后把本文 status 改 done。
+- **李哲**:~~确认鹏鹏的 GitHub 账号已是 `zoulukuang/deskfox` 协作者~~ 已确认(本人 2026-11-09:三个仓库的权限鹏鹏都有);指南 v1.1 已于 2026-11-09 由李哲放行合入 main(`9e860d4a9`)。分工已定:鹏鹏负责 Windows 端开发(指南 §五)。两人回执齐后把本文 status 改 done。
+- **不建任务板**(本人 2026-11-09 评估后定):三个仓库都不加统一任务板 / Notion;本仓的任务与接手人看 `docs/features/INDEX.md` in-progress 行加「交 <称呼>」,交接与回执仍按指南 §四。
 
 ## 回退
 
 `git revert` 本笔 commit;不涉及代码与配置。
+
+## 回执（Windows 电脑，2026-11-09）
+
+- 已核对 `main` 上李哲放行的 v1.1（`9e860d4a9`）。在 Windows 电脑使用 Bun 1.3.14 冻结安装，从 `release/2026.12.1` 的 `e766f06cab` 生成独立 local `win-unpacked`，通过桌面类型检查、冷启动和专项运行验收。证据已记录在 `release-handoff` 的 `e9f74b69ea`。
+- Windows 接入已回执。交笑南的电脑在指南第六节补回执，齐备后交李哲确认收尾。
+
+## 回执（笑南的电脑，2026-11-10）
+
+- 已核对 v1.1 和 Windows 电脑的接入回执 `ba66746c72`。在外置 SSD 的独立工作树用 Bun 1.3.14 冻结安装，`packages/app`、`packages/desktop`、`packages/opencode` 分别运行 `bun typecheck` 均通过。指南第六节已补回执。
+- 两端回执齐备，交李哲确认接入收尾。

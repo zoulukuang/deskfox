@@ -21,7 +21,7 @@
 | feat-id | 状态 | 简介 |
 |---|---|---|
 | [release-2026.12.1](./release-2026.12.1/) | done | **2026.12.1 双端已上线**(2026-11-10):11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪 + Electron 42.11.15;tag `ship-mac-prod-2026.12.1` / `ship-prod-2026.12.1` → `e766f06ca`;Intel 版 Rosetta 验证。 |
-| [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南(2026-11-09,Tiny,docs-only)— user 拍板与笑南(Mac)/ 鹏鹏(Windows,新加入)以仓库为公共语言协作;新增 `docs/governance/三端协作-Agent接入.md`:统一称呼与身份声明 / 第一天接入(含 Win 专项)/ 日常规则指针 / Agent 交接-评审-回执-验收协议 / Win 职责(鹏鹏 = Windows 端开发负责人)。交笑南的电脑、Windows 电脑回执;合 main 待李哲。 |
+| [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.1 已由李哲放行合入 main，鹏鹏负责 Windows 端开发。笑南的电脑与 Windows 电脑均已补接入回执，交李哲确认收尾。 |
 | [release-gate-spec](./release-gate-spec/) | done | 测试与发布规范 v1.0:四道门发版正本(候选冻结 / local 候选验收 / 正式制品 / 分级放行)+ CLAUDE.md 发版速查 + 三份治理文档指针(2026-11-09,Tiny,docs-only) |
 | [mac-release-readiness](./mac-release-readiness/) | done | Mac 2026.12.0 已发布：运行框架、后台恢复和测试隔离修复；原生回归、旧库副本冷启动、两站分享及双架构公证通过。main/tag、GitHub/Gitee/CDN、Mac 更新源及两站下载入口已上线回读，Windows 清单未变；Intel 性能按本次授权豁免。（2026-11-03 官网下载已回退到 11.2；记录于 2026-11-09 从 08a670659 补回，12.1 不含其 Electron 升级，后台恢复修复待李哲决定是否纳入） |
 | [attachment-cost-guard](./attachment-cost-guard/) | on-hold | REQ-142/143/144 附件成本保护，随 2026.12.0 发布后因拖放/PDF/大文本行为回退导致功能缺失，2026-11-03 官网下载回退；12.1 不含。记录于 2026-11-09 从 08a670659 补回，待单独评审后再合回。 |

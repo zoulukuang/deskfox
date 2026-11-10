@@ -96,5 +96,5 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 | v1.1 | 2026-11-09 | 分工写死:鹏鹏 = Windows 端开发负责人(§一表、§五);去掉「2026-11-09 加入」的不准确表述(Windows 电脑 10 月底起已在 fox-take 做安卓开发)。 |
 
 **回执**(接入后各加一行):
-- 笑南的电脑(YYYY-MM-DD):待回填。
-- Windows 电脑 / 鹏鹏(YYYY-MM-DD):待回填。
+- 笑南的电脑（2026-11-10）：已读 v1.1。用 Bun 1.3.14 在外置 SSD 上对 `ba66746c72` 执行冻结安装，`app`、`desktop` 和 `opencode` 的包级类型检查均通过。
+- Windows 电脑 / 鹏鹏（2026-11-09）：已读 v1.1。使用 Bun 1.3.14 冻结安装，从 `release/2026.12.1` 的 `e766f06cab` 构建独立 Windows local `win-unpacked`，桌面类型检查、冷启动和运行验收通过。证据见 `release-handoff` 的 `e9f74b69ea`。
