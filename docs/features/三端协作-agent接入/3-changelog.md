@@ -77,3 +77,10 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 
 **国内 New-API 日志保留**已补入 deskfox-web `main`，提交 [`b0f4ffe`](https://gitee.com/zoulukuang/deskfox-web/commit/b0f4ffe85e7013a0eb0f63bc6f0b422c18baadc4)。定时器、service 和 Python 脚本位于 `scripts/new-api-log-retention/`，三份文件的 SHA-256 与主机现网文件一致。主机上定时器处于 active 状态，`systemd-analyze verify` 通过，脚本预览退出正常并报告删除 0 个文件。此次只读核对主机并归档现行配置。
 
+### 复核(李哲的电脑,2026-11-10)
+
+- **笑南的电脑第二轮两项都已完成**。工具核验 6 格:身份全部正确;deskfox 的 DeskFox 与 Codex 都答出「默认分支 `main`、分支名 `feat/<小写-kebab>`、合推 main 须李哲同意」,说明 `AGENTS.md` 入口节对两种工具都生效(本分支名 `feat/mac-collab-round2` 本身也符合)。日志保留机制已入 deskfox-web `b0f4ffe`,与主机现网一致。
+- **技能发现的结论与处理**:Codex 不自动加载仓库技能,但读文件后能照做;DeskFox 在 fox-take 能直接调用 `handoff`,在运营仓未进技能列表。处理:不另建技能目录;fox-take 与运营仓 `AGENTS.md` 已写明「用 Codex 写交接单前先读 `.claude/skills/handoff/SKILL.md`」(fox-take `6091547`、运营仓 `e76a548`)。deskfox 本来就不用技能,载体是 `docs/features/<feat-id>/`,无需改。运营仓 DeskFox 未列出 `handoff` 的原因留作观察项,不阻断。
+- **Windows 电脑**:fox-take 安卓自检已过(第 4 项);代理测试的 Windows 路径问题已由本端在 fox-take `61fbb4a` 修复并交鹏鹏重跑;第 1、2、3、5 项待回执。
+- 本分支合 main 待李哲同意。
+
