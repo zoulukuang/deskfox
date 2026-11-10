@@ -75,6 +75,7 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 3. **回执**:接手方在交接文件末尾加 `## 回执(<称呼>,YYYY-MM-DD)`:做了什么、结果、commit、未做项。回执也是一笔 commit。
 4. **验收**:`1-spec.md` 验收标准 + R8 用例清单全绿 + 真桌面 QA。**平台归属**:Windows 项只认 Windows 电脑的结果,Mac 项只认 Mac;「CDP 自测 ≠ 真桌面 QA」照旧。本人体验项由李哲做,Agent 不代替。
 5. **开工前**:`git fetch` 后看 `docs/features/INDEX.md` 的 in-progress 行和最近 commit,有没有交给自己的事;避免两台电脑同时改同一 feat(`双端协作-SOP.md` §4.3)。
+6. **一项任务只由一个会话执行**(2026-11-10 起):同一台电脑上 DeskFox、Codex 等多个会话也算多个执行者。接手前先在该交接节下写一行「接手中(<称呼>,<工具>,<时间>)」并推送,看到已有「接手中」就不再动手,只读或另写评审。只读核验(如工具核验)不属于接手。起因:2026-11-10 笑南的电脑两个会话各自完成同一第二轮任务,deskfox-web 出现两份日志保留脚本、deskfox 出现重复回执分支。
 
 ---
 
@@ -97,6 +98,8 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 | v1.1 | 2026-11-09 | 分工写死:鹏鹏 = Windows 端开发负责人(§一表、§五);去掉「2026-11-09 加入」的不准确表述(Windows 电脑 10 月底起已在 fox-take 做安卓开发)。 |
 
 | v1.2 | 2026-11-10 | 工具口径改为 DeskFox / Codex(笑南、鹏鹏实际使用);发现本仓 `AGENTS.md` 是上游原文、DeskFox 与 Codex 读不到 `CLAUDE.md`,在 `AGENTS.md` 顶部加 DeskFox 入口节;评审不再绑定 `/code-review`。 |
+
+| v1.3 | 2026-11-10 | §四新增第 6 条「一项任务只由一个会话执行」,开工前写「接手中」。 |
 
 **回执**(接入后各加一行):
 - 笑南的电脑（2026-11-10）：已读 v1.1。用 Bun 1.3.14 在外置 SSD 上对 `ba66746c72` 执行冻结安装，`app`、`desktop` 和 `opencode` 的包级类型检查均通过。
