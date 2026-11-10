@@ -60,3 +60,27 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 
 **李哲的电脑**:两人回执齐后核对 6 格结果;若 Codex 读不到技能,把交接单格式补进各仓 `AGENTS.md`,不再只依赖技能目录。本分支合 main 待李哲同意。
 
+### 第二轮回执 · 笑南的电脑 · 2026-11-10
+
+本机 `scutil --get ComputerName` 返回 `岳笑南的Mac mini`。在 DeskFox 2026.12.1 桌面应用和 ChatGPT 桌面端随附的 Codex CLI 0.166.0-alpha.6 分别新开三个会话，每个会话只发送交接指定的问题。规则基线为 DeskFox `f56cf9b0fc`、FoxTake `ae6473e4`、运营仓 `cb8f7b9`。随后 FoxTake 快进到 `e5b9c07a`，分支约定和技能文件未变。
+
+| 仓库 | 工具 | 身份 | 默认分支和命名规则 | 是否列出 `handoff` |
+|---|---|---|---|---|
+| DeskFox | DeskFox 桌面应用 | 笑南的电脑 | `main`、`feat/<小写-kebab>`，合入及推送 `main` 均须李哲同意 | 未列出。本仓仅有 `effect`、`rtl-aware-development` 两项项目技能 |
+| DeskFox | Codex CLI | 笑南的电脑 | `main`、`feat/<小写-kebab>`，合入及推送 `main` 均须李哲同意 | 未列出。通过读取文件列出上述两项项目技能 |
+| FoxTake | DeskFox 桌面应用 | 笑南的电脑 | `feat/one-tap`，较大或可能冲突的任务用 `<type>/<主题>-YYYYMMDD` | 列出，会话报告可直接调用 |
+| FoxTake | Codex CLI | 笑南的电脑 | `feat/one-tap`，较大或可能冲突的任务用 `<type>/<主题>-YYYYMMDD` | 列出，通过读取 `.claude/skills/handoff/SKILL.md` |
+| 运营仓 | DeskFox 桌面应用 | 笑南的电脑 | `main`，现行规则未规定统一分支命名 | 列出，通过读取技能文件。会话报告 `platform-ops` 已注册、`handoff` 未出现在技能工具列表 |
+| 运营仓 | Codex CLI | 笑南的电脑 | `main`，现行规则未规定统一分支命名 | 列出，通过读取 `.claude/skills/handoff/SKILL.md` |
+
+六个会话均完成回复。DeskFox 的技能栏记录会话报告，这轮核验范围是发现与列举。用同版本 Codex 的 `skills/list` 对三个仓库强制重扫，原生列表均未返回仓库项目技能。
+
+**国内 New-API 日志保留**已补入 deskfox-web `main`，提交 [`b0f4ffe`](https://gitee.com/zoulukuang/deskfox-web/commit/b0f4ffe85e7013a0eb0f63bc6f0b422c18baadc4)。定时器、service 和 Python 脚本位于 `scripts/new-api-log-retention/`，三份文件的 SHA-256 与主机现网文件一致。主机上定时器处于 active 状态，`systemd-analyze verify` 通过，脚本预览退出正常并报告删除 0 个文件。此次只读核对主机并归档现行配置。
+
+### 复核(李哲的电脑,2026-11-10)
+
+- **笑南的电脑第二轮两项都已完成**。工具核验 6 格:身份全部正确;deskfox 的 DeskFox 与 Codex 都答出「默认分支 `main`、分支名 `feat/<小写-kebab>`、合推 main 须李哲同意」,说明 `AGENTS.md` 入口节对两种工具都生效(本分支名 `feat/mac-collab-round2` 本身也符合)。日志保留机制已入 deskfox-web `b0f4ffe`,与主机现网一致。
+- **技能发现的结论与处理**:Codex 不自动加载仓库技能,但读文件后能照做;DeskFox 在 fox-take 能直接调用 `handoff`,在运营仓未进技能列表。处理:不另建技能目录;fox-take 与运营仓 `AGENTS.md` 已写明「用 Codex 写交接单前先读 `.claude/skills/handoff/SKILL.md`」(fox-take `6091547`、运营仓 `e76a548`)。deskfox 本来就不用技能,载体是 `docs/features/<feat-id>/`,无需改。运营仓 DeskFox 未列出 `handoff` 的原因留作观察项,不阻断。
+- **Windows 电脑**:fox-take 安卓自检已过(第 4 项);代理测试的 Windows 路径问题已由本端在 fox-take `61fbb4a` 修复并交鹏鹏重跑;第 1、2、3、5 项待回执。
+- 本分支合 main 待李哲同意。
+
