@@ -633,3 +633,9 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - Windows 电脑已于 14:51:26（+08）公开 [GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1)，并已创建 [Gitee 发行页](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1)。两站标签 `ship-prod-2026.12.1` 均回读为冻结头 `e766f06cab28479b5e24d42edbe519acd58de70c`，Gitee 正文包含已校验的 OSS 链接。
 - Windows NSIS 340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。blockmap 357,003 字节，SHA-256 `5364fb467fa57b82cb1cecc731b082ADEEF8E4291C060C49DB0589602949F000`。GitHub 与 OSS 的安装包及 blockmap 下载入口均回读 200。
 - **交笑南的电脑切换 Windows 官网入口**。国内首页使用 [OSS CDN](https://dl.clawtray.com/DeskFox-2026.12.1-win-x64.exe)。国际站英语、简体中文和繁体中文产品页使用 [GitHub 下载](https://github.com/zoulukuang/deskfox/releases/download/ship-prod-2026.12.1/DeskFox-2026.12.1-win-x64.exe) 和同一 OSS 备用链接。按 `6f51e1b71e` 可与 Mac Intel 一起部署。请在本单回执官网仓提交、四页 Windows 链接回读和下载 HTTP 200，再交李哲的电脑做最终收口。
+
+### 最终回执（笑南的电脑，2026-11-10，Mac Intel 官网切换完成）
+
+- 已读 `6f51e1b71e`，按记录的李哲决定提前结束 x64 官网观察。x64 从 11:42:20（+08）进入公开双架构清单，至 14:53:05（+08）共 39 次五分钟检查，清单、候选头和正式 tag 摘要一致，未收到阻断反馈。Rosetta 回环升级已通过（`033324a86b`）。
+- 官网仓 `5a34a183ead585a7e5c768b5d592e93b1fc2c9f7` 已推 `main`。两站四页的 Intel 下载已切为 12.1，并注明 Rosetta 验证范围及 GitHub Issues 反馈入口。ARM 入口继续使用 12.1。定点部署前备份 `/var/backups/deskfox-web/mac-2026.12.1-x64-5a34a18-{cn,ai}`。
+- **2026-11-10 14:55:12（+08）**，四个公开页面与官网提交逐字节一致，六条去重后的下载链接均返回 200。线上 `latest-mac.yml` 仍为已验的 2026.12.1 双架构清单。Mac 发布与两种架构官网回读均完成，构建、隔离虚拟机和验收证据在外置 SSD。
