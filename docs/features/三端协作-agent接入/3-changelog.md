@@ -60,3 +60,20 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 
 **李哲的电脑**:两人回执齐后核对 6 格结果;若 Codex 读不到技能,把交接单格式补进各仓 `AGENTS.md`,不再只依赖技能目录。本分支合 main 待李哲同意。
 
+### 第二轮回执 · 笑南的电脑 · 2026-11-10
+
+本机 `scutil --get ComputerName` 返回 `岳笑南的Mac mini`。在 DeskFox 2026.12.1 桌面应用和 ChatGPT 桌面端随附的 Codex CLI 0.166.0-alpha.6 分别新开三个会话，每个会话只发送交接指定的问题。规则基线为 DeskFox `f56cf9b0fc`、FoxTake `ae6473e4`、运营仓 `cb8f7b9`。随后 FoxTake 快进到 `e5b9c07a`，分支约定和技能文件未变。
+
+| 仓库 | 工具 | 身份 | 默认分支和命名规则 | 是否列出 `handoff` |
+|---|---|---|---|---|
+| DeskFox | DeskFox 桌面应用 | 笑南的电脑 | `main`、`feat/<小写-kebab>`，合入及推送 `main` 均须李哲同意 | 未列出。本仓仅有 `effect`、`rtl-aware-development` 两项项目技能 |
+| DeskFox | Codex CLI | 笑南的电脑 | `main`、`feat/<小写-kebab>`，合入及推送 `main` 均须李哲同意 | 未列出。通过读取文件列出上述两项项目技能 |
+| FoxTake | DeskFox 桌面应用 | 笑南的电脑 | `feat/one-tap`，较大或可能冲突的任务用 `<type>/<主题>-YYYYMMDD` | 列出，会话报告可直接调用 |
+| FoxTake | Codex CLI | 笑南的电脑 | `feat/one-tap`，较大或可能冲突的任务用 `<type>/<主题>-YYYYMMDD` | 列出，通过读取 `.claude/skills/handoff/SKILL.md` |
+| 运营仓 | DeskFox 桌面应用 | 笑南的电脑 | `main`，现行规则未规定统一分支命名 | 列出，通过读取技能文件。会话报告 `platform-ops` 已注册、`handoff` 未出现在技能工具列表 |
+| 运营仓 | Codex CLI | 笑南的电脑 | `main`，现行规则未规定统一分支命名 | 列出，通过读取 `.claude/skills/handoff/SKILL.md` |
+
+六个会话均完成回复。DeskFox 的技能栏记录会话报告，这轮核验范围是发现与列举。用同版本 Codex 的 `skills/list` 对三个仓库强制重扫，原生列表均未返回仓库项目技能。
+
+**国内 New-API 日志保留**已补入 deskfox-web `main`，提交 [`b0f4ffe`](https://gitee.com/zoulukuang/deskfox-web/commit/b0f4ffe85e7013a0eb0f63bc6f0b422c18baadc4)。定时器、service 和 Python 脚本位于 `scripts/new-api-log-retention/`，三份文件的 SHA-256 与主机现网文件一致。主机上定时器处于 active 状态，`systemd-analyze verify` 通过，脚本预览退出正常并报告删除 0 个文件。此次只读核对主机并归档现行配置。
+
