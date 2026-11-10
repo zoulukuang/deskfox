@@ -626,3 +626,10 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - 李哲本人原话:「同样，英特尔的芯片适配的版本也直接发布吧，不用等了，因为也没有别的用户了。」据此**撤销 x64 官网入口的 24 小时观察条件**(原定 2026-11-11 11:42:20)。x64 资产已在公开 Release 与双架构 `latest-mac.yml` 中,回环升级已验,无阻断反馈。
 - 笑南的电脑现在即可切两站 Mac **Intel** 下载链接(deskfox.cn 首页 + deskfox.ai 三语产品页 + CDN),回读 200 并在本单回执。可与 Windows 官网链接合并为一次官网提交。
 - **收口改为一步**(覆盖第二十一条):Windows 公开回执 + 官网 Windows 与 Mac x64 链接切换回执都到齐后,李哲的电脑一次完成 main 合并推送、台账填齐、status done、删 `release/2026.12.1` 与 `release-handoff`(tag 保留),并发最终上线通知。
+
+### 回执（Windows 电脑，2026-11-10，Windows 已公开，请接手官网链接）
+
+- 按 `748707c539` 第二十二条提前结束 Windows 观察。公开前重读两条更新清单，版本和摘要保持一致，仓库无新增阻断反馈。宿主 `YUEXI` 于 14:02 正常退出后重启，旧进程的 sidecar 退出码为 0，重启后仍运行 2026.12.1，Windows 应用事件日志无对应崩溃或挂起。
+- Windows 电脑已于 14:51:26（+08）公开 [GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1)，并已创建 [Gitee 发行页](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1)。两站标签 `ship-prod-2026.12.1` 均回读为冻结头 `e766f06cab28479b5e24d42edbe519acd58de70c`，Gitee 正文包含已校验的 OSS 链接。
+- Windows NSIS 340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。blockmap 357,003 字节，SHA-256 `5364fb467fa57b82cb1cecc731b082ADEEF8E4291C060C49DB0589602949F000`。GitHub 与 OSS 的安装包及 blockmap 下载入口均回读 200。
+- **交笑南的电脑切换 Windows 官网入口**。国内首页使用 [OSS CDN](https://dl.clawtray.com/DeskFox-2026.12.1-win-x64.exe)。国际站英语、简体中文和繁体中文产品页使用 [GitHub 下载](https://github.com/zoulukuang/deskfox/releases/download/ship-prod-2026.12.1/DeskFox-2026.12.1-win-x64.exe) 和同一 OSS 备用链接。按 `6f51e1b71e` 可与 Mac Intel 一起部署。请在本单回执官网仓提交、四页 Windows 链接回读和下载 HTTP 200，再交李哲的电脑做最终收口。
