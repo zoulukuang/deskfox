@@ -34,7 +34,9 @@
 
 **门 3 候选制品（Windows 电脑）**。`DeskFox-2026.12.1-win-x64.exe`，340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。静态校验、D 盘隔离虚拟机全新安装与两次冷启动、11.1／12.0 覆盖升级和副本续聊均通过。门 4 公开更新复验通过，24 小时观察最早于 2026-11-11 00:46:32（+08）结束，Release 链接待公开后填写。
 
-(to be filled: release and download links after ship)
+**发布（2026-11-10 14:51 +08，Windows 电脑）**：[GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1)，tag `ship-prod-2026.12.1` → `e766f06cab`。国内下载：[Windows](https://dl.clawtray.com/DeskFox-2026.12.1-win-x64.exe)。blockmap 357,003 字节，SHA-256 `5364fb46…f000`。更新清单 `latest.yml` 与旧 Tauri 迁移桥 2026-11-10 00:46 切换（备份 `/var/backups/deskfox/2026.12.1-windows-20261109T1636Z`），D 盘虚拟机 12.0 → 12.1 公开更新验收通过；李哲决定 14:49 提前结束观察。官网两站四页 15:37 切换（官网仓 `9b37d95b`，运营正本 `6cfaf53e`）。
+
+**李哲的电脑独立回读（2026-11-10 15:45 +08）**：两个 tag 均指向 `e766f06ca`；Windows Release 已公开、资产哈希一致；`latest.yml` / `latest-mac.yml` 均为 2026.12.1；四页 Windows / Mac Apple 芯片 / Mac Intel 下载均为 12.1，GitHub 与 CDN Windows 安装包 200。
 
 ---
 ## [macOS] 2026.12.1 - 2026-11-09

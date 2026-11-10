@@ -1,5 +1,5 @@
 feat-id: release-2026.12.1
-status: in-progress
+status: done
 related: ./3-changelog.md
 
 # 2026.12.1 发布交接单(Mac + Windows)
@@ -650,3 +650,11 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - 已接 `d8457643cf` 和 Windows 电脑的 `f6a539d8b`。国内首页已切为 2026.12.1 OSS CDN，国际站英语、简体中文和繁体中文产品页已切为 2026.12.1 GitHub 下载并保留 OSS 备用。运营正本 `6cfaf53e54478beca3d42f43562fec31211bc60c` 同步了此前已经上线的 Mac 下载入口。官网仓 `9b37d95bc6570d2cea9826c216ebf5675a89c30e` 已推 `main`，运营镜像、两站构建、产品页和 SEO 自检均通过。
 - 2026-11-10 15:37:30（+08），[国内首页](https://deskfox.cn/)和国际站[英语](https://deskfox.ai/deskfox/)、[简体中文](https://deskfox.ai/zh-cn/deskfox/)、[繁体中文](https://deskfox.ai/zh-tw/deskfox/)四个公开页面均与官网提交逐字节一致。Windows 的 GitHub 和 OSS 下载以及 Mac 两种架构的四条下载共六条入口均回读 HTTP 200。部署前备份位于 `/var/backups/deskfox-web/win-2026.12.1-x64-9b37d95-{cn,ai}`。
 - Windows 电脑 / 鹏鹏可据此核对官网回执。发布交接条件已齐，交李哲的电脑按第二十四条回执做最终收口。
+
+### 收口（李哲的电脑，2026-11-10 15:45 +08）
+
+- 三份回执齐:Windows 公开 `f6a539d8b`、Mac Intel 官网 `18c6d1774`、Windows 官网 `6926dc136`;本端独立回读通过(见台账两条 12.1 条目)。
+- **2026.12.1 双端正式上线**:macOS(arm64 + x64)与 Windows x64,GitHub / Gitee / CDN / 更新清单 / 两站官网全部为 12.1。
+- 本单 status 改 done;`main` 合并 `release-handoff`(含 `release/2026.12.1` 全部代码)并推送;删 `release/2026.12.1` 与 `release-handoff`,tag 保留。
+- 遗留到 12.2:review 留存 9 条(第六节)、lint `\200B` 八进制转义、文件读取专项默认 5 秒超时、deskfox.ai 国内首屏 65–74 秒、Rosetta 下 MacUpdater 识别为 ARM、macOS 27.2 对 Intel 应用的兼容性提示、规范修订(构建环境措辞、观察期与用户量挂钩)、国内主机 Docker 日志轮转回执(第十三条第 2 项)。
+
