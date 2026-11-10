@@ -84,3 +84,12 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 - **Windows 电脑**:fox-take 安卓自检已过(第 4 项);代理测试的 Windows 路径问题已由本端在 fox-take `61fbb4a` 修复并交鹏鹏重跑;第 1、2、3、5 项待回执。
 - 本分支合 main 待李哲同意。
 
+### 交接(李哲的电脑,2026-11-10,第二轮补充:重复执行清理)
+
+笑南的电脑两个会话各自完成了同一第二轮任务,结果一致,但留下两处重复:
+
+**交笑南的电脑**(回执写本节末尾):
+1. **deskfox-web 去重**:`b0f4ffe`(`scripts/new-api-log-retention/`)与 `f059f282`(`scripts/new-api/`)是同一套日志保留文件。保留 `scripts/new-api-log-retention/`(本单复核已引用),删除 `scripts/new-api/`;若其 README 有另一份没有的安装路径说明,先并入保留目录的 README。回执写提交号。
+2. **删除重复分支**:deskfox 的 `collab-verification` 内容与已合入 main 的第二轮回执(`c90ce9d03`)重复,且分支名不带 `feat/` 前缀,不合并,直接删除远端分支。其中多出的验证结论(`f56cf9b0f` 上冻结安装、29 项 typecheck 与六包单测通过)已记在本节,不会丢。
+3. 今后按指南 §四第 6 条,接手前写「接手中」。
+
