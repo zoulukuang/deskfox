@@ -656,5 +656,6 @@ Windows 电脑同样适用第 2 条(草稿 → 清单 → 观察 → 公开 → 
 - 三份回执齐:Windows 公开 `f6a539d8b`、Mac Intel 官网 `18c6d1774`、Windows 官网 `6926dc136`;本端独立回读通过(见台账两条 12.1 条目)。
 - **2026.12.1 双端正式上线**:macOS(arm64 + x64)与 Windows x64,GitHub / Gitee / CDN / 更新清单 / 两站官网全部为 12.1。
 - 本单 status 改 done;`main` 合并 `release-handoff`(含 `release/2026.12.1` 全部代码)并推送;删 `release/2026.12.1` 与 `release-handoff`,tag 保留。
-- 遗留到 12.2:review 留存 9 条(第六节)、lint `\200B` 八进制转义、文件读取专项默认 5 秒超时、deskfox.ai 国内首屏 65–74 秒、Rosetta 下 MacUpdater 识别为 ARM、macOS 27.2 对 Intel 应用的兼容性提示、规范修订(构建环境措辞、观察期与用户量挂钩)、国内主机 Docker 日志轮转回执(第十三条第 2 项)。
+- 遗留到 12.2:review 留存 9 条(第六节)、lint `\200B` 八进制转义、文件读取专项默认 5 秒超时、deskfox.ai 国内首屏 65–74 秒、Rosetta 下 MacUpdater 识别为 ARM、macOS 27.2 对 Intel 应用的兼容性提示、规范修订(构建环境措辞、观察期与用户量挂钩)。
+- 更正(2026-11-10,李哲的电脑):国内主机日志由 deskfox-web 侧自动处理,主机上 `new-api-log-retention.timer` 运行中、new-api compose 已设 `max-size: 50m`,第十三条第 2 项关闭。此前本端按 `/etc/docker/daemon.json` 判断「未配置」是查错了位置。
 
