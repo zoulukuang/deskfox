@@ -23,28 +23,98 @@
 
 ## [Windows] 2026.12.1 - 2026-11-09
 
-与 macOS 2026.12.1 同源同号(分支 `feat/share-only-on-11.2`)。基线 `ship-prod-2026.11.1` 同代码的 11.2 基线,**不含** 2026.12.0 的附件成本保护 / Electron 升级批次。只带:
+与 macOS 2026.12.1 同源同号，正式候选源码为 `release/2026.12.1` 的 `e766f06cab`。以 11.2 同源代码为基线，保留附件的 11.2 行为，并纳入以下改动。
 - REQ-148 双站分享(share-routing cherry-pick,含 Windows 路径校验 `83d995636`)
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick;Windows 2026.12.0 已带,12.1 不倒退)
+- 后台恢复须健康才报就绪(`b4b54a58ad` 仅代码三文件 cherry-pick,`fix/sidecar-healthy-ready-12.1` a5c709cc6;李哲 2026-11-09 决定纳入;候选源码头 ce71d3bd1)
+- Electron 42.3.3 → 42.11.15 维护更新(`fix/electron-42-11-15` a2a9bba23,R4 override bun.lock;修 safeStorage 钥匙串弹窗与退出挂起;李哲 2026-11-09 决定纳入;候选源码头 e766f06ca)
 
 号线 2026.11.0 → 2026.12.1 跳过已对外发布且禁降级的 2026.12.0。**需在 Windows 机器上打包**。
 
-(to be filled: commits / plugin / installer path after ship)
+**门 3 候选制品（Windows 电脑）**。`DeskFox-2026.12.1-win-x64.exe`，340,746,094 字节，SHA-256 `eb8e07bf06968bd24b990ca2c3203d3ada71fa28c298aaeb174c41dd2d7a1d36`。静态校验、D 盘隔离虚拟机全新安装与两次冷启动、11.1／12.0 覆盖升级和副本续聊均通过。门 4 公开更新复验通过，24 小时观察最早于 2026-11-11 00:46:32（+08）结束，Release 链接待公开后填写。
+
+**发布（2026-11-10 14:51 +08，Windows 电脑）**：[GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.1)，tag `ship-prod-2026.12.1` → `e766f06cab`。国内下载：[Windows](https://dl.clawtray.com/DeskFox-2026.12.1-win-x64.exe)。blockmap 357,003 字节，SHA-256 `5364fb46…f000`。更新清单 `latest.yml` 与旧 Tauri 迁移桥 2026-11-10 00:46 切换（备份 `/var/backups/deskfox/2026.12.1-windows-20261109T1636Z`），D 盘虚拟机 12.0 → 12.1 公开更新验收通过；李哲决定 14:49 提前结束观察。官网两站四页 15:37 切换（官网仓 `9b37d95b`，运营正本 `6cfaf53e`）。
+
+**李哲的电脑独立回读（2026-11-10 15:45 +08）**：两个 tag 均指向 `e766f06ca`；Windows Release 已公开、资产哈希一致；`latest.yml` / `latest-mac.yml` 均为 2026.12.1；四页 Windows / Mac Apple 芯片 / Mac Intel 下载均为 12.1，GitHub 与 CDN Windows 安装包 200。
 
 ---
 ## [macOS] 2026.12.1 - 2026-11-09
 
-基线 `ship-mac-prod-2026.11.2`,**不含** 2026.12.0 的附件成本保护 / Electron 升级 / updater 禁降级批次。只带:
+基线为 `ship-mac-prod-2026.11.2`，正式候选源码为 `release/2026.12.1` 的 `e766f06cab`。本次从该基线选入以下改动。
+
 - REQ-148 双站分享(share-routing,`af056a70c7` + 修复 `49442977b` / `83d995636` / `797abd35f` / `ef012db88` cherry-pick)
 - 配置型供应商断开后列表不刷新修复(provider-disconnect-stale)
 - updater 禁止降级保护(`68397f2a0` 仅代码三文件 cherry-pick,两端共用)
+- 后台恢复须健康才报就绪(`b4b54a58ad` 仅代码三文件 cherry-pick,`fix/sidecar-healthy-ready-12.1` a5c709cc6;李哲 2026-11-09 决定纳入;候选源码头 ce71d3bd1)
+- Electron 42.3.3 → 42.11.15 维护更新(`fix/electron-42-11-15` a2a9bba23,R4 override bun.lock;修 safeStorage 钥匙串弹窗与退出挂起;李哲 2026-11-09 决定纳入;候选源码头 e766f06ca)
 
 号线直接从 2026.11.2 跳到 2026.12.1:macOS 2026.12.0 已对外发布且其 updater 禁降级,新包必须高于它。
 
-(to be filled: commits / plugin / installer path after ship)
+**门 3 候选制品（笑南的电脑）**。四份制品的签名、Apple 公证票据与静态校验通过。
+
+| 制品 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `DeskFox-2026.12.1-mac-arm64.dmg` | 339,413,656 | `34e3cb2487f417c9e96c7fb04924b0dd6fc54b17f222845bcbf37ebd81a99e3c` |
+| `DeskFox-2026.12.1-mac-arm64.zip` | 351,399,552 | `26ab02d868aaffe73138413097bbab62412b2ddbd3482931a06d0be4f48553fe` |
+| `DeskFox-2026.12.1-mac-x64.dmg` | 357,580,835 | `e61b348b6ea244fc952a2e9e5092153883ccd0d9f470188d16e868cb80e343e2` |
+| `DeskFox-2026.12.1-mac-x64.zip` | 369,658,606 | `5ab88e3e478c18bfe3ae232b820f5a94b6d84c22a24de6880ed46e0367dcb798` |
+
+**发布（2026-11-10 11:42 +08，笑南的电脑）**：[GitHub Release](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.1) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.1)，tag `ship-mac-prod-2026.12.1` → `e766f06cab`。国内下载：[Apple 芯片](https://dl.clawtray.com/DeskFox-2026.12.1-mac-arm64.dmg) / [Intel](https://dl.clawtray.com/DeskFox-2026.12.1-mac-x64.dmg)。更新清单 `latest-mac.yml` 2026-11-10 01:21 先切 arm64，11:42 并入 x64（双架构清单 SHA-256 `6604f22cb800660358d887852eb8d23c9e176fd853d482b9cc7595c320318c7d`，备份 `/var/backups/deskfox/2026.12.1-mac-dual-20261110T034213Z/`）。官网两站 arm64 链接 11:47 切换（官网仓 `9bf27ecc`），按第 23 条提前放行后，Intel 官网入口于 14:55 回读通过（官网仓 `5a34a183`）。四页与提交一致，六条下载链接返回 200。
+
+**李哲的电脑独立回读（2026-11-10 11:50 +08）**：tag 指向 `e766f06ca`；GitHub Release 非草稿、8 份资产大小与 SHA-256 同上表；deskfox.cn 首页与 deskfox.ai 三语产品页 arm64 链接为 2026.12.1、x64 仍 2026.11.2；CDN 与 GitHub arm64 DMG 均 200；线上清单 version 2026.12.1 含四条 OSS 地址。
 
 ---
+> 以下两条 2026.12.0 条目从 origin/main 08a670659 原样补回（2026-11-09，李哲的电脑）。该版本已对外发布，官网下载于 2026-11-03 切回 11.2 / 11.1（官网仓 10d9a10）；其附件成本保护留在 2026.12.0，Electron 维护更新已单独纳入 2026.12.1。
+
+## [macOS] 2026.12.0 - 2026-10-21
+
+**主题**：REQ-142/143/144 附件成本保护、REQ-148 双区域分享，以及更新安全和发布前稳定性修复。Electron 42.11.15 避免钥匙串过早初始化；后台恢复仅在健康检查通过后报告就绪。
+
+**验收**：完整实际 pre-push 通过（29 包类型、六包测试）；Finder 混合拖放、取消保留草稿、发送回复、后台恢复、原生终端、私有旧库副本两次冷启动与续聊通过；中英文分享在浏览器完整展示并取消发布。两架构 app/DMG 全部公证 Accepted，四份日志无 issues，票据、Gatekeeper、DMG 挂载内容和 ZIP CRC 通过。Intel/Rosetta 实际对话及退出通过；Intel 真机性能未验收、Rosetta 启动延迟保留，按用户本次明确授权豁免发布阻断。
+
+| 安装包 | bytes | SHA-256 |
+|---|---:|---|
+| DeskFox-2026.12.0-mac-arm64.dmg | 398891064 | `d8dde7d6c2eebcfd86a2bcea1c09d51291b664e6024685ccd8f223493a4762f9` |
+| DeskFox-2026.12.0-mac-x64.dmg | 417012812 | `45299536f84974ef41cf49766d8c334ee3912c0eae2e2c07b21bb27540d7b599` |
+
+**Release**：[GitHub](https://github.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0) / [Gitee](https://gitee.com/zoulukuang/deskfox/releases/tag/ship-mac-prod-2026.12.0)
+
+**国内下载**：[Apple 芯片](https://dl.clawtray.com/DeskFox-2026.12.0-mac-arm64.dmg) / [Intel](https://dl.clawtray.com/DeskFox-2026.12.0-mac-x64.dmg)
+
+**发布验证**：tag 来源 `d7b671a15a`，main/tag 已推送；GitHub 两 DMG digest 与本地一致。Mac latest-mac.yml 为 2026.12.0，包含双架构 ZIP/DMG 四条且 SHA-512/大小匹配、首尾 Range 字节匹配。两站四个下载页面由官网仓已推送 `e6531fe` 定点部署，六条安装链接均 200；分享服务正常，既有分享说明/图片保留。Windows latest.yml 与发布前逐字节相同，SHA-256 `528b06a863f6f5fbe7c3cf3c299700efe32b5efb8d0a538bc39fababaa2647d9`。实际本机正式安装未替换；所有私有备份均未上传。
+
+完整制品哈希、测试及公证续发记录见 [mac-release-readiness](./features/mac-release-readiness/3-changelog.md)。
+
+---
+
+## [Windows] 2026.12.0 - 2026-10-20
+
+**主题**：附件成本保护与双区域分享；修复 Windows 服务构建及更新器错误降级。
+
+**本次内容**：
+
+- REQ-142／143／144：附件准入、文本路径引用、图片／PDF 附件、大附件发送确认与成本提醒。
+- REQ-148：按区域发布与取消会话分享；同区域私有定时备份，备份保留七天，恢复应用删除记录；公开分享保留至取消。
+- SolidStart Windows 入口字符串与 URL 路由补丁，分享回归精确隔离模型目录刷新请求。
+- 更新器配置渠道后显式禁止降级，防止较旧线上版本覆盖已安装新版并导致原库被隔离。
+
+**验收**：29 包类型与六包测试、159 项 E2E、65 项原速性能及四项 Windows 六倍限速通过；更新／数据库边界 52 项、桌面专项 172 项通过。实际升级及两次独立冷启动、旧会话恢复视觉确认、CSV／PNG／PDF 外部拖放通过。
+
+**发布产物**：仅使用已验收 `windows-candidate-r2`，339951837 bytes，SHA-256 `3982605b8a31d4da6c85af89af782fbd2f026e80c49d2d9d04eef90552cff775`。原 windows-candidate 已作废。Mac 保持 2026.11.2，本次不发布。
+
+**Release**：https://github.com/zoulukuang/deskfox/releases/tag/ship-prod-2026.12.0
+**国内 CDN**：https://dl.clawtray.com/DeskFox-2026.12.0-win-x64.exe
+**installer**：`D:\project\opencode-fork\logs\release-20261019\windows-candidate-r2\DeskFox-2026.12.0-win-x64.exe`
+
+**发布验证**：GitHub 非 draft／非 prerelease，资产 digest 与 CDN 完整下载 SHA 一致；Electron 与旧 Tauri Windows 更新入口均为 2026.12.0。两站首页链接已更新（官网仓 ea9eb08），Mac 2026.11.2 清单逐字节未变。发布 tag 指向 1983d02da3，完整 pre-push 通过，main 与 tag 已推送。
+
+完整变更、风险、备份和验收证据见 [release-readiness](./features/release-readiness/3-changelog.md)。
+
+---
+
+---
+
 ## [macOS] 2026.11.2 - 2026-09-17
 
 **主题**:对外发版收口批 —— 构建版本号注入 + 消息不丢 + 引用回看 + 三簇高频误触
