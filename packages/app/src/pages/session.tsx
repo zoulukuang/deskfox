@@ -22,7 +22,8 @@ import {
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
-import { debounce } from "@solid-primitives/scheduled"
+// FORK: 合并文件变动触发的差异刷新 [feat: deskfox-vcs-refresh-overload] 2026-11-11
+import { createVcsRefresh } from "@/pages/session/vcs-refresh"
 import { useLocal } from "@/context/local"
 import { FileProvider, selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
@@ -807,7 +808,8 @@ export default function Page() {
         : skipToken,
     }
   })
-  const refreshVcs = debounce(() => void queryClient.invalidateQueries({ queryKey: vcsKey() }), 100)
+  // FORK: 已发出的差异请求结束后再合并刷新 [feat: deskfox-vcs-refresh-overload] 2026-11-11
+  const refreshVcs = createVcsRefresh(queryClient, vcsKey, () => vcsQuery.isFetching)
   const reviewDiffs = () => {
     if (reviewMode() === "git" || reviewMode() === "branch")
       // avoids suspense
