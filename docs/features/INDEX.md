@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | in-progress | 高频文件变动触发重复 Git 差异请求，导致回答提交和目录树等待本地连接。修复会话页刷新合并，回归覆盖慢差异接口和交互。 |
+| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | on-hold | 高频文件事件导致 Git 差异请求积压，Windows 已有修复和负载验证；macOS 后台未异常退出、文件事件密集，同因待现场确认。两端排查和已有代码统一留在 `fix/deskfox-vcs-refresh-overload`，不合 main、不发布。退出：再次复发或用户明确恢复排查。 |
 | [release-2026.12.1](./release-2026.12.1/) | done | **2026.12.1 双端已上线**(2026-11-10):11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪 + Electron 42.11.15;tag `ship-mac-prod-2026.12.1` / `ship-prod-2026.12.1` → `e766f06ca`;Intel 版 Rosetta 验证。 |
 | [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.2;第二轮:笑南的电脑已完成(DeskFox / Codex 工具核验 6 格、日志机制入 deskfox-web `b0f4ffe`);交 Windows 电脑:Git 配置、署名、Python 别名、工具核验、代理测试重跑。 |
 | [release-gate-spec](./release-gate-spec/) | done | 测试与发布规范 v1.0:四道门发版正本(候选冻结 / local 候选验收 / 正式制品 / 分级放行)+ CLAUDE.md 发版速查 + 三份治理文档指针(2026-11-09,Tiny,docs-only) |
