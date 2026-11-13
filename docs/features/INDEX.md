@@ -20,7 +20,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
-| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | on-hold | Windows 已有差异刷新合并修复；2026-11-13 Mac NetLog 确认同类连接积压，差异请求发送前等待约 270 秒、文件树等待约 84 秒。真实 FoxTake 副本 186 个未跟踪文件串行三轮：Git 调用均值约 4.72 秒，其中未跟踪部分约 4.65 秒；额外并发耗时未量化，单次成本尚未优化。证据与总结统一留在 `fix/deskfox-vcs-refresh-overload`，Mac local 对照未做，不合 main、不发布。退出：用户安排验证/修复推进或再次补充现场。 |
+| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | spec | **已记为需求，待排版本**(2026-11-13,李哲):Git 差异请求积压占满本地连接，导致文件树一直加载、发消息超时。两端现场已证实；源头是监听不读 `.gitignore`(触发放大)+ 每个未跟踪文件串行两次 git(FoxTake 186 个约 4.7 秒)。短期范围见 `1-spec.md`:刷新合并(`8d979a0a9b` 已完成)+ 忽略路径不触发刷新 + `.git/` 过滤修正 + 切换判断按内容比较；上游三笔修复随追上游 v2 获得。不合 main、不发布，等李哲合并其他需求排版本。 |
 | [release-2026.12.1](./release-2026.12.1/) | done | **2026.12.1 双端已上线**(2026-11-10):11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪 + Electron 42.11.15;tag `ship-mac-prod-2026.12.1` / `ship-prod-2026.12.1` → `e766f06ca`;Intel 版 Rosetta 验证。 |
 | [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.2;第二轮:笑南的电脑已完成(DeskFox / Codex 工具核验 6 格、日志机制入 deskfox-web `b0f4ffe`);交 Windows 电脑:Git 配置、署名、Python 别名、工具核验、代理测试重跑。 |
 | [release-gate-spec](./release-gate-spec/) | done | 测试与发布规范 v1.0:四道门发版正本(候选冻结 / local 候选验收 / 正式制品 / 分级放行)+ CLAUDE.md 发版速查 + 三份治理文档指针(2026-11-09,Tiny,docs-only) |
