@@ -7,6 +7,8 @@ import { Git } from "@/git"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { VcsEvent } from "@opencode-ai/schema/vcs-event"
+// FORK: Batch untracked Git patches for Windows refresh latency [feat: deskfox-vcs-refresh-overload]
+import { untrackedDiffs } from "./vcs-untracked-diffs"
 
 const PATCH_CONTEXT_LINES = 2_147_483_647
 const MAX_PATCH_BYTES = 10_000_000
@@ -172,13 +174,27 @@ const files = Effect.fnUntraced(function* (
   batch: { patches: Map<string, string>; capped: boolean },
   options?: DiffOptions,
 ) {
+  // FORK-BEGIN: Reuse one Git batch for untracked patch text and line counts [feat: deskfox-vcs-refresh-overload]
+  const untracked = yield* untrackedDiffs(git, cwd, list, {
+    context: options?.context ?? PATCH_CONTEXT_LINES,
+    maxOutputBytes: MAX_TOTAL_PATCH_BYTES,
+  })
+  // FORK-END
   const next: FileDiff[] = []
   let total = 0
   let capped = false
 
   for (const item of list.toSorted((a, b) => a.file.localeCompare(b.file))) {
-    const stat = map.get(item.file) ?? (item.status === "added" ? yield* git.statUntracked(cwd, item.file) : undefined)
-    const patch = yield* patchForItem(git, cwd, ref, item, batch, capped, options)
+    // FORK-BEGIN: Missing batch entries retain the existing file-level behavior [feat: deskfox-vcs-refresh-overload]
+    const added = untracked?.get(item.file)
+    const stat = map.get(item.file) ?? added ?? (item.status === "added" ? yield* git.statUntracked(cwd, item.file) : undefined)
+    const patch =
+      added && (added.patch !== undefined || capped)
+        ? !capped && Buffer.byteLength(added.patch ?? "") <= MAX_PATCH_BYTES
+          ? added.patch || emptyPatch(item.file)
+          : emptyPatch(item.file)
+        : yield* patchForItem(git, cwd, ref, item, batch, capped, options)
+    // FORK-END
     const result: { patch: string; capped: boolean } = capped
       ? { patch, capped: true }
       : totalPatch(item.file, patch, total)

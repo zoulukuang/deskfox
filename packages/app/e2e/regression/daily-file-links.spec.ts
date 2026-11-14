@@ -1,6 +1,6 @@
 // FORK-ONLY: visible Markdown link navigation [feat: daily-file-links] 2026-11-14
 import { expect, test } from "@playwright/test"
-import { bootstrapContextFlow } from "../utils/context-flows"
+import { bootstrapContextFlow, openFileInPreview } from "../utils/context-flows"
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -71,6 +71,48 @@ test("opens an encoded chat file link and navigates document sections without le
   await expect(absoluteLink).toHaveAttribute("href", "C:/OpenCode/ContextFlows/guide%20space.md#target-section", { timeout: 5000 })
   await absoluteLink.click()
   await expect(viewer.getByText("Correct file contents.", { exact: true })).toBeVisible()
+})
+
+test("a cross-document link takes precedence over a previous scroll position on revisit", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "deskfox", {
+      value: {
+        invoke: async () => 1,
+        listen: async () => () => {},
+      },
+    })
+  })
+  await bootstrapContextFlow(page, {
+    files: [
+      { name: "entry.md", content: "[Jump to the guide](./guide.md#目标章节)" },
+      { name: "other.md", content: "## 目标章节\n\nUnrelated document" },
+      {
+        name: "guide.md",
+        content: [
+          "# Guide top",
+          ...Array.from({ length: 70 }, (_, index) => `Paragraph ${index}.`),
+          "## 目标章节",
+          "Correct target",
+          "[Back to top](#guide-top)",
+        ].join("\n\n"),
+      },
+    ],
+  })
+  const viewer = page.locator('[data-context="file-viewer"]:visible')
+  const target = viewer.getByRole("heading", { name: "目标章节", exact: true })
+  const top = viewer.getByRole("heading", { name: "Guide top", exact: true })
+  await openFileInPreview(page, "entry.md", "Jump to the guide")
+  await viewer.getByRole("link", { name: "Jump to the guide" }).click()
+  await expect(target).toBeInViewport({ ratio: 1 })
+  await viewer.getByRole("link", { name: "Back to top" }).click()
+  await expect(top).toBeInViewport({ ratio: 1 })
+  await openFileInPreview(page, "other.md", "Unrelated document")
+  await openFileInPreview(page, "guide.md", "Correct target")
+  await expect(top).toBeInViewport({ ratio: 1 })
+  await openFileInPreview(page, "entry.md", "Jump to the guide")
+  await viewer.getByRole("link", { name: "Jump to the guide" }).click()
+  await expect(viewer.getByText("Correct target")).toBeVisible()
+  await expect(target).toBeInViewport({ ratio: 1 })
 })
 
 test("opens the literal percent/hash/question filename even when decoded lookalikes exist", async ({ page }) => {

@@ -1,5 +1,5 @@
 // FORK-ONLY: scoped Markdown fragment navigation [feat: daily-file-links] 2026-11-14
-import { createEffect, createSignal, onCleanup } from "solid-js"
+import { createEffect, createSignal, onCleanup, untrack } from "solid-js"
 import { resolveAbsolute } from "@/utils/local-asset"
 
 const [requested, setRequested] = createSignal<{ file: string; fragment: string }>()
@@ -22,6 +22,7 @@ export function createMdFragmentNavigation(
   root: () => string | undefined,
   path: () => string | undefined,
   active: () => boolean = () => true,
+  onScroll?: () => void,
 ) {
   let claimed: ReturnType<typeof requested>
   onCleanup(() => {
@@ -39,7 +40,9 @@ export function createMdFragmentNavigation(
     claimed = request
     const scroll = () => {
       if (requested() !== request) return
-      if (scrollMdFragment(scope, request.fragment)) setRequested(undefined)
+      if (!scrollMdFragment(scope, request.fragment)) return
+      untrack(() => onScroll?.())
+      setRequested(undefined)
     }
     // Markdown parsing is asynchronous: wait for this document's heading DOM.
     const observer = new MutationObserver(scroll)

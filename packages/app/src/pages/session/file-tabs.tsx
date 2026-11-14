@@ -396,6 +396,14 @@ function createScrollSync(input: { tab: () => string; view: ReturnType<typeof us
     handleScroll,
     queueRestore,
     setViewport,
+    // FORK: A link's anchor supersedes the position restored when this tab remounts [feat: daily-file-links]
+    rememberFragment() {
+      if (!scroll) return
+      if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame)
+      scrollFrame = undefined
+      pending = undefined
+      input.view().setScroll(input.tab(), { x: scroll.scrollLeft, y: scroll.scrollTop })
+    },
   }
 }
 
@@ -1350,7 +1358,8 @@ export function FileTabContent(props: {
   // FORK: MD 内链点击拦截 — 用容器 ref 监听点击事件(2026-05-05 P0 fix:移除 TOC,user 不要大纲面板)
   const [mdContainerRef, setMdContainerRef] = createSignal<HTMLDivElement | undefined>()
   // FORK: scope the requested fragment to this file after Markdown renders [feat: daily-file-links] 2026-11-14
-  createMdFragmentNavigation(mdContainerRef, () => sdk().directory, path, () => activeFileTab() === props.tab)
+  createMdFragmentNavigation(mdContainerRef, () => sdk().directory, path, () => activeFileTab() === props.tab,
+    scrollSync.rememberFragment)
 
   // MD 内链点击拦截:相对路径 *.md / *.txt / 等 → 调 props.onOpenTab 在查看器打开
   // FORK: REQ-075 — 逻辑提取到 md-link-click.ts 与聊天区共享,此处 baseDir=当前文件所在目录,

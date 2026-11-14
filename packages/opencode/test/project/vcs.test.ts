@@ -236,6 +236,116 @@ describe("Vcs diff", () => {
     { git: true },
   )
 
+  // FORK: protect Windows diff latency while preserving Git's patch output [feat: deskfox-vcs-refresh-overload]
+  it.instance(
+    "diff('git') batches untracked files without touching the user's index",
+    () =>
+      Effect.gen(function* () {
+        const instance = yield* TestInstance
+        const directory = instance.directory
+        const commands = yield* Git.Service
+        const trace = path.join(directory, ".git", "qa-trace.jsonl")
+        const index = path.join(directory, ".git", "index")
+        const objects = path.join(directory, ".git", "objects")
+        yield* write(path.join(directory, ".gitattributes"), "*.dat -diff\n")
+        yield* write(path.join(directory, ".gitignore"), "ignored/\n")
+        yield* write(path.join(directory, "ignored", "tracked.txt"), "tracked\n")
+        yield* git(directory, ["add", ".gitattributes", ".gitignore"])
+        yield* git(directory, ["add", "-f", "ignored/tracked.txt"])
+        yield* git(directory, ["commit", "--no-gpg-sign", "-m", "track ignored sample"])
+        yield* git(directory, ["rm", "ignored/tracked.txt"])
+        yield* write(path.join(directory, "ignored", "skip.txt"), "ignored\n")
+        const names = ["space 中文 %.txt", "empty.txt", "binary.dat", "hunk.txt"]
+        yield* write(path.join(directory, names[0]), "without final newline")
+        yield* write(path.join(directory, names[1]), "")
+        yield* write(path.join(directory, names[2]), "Git attribute forces binary\n")
+        yield* write(path.join(directory, names[3]), "one\n+++ fake header\n")
+        const expected = yield* Effect.forEach(names, (name) =>
+          Effect.all([
+            commands.statUntracked(directory, name),
+            commands.patchUntracked(directory, name, { context: 0 }),
+          ]),
+        )
+        const before = yield* Effect.promise(() => fs.readFile(index))
+        const objectNames = () => Effect.promise(() => fs.readdir(objects, { recursive: true }))
+        const beforeObjects = (yield* objectNames()).toSorted()
+        const vcs = yield* init()
+        const previous = process.env.GIT_TRACE2_EVENT
+        process.env.GIT_TRACE2_EVENT = trace.replaceAll("\\", "/")
+        const diff = yield* vcs.diff("git", { context: 0 }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (previous === undefined) delete process.env.GIT_TRACE2_EVENT
+              else process.env.GIT_TRACE2_EVENT = previous
+            }),
+          ),
+        )
+        expect(yield* Effect.promise(() => fs.readFile(index))).toEqual(before)
+        expect((yield* objectNames()).toSorted()).toEqual(beforeObjects)
+        expect(diff.some((item) => item.file === "ignored/skip.txt")).toBe(false)
+        expect(diff.find((item) => item.file === "ignored/tracked.txt")?.status).toBe("deleted")
+        for (const [position, name] of names.entries()) {
+          const [stat, patch] = expected[position]!
+          expect(diff.find((item) => item.file === name)).toEqual({
+            file: name,
+            status: "added",
+            additions: stat?.additions ?? 0,
+            deletions: stat?.deletions ?? 0,
+            patch: patch.text,
+          })
+        }
+        const events = yield* Effect.promise(() => fs.readFile(trace, "utf8"))
+        expect(events.match(/"--no-index"/g) ?? []).toHaveLength(0)
+      }),
+    { git: true },
+    20_000,
+  )
+
+  // FORK: cover a fresh linked Git worktree and scoped diff from a nested directory [feat: deskfox-vcs-refresh-overload]
+  worktreeIt.live(
+    "batches from a subdirectory without importing changes outside the scope",
+    () =>
+      Effect.gen(function* () {
+        const root = yield* tmpdirScoped({ git: true })
+        const tmp = yield* tmpdirScoped()
+        const directory = path.join(tmp, "linked")
+        yield* git(root, ["worktree", "add", "--detach", directory, "HEAD"])
+        const nested = path.join(directory, "sub")
+        yield* write(path.join(directory, "outside.txt"), "outside\n")
+        yield* write(path.join(nested, "one.txt"), "one\n")
+        yield* write(path.join(nested, "two.txt"), "two\n")
+
+        const diff = yield* Vcs.Service.use((vcs) => vcs.diff("git")).pipe(provideInstance(nested))
+        expect(diff.map((item) => item.file)).toEqual(["sub/one.txt", "sub/two.txt"])
+        expect(diff[0]).toMatchObject({ additions: 1, deletions: 0, status: "added" })
+        expect(diff[0]?.patch).toContain("+++ b/sub/one.txt")
+      }),
+    20_000,
+  )
+
+  // FORK: an unborn branch can also contain staged and untracked paths [feat: deskfox-vcs-refresh-overload]
+  it.instance(
+    "batches untracked additions before the initial commit",
+    () =>
+      Effect.gen(function* () {
+        const instance = yield* TestInstance
+        yield* git(instance.directory, ["symbolic-ref", "HEAD", "refs/heads/unborn"])
+        for (const name of ["one.txt", "two.txt", "staged.txt"]) {
+          yield* write(path.join(instance.directory, name), "new contents\n")
+        }
+        yield* git(instance.directory, ["add", "staged.txt"])
+        const vcs = yield* init()
+        const diff = yield* vcs.diff("git")
+        expect(diff.map((item) => item.file)).toEqual(["one.txt", "staged.txt", "two.txt"])
+        for (const item of diff) {
+          expect(item).toMatchObject({ additions: 1, deletions: 0, status: "added" })
+          expect(item.patch).toContain("+new contents")
+        }
+      }),
+    { git: true },
+    20_000,
+  )
+
   it.instance(
     "diff('git') handles special filenames",
     () =>
