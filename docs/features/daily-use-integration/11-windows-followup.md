@@ -60,7 +60,9 @@ diff 和判定统计按 30 秒内开始的请求计数。旧包仅忽略组另�
 
 REQ-146 首次跨文档和跨文档重访均通过。旧包重访后标题顶部为 2330 px，超出 902 px 高视口。新包重访 1.3 秒后标题仍完整位于视口内，范围为 162.8–186.8 px。首次及重访验收步骤（包含固定等待）分别用时 3.98 秒和 2.08 秒。
 
-十轮验收均记录了退出，CDP、隔离 sidecar 和本地模型桩均已关闭，默认协议恢复，原正式版进程保留。
+另用 Computer Use 在新包的 Windows 窗口点击重访链接。前置状态用 CDP 准备，最终点击走 Windows 原生鼠标输入，可见标题与 `TARGET_SECTION`。随后采集的坐标仍为 162.8–186.8 px。[点击后截图](./11-windows-evidence/req146-native-click.png)和[坐标](./11-windows-evidence/req146-native-click.json)已留存，原始记录位于 `candidate-followup-native-anchor`。
+
+十一轮验收均记录了退出，CDP、隔离 sidecar 和本地模型桩均已关闭，默认协议恢复，原正式版进程保留。
 
 ## 证据索引
 
