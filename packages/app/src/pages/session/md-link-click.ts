@@ -73,11 +73,18 @@ export function createMdLinkClickHandler(input: {
       // 永远 preventDefault — 阻断原生导航(REQ-075 SPA 变空白的根因)
       event.preventDefault()
       // 异步检查文件存在;不存在 → toast 提示,不开 tab
+      const alternate = link.closest('[data-component="text-part"]')
+        ? literalPercentFilename(rel, link.textContent)
+        : undefined
       input
         .checkExists(root, rel)
-        .then(() => {
-          if (input.queueFragment !== false) requestMdFragment(root, rel, fragment)
-          input.onOpen(rel, fragment)
+        .then(() => rel, (error: unknown) => {
+          if (!alternate || !(error instanceof Error) || !/\bENOENT\b/.test(error.message)) throw error
+          return input.checkExists(root, alternate).then(() => alternate)
+        })
+        .then((path) => {
+          if (input.queueFragment !== false) requestMdFragment(root, path, fragment)
+          input.onOpen(path, fragment)
         })
         .catch(() => {
           input.toast({ variant: "error", title: "文件不存在", description: rel })
@@ -87,6 +94,13 @@ export function createMdLinkClickHandler(input: {
       event.preventDefault()
     }
   }
+}
+
+function literalPercentFilename(path: string, label: string | null) {
+  const start = path.lastIndexOf("/") + 1
+  const name = path.slice(start)
+  // A model can insert a space after a literal %20 even when the displayed filename is exact.
+  if (label && label !== name && name.replaceAll("%20 ", "%20") === label) return path.slice(0, start) + label
 }
 
 function decodeLink(value: string) {

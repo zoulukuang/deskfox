@@ -1,4 +1,5 @@
 // FORK-ONLY: visible Markdown link navigation [feat: daily-file-links] 2026-11-14
+import { readFile } from "node:fs/promises"
 import { expect, test } from "@playwright/test"
 import { bootstrapContextFlow, openFileInPreview } from "../utils/context-flows"
 
@@ -152,4 +153,44 @@ test("opens the literal percent/hash/question filename even when decoded lookali
       page.locator('[data-context="file-viewer"]').getByText(`Contents of ${name}`, { exact: true }),
     ).toBeVisible()
   }
+})
+
+test("opens the literal percent file from the captured Windows OAuth reply", async ({ page }) => {
+  const capture: { text: string } = JSON.parse(
+    await readFile(
+      new URL("../../../../docs/features/daily-use-integration/12-windows-evidence/oauth-read.json", import.meta.url),
+      "utf8",
+    ),
+  )
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "deskfox", {
+      value: {
+        invoke: async (command: string, args: { path?: string }) => {
+          if (command === "get_file_mtime" && args.path === "report%20 draft.md") {
+            throw new Error("ENOENT: missing fixture")
+          }
+          return 1
+        },
+        listen: async () => () => {},
+      },
+    })
+  })
+  await bootstrapContextFlow(page, {
+    directory: "D:/tmp/deskfox-daily-win-20261114/A",
+    files: [
+      { name: "report%20draft.md", content: "# Exact file\n\nLITERAL_PERCENT" },
+      { name: "report draft.md", content: "# Space file\n\nREAL_SPACE" },
+    ],
+    messages: [
+      { id: "msg_oauth_user", role: "user", text: "Read the fixture files." },
+      { id: "msg_oauth_literal", role: "assistant", text: capture.text },
+    ],
+  })
+  const viewer = page.locator('[data-context="file-viewer"]:visible')
+  const link = page.getByRole("link", { name: "report%20draft.md", exact: true })
+  await expect(link).toHaveAttribute("href", /report%2520%20draft\.md$/)
+  await link.click()
+  await expect(viewer.getByText("LITERAL_PERCENT", { exact: true })).toBeVisible()
+  await page.getByRole("link", { name: "report draft.md", exact: true }).click()
+  await expect(viewer.getByText("REAL_SPACE", { exact: true })).toBeVisible()
 })

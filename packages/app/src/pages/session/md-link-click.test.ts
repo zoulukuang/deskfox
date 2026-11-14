@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { createMdLinkClickHandler, type MdLinkToast } from "./md-link-click"
 
-function setup(opts: { root?: string; baseDir?: string; exists?: boolean } = {}) {
+function setup(opts: { root?: string; baseDir?: string; exists?: boolean; files?: readonly string[]; error?: Error } = {}) {
   const opened: string[] = []
   const checked: string[] = []
   const toasts: MdLinkToast[] = []
@@ -14,7 +14,8 @@ function setup(opts: { root?: string; baseDir?: string; exists?: boolean } = {})
     onOpen: (rel) => opened.push(rel),
     checkExists: (_root, rel) => {
       checked.push(rel)
-      return (opts.exists ?? true) ? Promise.resolve(1) : Promise.reject(new Error("missing"))
+      const exists = opts.files?.includes(rel) ?? opts.exists ?? true
+      return exists ? Promise.resolve(1) : Promise.reject(opts.error ?? new Error("ENOENT: missing fixture"))
     },
     toast: (t) => toasts.push(t),
   })
@@ -43,6 +44,38 @@ function makeEvent(href: string | null, mods: Partial<MouseEvent> = {}) {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
+
+describe("REQ-162 OAuth literal percent links", () => {
+  const href = "D:/proj/docs/report%2520%20draft.md"
+  const exact = "docs/report%20 draft.md"
+  const literal = "docs/report%20draft.md"
+
+  test.each([
+    { files: [literal, "docs/report draft.md"], assistant: true, label: "report%20draft.md", opened: [literal] },
+    { files: [literal, exact], assistant: true, label: "report%20draft.md", opened: [exact] },
+    { files: [literal], assistant: false, label: "report%20draft.md", opened: [] },
+    { files: [literal], assistant: true, label: "Different label", opened: [] },
+    { files: [literal], assistant: true, label: "../report%20draft.md", opened: [] },
+    { files: ["report%20draft.md", "docs/report draft.md"], assistant: true, label: "report%20draft.md", opened: [] },
+    { files: [literal], assistant: true, label: "report%20draft.md", error: new Error("EACCES"), opened: [] },
+  ])("opens only the matching same-directory file: $files ($assistant, $label)", async (input) => {
+    const state = setup({ files: input.files, error: input.error })
+    const click = makeEvent(href)
+    const link = click.event.target as HTMLAnchorElement
+    link.textContent = input.label
+    if (input.assistant) {
+      const part = document.createElement("div")
+      part.dataset.component = "text-part"
+      document.body.append(part)
+      part.append(link)
+    }
+    state.handler(click.event)
+    await flush()
+    expect(state.checked[0]).toBe(exact)
+    expect(state.opened).toEqual([...input.opened])
+    expect(state.toasts.length).toBe(input.opened.length ? 0 : 1)
+  })
+})
 
 describe("createMdLinkClickHandler(REQ-075)", () => {
   test("U1: http(s)/mailto 外链 → 不拦截(交给 external-link 全局委托)", () => {
