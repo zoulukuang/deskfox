@@ -1,5 +1,5 @@
 import { debounce } from "@solid-primitives/scheduled"
-import type { QueryClient, QueryKey } from "@tanstack/solid-query"
+import { hashKey, type QueryClient, type QueryKey } from "@tanstack/solid-query"
 import { createEffect, createSignal } from "solid-js"
 
 // A file watcher can invalidate the review faster than Git can finish a diff.
@@ -11,7 +11,7 @@ export function createVcsRefresh(queryClient: QueryClient, queryKey: () => Query
   createEffect(() => {
     const key = pending()
     if (!key) return
-    if (key !== queryKey()) {
+    if (hashKey(key) !== hashKey(queryKey())) {
       setPending(undefined)
       return
     }

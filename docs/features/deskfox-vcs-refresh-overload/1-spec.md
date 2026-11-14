@@ -1,5 +1,5 @@
 feat-id: deskfox-vcs-refresh-overload
-status: spec
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 需求：Git 差异刷新不再堵塞文件树与发消息（短期修复）
@@ -7,6 +7,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 需求编号：REQ-149（OPENCODE-PLAN `需求池/Git差异请求积压-文件树与发消息被堵.md`；附带发现 REQ-150、REQ-151）
 - 提出：李哲，2026-11-13
 - 版本：未排期。李哲另定时间与其他需求合并成一个版本，按《测试与发布规范》四道门走
+- 2026-11-14 更新：用户确认六项日常使用修复计划并授权实施，版本号仍待候选冻结；实施决定与测试证据见 `2-plan.md` / `3-changelog.md`。
 - 规模：Medium（代码预计 < 150 行，含测试）
 - 依据：本目录 `3-changelog.md` 的 Windows 现场、macOS 复发现场、FoxTake 真实副本计时与源头追查
 
