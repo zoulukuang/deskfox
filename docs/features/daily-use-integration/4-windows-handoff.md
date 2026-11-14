@@ -132,3 +132,7 @@ REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows loca
 ## 剩余项补验回执（Windows 电脑，2026-11-14）
 
 真实 WSL 2 项目外预览隔离通过。OpenAI OAuth 读写完成，真实文件链接因字面 `%20` 文件地址多出空格而未通过。已留存 [补验回执](./3-changelog.md#剩余项补验回执windows-电脑2026-11-14)与[证据](./12-windows-oauth-wsl.md)。
+
+## 接手中（Windows 电脑，Codex，2026-11-14）
+
+续办 REQ-162 字面 `%20` 文件链接，基线 `87d44eab607969bde5db67a5cce4c2874c62ba05`。用已保存真实回复复现，修复后重打隔离 local 包并复验真实 OAuth 六链接。
