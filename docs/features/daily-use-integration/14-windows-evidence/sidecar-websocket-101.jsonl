@@ -1,0 +1,2 @@
+{"at":"2026-11-14T14:33:02.624Z","pid":31652,"event":"observer-start","node":"24.19.0"}
+{"at":"2026-11-14T14:33:38.726Z","pid":31652,"event":"websocket-upgrade","endpoint":"chatgpt.com/backend-api/codex/responses","status":101,"throughAgent":true,"ms":1129,"tls":true}

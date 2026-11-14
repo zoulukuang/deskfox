@@ -1,0 +1,89 @@
+=== ws-fix-install.result ===
+exit=-1 seconds=218.723676
+=== ws-fix-install-mirror.result ===
+exit=0 seconds=70.9806364
+=== ws-fix-build.result ===
+exit=0 seconds=113.1772079
+=== ws-fix-unit-red.log ===
+60 |     return output
+61 |   }
+62 | 
+63 |   try {
+64 |     expect(await connect("")).toContain("502")
+                                   ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "502"
+Received: "read ECONNRESET\n"
+
+      at <anonymous> (D:\project\deskfox-win-daily\packages\opencode\test\plugin\openai-ws-node-proxy.test.ts:64:31)
+(fail) Node WSS sends CONNECT through HTTPS_PROXY and honors NO_PROXY [693.69ms]
+
+ 0 pass
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [8.14s]
+=== ws-fix-test-final.log ===
+(pass) plugin.openai.ws-pool > retries websocket connection limit errors on the next stream attempt [30.66ms]
+(pass) plugin.openai.ws-pool > falls back to HTTP after websocket connection limit retries are exhausted [19.20ms]
+(pass) plugin.openai.ws-pool > shares the websocket retry budget across stream and connection limit failures [33.14ms]
+(pass) plugin.openai.ws-pool > retries websocket idle failures before first event then falls back to HTTP [86.21ms]
+(pass) plugin.openai.ws-pool > keeps websocket retry state until the failed stream becomes idle [1646.71ms]
+(pass) plugin.openai.ws-pool > retries failed websocket streams before using HTTP fallback [16.13ms]
+(pass) plugin.openai.ws-pool > resets websocket stream failures after a completed response [53.27ms]
+(pass) plugin.openai.ws-pool > falls back to HTTP for missing session and title requests [41.86ms]
+(pass) plugin.openai.ws-pool > falls back to HTTP while a websocket lane is busy [103.41ms]
+(pass) plugin.openai.ws-pool > reserves a websocket lane while its socket is connecting [119.27ms]
+(pass) plugin.openai.ws-pool > retries unexpected closes before first event then falls back to HTTP [29.11ms]
+(pass) plugin.openai.ws-pool > does not keep HTTP fallback active after aborting a websocket response [29.29ms]
+(pass) plugin.openai.ws-pool > releases the websocket lane when the response body is cancelled [32.21ms]
+
+ 50 pass
+ 0 fail
+ 189 expect() calls
+Ran 50 tests across 4 files. [6.81s]
+=== ws-fix-pre-push.log ===
+-     0,
+-     false,
+-   ],
+- ]
++ []
+
+- Expected  - 6
++ Received  + 1
+
+      at <anonymous> (D:\project\deskfox-win-daily\packages\app\src\pages\session\timeline\observe-element-offset.test.ts:50:17)
+(fail) reports a divergent native offset once and ignores equal offsets and unrelated mutations [30.39ms]
+
+ 1266 pass
+ 1 fail
+ 4129 expect() calls
+Ran 1267 tests across 155 files. [10.32s]
+error: script "test:unit" exited with code 1
+error: script "test" exited with code 1
+=== ws-fix-timeline-exact.log ===
+bun test v1.3.14 (0d9b296a)
+
+src\pages\session\timeline\observe-element-offset.test.ts:
+(pass) matches only the scroll element or an ancestor containing it [0.42ms]
+(pass) reports a divergent native offset once and ignores equal offsets and unrelated mutations [38.56ms]
+(pass) keeps checking until stale reset-delay callbacks can no longer win [30.77ms]
+(pass) reports the TanStack horizontal LTR offset after reconnect [31.02ms]
+(pass) reports the TanStack horizontal RTL offset after reconnect [31.12ms]
+(pass) cleanup suppresses an already queued delegated offset callback [30.67ms]
+(pass) cleanup cancels reconnect checks and delegated offset observation [15.15ms]
+
+ 7 pass
+ 0 fail
+ 13 expect() calls
+Ran 7 tests across 1 file. [402.00ms]
+=== ws-fix-pre-push-final.log ===
+ Tasks:    29 successful, 29 total
+Cached:    28 cached, 29 total
+Ran 1267 tests across 155 files. [10.47s]
+Ran 41 tests across 14 files. [959.00ms]
+Ran 140 tests across 22 files. [602.00ms]
+Ran 792 tests across 31 files. [9.00s]
+Ran 90 tests across 5 files. [5.22s]
+Ran 187 tests across 22 files. [1039.00ms]
+Ran 137 tests across 18 files. [230.00ms]

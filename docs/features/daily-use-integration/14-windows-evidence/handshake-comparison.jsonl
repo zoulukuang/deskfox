@@ -1,0 +1,4 @@
+{"mode":"direct-ws","node":"24.19.0","outcome":"Opening handshake has timed out","durationMs":8046}
+{"mode":"external-ws","node":"24.19.0","outcome":"HTTP 101","durationMs":789}
+{"mode":"global-ws","node":"24.19.0","outcome":"Opening handshake has timed out","durationMs":8047}
+{"mode":"native-ws","node":"24.19.0","outcome":"HTTP 101","durationMs":1116}

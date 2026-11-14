@@ -1,0 +1,44 @@
+[
+  {
+    "filename": "中文 空格.md",
+    "marker": "CN_SPACE",
+    "href": "D:/tmp/deskfox-daily-win-20261114/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md",
+    "ok": true,
+    "clickMs": 2606.3446000000113
+  },
+  {
+    "filename": "report%20draft.md",
+    "marker": "LITERAL_PERCENT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/A/report%2520draft.md",
+    "ok": true,
+    "clickMs": 214.9896000000008
+  },
+  {
+    "filename": "report draft.md",
+    "marker": "REAL_SPACE",
+    "href": "D:/tmp/deskfox-daily-win-20261114/A/report%20draft.md",
+    "ok": true,
+    "clickMs": 656.2546000000002
+  },
+  {
+    "filename": "report#节.md",
+    "marker": "HASH_NAME",
+    "href": "D:/tmp/deskfox-daily-win-20261114/A/report%23%E8%8A%82.md",
+    "ok": true,
+    "clickMs": 699.4477000000043
+  },
+  {
+    "filename": "100%.md",
+    "marker": "RAW_PERCENT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/A/100%25.md",
+    "ok": true,
+    "clickMs": 672.1407999999938
+  },
+  {
+    "filename": "生成 OpenAI Windows 复验 fix-ws-observe-repack.md",
+    "marker": "OAUTH_WINDOWS_REPORT_FIX-WS-OBSERVE-REPACK",
+    "href": "D:/tmp/deskfox-daily-win-20261114/A/%E7%94%9F%E6%88%90%20OpenAI%20Windows%20%E5%A4%8D%E9%AA%8C%20fix-ws-observe-repack.md",
+    "ok": true,
+    "clickMs": 693.7509999999893
+  }
+]

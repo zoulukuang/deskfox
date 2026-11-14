@@ -1,0 +1,32 @@
+=== before ===
+timestamp=2026-11-14T14:14:24.919Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:14:39.938Z level=ERROR  message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=[isolated] small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:14:41.945Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:14:56.952Z level=ERROR  message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=[isolated] small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:15:00.968Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:15:15.971Z level=ERROR  message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=[isolated] small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:15:23.980Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:15:38.997Z level=ERROR  message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=[isolated] small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:15:55.011Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:16:10.023Z level=ERROR  message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=[isolated] small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:16:40.035Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:17:07.173Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:17:14.549Z level=INFO  message=evaluated permission=read pattern="中文 空格.md" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:17:14.550Z level=INFO  message=evaluated permission=read pattern=report%20draft.md action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:17:14.622Z level=INFO  message=evaluated permission=read pattern="report draft.md" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:17:15.009Z level=INFO  message=evaluated permission=read pattern=report#节.md action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:17:15.009Z level=INFO  message=evaluated permission=read pattern=100%.md action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:17:17.048Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+=== default ===
+timestamp=2026-11-14T14:28:17.801Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:28:26.202Z level=INFO  message=evaluated permission=read pattern="中文 空格.md" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:26.210Z level=INFO  message=evaluated permission=read pattern=report%20draft.md action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:26.224Z level=INFO  message=evaluated permission=read pattern="report draft.md" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:26.238Z level=INFO  message=evaluated permission=read pattern=report#节.md action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:26.260Z level=INFO  message=evaluated permission=read pattern=100%.md action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:26.276Z level=INFO  message=evaluated permission=read pattern="未知\\中文 空格.md" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:27.116Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:28:38.772Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:28:44.430Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:28:46.731Z level=INFO  message=evaluated permission=read pattern="生成 OpenAI Windows 复验 fix-ws-default.md" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-11-14T14:28:47.405Z level=INFO  message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna

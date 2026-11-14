@@ -1,0 +1,13 @@
+[
+  {
+    "id": "req162-openai",
+    "ok": true,
+    "ms": 63176.29890000001,
+    "details": {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "readMs": 22942.6568,
+      "writeMs": 15141.061300000001
+    }
+  }
+]

@@ -76,6 +76,11 @@ Windows OAuth 字面 `%20` 链接补测（2026-11-14）：
 - [ ] C2 真模型：每类实际启用通道抽查生成和引用文件，返回有效链接并实际打开；同名文件不猜，网页和代码示例不被误写。
 - [ ] 闸：app 包级 typecheck、相关自动化与完整 pre-push；不得用 unit 代替真桌面/真模型。
 
+Windows 默认 OAuth WebSocket 续验（2026-11-14）：
+
+- [x] Node 回归：普通 WSS 建连按现有 `HTTPS_PROXY` 规则向本地代理发起 CONNECT。代理收到目标地址，OAuth 头不出现在 CONNECT 请求中；命中 `NO_PROXY` 的目标直接连接。
+- [x] Windows local：复现旧包超时。以新包、默认 OAuth 传输和真实模型完成读取五个文件及生成一个文件，逐一点击六条真实链接并核对内容。[WebSocket 证据、耗时、截图和包哈希](../daily-use-integration/14-windows-oauth-websocket.md)。
+
 ## 回退
 
 A/B/C 分笔提交，可分别 revert。任何请求权限扩大、外部代码执行或错误文件打开都阻止验收；未经双端回执不能标 done。

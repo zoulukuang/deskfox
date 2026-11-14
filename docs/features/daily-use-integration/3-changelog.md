@@ -121,3 +121,11 @@ HTTP ignored 用例在并行构建时曾触发既有保守刷新，保留失败�
 **真实 OpenAI OAuth HTTP 路径的六链接通过。** 用隔离代理诊断配置完成的新会话中，`gpt-5.6-luna` 真实读写并返回六个有效 href。`report%20draft.md` 的原始 href 后缀为 `report%2520draft.md`，点击约 568 ms 显示正确内容。不存在的同名文件未生成链接。使用默认 WebSocket 的新会话在 177 秒观察窗内未完成，失败证据保留，默认路径本轮未通过。
 
 新包 exe SHA-256 `ee678c825ca20d80e13d4d8bfd0264e3fbb318343facc5f47761032474441903`，app.asar SHA-256 `d0917641c40038daad83ba65d0ff460f49806496cfeee5f25ec82c7fa5d18aba`。[隔离构建、原文、截图与日志](./13-windows-oauth-fix.md)。未合 main、未发布。
+
+## 默认 OAuth WebSocket 复验回执（Windows 电脑，2026-11-14）
+
+**REQ-162 本机代理环境下的默认 OpenAI OAuth 通过，六个真实文件链接 6/6。** 旧 local 超时重现。修复在 Node 的 WSS 建连处把按 `ProxyEnv` 选出的现有代理交给原生 CONNECT agent。新隔离 local 包以默认配置运行真实 `openai/gpt-5.6-luna`，读取五个文件用时 22.94 秒，生成并核对文件 15.14 秒。六条链接实际打开正确内容，含字面 `%20`（588 ms）及生成文件（530 ms）。原生鼠标再次点击字面百分号链接，显示正确内容。另在只采集握手信息的诊断副本记录真实 OAuth WebSocket HTTP 101，TLS 校验通过。
+
+构建基线 `a5a9505eec6da053335358d6e49f542084644248`，冻结补丁 SHA-256 `e4ed6caa92c00652e526433c3a69e3416bff6ed69744d36c55ab1259f3103371`。正式验收用 local EXE SHA-256 `216df402a82a5b8968dc184d495b7002c404c2ea6e8743108e342dc31e4586fc`，app.asar SHA-256 `02bcc87ed8348a35c2636659e92c12d1cceaeb93a0aedea982beb78fe5e0dc36`。50 项 OpenAI 相关测试和完整 pre-push 通过。工作流、其他桥接及其他代理协议和平台的实机用例沿用未测状态。产品补丁含 R4 黑名单入口，待当前补丁二次确认后提交和推送。未合 main、未发布。
+
+[逐条点击、包哈希、R4 逐文件复核与日志](./14-windows-oauth-websocket.md)。

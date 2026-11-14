@@ -17,4 +17,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 当前项目内文件 API 检查项目边界；仅删除前端检查不能实现项目外读取。
 - native `get_file_mtime` / `read_binary_file_base64` 接受任意 root，但不提供完整单文件类型/大小/来源限制；B 需专用受控 IPC，不能简单把 root 换成 `/`。
 - shared request prep 在生成 OAuth instructions、messages 前调用 system transform；插件桥接是否消费 system 尚待核查。
+
+## Windows 默认 OAuth WebSocket（2026-11-14）
+
+先在旧 Windows local 包复现超时，再用其 Electron Node 对照默认和显式代理握手。继续复用 `ProxyEnv` 的代理选择。Node 24 的 WSS 连接在 `ws` 构造处显式传入原生 `https.Agent`，复用 Node CONNECT 实现。Bun 继续使用原有 `proxy` 选项。全局代理已经由桌面 sidecar 初始化，产品入口需要显式 agent。先写 Node 子进程回归，再重打隔离 local，与完整 pre-push 并行核验。`ws.ts` 属于上游黑名单，复核及实测后提交需 R4 二次确认。
 - 补充：`file.officePdf` 现有 handler 接受绝对路径，因此 Office 可在 native 验证单文件后复用，不需增加 server API。桥接兼容记录明确存在“不消费 system”的提供方，C 改用同一约定 + 请求副本用户 text 提醒，详情见 spec C。

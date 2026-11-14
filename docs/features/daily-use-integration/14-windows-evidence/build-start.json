@@ -1,0 +1,10 @@
+{
+  "pid": 13772,
+  "exe": "D:\\project\\deskfox-win-final\\packages\\desktop\\dist-deskfox\\win-unpacked\\DeskFox 本地版.exe",
+  "exe_sha256": "216df402a82a5b8968dc184d495b7002c404c2ea6e8743108e342dc31e4586fc",
+  "asar_sha256": "02bcc87ed8348a35c2636659e92c12d1cceaeb93a0aedea982beb78fe5e0dc36",
+  "runtime": "D:\\tmp\\deskfox-daily-win-20261114\\runtime\\final-real-oauth-fix-ws-default",
+  "port": 19731,
+  "time": "2026-11-14T22:27:57.190155+08:00",
+  "head": "a5a9505eec6da053335358d6e49f542084644248"
+}

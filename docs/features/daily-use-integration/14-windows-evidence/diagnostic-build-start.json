@@ -1,0 +1,10 @@
+{
+  "pid": 11332,
+  "exe": "D:\\tmp\\deskfox-daily-win-20261114\\ws-diagnostic-package\\DeskFox 本地版.exe",
+  "exe_sha256": "216df402a82a5b8968dc184d495b7002c404c2ea6e8743108e342dc31e4586fc",
+  "asar_sha256": "fde252b909eaf876d9f2c37d2de12f094137e471aa915b0ce6f6ce3e77ab7f9e",
+  "runtime": "D:\\tmp\\deskfox-daily-win-20261114\\runtime\\final-real-oauth-fix-ws-observe-repack",
+  "port": 19761,
+  "time": "2026-11-14T22:33:01.882059+08:00",
+  "head": "a5a9505eec6da053335358d6e49f542084644248"
+}
