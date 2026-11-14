@@ -10,6 +10,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 2026-11-14 用户明确批准「批准三组提交与推送」。提交前 cached binary diff SHA-256 核验为 `478c31c05c1ec8bb1e430ee1a12d8e45961840800ae96d9ca2ef18560b650b93`，与本组已批准的 14 文件冻结补丁完全一致。R4 与 Large 审签已完成；仅以规范允许的 `--no-verify` 越过已批准的提交守卫，commit 标注逐文件报告与 Large/bug-repro 原因，正常 push 继续执行完整闸。未改变已验产品代码，不合 main、不发布。
 
+代码提交 `6271ed9d02`，已正常推送至 `origin/fix/deskfox-vcs-refresh-overload`。本次 push 完整 pre-push 退出 0，日志 `/tmp/vcs-ignore-approved-push.log`；包括 29 项类型检查及全部既定测试套件，无新增失败。后续仅集成到版本集成分支。若需回退本次忽略过滤，使用 `git revert 6271ed9d02`；此前查询键修复与 HEAD 元数据例外保持各自独立提交。两端 local 验收仍待完成，维持 in-progress。
+
 实际 14 个产品/测试文件 +678/-6；完整文件清单、四个黑名单文件逐项 wrapper 不可替代理由、生成审计、风险与提交方式见 `6-ignore-r4-review.md`。api/server 各仅 3 行 additive 注入；SDK 两文件完全由生成脚本新增 76 行，无手改、无无关同步。
 
 验证：真实 Git 5 pass/66 断言、真实 HTTP handler 1 pass/14 断言、前端异步 6 pass/26 断言，相关 Playwright 1 pass（8.7 秒，无重试）；app/e2e/opencode 类型检查与完整 pre-push 均绿。完整闸为 29 项类型检查、app 1228+41、media 140、飞书 792、branding 82 pass/8 既有 skip、desktop 176、session-ui 125，零失败。父 agent 与另一个子 agent 独立复核未见阻断。
