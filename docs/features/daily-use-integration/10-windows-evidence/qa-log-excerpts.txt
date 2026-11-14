@@ -1,0 +1,43 @@
+
+[
+candidate
+ frozen install and local build]
+install candidate native 0 46.0740944s
+build candidate 0 293.0993718s
+  • signing with signtool.exe  path=dist-deskfox\win-unpacked\DeskFox 本地版.exe
+  • signing with signtool.exe  path=dist-deskfox\win-unpacked\resources\app.asar.unpacked\node_modules\@lydell\node-pty-win32-x64\prebuilds\win32-x64\conpty\OpenConsole.exe
+[deskfox] post-build verify: 最终包含 soffice.exe + 非空 presets ✓
+
+[deskfox] OK 构建完成,产物:
+  exe : D:\project\deskfox-win-daily\packages\desktop\dist-deskfox\win-unpacked\DeskFox 本地版.exe
+  dir : D:\project\deskfox-win-daily\packages\desktop\dist-deskfox\win-unpacked
+
+[
+base
+ frozen install and local build]
+install base native 0 58.8601221s
+build baseline 0 258.7084878s
+  • signing with signtool.exe  path=dist-deskfox\win-unpacked\DeskFox 本地版.exe
+  • signing with signtool.exe  path=dist-deskfox\win-unpacked\resources\app.asar.unpacked\node_modules\@lydell\node-pty-win32-x64\prebuilds\win32-x64\conpty\OpenConsole.exe
+[deskfox] post-build verify: 最终包含 soffice.exe + 非空 presets ✓
+
+[deskfox] OK 构建完成,产物:
+  exe : D:\project\deskfox-win-daily-base\packages\desktop\dist-deskfox\win-unpacked\DeskFox 本地版.exe
+  dir : D:\project\deskfox-win-daily-base\packages\desktop\dist-deskfox\win-unpacked
+
+[OpenAI OAuth sidecar]
+timestamp=2026-11-14T12:02:44.049Z level=ERROR run=dae81217 message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=ses_e261003ceffeHZWU2CPzHcV0m6 small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T12:03:01.075Z level=ERROR run=dae81217 message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=ses_e261003ceffeHZWU2CPzHcV0m6 small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T12:03:20.086Z level=ERROR run=dae81217 message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=ses_e261003ceffeHZWU2CPzHcV0m6 small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T12:03:43.112Z level=ERROR run=dae81217 message="stream error" providerID=openai modelID=gpt-5.6-luna session.id=ses_e261003ceffeHZWU2CPzHcV0m6 small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+
+[Windows MCP]
+2026-11-14T12:09:33.824Z {"id":"req153-two-windows-and-b","ok":true,"ms":10520.137899999998,"details":{"A":"disabled","B":"connected"}}
+2026-11-14T12:09:47.017Z {"id":"req153-cold-state","ok":true,"ms":556.7280000000001,"details":{"A":"disabled","B":"connected"}}
+2026-11-14T12:09:59.461Z {"id":"req153-cold-state","ok":true,"ms":794.6226999999999,"details":{"A":"disabled","B":"connected"}}
+2026-11-14T12:10:00.194Z {"id":"req153-manual-enable","ok":true,"ms":606.8864000000003}
+2026-11-14T12:10:13.078Z {"id":"req153-cold-state","ok":true,"ms":305.3841000000002,"details":{"A":"connected","B":"connected"}}
+2026-11-14T12:10:13.354Z {"id":"req153-readonly","ok":true,"ms":135.36589999999887}
+2026-11-14T12:10:18.311Z {"id":"req153-project-definition","ok":true,"ms":4802.942999999999}
+2026-11-14T12:10:19.045Z {"id":"req153-global-definition-removed","ok":true,"ms":610.4645999999993,"details":{"removed":"absent","readded":"disabled"}}
+2026-11-14T12:11:08.981Z {"id":"req153-late-connection","ok":true,"ms":15429.5131,"details":{"status":"disabled","pidExited":true}}

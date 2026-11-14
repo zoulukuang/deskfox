@@ -114,3 +114,5 @@ Windows 电脑接手时先追加身份/日期/分支头；完成后在本目录 
 ## 接手中(Windows 电脑,Codex,2026-11-14 19:31:50 +08:00)
 
 Windows 电脑（YUEXI）接手本期六项 Windows 验收。接手时远端头 `0c2b6bbd6e987187fc7f4e0ef8cd07c2fa10ca92`，已核实包含 `f517fc04b4` 与 `48909c6959`。独立 worktree 为 `D:/project/deskfox-win-daily`。
+
+本轮 Windows 执行已收口，六项结果、失败和待验项见 [Windows 回执](./3-changelog.md#回执windows-电脑2026-11-14)。

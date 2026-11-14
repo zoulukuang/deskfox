@@ -59,3 +59,31 @@ Mac 多窗口、跨项目隔离、各开关入口、保存失败与完整重启�
 **Mac T04 后续回执（笑南的电脑，2026-11-14）**：精确 `fc96b0b5b5` 修前包与含 `f517fc04b4` 的候选包，六组各执行一次，原始数据及统计经独立复核。候选空闲/ignored/mixed 30 次展开与 30 次普通聊天提交全部 ≤1 秒、全部消息落库；负载后自然清空。基线两种负载各有一次展开及提交 ≥2 秒超时，静默十秒后仍有 21/44 条未完成请求。两版均为实际打包 Electron、真实 watcher/Git/HTTP/SQLite，仅模型使用 loopback stub；CDP 驱动不冒充人工 OS QA。候选实际约 19.34Hz、基线约 19.60–19.63Hz，单轮短测不能外推长期/多机稳定性。逐次数据、依赖/包来源及退出证据见 [7-mac-vcs-load.md](./7-mac-vcs-load.md)。此回执解除前文 Mac T04 待验状态；六轮 QA 应用/后台及假模型均已停止，既有应用保留、默认协议恢复。
 
 六项仍为 in-progress。整批发版前尚需 Windows local（含 T04）、完整已启用模型通道矩阵及其他原 spec 未验项；不把代码集成、浏览器绿或单个真模型样本当作发布验收完成。当前功能提交为 `f517fc04b4`，已批准且正常完整闸推送；后续为验收文档，无新增产品变动，未合 main、未冻结候选、未发布。
+
+## 回执(Windows 电脑,2026-11-14)
+
+Windows 11 家庭版 x64（10.0.26300，YUEXI），Git 2.52.0.windows.1，Bun 1.3.14。接手时从 GitHub 获取的完整头为 `0c2b6bbd6e987187fc7f4e0ef8cd07c2fa10ca92`。确认包含 `f517fc04b42cbb9e47439832dec05f7b23c7a8dc` 和最终产品提交 `48909c6959fa0f02c87c85d945470946e92a65ce`。接手登记已推送，构建时头为 `30d0d13afa2371190212959c3cb7ba25195e63b4`，相对接手时的头仅增交接单登记。修前基线为 `fc96b0b5b5c8f4fce55875ec42b328f4731d6cc5`。
+
+候选和基线分别在独立 worktree 以 Bun 1.3.14 冻结安装，从各自的树执行 `pwsh -NoProfile -File packages/branding/scripts/build-deskfox-electron.ps1 -Env local`，均生成包含 LibreOffice 的 x64 win-unpacked 包。初次安装日志保留了 Bun 缓存冲突和 Node 原生依赖等待，补齐同版 Node 头文件后冻结安装成功用时 46.07 / 58.86 秒，构建用时 293.10 / 258.71 秒（候选 / 基线）。两版 bun.lock SHA-256 同为 `1563688f944b9a8a2d844c1877274c8bc345dac665a3fa437c6a75992df2101e`。
+
+| 包 | exe | exe SHA-256 | app.asar SHA-256 |
+| --- | --- | --- | --- |
+| 候选 | `D:/project/deskfox-win-daily/packages/desktop/dist-deskfox/win-unpacked/DeskFox 本地版.exe` | `995253f32183e238778bc0375c5d5146f7ed4c010b1debb4f77b838943c276f9` | `9f896b89b4814e9f80dd45789b4cf2d19aa7b8688f57060d59deb00990b1bf51` |
+| 基线 | `D:/project/deskfox-win-daily-base/packages/desktop/dist-deskfox/win-unpacked/DeskFox 本地版.exe` | `36c01a5b349f68659995c0167fae80ccdafbebd86b947d3cf4ba5745ce1b47e1` | `7d6e154e300d60ee40e78c94f7da50510bc76ca30b77e2258d50cc71b97aab25` |
+
+实际启动确认 LOCAL 徽标。独立 AppData、HOME、XDG 数据/配置/缓存、A/B Git 项目、Downloads 合成文件和 SQLite 独立。应用自带预览、watcher 与请求处理走打包版 Electron/CDP；截图采自该渲染器，Computer Use 检查到候选窗口和 LOCAL。两包启动都曾报告内置媒体插件固定端口 51737 已由在用正式版占用，正式版保留，六项中的普通聊天和预览走隔离 sidecar。模型仅收到合成夹具任务，复用的鉴权材料只存在于临时隔离配置，随相应运行清理。
+
+| 项目 | 结果 | 实测 |
+| --- | --- | --- |
+| REQ-149 请求积压 | **未通过本轮指标** | 六组 60/60 普通聊天收到 HTTP 204 并落库，最长 161.0 ms。各组 8/10 次目录展开 ≤1 秒。候选 mixed 判定峰值 1，40 秒仍有 1 条短请求，初始窗口未观察到 mixed 的 diff 完成。直接 diff 21.30 秒。已打开的忽略文件预览能更新。详见 [同机对照](./10-windows-evidence.md)。 |
+| REQ-152 文件链接 | **通过** | 文档中的五个盘符链接均命中内容标记，字面 %20 与空格文件区分正确。五个文档链接耗时 144–339 ms。DeepSeek 真模型生成的同五组源文件 href 也逐一点开并核对内容。 |
+| REQ-146 目录跳转 | **未通过重访场景** | 同文档返回及缺失锚点正确，首次跨文档跳转成功。复现：先打开目录并返回顶部，切到另一份含同名标题的文件，再从入口点回目录；目录打开后目标未入视口。目标顶部 2330 px，窗口高度 902 px。保留首次成功与两次重访失败截图。 |
+| REQ-160 项目外预览 | **本机与显式 HTTP 连接通过，WSL 未测** | PDF、DOCX、XLSX、PPTX 均显示唯一文本标记。PDF 约 0.50 秒，XLSX/PPTX 约 3.54/3.55 秒。DOCX 首轮 20 秒时仍在加载，HTTP 200 在约 21.72 秒完成；独立冷启复测返回 20,553 字节，点击至标记显示约 6.51 秒。项目外 Markdown/文本、缺失文件提示、旁边图片/样式不加载均核验。显式 HTTP 测试走独立地址的 loopback 转发，拒绝读取本机同名 PDF。本机没有 WSL 发行版，WSL 保持待验。 |
+| REQ-162 真模型 | **DeepSeek 通过，OpenAI OAuth 未通过** | 候选包中的 DeepSeek `deepseek-chat`（OpenAI-compatible API）真实读取五个合成文件，用时 10.83 秒，生成中文空格报告用时 6.07 秒；未显式要求链接或 Markdown，返回的 6 个完整编码链接均可点击并命中内容。不存在的同名文件未生成链接。第一次显式 `@ai-sdk/deepseek` 初始化失败，留存；OAuth `openai/gpt-5.6-luna` 多次 WebSocket 建连超时，在 97.5 秒观察窗内无完整回复。其余工作流、桥接和无可用凭据通道未测。 |
+| REQ-153 MCP | **双窗口、双冷启、只读和同名定义通过** | A 窗口关闭后另一 A 窗口同步，B 保持开启，切回 A 仍禁用。落盘仅增加 MCP enabled 覆盖，保留既有注释与配置，应用配置补齐 schema，连接参数未复制。退出应用与 sidecar 后冷启两次仍禁用，手动恢复后重启保持开启。只读保存返回错误且 UI 保持，恢复可写后可切换。项目同名定义保留参数，全局定义移除后仅 enabled 覆盖不启动，重新加入后仍按项目意图禁用。慢 stdio 连接关闭后保持 disabled，子进程已退出。 |
+
+REQ-149 详细复核中，tracked 与未跟踪文件合批更新用时 19.83 秒，切 detached HEAD 和分支的组合验证用时 34.85 秒，A 的在途请求期间切至 B 未污染 B。对 force-tracked 文件执行 `git rm` 后，第一个 diff 未列出删除，第二个正确出现 `deleted`，用时约 36.71 秒。串行补测的 10 次目录及 10 次普通提交都在 1 秒内，40 秒时仍有一条 diff 在途。并发样本与串行补测均留档。
+
+REQ-153 另通过实际普通消息请求核对工具列表。fixture 开启时工具存在，项目关闭后工具消失，检查用时 5.88 秒。B 和同 Git 仓另一个 worktree 均保持 connected。第二个 worktree 首次实例化时，应用向其配置补写了 schema，未写 MCP 配置。该 worktree 完成初始化后的复验通过，切换前后配置字节一致，用时 8.75 秒。
+
+[Windows 证据与负载表](./10-windows-evidence.md) 收录代表截图、请求与落库数据索引和完整日志位置。真实模型和工作区证据仅使用本轮合成数据。整体结论为 **Windows 未签整批通过**。本次为功能分支验收，未合 main、未发布。
