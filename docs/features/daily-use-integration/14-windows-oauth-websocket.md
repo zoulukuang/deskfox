@@ -53,4 +53,8 @@ related: ./3-changelog.md ./13-windows-oauth-fix.md ../daily-file-links/1-spec.m
 
 正式六链验收用上面原封构建的包。为补采协议状态，另在离线复制包的 sidecar 入口加载只读诊断订阅。该订阅从 Node HTTP 客户端事件观察目标的 WebSocket Upgrade，仅记录 101、用时、TLS 是否验证和供给 agent 的类别。诊断副本使用与正式验收相同的默认 OAuth 路径完成实际读写及六次点击，首个主会话 WebSocket 于 1129 ms 收到 HTTP 101，TLS 验证通过。诊断副本 app.asar SHA-256 为 `fde252b909eaf876d9f2c37d2de12f094137e471aa915b0ce6f6ce3e77ab7f9e`。先行的两次观察启动未能加载 sidecar 订阅，各自真实六链接完成的运行记录留在本机，握手取证使用实际加载诊断订阅的副本。[101 记录](./14-windows-evidence/sidecar-websocket-101.jsonl) · [诊断订阅脚本](./14-windows-evidence/observe-oauth-ws.cjs) · [诊断副本构建哈希](./14-windows-evidence/diagnostic-build-start.json) · [诊断会话结果](./14-windows-evidence/diagnostic-result.json)。
 
-所有测试副本的 OAuth 凭据已清理，测试进程及监听已退出，协议注册已恢复。隔离资料目录为 `D:/tmp/deskfox-daily-win-20261114/evidence`。本轮签字限实测 Windows 主机、HTTP CONNECT 环境及真实 OpenAI OAuth 这一条用户路径。其他平台、代理协议和模型通道仍待验。产品补丁的分支提交与推送待 R4 二次确认。未合 main、未发布。
+所有测试副本的 OAuth 凭据已清理，测试进程及监听已退出，协议注册已恢复。隔离资料目录为 `D:/tmp/deskfox-daily-win-20261114/evidence`。本轮签字限实测 Windows 主机、HTTP CONNECT 环境及真实 OpenAI OAuth 这一条用户路径。其他平台、代理协议和模型通道仍待验。
+
+## R4 提交与推送
+
+用户批准 SHA-256 为 `e4ed6caa92c00652e526433c3a69e3416bff6ed69744d36c55ab1259f3103371` 的三文件冻结补丁。产品提交 `09d0615cc77c96d2213832b0475bf01f95855172` 含 R4 override 标记，提交差异与批准的补丁 SHA-256 完全一致，三个文件的 Git blob 与验收包构建输入一致。产品提交推送的完整 pre-push 再次通过，29 项类型检查及六个包测试通过，desktop 保留 2 项既有跳过。[推送检查摘要](./14-windows-evidence/approved-push-excerpt.txt)。未合 main、未发布。

@@ -1,0 +1,30 @@
+Bun 1.3.14
+Product commit 09d0615cc77c96d2213832b0475bf01f95855172
+Approved and committed patch SHA-256 e4ed6caa92c00652e526433c3a69e3416bff6ed69744d36c55ab1259f3103371
+ Tasks:    29 successful, 29 total
+Cached:    28 cached, 29 total
+  Time:    50.187s
+[pre-push] fork 包单测 backstop…
+ 1267 pass
+ 0 fail
+Ran 1267 tests across 155 files. [18.25s]
+ 41 pass
+ 0 fail
+Ran 41 tests across 14 files. [1.97s]
+ 140 pass
+ 0 fail
+Ran 140 tests across 22 files. [648.00ms]
+ 792 pass
+ 0 fail
+Ran 792 tests across 31 files. [16.28s]
+ 90 pass
+ 0 fail
+Ran 90 tests across 5 files. [6.08s]
+ 185 pass
+ 2 skip
+ 0 fail
+Ran 187 tests across 22 files. [8.60s]
+ 137 pass
+ 0 fail
+Ran 137 tests across 18 files. [2.79s]
+   d035af867c..09d0615cc7  HEAD -> feat/daily-use-integration
