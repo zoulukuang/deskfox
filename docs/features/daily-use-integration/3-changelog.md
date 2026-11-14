@@ -6,6 +6,8 @@ related: ../deskfox-vcs-refresh-overload/1-spec.md ../daily-file-links/1-spec.md
 
 ## 2026-11-14 追加验收
 
+本轮产品与测试提交为 `48909c6959`；Windows 须包含此提交，旧 local 包没有新增的完整 href 约定。
+
 Mac 多窗口、跨项目隔离、各开关入口、保存失败与完整重启通过，详见 [8-multiwindow.md](./8-multiwindow.md)。OpenAI OAuth 与 DeepSeek API 扩展真实样本通过；OpenAI 首次暴露省略路径问题，已仅在 fork 文件交付 helper 明确禁止省略 href，保留显式格式与内部请求排除规则。10 项请求测试、包级类型、独立复核及完整 pre-push 通过。详细通道结果与前次归因更正见 [9-model-channels.md](./9-model-channels.md)：GetBot/Kimi 调用认证阻断、Anthropic 过期且无对应接入、Alibaba/workflow 未配置鉴权，不能声明所有通道已通过。Windows 交接顶部已有可直接转发文本，尚未代发或代签。未合 main、未发布。
 
 ## 接手中（笑南的电脑，Codex 主会话，2026-11-14）

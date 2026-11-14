@@ -6,6 +6,8 @@ related: ./3-changelog.md ../deskfox-vcs-refresh-overload/1-spec.md ../daily-fil
 
 ## 可直接转发给 Windows agent
 
+本轮最终产品提交为 `48909c6959`（完整 href 修复），接手时必须同时包含此提交与 `f517fc04b4`；旧 local 包不包含最新模型约定。
+
 ```text
 请接手本期 Windows 真机验收。先读 CLAUDE.md、docs/governance/三端协作-Agent接入.md 和测试与发布规范，核实电脑身份，登记并推送“接手中”，避免重复执行。在独立 worktree fetch origin，取 origin/feat/daily-use-integration 的最终头，记录完整 SHA，并确认包含 f517fc04b4；不要沿用旧包或旧 REQ-149 回执。
 
