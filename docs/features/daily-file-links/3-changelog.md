@@ -28,3 +28,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 首轮完整 `.husky/pre-push` 通过：29/29 类型检查；app 1212 unit + 41 browser、media-gen 140、adapter 792、branding 82、desktop 176、session-ui 125。之后补激活态保护与第 26 条测试，push 再跑完整闸；结果另补回执。GUI、Mac/Windows local、历史成品及真模型抽查尚未执行，不标 done。
 
 事后清单：与 A 预清单一致，改 2 个 fork 文件+新增 2 个 fork 文件/测试、上游查看器 4 行注入及本日志。无新依赖、无黑名单、无顺手改、无未理解代码、未使用批量替换。A 可整体 revert；B/C 尚未实施。
+
+### A 浏览器回归补验
+
+`04226381b7` 已推送，push 闸 29 类型检查、app 1213+41、其他包全部通过。追加 `daily-file-links.spec.ts` 使用现有经典布局 harness，真实点击聊天编码链接并检查文档内容和章节进入视口、目录来回跳转、缺失目录不离开会话。
+
+首轮 GUI 失败：文件内容正确但章节未进入视口。诊断发现首次 FileTabContent 在 Suspense 中被销毁时，尚未运行的章节 effect 没有接手请求，却被 cleanup 提前取消。改为只有实际等待该请求的查看器可取消。删除诊断日志后该 GUI 用例通过（Chromium，2.3 秒，retries=0），补充首次挂载销毁单测，相关单元/DOM 合计 27 pass / 0 fail（68 断言），`bun run typecheck:e2e` 通过。
+
+测试只在网络/native fixture 上跑真实前端，不能代替两端 local。native fixture 只允许 `guide space.md` 存在性探测；编码错误或片段混入路径不能假阳性。没有 retry 掩盖失败、没有放宽入视口断言。

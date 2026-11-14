@@ -23,10 +23,11 @@ export function createMdFragmentNavigation(
   path: () => string | undefined,
   active: () => boolean = () => true,
 ) {
+  let claimed: ReturnType<typeof requested>
   onCleanup(() => {
-    const directory = root()
-    const file = path()
-    if (directory && file && requested()?.file === resolveAbsolute(directory, file)) setRequested(undefined)
+    // Suspense can discard a viewer before its effects run. Only the viewer
+    // that actually started waiting for this request may cancel it.
+    if (claimed && requested() === claimed) setRequested(undefined)
   })
   createEffect(() => {
     const request = requested()
@@ -35,6 +36,7 @@ export function createMdFragmentNavigation(
     const file = path()
     if (!request || !scope || !directory || !file || !active()) return
     if (request.file !== resolveAbsolute(directory, file)) return
+    claimed = request
     const scroll = () => {
       if (requested() !== request) return
       if (scrollMdFragment(scope, request.fragment)) setRequested(undefined)

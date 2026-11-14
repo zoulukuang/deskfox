@@ -100,3 +100,30 @@ test("waits until the target viewer becomes active", () => {
     state.dispose()
   }
 })
+
+test("a discarded initial viewer does not cancel a request it never claimed", () => {
+  requestMdFragment("/repo", "guide.md", "section")
+  createRoot((dispose) => {
+    createMdFragmentNavigation(
+      () => undefined,
+      () => "/repo",
+      () => "guide.md",
+    )
+    dispose()
+  })
+  const state = setup()
+  const calls: string[] = []
+  try {
+    const heading = document.createElement("h2")
+    heading.id = "section"
+    heading.scrollIntoView = () => {
+      calls.push(heading.id)
+    }
+    state.container.append(heading)
+    state.setActive(false)
+    state.setActive(true)
+    expect(calls).toEqual(["section"])
+  } finally {
+    state.dispose()
+  }
+})

@@ -4,6 +4,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 文件链接与查看
 
+审签补记（2026-11-14）：用户对主 agent 汇总的 REQ-149 过滤与本节 B 项目外内部预览方案明确回复「批准两项施工方案，继续并行推进」。B 的 Large 施工门已通过；C 的具体 R4 提交仍待实现及测试后的单独复核。
+
 范围依据：用户确认的 2026-11-14 六项计划，本组覆盖 REQ-152、146、160、162。执行：笑南的电脑 / Codex `file_links`，独占 `fix/daily-file-links`。
 
 ## A. 编码与锚点（可独立交付，Medium）
@@ -32,6 +34,8 @@ Office 使用现有 `file.officePdf({path: canonicalAbsolutePath})`：当前 han
 
 将“已定位文件应输出 `[文件名](真实路径)`，不能猜同名文件、不能虚构路径；路径空格/百分号正确编码”的约定注入实际使用的所有模型通道。共享 `LLMRequestPrep.prepare` 是原生、AI SDK 和 workflow 汇合点；原生提供方的 OAuth instructions 也由此派生。插件桥接需要继续核查插件是否保留 system 内容，不能仅改某一模型 prompt。
 
+链接语法使用绝对文件路径、按路径段编码空格/中文/百分号，保留 `/` 分隔与 Windows 盘符，例如 `[报告.pdf](/Users/name/Downloads/report%20draft.pdf)`、`[说明.md](C:/work/docs/guide.md)`；不输出 `file://` URL，不给未经定位的裸文件名拼接猜测地址。遵守用户明确要求的输出格式；不改代码示例里的文字。
+
 已核查飞书 pipeline 的兼容记录：Claude Code 等桥接可能忽略 system 提示，不能只追加 system。选择在 `LLMRequestPrep.prepare` 汇合点调用 fork helper：system 加一次同一约定；发送给模型的 messages 副本中最后一条用户消息追加明确标记的 DeskFox 文件交付提示，字符串和 text-part 数组两种形态都支持。只改请求副本，不修改原消息、持久化历史、工具调用/结果、图片/文件 parts，不生成额外用户轮次；重复调用不重复附加。
 
 该请求副本同时流向 AI SDK、native runtime、OAuth/workflow 和 provider 插件，桥接即使丢弃 system 仍能从用户文本收到约定。未知第三方桥接若连用户文本也自行改写不在客户端可保证范围，必须在真实启用通道抽查中暴露，不能宣称结构测试等于全部模型服从。
@@ -51,7 +55,7 @@ Office 使用现有 `file.officePdf({path: canonicalAbsolutePath})`：当前 han
 - [ ] B2 IPC：缺失、权限、磁盘不可用、超限、类型不支持有准确结果。
 - [ ] B3 GUI：远端/WSL 路径不调用本机 IPC；项目内预览保持原有行为。
 - [ ] B4 Mac/Windows local：项目外 PDF 与普通文档真实看到内容，不以打开空对话框算通过。
-- [ ] C1 集成：原生/AI SDK/OAuth/workflow/启用插件模型均收到共享约定；用户及工具消息不改写。
+- [ ] C1 集成：原生/AI SDK/OAuth/workflow/启用插件模型均收到共享约定；原始/持久化历史消息、工具 parts 不改写，仅模型请求副本追加应用提示。
 - [ ] C2 真模型：每类实际启用通道抽查生成和引用文件，返回有效链接并实际打开；同名文件不猜，网页和代码示例不被误写。
 - [ ] 闸：app 包级 typecheck、相关自动化与完整 pre-push；不得用 unit 代替真桌面/真模型。
 
