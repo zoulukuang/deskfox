@@ -152,3 +152,7 @@ REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows loca
 ## 接手中（Windows 电脑，Codex，2026-11-14 23:19:56 +08:00）
 
 收口六项 Windows 验收。基线 `5fa21778b9b478be3c8e03c0f2afe9db0875a2ae`。按远端头和既有证据逐项核对，在隔离 local 包补测本机可覆盖的缺口。
+
+## 收口回执（Windows 电脑，2026-11-15）
+
+已按接手远端头重打 Windows local，补齐同机负载对照、导航、预览错误和 WSL、MCP、可用真实模型等本机检查。实验原生 OpenAI 运行时失败及仍待验边界见 [六项回执](./3-changelog.md#六项验收收口回执windows-电脑2026-11-15)与[证据](./15-windows-closeout.md)。未合 main、未发布。
