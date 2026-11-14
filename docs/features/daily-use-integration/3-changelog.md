@@ -113,3 +113,11 @@ HTTP ignored 用例在并行构建时曾触发既有保守刷新，保留失败�
 | REQ-160 WSL 项目外预览隔离 | **通过** | 使用实际 WSL 2 Alpine 与 Linux OpenCode sidecar。项目内文本正常显示。点击两条 Linux 项目外 PDF、DOCX 和四条 Windows PDF、DOCX、XLSX、PPTX 路径，全部提示仅支持本机桌面会话，未打开项目外文档，未改变会话。 |
 
 [包哈希、模型原文、逐项截图和日志](./12-windows-oauth-wsl.md)。其余未验通道沿用原状态，Windows 整批尚未签通过。未合 main、未发布。
+
+## 字面百分号链接复验（Windows 电脑，2026-11-14）
+
+产品修复 `a5c91952300bc8d4ccf274db7a0431c30c215cd2` 经完整 pre-push 推送功能分支。修复明确区分字面 `%20` 与实际空格的编码，旧回复仅在精确目标不存在时核对同目录匹配项。旧包的真实失败回复在新包回放六条均打开正确文件，原失败项约 651 ms。
+
+**真实 OpenAI OAuth HTTP 路径的六链接通过。** 用隔离代理诊断配置完成的新会话中，`gpt-5.6-luna` 真实读写并返回六个有效 href。`report%20draft.md` 的原始 href 后缀为 `report%2520draft.md`，点击约 568 ms 显示正确内容。不存在的同名文件未生成链接。使用默认 WebSocket 的新会话在 177 秒观察窗内未完成，失败证据保留，默认路径本轮未通过。
+
+新包 exe SHA-256 `ee678c825ca20d80e13d4d8bfd0264e3fbb318343facc5f47761032474441903`，app.asar SHA-256 `d0917641c40038daad83ba65d0ff460f49806496cfeee5f25ec82c7fa5d18aba`。[隔离构建、原文、截图与日志](./13-windows-oauth-fix.md)。未合 main、未发布。

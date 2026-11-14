@@ -1,0 +1,44 @@
+oauth-link-unit-red.log
+(fail) REQ-162 OAuth literal percent links > opens only the matching same-directory file: [ "docs/report%20draft.md", "docs/report draft.md" ] (true, report%20draft.md) [11.03ms]
+(fail) REQ-162 OAuth literal percent links > opens only the matching same-directory file: [ "docs/report%20draft.md", "docs/report draft.md" ] (true, report%20draft.md) [11.03ms]
+ 29 pass
+ 1 fail
+
+oauth-link-browser-repro.log
+      - waiting for locator('[data-context="file-viewer"]:visible').getByText('LITERAL_PERCENT', { exact: true })
+    > 191 |   await expect(viewer.getByText("LITERAL_PERCENT", { exact: true })).toBeVisible()
+  1 failed
+
+oauth-link-unit-green.log
+ 35 pass
+ 0 fail
+ 92 expect() calls
+
+oauth-link-browser-green.log
+[4/4] [chromium] › e2e\regression\daily-file-links.spec.ts:158:1 › opens the literal percent file from the captured Windows OAuth reply
+  4 passed (9.3s)
+
+oauth-file-delivery-test.log
+(pass) shared prepare delivers the contract for oauth [2.36ms]
+ 10 pass
+ 0 fail
+ 35 expect() calls
+
+oauth-fix-push.log
+ Tasks:    29 successful, 29 total
+ 1267 pass
+ 0 fail
+ 41 pass
+ 0 fail
+ 140 pass
+ 0 fail
+ 792 pass
+ 0 fail
+ 90 pass
+ 0 fail
+ 185 pass
+ 2 skip
+ 0 fail
+ 137 pass
+ 0 fail
+   255b35f054..a5c9195230  HEAD -> feat/daily-use-integration

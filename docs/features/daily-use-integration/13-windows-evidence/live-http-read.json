@@ -1,0 +1,51 @@
+{
+  "acceptMs": 111.77350000000115,
+  "endMs": 42421.2449,
+  "text": "- [中文 空格.md](D:/tmp/deskfox-daily-win-20261114/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md)：`CN_SPACE`\n- [report%20draft.md](D:/tmp/deskfox-daily-win-20261114/A/report%2520draft.md)：`LITERAL_PERCENT`\n- [report draft.md](D:/tmp/deskfox-daily-win-20261114/A/report%20draft.md)：`REAL_SPACE`\n- [report#节.md](D:/tmp/deskfox-daily-win-20261114/A/report%23%E8%8A%82.md)：`HASH_NAME`\n- [100%.md](D:/tmp/deskfox-daily-win-20261114/A/100%25.md)：`RAW_PERCENT`\n- `未知/中文 空格.md` 不存在。",
+  "tools": [
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    }
+  ]
+}

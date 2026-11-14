@@ -1,0 +1,47 @@
+final-real-oauth-fix
+timestamp=2026-11-14T13:54:09.150Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:54:24.174Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:54:26.182Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:54:41.006Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError (cause: AggregateError)"
+timestamp=2026-11-14T13:54:45.016Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:54:59.830Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError (cause: AggregateError)"
+timestamp=2026-11-14T13:55:07.837Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:55:22.854Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:55:38.868Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:55:53.886Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:56:23.894Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:56:52.567Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+2026-11-14T13:57:05.546Z {"id":"req162-openai","ok":false,"ms":180506.3762,"error":"Error: No completed assistant turn within 177 s"}
+
+final-real-oauth-proxy-fix
+timestamp=2026-11-14T13:57:31.499Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:57:46.524Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:57:48.536Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:58:03.544Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:58:07.553Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:58:22.565Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:58:30.572Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:58:45.582Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:59:01.594Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+2026-11-14T13:59:07.979Z {"id":"req162-openai","ok":false,"ms":100330.8368,"error":"Error: No completed assistant turn within 97.5 s"}
+
+final-real-oauth-proxy-http
+timestamp=2026-11-14T13:59:39.170Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T13:59:54.190Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T13:59:56.198Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:00:11.216Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:00:15.220Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:00:30.228Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:00:38.235Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:00:53.253Z level=ERROR message="stream error" providerID=openai modelID=gpt-5.6-luna small=false agent=build mode=primary error.error="ProviderResponseStreamError: WebSocket connect timed out (cause: Error: WebSocket connect timed out)"
+timestamp=2026-11-14T14:01:09.259Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+2026-11-14T14:01:15.594Z {"id":"req162-openai","ok":false,"ms":100422.03139999999,"error":"Error: No completed assistant turn within 97.5 s"}
+
+final-real-oauth-proxy-http2
+timestamp=2026-11-14T14:01:37.190Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:01:46.124Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:02:04.435Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:02:17.884Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:02:31.635Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T14:02:38.470Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+2026-11-14T14:02:52.627Z {"id":"req162-openai","ok":true,"ms":79360.8878,"details":{"provider":"openai","model":"gpt-5.6-luna","readMs":42421.2449,"writeMs":28736.953799999996}}

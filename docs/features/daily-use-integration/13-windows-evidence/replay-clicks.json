@@ -1,0 +1,74 @@
+[
+  {
+    "id": "oauth-link-1",
+    "ok": true,
+    "ms": 2154.8269,
+    "details": {
+      "filename": "中文 空格.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md",
+      "expected": "CN_SPACE",
+      "markerVisible": true,
+      "clickMs": 2136.4833
+    }
+  },
+  {
+    "id": "oauth-link-2",
+    "ok": true,
+    "ms": 660.383600000001,
+    "details": {
+      "filename": "report%20draft.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/report%2520%20draft.md",
+      "expected": "LITERAL_PERCENT",
+      "markerVisible": true,
+      "clickMs": 650.8709000000017
+    }
+  },
+  {
+    "id": "oauth-link-3",
+    "ok": true,
+    "ms": 565.3243000000002,
+    "details": {
+      "filename": "report draft.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/report%20draft.md",
+      "expected": "REAL_SPACE",
+      "markerVisible": true,
+      "clickMs": 555.3761999999988
+    }
+  },
+  {
+    "id": "oauth-link-4",
+    "ok": true,
+    "ms": 554.1185000000005,
+    "details": {
+      "filename": "report#节.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/report%23%E8%8A%82.md",
+      "expected": "HASH_NAME",
+      "markerVisible": true,
+      "clickMs": 545.3411999999989
+    }
+  },
+  {
+    "id": "oauth-link-5",
+    "ok": true,
+    "ms": 567.3237000000008,
+    "details": {
+      "filename": "100%.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/100%25.md",
+      "expected": "RAW_PERCENT",
+      "markerVisible": true,
+      "clickMs": 547.4108000000015
+    }
+  },
+  {
+    "id": "oauth-link-6",
+    "ok": true,
+    "ms": 562.3277999999991,
+    "details": {
+      "filename": "生成 OpenAI Windows 复验 default.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/%E7%94%9F%E6%88%90%20OpenAI%20Windows%20%E5%A4%8D%E9%AA%8C%20default.md",
+      "expected": "OAUTH_WINDOWS_REPORT_DEFAULT",
+      "markerVisible": true,
+      "clickMs": 552.0730999999978
+    }
+  }
+]
