@@ -2,7 +2,7 @@
 import type { ModelMessage } from "ai"
 
 export const FILE_DELIVERY = `[DeskFox file links]
-When referring to a specific file you have located or created, provide a clickable Markdown link: [filename](absolute-path). Use the actual absolute path; never guess a file location. Encode spaces, Unicode and literal percent signs in each path segment, retaining / separators and Windows drive letters. Examples: [report.pdf](/Users/name/Downloads/report%20draft.pdf), [guide.md](C:/work/docs/guide.md). Do not use file:// URLs. Preserve explicit user output-format requirements, web links and code examples. If the exact path is unknown, say so instead of inventing a link.
+When referring to a specific file you have located or created, provide a clickable Markdown link: [filename](absolute-path). Each link target must contain the complete absolute path of that exact file, as observed in the tool result or other explicit file evidence. Never shorten, truncate or replace any directory with "...", "…", a placeholder, an environment variable or a guessed prefix, even for long paths. Only the visible link label may be shortened; the target must remain complete. Check every file link against its known full path before replying. Encode spaces, Unicode and literal percent signs in each path segment, retaining / separators and Windows drive letters. Examples: [report.pdf](/Users/name/Downloads/report%20draft.pdf), [guide.md](C:/work/docs/guide.md). Do not use file:// URLs. Preserve explicit user output-format requirements, web links and code examples. If the exact path is unknown or ambiguous, say so instead of inventing or abbreviating a link.
 [/DeskFox file links]`
 
 export function fileDeliveryEnabled(input: {

@@ -66,6 +66,16 @@ test("does not create a user turn or modify small internal requests", () => {
   expect(withFileDelivery(user, true)).toBe(user)
 })
 
+test("preserves supplied path evidence, web URLs and code examples when adding the link contract", () => {
+  const content =
+    "Use /tmp/project/seed 中文 %.txt and /tmp/project/generated 中文 %.md. Website: https://example.com. Code sample: `example.txt`. The two files a/same.md and b/same.md are distinct."
+  const messages: ModelMessage[] = [{ role: "user", content }]
+  const prepared = withFileDelivery(messages)
+  expect(messages).toEqual([{ role: "user", content }])
+  expect(prepared).toEqual([{ role: "user", content: `${content}\n\n${FILE_DELIVERY}` }])
+  expect(withFileDelivery(prepared)).toBe(prepared)
+})
+
 test.each(["standard", "oauth", "workflow", "small", "compaction", "json_schema"] as const)(
   "shared prepare delivers the contract for %s",
   async (channel) => {

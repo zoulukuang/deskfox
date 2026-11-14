@@ -4,6 +4,16 @@ related: ./3-changelog.md ../deskfox-vcs-refresh-overload/1-spec.md ../daily-fil
 
 # Windows 验收交接（2026-11-14）
 
+## 可直接转发给 Windows agent
+
+```text
+请接手本期 Windows 真机验收。先读 CLAUDE.md、docs/governance/三端协作-Agent接入.md 和测试与发布规范，核实电脑身份，登记并推送“接手中”，避免重复执行。在独立 worktree fetch origin，取 origin/feat/daily-use-integration 的最终头，记录完整 SHA，并确认包含 f517fc04b4；不要沿用旧包或旧 REQ-149 回执。
+
+按本文件详细夹具与原始 spec 执行。使用 Bun 1.3.14 冻结安装依赖，按下文命令重新构建 local 包，隔离配置、数据库和测试项目，记录 exe 路径及哈希。重点验六项：149 请求积压与忽略过滤；152 中文、空格、字面百分号和盘符链接打开正确内容；146 同文档及跨文档锚点；160 项目外 PDF/Office 内部预览与远端隔离；162 真实模型自动给出文件链接；153 MCP 关闭跨重启、项目作用域及多窗口一致。
+
+负载须在同机对照修复前与新包，测真实目录展开和普通聊天提交到后台接受，不能用 question reply 或首 token 代替；保留逐次耗时、实写速率和超时。回执写入 docs/features/daily-use-integration/3-changelog.md，附截图、日志、包与代码哈希、未测项。失败保留复现和证据，未测不签通过，修复按仓规单独推进。完成后汇报结果；本次不合 main、不发布。
+```
+
 编写：笑南的电脑。接手端：**Windows 电脑，尚未有人接手或签字**。本文件是执行材料，不是 Windows 通过回执，也不授权合 main、冻结版本或发布。
 
 ## 代码与包
