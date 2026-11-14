@@ -36,6 +36,12 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 剩余 Git 忽略判定方案见 `4-ignore-design.md`；该部分及两端新代码 local 对照尚未完成，feat 保持 in-progress。不得把旧 Windows 证据当成这批新代码验收；不合 main、不发布。
 
+## HEAD 例外复核修正（笑南的电脑，2026-11-14）
+
+独立复核见 `5-frontend-review.md`：detached HEAD 的 soft reset 会改变有效 diff，却不改变 branch key，不能把 HEAD 事件全部吞掉。已将 `shouldIgnoreVcsMetadata` 设为保留根 HEAD、过滤其他元数据，并修正 unit/e2e 验收；这是对 T5 的必要细化，不扩入通用 Git 计算优化。
+
+四条新用例在旧过滤下失败；修后两个单测文件 **25 pass**，Playwright **1 pass / 0 retry**，e2e typecheck 通过。完整 `.husky/pre-push` 再次退出 0：29/29 typecheck、app **1222 + 41**，其余与前述一致。日志 `/tmp/deskfox-req149-pre-push-head-20261114.log`、`/tmp/deskfox-req149-e2e-head-20261114.log`。原始工作区、正式版数据及 main 未改变。
+
 ## 历史调查与验证
 
 2026-11-11，Windows 电脑。2026.12.1 的现场网络日志记录了同一项目 1,300 多次差异请求，目录树和回答提交等待连接超过 8 分钟。连续文件事件反复使差异查询失效，查询层取消旧结果后，已发出的 HTTP 请求仍在等待。

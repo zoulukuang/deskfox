@@ -72,8 +72,10 @@ test("merges file changes while a Git diff is in flight", async ({ page }) => {
 
   try {
     await change(`${directory}/.git/index`)
-    await change(`${directory}/.git/HEAD`.replaceAll("/", "\\"))
     expect(requests).toBe(initialRequests)
+    // A detached-HEAD move can change the diff without changing the branch key.
+    await change(`${directory}/.git/HEAD`.replaceAll("/", "\\"))
+    await expect.poll(() => requests).toBe(initialRequests + 1)
     await change(`${directory}/tracked.ts`)
     await expect.poll(() => requests).toBe(initialRequests + 1)
     for (let index = 0; index < 8; index++) {
