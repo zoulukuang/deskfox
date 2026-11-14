@@ -23,6 +23,7 @@
 |---|---|---|
 | [daily-use-integration](./daily-use-integration/) | in-progress | 2026-11-14 六项日常使用修复整批集成与 Mac local 验证；沿用三个功能 feat 的已批准方案，笑南的电脑 / Codex 主会话接手。分支 `feat/daily-use-integration`，平台与真模型未验项按实留存，尚未冻结发布候选。 |
 | [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | in-progress | **REQ-149 短期修复已恢复实施**（2026-11-14）：用户确认六项日常使用修复计划并授权开工。笑南的电脑 / Codex 接手原 `fix/deskfox-vcs-refresh-overload`；先补查询键复现，再完成忽略路径与 `.git/` 过滤、Mac local 对照。Windows 新代码验收待交接。接手基线与剩余项见 `3-changelog.md`；不合 main、不发布。 |
+| [mcp-toggle-persistence](./mcp-toggle-persistence/) | in-progress | REQ-153 MCP 开关意图持久化（2026-11-14）：笑南的电脑 / Codex 子 agent 实现于 `fix/mcp-toggle-persistence`；当前项目 JSONC 单叶覆盖，74 条 MCP/配置测试及完整 pre-push 通过。具体 R4 报告见 3-changelog，代码待批准提交；两端 local/多窗口 GUI 待验。 |
 | [brand-docs-refresh](./brand-docs-refresh/) | done | 2026-11-14 品牌来源注释与托盘 README 对齐现行三态、平台模式和生成流程；仅说明修改，图片及软件行为不变。 |
 | [release-2026.12.1](./release-2026.12.1/) | done | **2026.12.1 双端已上线**(2026-11-10):11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪 + Electron 42.11.15;tag `ship-mac-prod-2026.12.1` / `ship-prod-2026.12.1` → `e766f06ca`;Intel 版 Rosetta 验证。 |
 | [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.2;第二轮:笑南的电脑已完成(DeskFox / Codex 工具核验 6 格、日志机制入 deskfox-web `b0f4ffe`);交 Windows 电脑:Git 配置、署名、Python 别名、工具核验、代理测试重跑。 |
