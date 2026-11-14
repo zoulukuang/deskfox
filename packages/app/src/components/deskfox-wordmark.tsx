@@ -1,5 +1,5 @@
 // [fork-only] DeskFoX.Ai 品牌 wordmark
-// 来源:OPENCODE-PLAN/品牌设计/SVG/wordmark.svg(几何无衬线,与三角图标呼应)
+// 来源:运营仓 品牌设计/SVG/wordmark.svg(几何无衬线,与三角图标呼应;品牌正本 2026-09-30 从 OPENCODE-PLAN 迁至运营仓)
 // 首页 home 用,替代上游 <Logo>。尺寸/透明度由调用方通过 class 控制(如 w-60 opacity-50)。
 // 内部 fill 为品牌固有色(Desk 深 navy / Fo 钢蓝 / X 三角带珊瑚芯 / .Ai),属资产本身,inline 即可。
 export function DeskFoxWordmark(props: { class?: string }) {
