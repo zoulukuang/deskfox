@@ -22,9 +22,9 @@
 | feat-id | 状态 | 简介 |
 |---|---|---|
 | [daily-use-integration](./daily-use-integration/) | in-progress | 2026-11-14 六项日常使用修复整批集成与 Mac local 验证；沿用三个功能 feat 的已批准方案，笑南的电脑 / Codex 主会话接手。分支 `feat/daily-use-integration`，平台与真模型未验项按实留存，尚未冻结发布候选。 |
-| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | in-progress | **REQ-149 短期修复已恢复实施**（2026-11-14）：用户确认六项日常使用修复计划并授权开工。笑南的电脑 / Codex 接手原 `fix/deskfox-vcs-refresh-overload`；先补查询键复现，再完成忽略路径与 `.git/` 过滤、Mac local 对照。Windows 新代码验收待交接。接手基线与剩余项见 `3-changelog.md`；不合 main、不发布。 |
-| [mcp-toggle-persistence](./mcp-toggle-persistence/) | in-progress | REQ-153 当前项目开关持久化已实现；用户已批准实际 R4，`ddd1940720` 经完整闸推送，最终功能分支头 `fc3a1b5f62`。整批验收见 daily-use-integration；两端 local/多窗口 GUI 待验。 |
-| [daily-file-links](./daily-file-links/) | in-progress | REQ-152/146/160/162 四项已实现；用户已批准模型入口实际 R4，功能头 `eb343b8ce1` 经完整闸推送。文件浏览器回归通过，整批与 Mac local 验证见 daily-use-integration；Windows/真模型待验。 |
+| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | in-progress | REQ-149 刷新合并、查询键、元数据及 Git 忽略过滤已实现并推送，完整闸/真实 Git/HTTP/浏览器及 Mac watcher 短样本通过。Mac 修前后负载对照进行中，Windows 新代码待验；整批证据见 daily-use-integration。 |
+| [mcp-toggle-persistence](./mcp-toggle-persistence/) | in-progress | REQ-153 已实现，Mac local 发现的默认配置覆盖问题补充修复为 `f517fc04b4`，用户批准后经完整闸推至集成分支。177 项后台及实际 Electron 完整重启验证通过；Windows/多窗口未验项见 daily-use-integration。 |
+| [daily-file-links](./daily-file-links/) | in-progress | REQ-152/146/160/162 已实现并推送。浏览器、Mac 真桌面文件/Office/目录点击与 DeepSeek API 最小样本通过；GetBot/OAuth 失败如实留存，Windows和完整模型矩阵待验，详见 daily-use-integration。 |
 | [brand-docs-refresh](./brand-docs-refresh/) | done | 2026-11-14 品牌来源注释与托盘 README 对齐现行三态、平台模式和生成流程；仅说明修改，图片及软件行为不变。 |
 | [release-2026.12.1](./release-2026.12.1/) | done | **2026.12.1 双端已上线**(2026-11-10):11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪 + Electron 42.11.15;tag `ship-mac-prod-2026.12.1` / `ship-prod-2026.12.1` → `e766f06ca`;Intel 版 Rosetta 验证。 |
 | [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.2;第二轮:笑南的电脑已完成(DeskFox / Codex 工具核验 6 格、日志机制入 deskfox-web `b0f4ffe`);交 Windows 电脑:Git 配置、署名、Python 别名、工具核验、代理测试重跑。 |

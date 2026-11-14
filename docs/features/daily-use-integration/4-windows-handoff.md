@@ -9,7 +9,7 @@ related: ./3-changelog.md ../deskfox-vcs-refresh-overload/1-spec.md ../daily-fil
 ## 代码与包
 
 - 远端分支 `origin/feat/daily-use-integration`，首轮产品树基准 `a4d3ec5691`，后续 MCP 补充修复见下。**接手时 fetch 并拉取最终远端头，记录完整 SHA，从该头重新构建 local 包验收**，不要只 checkout 旧产品哈希后漏掉补丁和交接更新。
-- **补充修复待提交**：Mac local 验收发现 MCP 自动配置目录覆盖项目开关，修复补丁 SHA256 `ec8a042c6d3b097b600693b655309f97eaff36fb08783e9b68494db591a0b7f1` 已测试，正在完成新增 R4 提交确认。Windows 正式接手前须确认此补丁已进入最终远端头；不能使用尚未包含修复的旧集成包验收 MCP。见[补充复核](../mcp-toggle-persistence/4-native-config-review.md)。
+- **必须包含补充修复 `f517fc04b4`**：Mac local 验收发现的 MCP 自动配置目录覆盖问题已修复，经用户新增 R4 批准、完整检查后推送。对应冻结补丁 SHA256 `ec8a042c6d3b097b600693b655309f97eaff36fb08783e9b68494db591a0b7f1`。Windows 接手前用 `git merge-base --is-ancestor f517fc04b4 HEAD` 确认包含此提交；不能用未修复的旧集成包验收 MCP。见[补充复核](../mcp-toggle-persistence/4-native-config-review.md)。
 - 在干净独立 checkout/worktree 内使用根 `packageManager` 指定 Bun（当前1.3.14），`bun install --frozen-lockfile`；Windows 构建用 `powershell -File packages/branding/scripts/build-deskfox-electron.ps1 -Env local`。运行生成的「DeskFox 本地版」，确认 LOCAL 徽标、独立 `opencode-local.db`；记录实际 exe 路径、SHA256与构建头。不要用旧 exe、正式包、浏览器或开发热更新冒充本次 local 结果。
 - 六项原始契约：[REQ-149](../deskfox-vcs-refresh-overload/1-spec.md)、[REQ-152/146/160/162](../daily-file-links/1-spec.md)、[REQ-153](../mcp-toggle-persistence/1-spec.md)。自动化证据见[集成回执](./3-changelog.md)，不能代替以下真桌面项。
 - **旧 REQ-149 Windows 回执只验过早期合并请求版本，本次新增 Git 忽略、HEAD保护和其他五项，必须重新验，不能沿用旧签字。**

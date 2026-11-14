@@ -42,4 +42,4 @@ launcher 的 fork helper 清除继承来源标记，尊重非空显式目录，�
 - 本报告和 spec 追加说明不在产品补丁中。
 - 父会话已执行整批完整 pre-push，退出 0；日志 `/tmp/daily-use-mcp-native-pre-push.log`。重建 local 后，在实际打包 Electron 中通过 CDP 驱动真实开关：开启→关闭→刷新仍关闭；旧主进程 78225/sidecar 78232 均退出后，新主进程 79395/sidecar 79407 仍读到 disabled（全局 true、项目 false），手动开启才 connected。没有 mock native/HTTP；本轮 CUA 工具重连失败，故不冒充 CUA 鼠标或人工真桌面复验。完整证据见 [Mac local 回执](../daily-use-integration/6-mac-local.md)。
 - 复验包 app.asar SHA256：`378a32dd08aa46ea25410d96e5efde55b608e04089fce7d393169c6cca3890c8`，代码为 `c5b9ded3b5` 加本节冻结补丁。测试主进程/后台已停止，既有正式/voice 应用存活，默认协议 handler 已恢复。
-- 新增 R4 提交批准仍待父会话办理；不提交、不推送，不合 main，不发版。回退该增量即可恢复原行为，已有项目 JSONC 数据无迁移、无需删除。
+- 用户已明确批准补充修复提交与推送，提交 `f517fc04b4` 已正常完整 pre-push 并推送到 `feat/daily-use-integration`，日志 `/tmp/daily-use-mcp-native-approved-push.log`；提交前产品 SHA 再次一致。未合 main、未发版。回退该增量即可恢复原行为，已有项目 JSONC 数据无迁移、无需删除。

@@ -4,6 +4,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## 2026-11-14 补充：真实 local 启动配置复现与修复待提交
 
+后续回执：用户已批准补充修复；`f517fc04b4` 按冻结补丁提交并通过正常推送完整闸，位于 `feat/daily-use-integration`。下段待批状态是复核时记录，现已解除。
+
 集成验收发现桌面自动 `OPENCODE_CONFIG_DIR` 覆盖项目 enabled。新增窄修已完成先红后绿复现、177 项配置/MCP 回归、完整闸、独立评审与实际打包 Electron 的完整后台重启验证；冻结补丁 `ec8a042c6d3b097b600693b655309f97eaff36fb08783e9b68494db591a0b7f1`，尚待新增 R4 提交确认，未冒用此前授权。实际改动与来源边界见 [4-native-config-review.md](./4-native-config-review.md)，原生证据见 [Mac 集成回执](../daily-use-integration/6-mac-local.md)。仅 1 个黑名单文件 config.ts；未修复完整 Global 配置迁移。以下首次提交/推送记录保留原样。
 
 # 接手与验证

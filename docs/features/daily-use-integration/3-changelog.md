@@ -44,6 +44,8 @@ related: ../deskfox-vcs-refresh-overload/1-spec.md ../daily-file-links/1-spec.md
 
 ## 证据与交接入口
 
+**补充提交回执（笑南的电脑，2026-11-14）**：用户明确回复「批准补充修复提交与推送」。7 文件产品/测试暂存 diff 的 SHA256 与上述冻结对象一致，连授权回执提交为 `f517fc04b4`；正常 push 再次完整闸通过并推送到 `feat/daily-use-integration`，日志 `/tmp/daily-use-mcp-native-approved-push.log`。上段“待回复”为此前状态，现已解除；未合 main、未发布。Mac T04 修前后负载对照继续进行。
+
 - [Windows 执行交接](./4-windows-handoff.md)：六项最小夹具与通过条件，明确无人接手、不能沿用旧 REQ-149 Windows 回执。
 - [真模型记录](./5-model-smoke.md)：DeepSeek API 真实读写返回有效链接，目标内容已验证；GetBot 401、OpenAI OAuth 未知服务错误分别保留，不算通过。未发现 workflow 真通道，未测试过期 Anthropic。
 - [Mac local 原生回执](./6-mac-local.md)：真实 Electron IPC、CUA 点击、Office 转换、目录跳转、真实 watcher 短样本与 MCP 首次失败/复验，区分所有证据层级。local 启动曾改变默认协议 handler，已恢复 `ai.deskfox.app`；本轮后续启动均立即恢复并保留正式/既有 voice 进程，未把范围外修复并入六项。
