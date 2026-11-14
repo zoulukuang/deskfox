@@ -15,3 +15,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 边界：不改 main、不发布、不改规划仓。Large/R4 具体方案交主 agent 汇总审签，不把范围许可当成 override。
 
 本笔仅登记接手：diff 检查与 pre-commit，按 docs-only 例外跳过全量 pre-push 产品测试。
+
+## A：编码与章节导航（笑南的电脑，2026-11-14）
+
+先在共享 handler 新增复现：原实现 10 pass / 12 fail，分别命中编码字面路径、编码越界、片段混入文件名和锚点原生导航。修复后相关测试为 26 pass / 0 fail（67 断言）。旧 U2「原生处理锚点」断言按 REQ-146 有意改为「缺失锚点也阻止整页导航」，并新增真实容器内定位断言；其余旧测试保留。
+
+- `md-link-click.ts`：分离片段后单次解码，解码后再检查项目边界；纯锚点在当前 Markdown 容器滚动；成功打开文件时传递一次性章节请求。
+- 新 `md-fragment.ts`：等待目标 root/path 的 Markdown DOM，只在激活查看器定位；消费后清除，卸载取消，MutationObserver 随 Solid scope 释放。无任意短超时，不因慢加载丢掉跳转。
+- `file-tabs.tsx`：4 行 FORK 注入（import/comment/call），接入延迟章节定位；未改底层 Markdown/UI renderer。
+- 测试覆盖空格、中文、字面百分号、单次解码、编码点段/分隔符越界、Windows 盘符、中文和 sanitize 前缀锚点、同名 ID 消息隔离、延迟 DOM、不同文档/项目、卸载与激活态。
+
+首轮完整 `.husky/pre-push` 通过：29/29 类型检查；app 1212 unit + 41 browser、media-gen 140、adapter 792、branding 82、desktop 176、session-ui 125。之后补激活态保护与第 26 条测试，push 再跑完整闸；结果另补回执。GUI、Mac/Windows local、历史成品及真模型抽查尚未执行，不标 done。
+
+事后清单：与 A 预清单一致，改 2 个 fork 文件+新增 2 个 fork 文件/测试、上游查看器 4 行注入及本日志。无新依赖、无黑名单、无顺手改、无未理解代码、未使用批量替换。A 可整体 revert；B/C 尚未实施。

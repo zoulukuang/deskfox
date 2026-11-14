@@ -1,21 +1,27 @@
 // [fork-only] REQ-075 md 内链点击拦截共享实现单测 — 聊天区(baseDir=项目根)与文件预览区
 // (baseDir=当前文件目录)两组模式;越权/不存在/外链/锚点/修饰键全覆盖。
 //   [feat: batch-port-edit-mdlink] 2026-07-07
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { createMdLinkClickHandler, type MdLinkToast } from "./md-link-click"
 
 function setup(opts: { root?: string; baseDir?: string; exists?: boolean } = {}) {
   const opened: string[] = []
+  const checked: string[] = []
   const toasts: MdLinkToast[] = []
   const handler = createMdLinkClickHandler({
     root: () => opts.root ?? "D:/proj",
     baseDir: () => opts.baseDir ?? opts.root ?? "D:/proj",
     onOpen: (rel) => opened.push(rel),
-    checkExists: () => ((opts.exists ?? true) ? Promise.resolve(1) : Promise.reject(new Error("missing"))),
+    checkExists: (_root, rel) => {
+      checked.push(rel)
+      return (opts.exists ?? true) ? Promise.resolve(1) : Promise.reject(new Error("missing"))
+    },
     toast: (t) => toasts.push(t),
   })
-  return { handler, opened, toasts }
+  return { handler, opened, checked, toasts }
 }
+
+afterEach(() => document.body.replaceChildren())
 
 function makeEvent(href: string | null, mods: Partial<MouseEvent> = {}) {
   const a = document.createElement("a")
@@ -50,11 +56,11 @@ describe("createMdLinkClickHandler(REQ-075)", () => {
     expect(toasts).toEqual([])
   })
 
-  test("U2: 锚点 #xxx → 不拦截(浏览器原生处理)", () => {
+  test("U2: missing anchor never navigates the SPA", () => {
     const { handler, opened } = setup()
     const { event, wasPrevented } = makeEvent("#section-1")
     handler(event)
-    expect(wasPrevented()).toBe(false)
+    expect(wasPrevented()).toBe(true)
     expect(opened).toEqual([])
   })
 
@@ -140,5 +146,67 @@ describe("createMdLinkClickHandler(REQ-075)", () => {
     const { event, wasPrevented } = makeEvent(null)
     handler(event)
     expect(wasPrevented()).toBe(false)
+  })
+})
+
+describe("REQ-152 and REQ-146", () => {
+  test.each([
+    ["./space%20name.md", "space name.md"],
+    ["./%E4%B8%AD%E6%96%87.md", "中文.md"],
+    ["./literal%2520.md", "literal%20.md"],
+    ["./100%.md", "100%.md"],
+    ["D:/proj/space%20name.md", "space name.md"],
+  ])("decodes exactly once: %s", async (href, path) => {
+    const state = setup()
+    state.handler(makeEvent(href).event)
+    await flush()
+    expect(state.checked).toEqual([path])
+    expect(state.opened).toEqual([path])
+  })
+
+  test("separates the fragment before decoding the path", async () => {
+    const state = setup({ baseDir: "D:/proj/docs" })
+    state.handler(makeEvent("./guide%23draft.md#%E7%AB%A0%E8%8A%82").event)
+    await flush()
+    expect(state.checked).toEqual(["docs/guide#draft.md"])
+    expect(state.opened).toEqual(["docs/guide#draft.md"])
+  })
+
+  test.each(["%2E%2E/%2E%2E/outside.md", "..%2F..%2Foutside.md", "..%5C..%5Coutside.md"])(
+    "checks the boundary after decoding %s",
+    async (href) => {
+      const state = setup()
+      const click = makeEvent(href)
+      state.handler(click.event)
+      await flush()
+      expect(click.wasPrevented()).toBe(true)
+      expect(state.checked).toEqual([])
+      expect(state.opened).toEqual([])
+      expect(state.toasts[0]?.title).toBe("链接超出项目范围")
+    },
+  )
+
+  test.each(["section", "章节", "user-content-section"])("scrolls inside the clicked markdown: %s", (id) => {
+    const state = setup()
+    const other = document.createElement("div")
+    other.setAttribute("data-component", "markdown")
+    const scope = other.cloneNode() as HTMLDivElement
+    const heading = document.createElement("h2")
+    heading.id = id
+    const wrongHeading = heading.cloneNode(true) as HTMLHeadingElement
+    const scrolled: Element[] = []
+    heading.scrollIntoView = () => {
+      scrolled.push(heading)
+    }
+    wrongHeading.scrollIntoView = () => {
+      scrolled.push(wrongHeading)
+    }
+    other.append(wrongHeading)
+    const click = makeEvent(`#${encodeURIComponent(id.replace(/^user-content-/, ""))}`)
+    scope.append(click.event.target as Node, heading)
+    document.body.append(other, scope)
+    state.handler(click.event)
+    expect(click.wasPrevented()).toBe(true)
+    expect(scrolled).toEqual([heading])
   })
 })

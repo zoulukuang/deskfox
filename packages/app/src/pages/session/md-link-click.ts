@@ -6,6 +6,7 @@
 // 聊天区此前完全没接线 → 相对链接走浏览器原生 <a> 导航把整个 SPA 导航掉,主内容区变空白。
 // toast / checkExists 由调用方注入(showToast / invoke("get_file_mtime")),本模块只依赖纯路径函数。
 import { resolveAbsolute } from "@/utils/local-asset"
+import { requestMdFragment, scrollMdFragment } from "./md-fragment"
 
 export type MdLinkToast = { variant: "error"; title: string; description: string }
 
@@ -28,16 +29,22 @@ export function createMdLinkClickHandler(input: {
     if (!link) return
     const href = link.getAttribute("href")
     if (!href) return
-    // 跳过外链 / data / blob;锚点(#xxx)留给浏览器原生处理
+    // External URLs remain delegated to the platform's existing link handler.
     if (/^(https?|mailto|data|blob|tauri|localasset|file|javascript):/i.test(href)) return
     if (href.startsWith("//")) return
-    if (href.startsWith("#")) return
+    const hash = href.indexOf("#")
+    const fragment = hash < 0 ? "" : decodeLink(href.slice(hash + 1))
+    if (href.startsWith("#")) {
+      event.preventDefault()
+      scrollMdFragment(link.closest('[data-component="markdown"]'), fragment)
+      return
+    }
 
     const root = input.root()
     const base = input.baseDir()
     if (!root || !base) return
 
-    const targetAbs = resolveAbsolute(base, href)
+    const targetAbs = resolveAbsolute(base, decodeLink(hash < 0 ? href : href.slice(0, hash)))
     const normRoot = root.replace(/\\/g, "/").replace(/\/+$/, "")
     // 越权防护:解析后必须在项目根内
     if (!targetAbs.startsWith(normRoot + "/") && targetAbs !== normRoot) {
@@ -53,7 +60,10 @@ export function createMdLinkClickHandler(input: {
       // 异步检查文件存在;不存在 → toast 提示,不开 tab
       input
         .checkExists(root, rel)
-        .then(() => input.onOpen(rel))
+        .then(() => {
+          requestMdFragment(root, rel, fragment)
+          input.onOpen(rel)
+        })
         .catch(() => {
           input.toast({ variant: "error", title: "文件不存在", description: rel })
         })
@@ -61,5 +71,14 @@ export function createMdLinkClickHandler(input: {
       // 没拿到合法相对路径(可能解析到根本身)— 也阻止默认,防原生导航
       event.preventDefault()
     }
+  }
+}
+
+function decodeLink(value: string) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    // A literal percent in a filename is valid. Never decode a second time.
+    return value
   }
 }
