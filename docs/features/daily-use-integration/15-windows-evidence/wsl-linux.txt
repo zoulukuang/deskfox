@@ -1,0 +1,5 @@
+1.18.16
+NAME="Alpine Linux"
+ID=alpine
+VERSION_ID=3.23.5
+bad9b279fb1e76e74c9d867339f25faf506ab2ecf777f14265787048a76a7bda  /root/.opencode/bin/opencode

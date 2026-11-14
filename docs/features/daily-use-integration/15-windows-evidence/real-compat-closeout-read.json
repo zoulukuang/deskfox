@@ -1,0 +1,23 @@
+{
+  "acceptMs": 247.8918999999987,
+  "endMs": 12362.510299999998,
+  "text": "五个文件都存在，并且都已实际读取；每个文件的内容都是 `# 文件` 外加一行标记：\n\n| 文件 | 标记 |\n|---|---|\n| [中文 空格.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md) | `CN_SPACE` |\n| [report%20draft.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%2520draft.md) | `LITERAL_PERCENT` |\n| [report draft.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%20draft.md) | `REAL_SPACE` |\n| [report#节.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%23%E8%8A%82.md) | `HASH_NAME` |\n| [100%.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/100%25.md) | `RAW_PERCENT` |\n\n「未知/中文 空格.md」：不存在。`未知` 目录不存在，`未知\\中文 空格.md` 也不存在。\n\n示例网址：https://example.com/\n\n仅作示例；未执行该命令：`cat example.txt`",
+  "tools": [
+    {
+      "name": "bash",
+      "status": "completed"
+    },
+    {
+      "name": "bash",
+      "status": "completed"
+    },
+    {
+      "name": "bash",
+      "status": "completed"
+    },
+    {
+      "name": "bash",
+      "status": "completed"
+    }
+  ]
+}

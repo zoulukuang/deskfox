@@ -1,0 +1,44 @@
+[
+  {
+    "filename": "中文 空格.md",
+    "marker": "CN_SPACE",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md",
+    "ok": true,
+    "clickMs": 3610.1142000000036
+  },
+  {
+    "filename": "report%20draft.md",
+    "marker": "LITERAL_PERCENT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/report%2520draft.md",
+    "ok": true,
+    "clickMs": 154.46560000000318
+  },
+  {
+    "filename": "report draft.md",
+    "marker": "REAL_SPACE",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/report%20draft.md",
+    "ok": true,
+    "clickMs": 639.9090000000069
+  },
+  {
+    "filename": "report#节.md",
+    "marker": "HASH_NAME",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/report%23%E8%8A%82.md",
+    "ok": true,
+    "clickMs": 633.6085999999996
+  },
+  {
+    "filename": "100%.md",
+    "marker": "RAW_PERCENT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/100%25.md",
+    "ok": true,
+    "clickMs": 715.5394000000015
+  },
+  {
+    "filename": "生成 deepseek real-deepseek-closeout-default 报告.md",
+    "marker": "REAL_MODEL_REPORT_REAL-DEEPSEEK-CLOSEOUT-DEFAULT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/%E7%94%9F%E6%88%90%20deepseek%20real-deepseek-closeout-default%20%E6%8A%A5%E5%91%8A.md",
+    "ok": true,
+    "clickMs": 667.7021999999997
+  }
+]

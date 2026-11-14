@@ -1,0 +1,12 @@
+{
+  "href": "http://127.0.0.1:19885/deskfox-qa-external",
+  "target": "_blank",
+  "handoffs": [
+    {
+      "url": "http://127.0.0.1:19885/deskfox-qa-external",
+      "userGesture": true
+    }
+  ],
+  "browserGet": false,
+  "preserved": true
+}

@@ -1,0 +1,31 @@
+real-compat-closeout
+timestamp=2026-11-14T15:50:49.766Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:50:51.703Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:50:53.754Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:50:55.560Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:50:57.654Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:51:00.191Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:51:01.971Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+timestamp=2026-11-14T15:51:03.997Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-chat
+
+real-oauth-closeout
+timestamp=2026-11-14T15:51:34.764Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:51:40.106Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:51:46.644Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:51:52.770Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:52:01.884Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:52:06.077Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:52:10.500Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=openai llm.model=gpt-5.6-luna
+
+real-oauth-closeout-native
+timestamp=2026-11-14T15:52:47.616Z level=INFO message="llm runtime selected" llm.runtime=native llm.provider=openai llm.model=gpt-5.6-luna
+timestamp=2026-11-14T15:52:52.646Z level=ERROR message=process error="RequestExecutor.execute: HTTP transport failed"
+
+real-deepseek-closeout-default
+timestamp=2026-11-14T15:58:49.737Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash
+timestamp=2026-11-14T15:58:52.598Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash
+timestamp=2026-11-14T15:58:54.677Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash
+timestamp=2026-11-14T15:58:57.374Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash
+timestamp=2026-11-14T15:59:00.749Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash
+timestamp=2026-11-14T15:59:03.348Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash
+timestamp=2026-11-14T15:59:05.692Z level=INFO message="llm runtime selected" llm.runtime=ai-sdk llm.provider=deepseek llm.model=deepseek-flash

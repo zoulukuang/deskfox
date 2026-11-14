@@ -1,0 +1,4 @@
+{
+  "before": "{\n  // Preserve this QA comment\n  \"share\": \"disabled\"\n}\n",
+  "after": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  // Preserve this QA comment\n  \"share\": \"disabled\",\n  \"mcp\": {\n    \"deskfox_daily_win_20261114\": {\n      \"enabled\": false\n    }\n  }\n}\n"
+}

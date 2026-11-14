@@ -1,0 +1,44 @@
+[
+  {
+    "filename": "中文 空格.md",
+    "marker": "CN_SPACE",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/中文%20空格.md",
+    "ok": true,
+    "clickMs": 2448.2395999999935
+  },
+  {
+    "filename": "report%20draft.md",
+    "marker": "LITERAL_PERCENT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/report%2520draft.md",
+    "ok": true,
+    "clickMs": 162.0879999999961
+  },
+  {
+    "filename": "report draft.md",
+    "marker": "REAL_SPACE",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/report%20draft.md",
+    "ok": true,
+    "clickMs": 559.9196000000011
+  },
+  {
+    "filename": "report#节.md",
+    "marker": "HASH_NAME",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/report%23节.md",
+    "ok": true,
+    "clickMs": 540.0462999999945
+  },
+  {
+    "filename": "100%.md",
+    "marker": "RAW_PERCENT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/100%25.md",
+    "ok": true,
+    "clickMs": 569.8609999999899
+  },
+  {
+    "filename": "生成 OpenAI Windows 复验 closeout.md",
+    "marker": "OAUTH_WINDOWS_REPORT_CLOSEOUT",
+    "href": "D:/tmp/deskfox-daily-win-20261114/closeout/A/%E7%94%9F%E6%88%90%20OpenAI%20Windows%20%E5%A4%8D%E9%AA%8C%20closeout.md",
+    "ok": true,
+    "clickMs": 525.8546999999962
+  }
+]

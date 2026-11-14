@@ -1,0 +1,43 @@
+{
+  "acceptMs": 186.42849999999817,
+  "endMs": 28906.266600000003,
+  "text": "先核对工作目录中的精确文件名，再逐个读取内容；不会执行示例命令。\n逐个读取结果：\n\n- [中文 空格.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/中文%20空格.md)：`CN_SPACE`\n- [report%20draft.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%2520draft.md)：`LITERAL_PERCENT`\n- [report draft.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%20draft.md)：`REAL_SPACE`\n- [report#节.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%23节.md)：`HASH_NAME`\n- [100%.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/100%25.md)：`RAW_PERCENT`\n\n`未知/中文 空格.md` 不存在。\n\nhttps://example.com/\n\n仅供示例的命令：`cat example.txt`",
+  "tools": [
+    {
+      "name": "deskfox_daily_win_20261114_current_directory",
+      "status": "error"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "glob",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "error"
+    }
+  ]
+}

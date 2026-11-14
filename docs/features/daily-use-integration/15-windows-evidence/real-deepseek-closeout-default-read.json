@@ -1,0 +1,39 @@
+{
+  "acceptMs": 32.904899999997724,
+  "endMs": 13772.3835,
+  "text": "五个文件均已实际读取，各自的标记如下：\n\n- [中文 空格.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md) → `CN_SPACE`\n- [report%20draft.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%2520draft.md) → `LITERAL_PERCENT`\n- [report draft.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%20draft.md) → `REAL_SPACE`\n- [report#节.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/report%23%E8%8A%82.md) → `HASH_NAME`\n- [100%.md](D:/tmp/deskfox-daily-win-20261114/closeout/A/100%25.md) → `RAW_PERCENT`\n\n「未知/中文 空格.md」不存在（该目录本身也不存在）。\n\nhttps://example.com/ 和仅供示例的命令 `cat example.txt`",
+  "tools": [
+    {
+      "name": "bash",
+      "status": "completed"
+    },
+    {
+      "name": "bash",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "bash",
+      "status": "completed"
+    }
+  ]
+}
