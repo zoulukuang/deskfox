@@ -5,8 +5,8 @@ import WebSocket from "ws"
 import { APICallError } from "ai"
 import { ProviderError } from "@/provider/error"
 import { errorMessage } from "@/util/error"
-import { ProxyEnv } from "@/util/proxy-env"
 import { isRecord } from "@/util/record"
+import { responsesWebSocketProxy } from "./ws-proxy" // FORK: REQ-162 configure the WSS proxy per runtime 2026-11-14
 
 export const PROTOCOL_HEADER = "responses_websockets=2026-02-06"
 
@@ -81,13 +81,8 @@ export function connectResponsesWebSocket(options: ConnectResponsesWebSocketOpti
     }
     delete headers["content-length"]
 
-    // Bun does not apply HTTP(S)_PROXY to WebSockets unless the proxy is supplied explicitly.
-    const proxy =
-      typeof Bun === "undefined"
-        ? undefined
-        : ProxyEnv.getProxyForUrl(options.url.replace(/^wss:/, "https:").replace(/^ws:/, "http:"))
-    const connect = { headers, ...(proxy ? { proxy } : {}) }
-    const socket = new WebSocket(options.url, connect)
+    // FORK: REQ-162 pass the resolved proxy directly to the WSS client 2026-11-14
+    const socket = new WebSocket(options.url, { headers, ...responsesWebSocketProxy(options.url) })
     const timeout = options.timeout
       ? setTimeout(() => {
           cleanup()
