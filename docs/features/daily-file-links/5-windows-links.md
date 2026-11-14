@@ -13,3 +13,9 @@ REQ-152/162 最后交叉核查发现：handler 支持 `C:/` 不代表消息真�
 本笔属于同一文件链接范围的末端修复，session-ui不在现行pre-commit黑名单正则内，普通hook提交。它补充/更新先前4-r4-review中“尚未修改既有Markdown文件”的时间点描述；唯一待提交R4仍是opencode `llm/request.ts`。C staged diff 与 `/tmp/deskfox-file-links-r4-review.patch` 保持冻结，未经审签不提交。
 
 仍不等同于Windows真实桌面回执；本次为Mac上Chromium、Windows路径fixture，双端local继续待验。
+
+## 推送回执
+
+代码已推 `bd85062226`；最终push自动完整闸通过：29/29类型检查，app1229 unit+41 browser、media140、adapter792、branding82、desktop185、session-ui137，全0fail。GUI6条/e2e类型检查通过；app生产build通过（23.97秒，只有既有大chunk提示）。本回执为docs-only，按规则跳过重复pre-push；没有跳过任何代码提交的完整闸。
+
+尚未完成：Mac/Windows真实Electron transport/Office成功转换及真实模型通道抽查；C唯一黑名单改动待用户R4确认，stage SHA256 `49c053338dc79441d7eca3b4a125e66980a0ac939822e4e319760fd30ef2510b`，不标整体done。
