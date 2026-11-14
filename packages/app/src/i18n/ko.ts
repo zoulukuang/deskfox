@@ -1356,4 +1356,11 @@ export const dict = {
 
   "desktop.picker.error.notSelected": "선택기에서 파일을 선택하지 않았습니다",
   "desktop.picker.error.sizeLimit": "선택한 첨부 파일이 {{limit}} MB 제한을 초과합니다",
+  // FORK-BEGIN: REQ-102 语音派活顶部栏入口 [feat: voice-dispatch-minimal] 2026-08-21
+  "titlebar.voice.off": "Start voice dispatch",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.on": "Voice dispatch is on — click to stop",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.starting": "Starting voice gateway…",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.unavailable": "Voice dispatch unavailable",  // FORK-i18n-backfill(en 兜底)
+  "titlebar.voice.error": "Voice dispatch error — click to retry",  // FORK-i18n-backfill(en 兜底)
+  // FORK-END
 }

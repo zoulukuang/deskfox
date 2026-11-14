@@ -38,6 +38,8 @@ import type { SolidQueryOptions } from "@tanstack/solid-query"
 import { createRefreshQueue } from "./global-sync/queue"
 import { directoryKey } from "./global-sync/utils"
 import { PathKey } from "@/utils/path-key"
+// FORK: voice-session-refresh — 见下方 onCleanup 附近的 FORK 块 [feat: voice-dispatch-minimal] 2026-08-21
+import { isDesktopApp, listen } from "@/utils/native"
 import { createDirSyncContext } from "./directory-sync"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
@@ -769,6 +771,37 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       },
     })
   })
+
+  // FORK-BEGIN: voice-session-refresh — 语音派活后主动重拉会话列表 [feat: voice-dispatch-minimal] 2026-08-21
+  // 语音的 ACP 宿主是**另一个 opencode 进程**,跟主实例共享同一个 SQLite 但**各有各的 event bus**:
+  // 会话已经写进库了,主实例收不到任何 session 事件,列表就一直停在旧状态
+  // (2026-08-21 user 真机:`分析今日A股市场盘面` 17:51 已在库里,界面里看不到)。
+  // 主进程侧轮询 gateway 的 /api/tasks,集合一变就发这个事件(见 main/deskfox/voice/task-watch.ts)。
+  let unlistenVoice: (() => void) | undefined
+  if (isDesktopApp()) {
+    void listen("voice-session-changed", () => {
+      // 要让侧栏真的出现新会话,**三件事缺一不可**(2026-08-21 逐层真机取证得出):
+      //   ① `sessionMeta.delete` —— `loadSessions` 开头有 `if (meta && meta.limit >= retainedLimit) return`,
+      //      它的语义是"确保加载过"而非"重新加载";不清这个记号,后面两步都白做;
+      //   ② `invalidateQueries` —— 加载走的是 `queryClient.fetchQuery`,缓存没过期就直接返回旧数据;
+      //   ③ `queue.push` —— 真正触发加载并把结果 reconcile 回 store。
+      //      侧栏读的是 store(`sortedRootSessions(workspaceStore, …)`),不是 query,
+      //      所以只 invalidate 而不 push,界面永远不动。
+      // 我先后只做过 ② 和 ③,两次都以为修好了 —— 都没验到 DOM 就收工,两次都是假的。
+      for (const directory of Object.keys(children.children)) {
+        const key = directoryKey(directory)
+        sessionMeta.delete(key)
+        void queryClient.invalidateQueries(queryOptionsApi.sessions(key))
+        queue.push(directory)
+      }
+    })
+      .then((fn) => {
+        unlistenVoice = fn
+      })
+      .catch(() => {})
+  }
+  onCleanup(() => unlistenVoice?.())
+  // FORK-END
 
   onCleanup(unsub)
   onCleanup(() => {

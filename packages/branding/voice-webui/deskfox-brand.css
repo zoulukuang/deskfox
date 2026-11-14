@@ -1,0 +1,48 @@
+/* [fork-only] REQ-102 语音 WebUI 品牌化 —— 视觉部分 [feat: voice-dispatch-minimal] 2026-08-22
+ *
+ * 配色取自 packages/branding/src/theme.css:
+ *   Slate Navy #1f2d44(主) / Cool Blue #7295c4(辅) / Warm Coral #ff9a7a(点缀,面积 ≤ 15%)
+ * 原页面那颗光球是紫色 —— 那是 qwen 的品牌色,换成我们的蓝系。
+ *
+ * ⚠️ 同 JS:不依赖 qwen 的类名(带 hash,升级即变)。这里只用属性选择器和我们自己加的类,
+ * 以及对"圆形大色块"这种结构特征的宽泛匹配。改不中最多是配色没换,不会破坏布局。
+ */
+
+:root {
+  --deskfox-navy: #1f2d44;
+  --deskfox-blue: #7295c4;
+  --deskfox-blue-light: #9dbbe3;
+  --deskfox-coral: #ff9a7a;
+}
+
+/* 我们自己插的副标题 —— 对齐原「REALTIME VOICE · LIVE」那行的气质:小、灰、宽字距 */
+.deskfox-subtitle {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-top: 2px;
+}
+
+/* 顶栏 logo:JS 把 "V" 换成背景图后,补一个圆角和底色,免得深色图边缘糊在深色栏上 */
+[data-deskfox-logo] {
+  background-color: var(--deskfox-navy) !important;
+  border-radius: 10px !important;
+  color: transparent !important;
+}
+
+/* 中央声波球:原色是紫,换成 Slate Navy → Cool Blue。
+ * 按"尺寸够大 + 圆形"匹配,不认类名。radial-gradient 保留原本的球感。 */
+div[class][style*="border-radius"],
+canvas + div[class] {
+  --deskfox-orb-tint: var(--deskfox-blue);
+}
+
+/* 兜底:凡是用紫色系做主色的大色块,统一改判成品牌蓝。
+ * 用 filter 做色相旋转比逐个改 background 稳 —— 不用猜它到底写在哪个属性上。 */
+[class*="orb"],
+[class*="Orb"],
+[class*="sphere"],
+[class*="Sphere"] {
+  filter: hue-rotate(-35deg) saturate(0.75) brightness(0.95);
+}

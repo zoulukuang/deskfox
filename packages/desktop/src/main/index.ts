@@ -21,6 +21,9 @@ import { CHANNEL, PRODUCT_NAMES } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
 import { registerDeskfoxIpc } from "./deskfox/ipc"
+// FORK: 语音桥的 sidecar 连接信息发布点 + 退出时回收语音网关 [feat: voice-acp-bridge]
+import { publishSidecarInfo } from "./deskfox/voice/sidecar-info"
+import { shutdownVoiceGateway } from "./deskfox/voice/gateway"
 // FORK: 匿名使用统计(从 Tauri telemetry.rs 平移)[feat: telemetry-usage-stats] 2026-06-13
 import { initTelemetry, emitAppOpen } from "./deskfox/telemetry"
 import { createTray, attachCloseToTray, setQuitting, isQuitting, showMainWindow, setTrayStatus } from "./deskfox/tray"
@@ -216,6 +219,11 @@ const main = Effect.gen(function* () {
     // FORK: 先停看门狗,避免主动停 sidecar 被误判死亡触发重启 [feat: sidecar-watchdog-respawn]
     sidecarWatchdog?.stop()
     sidecarWatchdog = null
+    // FORK: 连带收掉语音网关 —— 它是我们 spawn 的子进程,不收就成孤儿(占着 3101 继续活着)。
+    //   危害不只是端口:下次启动 DeskFox 再开语音,health 会探到那个孤儿而误报"已开启",
+    //   而它连的 sidecar 早已随上一个 DeskFox 死了 —— 用户看到语音"开着"却完全不工作。
+    //   2026-08-25 真机 QA 实撞。[feat: voice-acp-bridge]
+    shutdownVoiceGateway()
     await killSidecar()
     wslServers.stopAll()
   }
@@ -462,6 +470,8 @@ const main = Effect.gen(function* () {
     if (SIDECAR_VERSION === "v2") {
       logger.log("spawning v2 sidecar")
       const sidecar = yield* Effect.promise(() => startBackgroundCli(logger, shellEnv?.XDG_STATE_HOME))
+      // FORK: 同 v1 分支 —— 语音桥的连接信息来源 [feat: voice-acp-bridge]
+      publishSidecarInfo({ url: sidecar.url, username: sidecar.username, password: sidecar.password })
       yield* Deferred.succeed(serverReady, {
         url: sidecar.url,
         username: sidecar.username,
@@ -551,6 +561,9 @@ const main = Effect.gen(function* () {
       log: (message, data) => writeLog("utility", message, data ?? {}, "warn"),
     })
     sidecarWatchdog.start()
+    // FORK: 语音桥要连本 sidecar,而地址/密码只存在于运行期(端口随机 + randomUUID 不落盘)
+    //   [feat: voice-acp-bridge]
+    publishSidecarInfo({ url, username: "opencode", password })
     yield* Deferred.succeed(serverReady, {
       url,
       username: "opencode",

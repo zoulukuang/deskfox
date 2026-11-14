@@ -6,6 +6,8 @@
 
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { tool } from "./tool-shim"
+// FORK: REQ-102 ACP 子进程门控(语音派活)[feat: voice-dispatch-minimal] 2026-08-21
+import { MEDIA_GEN_PLUGIN_ID, shouldSkipInAcp, shouldStartMediaServer } from "./acp-gate"
 import { ALIBABA_PROVIDER_ID, readProviderApiKey } from "./auth"
 import { DashScopeError } from "./dashscope-task"
 import { DEFAULT_MODEL, generateImage } from "./dashscope-image"
@@ -23,7 +25,13 @@ const fail = (e: unknown) => `操作失败:${e instanceof DashScopeError ? e.fri
 let serverStarted = false
 
 export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
-  if (!serverStarted) {
+  // FORK-BEGIN: REQ-102 语音派活的 ACP 子进程门控 [feat: voice-dispatch-minimal] 2026-08-21
+  //   · 不在白名单(默认白名单含 media-gen,所以默认不会命中)→ 整个插件跳过
+  //   · 在 ACP 里 → **保留 tools、不起 server**:tools 直接调引擎不经过 server,而 server 端口
+  //     是固定的 51737,主实例已占着,子进程再起只会撞端口 + 覆写发现文件(spike 实测噪声)
+  if (shouldSkipInAcp(MEDIA_GEN_PLUGIN_ID, process.env)) return {}
+
+  if (!serverStarted && shouldStartMediaServer(process.env)) {
     serverStarted = true
     try {
       await startMediaServer() // FORK: 改 async(node:http listen 异步)[feat: electron-replatform]
@@ -31,6 +39,7 @@ export const MediaGenPlugin = async (_input: PluginInput): Promise<Hooks> => {
       console.error("[media-gen] generate server start failed:", e)
     }
   }
+  // FORK-END
   return {
     tool: {
       media_image_generate: tool({

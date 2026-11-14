@@ -1,0 +1,610 @@
+// [fork-only] REQ-102 语音派活 — Gateway 进程托管 [feat: voice-dispatch-minimal] 2026-08-21
+//
+// 点顶部栏图标 → 主进程起 `qwenaudio gateway run --backend opencode`,env 由 launch-config 构造;
+// 再点关闭 → 停进程。renderer 只经 IPC 拿一个状态字符串,不碰进程细节。
+//
+// 为什么托管在主进程而不是 renderer:① env 里有 DASHSCOPE key,不该过 renderer;
+// ② 主进程的 `process.env` 已经被 `applyDeskfoxDataNamespace()` 设好 XDG(D-A 共用命名空间
+// 的前提就是子进程继承它);③ 关窗口不该把语音杀掉。
+//
+// 纯逻辑(判定/解析/拼参数)全部抽成可测函数,spawn 与 fetch 走注入,单测不起真进程。
+
+import { appendFileSync, mkdirSync, readFileSync, realpathSync } from "node:fs"
+import { homedir } from "node:os"
+import path from "node:path"
+import { spawn, type ChildProcess } from "node:child_process"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+import { BrowserWindow, shell } from "electron"
+import log from "electron-log/main.js"
+import { acpSessionStatePath, invalidateCoordinatorOnStart } from "./coordinator-state"
+import {
+  archiveCoordinator,
+  archiveTransitSessions,
+  createJournalState,
+  syncJournal,
+  type JournalState,
+} from "./journal-writer"
+import { startTaskWatch, type TaskWatchHandle } from "./task-watch"
+import {
+  GATEWAY_PORT,
+  binDir,
+  buildAcpGatewayEnv,
+  buildGatewayEnv,
+  checkVoiceWorkspace,
+  useAcpBridge,
+  voiceCoordinatorDir,
+} from "./launch-config"
+import { getSidecarInfo } from "./sidecar-info"
+import { resolveAcpHost } from "./launch-env"
+import { applyWebuiBrand, resolveWebuiIndex } from "./webui-brand"
+
+const execFileAsync = promisify(execFile)
+
+export type VoiceState = "unavailable" | "off" | "starting" | "on" | "error"
+
+export interface VoiceStatus {
+  readonly state: VoiceState
+  /** 给 tooltip 用的人话;unavailable / error 时必须能指导下一步 */
+  readonly detail: string
+  readonly gatewayUrl?: string
+}
+
+// ───────────────────────────── 纯逻辑 ─────────────────────────────
+
+export interface SetupProbe {
+  readonly ready: boolean
+  readonly issue: string
+}
+
+/**
+ * 解析 `qwenaudio setup --backend <id> --json` 的输出。
+ * 拿不准一律当"没装好"—— 语音入口宁可禁用并说清原因,也不要点了没反应。
+ *
+ * `backendId` 随链路走:旧链路 `opencode`(判 opencode CLI 装没装),
+ * 新链路 `acp`(判据只有一条:`ACP_COMMAND` 指向的文件存在且可执行)。
+ */
+export function parseSetupJson(stdout: string, backendId = "opencode"): SetupProbe {
+  try {
+    const data = JSON.parse(stdout) as {
+      backends?: Array<{ id?: string; ready?: boolean; issue?: string; issues?: string[]; backend?: { source?: string } }>
+    }
+    const entry = data.backends?.find((b) => b.id === backendId)
+    if (!entry) return { ready: false, issue: `qwenaudio 没报告 ${backendId} 后端` }
+    if (entry.ready) return { ready: true, issue: "" }
+    const issue = entry.issue || entry.issues?.[0] || `qwenaudio 报告 ${backendId} 后端未就绪`
+    return { ready: false, issue }
+  } catch {
+    return { ready: false, issue: "qwenaudio setup 输出不是 JSON(版本不符?)" }
+  }
+}
+
+/**
+ * 这次失败值不值得重试。
+ *
+ * 2026-08-21 真机实测:语音 ACP 宿主启动时要开**和主实例同一个** `opencode.db`
+ * (D-A 共用命名空间的必然结果),而 opencode 启动阶段会跑迁移、拿排他锁;
+ * 撞上主实例正在写就直接 `database is locked` → 宿主 exit 1 → Gateway "在就绪前退出"。
+ * 这是 1-spec §5·R1 登记的风险真实爆发,**而且是间歇性的**(同样的命令多数时候能成)。
+ * 锁是瞬态的,所以值得退避重试;不是锁的失败重试没意义,原样报出去。
+ */
+export function isRetryableStartFailure(output: string): boolean {
+  return /database is locked|SQLITE_BUSY|Gateway 在就绪前退出|acp\.initialization_failed|Failed query/i.test(
+    String(output ?? ""),
+  )
+}
+
+/**
+ * Gateway 启动参数。`run` 是前台跑法 —— 我们自己托管进程,不用它的 install/start 后台服务。
+ *
+ * `--backend acp` 是 voice-acp-bridge 的入口:qwen 不再自己 spawn 一个 opencode,
+ * 改成 spawn `ACP_COMMAND` 指向的桥,由桥连回 DeskFox 自己的 sidecar。
+ *
+ * ⚠️ **不能再带 `--backend-permission-mode full`**:通用 acp backend 的
+ * `supportsFullPermission: false`,CLI 层直接拒绝启动(实测:进程根本起不来)。
+ * 见 launch-config 的 buildAcpGatewayEnv 注释。
+ */
+export function buildGatewayArgs(backend: "opencode" | "acp" = "opencode"): string[] {
+  return ["gateway", "run", "--backend", backend]
+}
+
+export function gatewayHealthUrl(port: number = GATEWAY_PORT): string {
+  return `http://127.0.0.1:${port}/api/health`
+}
+
+/**
+ * `/api/health` 说"就绪"了没有 —— **判据必须含 `backend`,不能只看 `ok`**。
+ *
+ * qwen 自己在代码里写明 "Gateway liveness is independent from optional backend readiness":
+ * 顶层 `ok/status` 只表示 3101 这个 HTTP 服务活着,ACP 后端挂没挂它不管。
+ * 2026-08-21 真机撞到的正是这个缝:首次跑到全新的语音库上,qwen 起的 backend server(4396)
+ * 和我们的 ACP 宿主**并发建表**,ACP 侧 `CREATE TABLE workspace` 撞车退出,
+ * 而 3101 照样 200 → 我们判定"已开启" → 用户打开界面,说话没人应。
+ * 把 `backend.ok` 纳入判据后,这种半死状态会落进重试(第二次库已建好,实测干净 `acp.initialized`)。
+ */
+export function isBackendReady(health: unknown): boolean {
+  if (!health || typeof health !== "object") return false
+  const h = health as { ok?: unknown; backend?: { ok?: unknown; code?: unknown } }
+  if (h.ok !== true) return false
+  const backend = h.backend
+  // 拿不到 backend 段就当没就绪:宁可多等一轮重试,也不要报了 on 却不能用
+  if (!backend || typeof backend !== "object") return false
+  return backend.ok === true || String(backend.code ?? "").toUpperCase() === "READY"
+}
+
+/**
+ * 把内部状态映射成 renderer 要的 status(集中一处,免得两边各判各的)。
+ *
+ * `workspaceIssue` 存在时一律 **unavailable(按钮禁用)** 而不是 error —— 2026-08-21 user 真机反馈:
+ * 在非 git 项目上点,拿到的是「出错了,点击重试」,可重试**永远不可能成功**(目录不会自己变成
+ * git 仓库),表现就成了"点了没反应"。这种"换个项目才行"的前置条件属于**不可用**,
+ * 要在点之前就说清楚,而不是让人点一次错一次。
+ */
+export function deriveStatus(input: {
+  readonly available: SetupProbe | null
+  readonly running: boolean
+  readonly healthy?: boolean
+  readonly starting: boolean
+  readonly lastError: string
+  readonly workspaceIssue?: string
+}): VoiceStatus {
+  // on 的判据是 **health 探通**,不是"进程还在":2026-08-21 真机遇到进程活着但 3101 从没开,
+  // 按 running 判会报"已开启",用户点开却什么都没有 —— 比报错更糟。
+  if (input.running && input.healthy) {
+    return { state: "on", detail: "语音派活已开启", gatewayUrl: `http://127.0.0.1:${GATEWAY_PORT}` }
+  }
+  if (input.lastError) return { state: "error", detail: input.lastError }
+  if (input.running || input.starting) return { state: "starting", detail: "正在启动语音网关…" }
+  if (input.workspaceIssue) return { state: "unavailable", detail: input.workspaceIssue }
+  if (input.lastError) return { state: "error", detail: input.lastError }
+  if (input.available && !input.available.ready) return { state: "unavailable", detail: input.available.issue }
+  return { state: "off", detail: "点击开启语音派活" }
+}
+
+// ───────────────────────────── 进程托管 ─────────────────────────────
+
+let child: ChildProcess | null = null
+let starting = false
+let lastError = ""
+let availability: SetupProbe | null = null
+/** health 探通过才算 on —— 进程活着 ≠ 服务可用(2026-08-21 真机:进程在、3101 死,状态却报 on) */
+let healthy = false
+let taskWatch: TaskWatchHandle | null = null
+let journalState: JournalState | null = null
+
+/**
+ * 起「任务变了就让界面重拉会话列表」的轮询。
+ *
+ * 必要性见 task-watch.ts:语音的 ACP 宿主是另一个 opencode 进程,跟主实例共享 db 但
+ * **不共享 event bus** —— 会话写进去了,主实例毫不知情,列表就一直是旧的
+ * (2026-08-21 user 真机反馈的正是这个)。
+ */
+function startSessionListWatch(directory: string): void {
+  taskWatch?.stop()
+  journalState = createJournalState()
+  taskWatch = startTaskWatch({
+    fetchTasks: async () => {
+      const res = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/api/tasks`, { signal: AbortSignal.timeout(3000) })
+      if (!res.ok) throw new Error(String(res.status))
+      return await res.json()
+    },
+    // 首轮把已有任务标记成历史 —— /api/tasks 是跨会话累积的,不这么做新建的「语音沟通」
+    // session 开头会凭空多出上次的几轮对话
+    onPoll: (_payload, first) => {
+      if (!first || !journalState) return
+      void syncJournal({ directory, state: journalState, seedOnly: true })
+    },
+    notify: () => {
+      // 先把新完成的轮次写进「语音沟通」session,再让界面刷新 —— 顺序反了会闪一下空列表
+      void (async () => {
+        if (journalState) await syncJournal({ directory, state: journalState })
+        await archiveCurrentCoordinator(directory)
+        await archiveProjectTransits(directory)
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send("deskfox:voice-session-changed")
+        }
+        log.info("[voice] 任务集合变化 → 已同步语音沟通记录并通知界面刷新")
+      })()
+    },
+  })
+}
+
+/**
+ * 归档"中转站"第三层 session。qwen 会把它建的每条 project session 记在同一个状态文件的
+ * `projects` 段里,拿它当清单逐条判定(判据见 voice-journal.ts 的 isTransitSession)。
+ */
+async function archiveProjectTransits(directory: string): Promise<void> {
+  if (!journalState) return
+  try {
+    const raw = readFileSync(acpSessionStatePath(), "utf8")
+    const parsed = JSON.parse(raw) as { projects?: Record<string, { sessionId?: string }> }
+    const ids = Object.values(parsed?.projects ?? {})
+      .map((v) => String(v?.sessionId ?? ""))
+      .filter(Boolean)
+    if (ids.length) await archiveTransitSessions({ directory, sessionIds: ids, state: journalState })
+  } catch {}
+}
+
+/**
+ * 归档当前的 coordinator session。
+ *
+ * 它的 id 在 qwen 的状态文件里(见 coordinator-state.ts),而且是**跑起来之后**才写进去的,
+ * 所以不能在起网关那一刻读 —— 放在每轮同步里顺手做,读到了就归档一次(内部去重)。
+ */
+async function archiveCurrentCoordinator(directory: string): Promise<void> {
+  if (!journalState) return
+  try {
+    const raw = readFileSync(acpSessionStatePath(), "utf8")
+    const parsed = JSON.parse(raw) as { coordinators?: Record<string, { sessionId?: string }> }
+    for (const [key, value] of Object.entries(parsed?.coordinators ?? {})) {
+      if (!key.startsWith("opencode:")) continue
+      const sessionId = String(value?.sessionId ?? "")
+      if (sessionId) await archiveCoordinator({ directory, sessionId, state: journalState })
+    }
+  } catch {
+    // 状态文件还没写出来是正常的(第一轮之前),下一轮再看
+  }
+}
+
+/**
+ * 语音网关日志落地。electron-log 在打包态没把这些行写到能找到的地方,而 Gateway 起不来时
+ * **唯一的线索就在它的 stdout/stderr** —— 自用阶段没有日志等于没法自查。
+ * 位置:`$XDG_STATE_HOME/deskfox/voice-gateway.log`,追加写,失败静默(日志不该反过来搞垮功能)。
+ */
+export function voiceLogPath(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
+  const stateHome = env.XDG_STATE_HOME || path.join(home, ".local", "state")
+  return path.join(stateHome, "deskfox", "voice-gateway.log")
+}
+
+function appendVoiceLog(line: string): void {
+  try {
+    const p = voiceLogPath()
+    mkdirSync(path.dirname(p), { recursive: true })
+    appendFileSync(p, `${new Date().toISOString()} ${line.trimEnd()}\n`)
+  } catch {}
+}
+
+export interface StartInput {
+  /** DeskFox 当前窗口的项目目录 */
+  readonly workspace: string
+  /** fork 仓根(D-G:ACP 宿主要用) */
+  readonly repoRoot: string
+  readonly wrapperPath: string
+  /** 语音桥脚本路径(voice-acp-bridge 新链路) */
+  readonly bridgePath?: string
+  /** 与主实例一致的 db 分流(见 launch-config 的同名字段;仅旧链路用) */
+  readonly disableChannelDb: boolean
+  /** 起来后是否自动打开语音界面(默认 true;冒烟脚本用 false) */
+  readonly openUi?: boolean
+}
+
+export interface ProbeInput {
+  /** wrapper 绝对路径 —— 旧链路**必须给**,理由见函数注释 */
+  readonly wrapperPath: string
+  /** 桥脚本绝对路径 —— 新链路必须给(它就是 `ACP_COMMAND`,setup 的 ready 判据) */
+  readonly bridgePath?: string
+  readonly extraPathDirs?: readonly string[]
+}
+
+/**
+ * 探测 qwen-audio-agent 装没装好;结果缓存,`force` 可重探。
+ *
+ * 两个坑都是 2026-08-21 真机点按钮才暴露的:
+ *   ① **必须带 `OPENCODE_BIN`**。不带的话 `setup` 会去找 PATH 上"已安装的 opencode",
+ *      在本机那是 homebrew 的 **1.17.4** → `ready:false`;带上 wrapper 则 `source: configured`
+ *      → 跳过版本闸 → ready。
+ *   ② **非零退出也要读 stdout**。`setup` 在 not-ready 时 exit 1,但**照样打完整 JSON**;
+ *      只 catch 不解析就会把"1.17.4 太旧"这种可执行的原因丢掉,退化成一句没用的"命令失败"。
+ */
+export async function probeAvailability(input: ProbeInput, force = false): Promise<SetupProbe> {
+  if (availability && !force) return availability
+  const acp = useAcpBridge()
+  const backendId = acp ? "acp" : "opencode"
+  const pathDirs = [...(input.extraPathDirs ?? []), ...String(process.env.PATH ?? "").split(":")]
+  const env = {
+    ...process.env,
+    // 新链路 setup 只看 ACP_COMMAND 指的文件在不在、能不能执行;旧链路看 OPENCODE_BIN
+    ...(acp ? { ACP_COMMAND: input.bridgePath ?? "" } : { OPENCODE_BIN: input.wrapperPath }),
+    PATH: pathDirs.filter(Boolean).join(":"),
+  }
+  if (acp && !input.bridgePath) {
+    availability = { ready: false, issue: "找不到语音桥脚本 —— 这份 DeskFox 不是从仓里跑的?(见 paths.ts 的仓根解析)" }
+    return availability
+  }
+  try {
+    const { stdout } = await execFileAsync("qwenaudio", ["setup", "--backend", backendId, "--json"], {
+      timeout: 30_000,
+      env,
+    })
+    availability = parseSetupJson(stdout, backendId)
+  } catch (e) {
+    const err = e as { message?: string; stdout?: string }
+    const stdout = String(err?.stdout ?? "")
+    if (stdout.trim().startsWith("{")) {
+      availability = parseSetupJson(stdout, backendId)
+      return availability
+    }
+    const msg = String(err?.message ?? e)
+    availability = {
+      ready: false,
+      issue: /ENOENT|not found/i.test(msg)
+        ? "未安装 qwen-audio-agent —— 终端跑 `npm i -g qwen-audio-agent@1.11.0` 后重试"
+        : `qwenaudio setup 失败:${msg}`,
+    }
+  }
+  return availability
+}
+
+export function getVoiceStatus(workspace?: string): VoiceStatus {
+  // 没传 workspace(比如内部调用)就不做目录判定,免得凭空报"没有打开项目"
+  const ws = workspace === undefined ? null : checkVoiceWorkspace(workspace)
+  return deriveStatus({
+    available: availability,
+    running: !!child,
+    healthy,
+    starting,
+    lastError,
+    workspaceIssue: ws && !ws.ok ? ws.reason : undefined,
+  })
+}
+
+export async function startVoiceGateway(input: StartInput): Promise<VoiceStatus> {
+  if (child) return getVoiceStatus()
+  lastError = ""
+
+  // R3 护栏:非 git 仓库根一律拒起(语音要以全开权限改文件,git 是最后的撤销手段)。
+  // 注意**不写 lastError** —— 这不是"出过错",是"当前项目不满足前置条件",
+  // 由 getVoiceStatus 统一算成 unavailable(按钮禁用 + 说清换项目)。
+  const ws = checkVoiceWorkspace(input.workspace)
+  if (!ws.ok) return getVoiceStatus(input.workspace)
+
+  const acp = useAcpBridge()
+
+  // bun 给桥/wrapper 的 shebang 用;claude CLI 给 claude-code provider 用
+  // —— GUI 进程的 PATH 常常两个都没有
+  const extraPathDirs: string[] = []
+  try {
+    const host = resolveAcpHost({ repoRoot: input.repoRoot, env: process.env })
+    const d = binDir(host.command)
+    if (d && host.command.includes("/")) extraPathDirs.push(d)
+  } catch (e) {
+    // 新链路只用 bun 跑桥,拿不到"1.x 源码入口"不是致命的:仓根解析失败会在下面的
+    // bridgePath 校验里以更准确的措辞报出来
+    if (!acp) {
+      lastError = String((e as { message?: string })?.message ?? e)
+      return getVoiceStatus()
+    }
+  }
+
+  const probe = await probeAvailability({
+    wrapperPath: input.wrapperPath,
+    bridgePath: input.bridgePath,
+    extraPathDirs,
+  })
+  if (!probe.ready) return getVoiceStatus()
+
+  let env: Record<string, string>
+  let warnings: readonly string[]
+  if (acp) {
+    // 语音沟通(coordinator)的独立目录得先存在,否则 sidecar 建 session 时会落到别处
+    const voiceDir = voiceCoordinatorDir()
+    try {
+      mkdirSync(voiceDir, { recursive: true })
+    } catch (e) {
+      lastError = `建不了语音工作目录 ${voiceDir}:${String((e as { message?: string })?.message ?? e)}`
+      return getVoiceStatus()
+    }
+    const built = buildAcpGatewayEnv({
+      workspace: ws.dir,
+      bridgePath: input.bridgePath ?? "",
+      server: getSidecarInfo(),
+      env: process.env,
+      extraPathDirs,
+    })
+    env = built.env
+    warnings = built.warnings
+    // sidecar 没就绪就别起:桥连不上 DeskFox,起来也只会在用户说话时静默失败
+    if (!env.ACP_DESKFOX_SERVER_URL) {
+      lastError = "DeskFox 后端还没就绪,稍等几秒再开语音"
+      return getVoiceStatus()
+    }
+  } else {
+    const built = buildGatewayEnv({
+      workspace: ws.dir,
+      repoRoot: input.repoRoot,
+      wrapperPath: input.wrapperPath,
+      env: process.env,
+      extraPathDirs,
+      disableChannelDb: input.disableChannelDb,
+    })
+    env = built.env
+    warnings = built.warnings
+  }
+  for (const w of warnings) log.warn(`[voice] ${w}`)
+
+  // 品牌化 WebUI(见 webui-brand.ts):每次起网关都做一次,qwen 升级覆盖了 index.html 也能自动补回。
+  // 失败只记一行,绝不挡住语音 —— 没品牌的界面也是能用的界面。
+  try {
+    // ⚠️ `which` 给的是 homebrew 的**符号链接**(bin/qwenaudio → ../lib/node_modules/…),
+    // 不解引用就会往 `homebrew/web/dist` 找,永远找不到(2026-08-22 实测踩过)。
+    const qwenPath = realpathSync((await execFileAsync("which", ["qwenaudio"])).stdout.trim())
+    if (qwenPath) {
+      const brand = applyWebuiBrand({ repoRoot: input.repoRoot, webuiIndexPath: resolveWebuiIndex(qwenPath) })
+      log.info(`[voice] WebUI 品牌化:${brand.note}`)
+      appendVoiceLog(`WebUI 品牌化:${brand.note}`)
+    }
+  } catch (e) {
+    log.warn(`[voice] WebUI 品牌化跳过:${String(e)}`)
+  }
+
+  starting = true
+  healthy = false
+
+  if (acp) {
+    appendVoiceLog(`--- start(acp 桥)workspace=${ws.dir} voiceDir=${env.ACP_DESKFOX_VOICE_DIR} ---`)
+    // 新链路不需要作废 coordinator:桥进程与网关同生共死,它进程内的 session 映射一清空,
+    // 下一轮 resume 就会透明换新(sessions.ts 文件头)。"每次启动重建"是免费拿到的,
+    // 不用再去改 qwen 的状态文件。
+  } else {
+    const backendModel = String(JSON.parse(env.OPENCODE_CONFIG_CONTENT).model ?? "")
+    appendVoiceLog(`--- start workspace=${ws.dir} model=${backendModel} ---`)
+
+    // **每次起网关都作废** coordinator session。两个理由(详见 coordinator-state.ts):
+    // ① 换模型时不作废的话,改 model 是静默失效的(它 resume 老 session,opencode 从历史消息恢复模型);
+    // ② 更要紧的是 few-shot 污染 —— 老 coordinator 历史里堆满"自己动手干"的样例,会压过路由引导,
+    //    像样的调研任务也不肯开独立 session(2026-08-21 真机:从 17:51 复用到 22:45 的那条)。
+    const invalidated = invalidateCoordinatorOnStart({ backendModel })
+    if (invalidated.invalidated) {
+      const changed = invalidated.previousModel && invalidated.previousModel !== backendModel
+      const prefix = changed ? `后端模型 ${invalidated.previousModel} → ${backendModel};` : ""
+      const msg = `${prefix}已作废 coordinator session(每次起网关重建,避免历史污染路由判断):${invalidated.dropped.join(", ")}`
+      log.info(`[voice] ${msg}`)
+      appendVoiceLog(msg)
+    }
+  }
+
+  // 最多试 3 次:见 isRetryableStartFailure —— 与主实例抢同一个 db 的锁是瞬态的
+  const MAX_ATTEMPTS = 3
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS && !healthy; attempt++) {
+    if (attempt > 1) appendVoiceLog(`--- retry ${attempt}/${MAX_ATTEMPTS} ---`)
+    let recent = ""
+    const proc = spawn("qwenaudio", buildGatewayArgs(acp ? "acp" : "opencode"), {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    child = proc
+    const tap = (d: unknown, warn = false) => {
+      const text = String(d)
+      recent = `${recent}${text}`.slice(-4000)
+      if (warn) log.warn(`[voice-gateway] ${text.trimEnd()}`)
+      else log.info(`[voice-gateway] ${text.trimEnd()}`)
+      appendVoiceLog(text)
+    }
+    proc.stdout?.on("data", (d) => tap(d))
+    proc.stderr?.on("data", (d) => tap(d, true))
+    proc.on("error", (e) => {
+      lastError = `语音网关起不来:${e.message}`
+      if (child === proc) child = null
+    })
+    proc.on("exit", (code, signal) => {
+      log.info(`[voice] gateway exited code=${code} signal=${signal}`)
+      appendVoiceLog(`--- exit code=${code} signal=${signal} ---`)
+      if (child === proc) {
+        healthy = false
+        child = null
+        // 非我们主动停的退出要留痕,否则图标会莫名其妙变回"关"
+        if (code !== 0 && code !== null) lastError = `语音网关意外退出(code=${code})`
+      }
+    })
+
+    healthy = await waitForHealth(60_000, () => isRetryableStartFailure(recent))
+    appendVoiceLog(`attempt=${attempt} health=${healthy}`)
+    if (healthy) {
+      lastError = ""
+      break
+    }
+    // 没起来:**必须等这一轮真的退干净**再决定重试。
+    // 2026-08-21 真机:只发 SIGTERM + 固定睡 3 秒就重来,实测退出用了 3.1 秒 —— 新一轮
+    // 早了 100ms 起来,3101 端口和 gateway 实例租约还被上一轮占着,第 2 轮秒退,
+    // 白白烧掉一次重试机会。
+    child = null
+    await terminate(proc)
+    if (!isRetryableStartFailure(recent)) {
+      if (!lastError) lastError = "语音网关启动超时 —— 日志见 voice-gateway.log"
+      break
+    }
+    lastError = `语音后端首次初始化没抢过并发(建表/锁冲突),已重试 ${attempt}/${MAX_ATTEMPTS} 次`
+  }
+
+  starting = false
+  // 新链路**不起** journal / 列表轮询 —— 那整套是"两套 opencode 不共享事件总线"的补丁:
+  //   · 列表刷新:session 现在由本 sidecar 创建,`session.created` 走同一条总线,界面自动就更新了;
+  //   · 语音沟通记录:coordinator session 本身就是记录(1-spec §3.1),不用再把对话誊抄一遍;
+  //   · 中转站归档:第三层就是真任务 session,没有"中转站"这种东西了。
+  // 代码留着不删(§6:验收通过后单独一期清理),`DESKFOX_VOICE_LEGACY_BACKEND=1` 可整体退回。
+  if (healthy && !acp) startSessionListWatch(ws.dir)
+  if (healthy && input.openUi !== false) {
+    // Gateway 是无头的:不打开前端,用户点完图标面对的是"什么也没发生"。
+    // 它的根路径就是 WebUI(实测 200 / text/html),交给系统浏览器 —— 麦克风授权那套
+    // 浏览器已经处理好了,比在 Electron 里自己搭一套权限流省事得多(自用阶段够用)。
+    const url = `http://127.0.0.1:${GATEWAY_PORT}/`
+    void shell.openExternal(url).catch((e) => log.warn(`[voice] 打开语音界面失败 ${url}: ${String(e)}`))
+  }
+  return getVoiceStatus(input.workspace)
+}
+
+/**
+ * 让一个子进程真正结束:先 SIGTERM,`graceMs` 内不走就 SIGKILL。
+ * 返回时进程一定已经 exit(或从来就没起来),端口 / 实例租约才算真的还回来了。
+ */
+async function terminate(proc: ChildProcess, graceMs = 8000): Promise<void> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return
+  const exited = new Promise<void>((resolve) => proc.once("exit", () => resolve()))
+  try {
+    proc.kill("SIGTERM")
+  } catch {
+    return
+  }
+  const timer = new Promise<"timeout">((r) => setTimeout(() => r("timeout"), graceMs))
+  if ((await Promise.race([exited.then(() => "exited" as const), timer])) === "timeout") {
+    try {
+      proc.kill("SIGKILL")
+    } catch {}
+    await Promise.race([exited, new Promise<void>((r) => setTimeout(r, 2000))])
+  }
+}
+
+/**
+ * 轮询到"gateway + 后端都就绪"为止。
+ * `giveUp` 让调用方拿进程输出提前叫停 —— 后端建表撞车时 3101 会一直 200,
+ * 干等满超时才认输 = 用户白等一分钟,而重试其实立刻就能成。
+ */
+async function waitForHealth(timeoutMs = 60_000, giveUp?: () => boolean): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!child) return false
+    if (giveUp?.()) return false
+    try {
+      const res = await fetch(gatewayHealthUrl(), { signal: AbortSignal.timeout(3000) })
+      if (res.ok && isBackendReady(await res.json())) return true
+    } catch {}
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return false
+}
+
+export async function stopVoiceGateway(): Promise<VoiceStatus> {
+  const proc = child
+  child = null
+  starting = false
+  healthy = false
+  lastError = ""
+  taskWatch?.stop()
+  taskWatch = null
+  journalState = null
+  if (!proc) return getVoiceStatus()
+  proc.kill("SIGTERM")
+  // 给它自己收尾的机会;超时再 SIGKILL,免得 3101/4396 端口留着不放
+  await new Promise<void>((resolve) => {
+    const t = setTimeout(() => {
+      try {
+        proc.kill("SIGKILL")
+      } catch {}
+      resolve()
+    }, 5000)
+    proc.once("exit", () => {
+      clearTimeout(t)
+      resolve()
+    })
+  })
+  return getVoiceStatus()
+}
+
+/** app 退出时收尾,别把 Gateway 留成孤儿进程。 */
+export function shutdownVoiceGateway(): void {
+  if (!child) return
+  try {
+    child.kill("SIGTERM")
+  } catch {}
+  child = null
+}

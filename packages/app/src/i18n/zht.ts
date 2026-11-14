@@ -1449,4 +1449,11 @@ export const dict = {
   "project.path.unreachable.description":
     "無法存取 “{{directory}}”,磁碟可能未連接或未對應(網路磁碟/USB),請重新連接後再試。",
   // FORK-END
+  // FORK-BEGIN: REQ-102 语音派活顶部栏入口 [feat: voice-dispatch-minimal] 2026-08-21
+  "titlebar.voice.off": "開啟語音派活",
+  "titlebar.voice.on": "語音派活已開啟 —— 點擊關閉",
+  "titlebar.voice.starting": "正在啟動語音閘道…",
+  "titlebar.voice.unavailable": "語音派活不可用",
+  "titlebar.voice.error": "語音派活出錯 —— 點擊重試",
+  // FORK-END
 } satisfies Partial<Record<Keys, string>>
