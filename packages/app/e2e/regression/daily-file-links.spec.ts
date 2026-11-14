@@ -44,7 +44,11 @@ test("opens an encoded chat file link and navigates document sections without le
     ],
     messages: [
       { id: "msg_links_user", role: "user", text: "Show the guide." },
-      { id: "msg_links_assistant", role: "assistant", text: "[Open guide](./guide%20space.md#target-section)" },
+      {
+        id: "msg_links_assistant",
+        role: "assistant",
+        text: "[Open guide](./guide%20space.md#target-section)\n\n[Absolute Windows guide](C:/OpenCode/ContextFlows/guide%20space.md#target-section)",
+      },
     ],
   })
   const sessionURL = page.url()
@@ -62,6 +66,10 @@ test("opens an encoded chat file link and navigates document sections without le
   await expect(viewer.getByRole("heading", { name: "Target section", exact: true })).toBeInViewport()
   await viewer.getByRole("link", { name: "Missing section", exact: true }).click()
   await expect(page).toHaveURL(sessionURL)
+  await expect(viewer.getByText("Correct file contents.", { exact: true })).toBeVisible()
+  const absoluteLink = page.getByRole("link", { name: "Absolute Windows guide", exact: true })
+  await expect(absoluteLink).toHaveAttribute("href", "C:/OpenCode/ContextFlows/guide%20space.md#target-section", { timeout: 5000 })
+  await absoluteLink.click()
   await expect(viewer.getByText("Correct file contents.", { exact: true })).toBeVisible()
 })
 
