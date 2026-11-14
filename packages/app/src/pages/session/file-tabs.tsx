@@ -15,6 +15,10 @@ import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { showToast } from "@opencode-ai/ui/toast"
 import { invoke, isDesktopApp, listen } from "@/utils/native"
 import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
+// FORK: delayed cross-document anchor navigation [feat: daily-file-links] 2026-11-14
+import { createMdFragmentNavigation } from "@/pages/session/md-fragment"
+// FORK: exact-file project-external preview [feat: daily-file-links] 2026-11-14
+import { createDocumentLinkOpener } from "@/pages/session/document-link"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useComments } from "@/context/comments"
@@ -1345,11 +1349,14 @@ export function FileTabContent(props: {
 
   // FORK: MD 内链点击拦截 — 用容器 ref 监听点击事件(2026-05-05 P0 fix:移除 TOC,user 不要大纲面板)
   const [mdContainerRef, setMdContainerRef] = createSignal<HTMLDivElement | undefined>()
+  // FORK: scope the requested fragment to this file after Markdown renders [feat: daily-file-links] 2026-11-14
+  createMdFragmentNavigation(mdContainerRef, () => sdk().directory, path, () => activeFileTab() === props.tab)
 
   // MD 内链点击拦截:相对路径 *.md / *.txt / 等 → 调 props.onOpenTab 在查看器打开
   // FORK: REQ-075 — 逻辑提取到 md-link-click.ts 与聊天区共享,此处 baseDir=当前文件所在目录,
   // 行为不变(R1 回归用例守护)[feat: batch-port-edit-mdlink] 2026-07-07
   const handleMdLinkClick = createMdLinkClickHandler({
+    onOpenOutside: createDocumentLinkOpener(),
     root: () => sdk().directory,
     baseDir: () => {
       const root = sdk().directory

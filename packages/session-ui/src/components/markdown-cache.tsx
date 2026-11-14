@@ -1,6 +1,8 @@
 import { checksum } from "@opencode-ai/core/util/encode"
 import DOMPurify from "dompurify"
 import { parseMarkdown } from "./markdown-worker"
+// FORK: allow explicit Windows drive links only [feat: daily-file-links] 2026-11-14
+import { preserveWindowsFileLink } from "./markdown-file-links"
 
 export type MarkdownCacheEntry = {
   raw: string
@@ -20,6 +22,7 @@ const config = {
 }
 
 if (typeof window !== "undefined" && DOMPurify.isSupported) {
+  DOMPurify.addHook("uponSanitizeAttribute", preserveWindowsFileLink) // FORK: daily-file-links
   DOMPurify.addHook("afterSanitizeAttributes", (node: Element) => {
     if (!(node instanceof HTMLAnchorElement)) return
     if (node.target !== "_blank") return

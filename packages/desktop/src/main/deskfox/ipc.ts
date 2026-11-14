@@ -14,6 +14,7 @@ import { registerLocalAssetProtocol } from "./local-asset"
 import { applyContextMenuLanguage } from "./context-menu"
 // REQ-084① 数据库隔离通知(一次性,renderer 就绪后取)[feat: voice-preclear-batch] 2026-08-18
 import { takeDbQuarantineNotice } from "./db-quarantine-notice"
+import { readDocumentPreview } from "./document-preview"
 
 export function registerDeskfoxIpc() {
   // 本地资源协议(localasset://)— app.whenReady 后注册 [feat: electron-replatform]
@@ -34,6 +35,7 @@ export function registerDeskfoxIpc() {
   h("open_in_terminal", fileOps.openInTerminal)
   h("get_file_mtime", fileOps.getFileMtime)
   h("get_file_size", fileOps.getFileSize)
+  h("read_document_preview", readDocumentPreview)
   h("write_text_file", fileOps.writeTextFile)
   h("read_binary_file_base64", fileOps.readBinaryFileBase64)
   h("write_binary_file_absolute_base64", fileOps.writeBinaryFileAbsoluteBase64)

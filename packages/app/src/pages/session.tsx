@@ -85,6 +85,8 @@ import {
 } from "@/pages/session/helpers"
 // FORK: REQ-075 聊天 md 内链拦截 [feat: batch-port-edit-mdlink] 2026-07-07
 import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
+// FORK: exact-file project-external preview [feat: daily-file-links] 2026-11-14
+import { createDocumentLinkOpener } from "@/pages/session/document-link"
 // FORK: 文件树宽度唯一事实源 [feat: file-tree-width-single-source] 2026-08-13
 import { resolvedFileTreeWidth } from "@/pages/session/file-tree-width"
 import { invoke } from "@/utils/native"
@@ -575,6 +577,7 @@ export default function Page() {
     setActive: tabs().setActive,
   })
   const handleChatMdLinkClick = createMdLinkClickHandler({
+    onOpenOutside: createDocumentLinkOpener(),
     root: () => sdk().directory,
     baseDir: () => sdk().directory,
     onOpen: (rel) => openChatFileTab(file.tab(rel)),

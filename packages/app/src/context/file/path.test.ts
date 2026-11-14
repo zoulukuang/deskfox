@@ -395,3 +395,14 @@ describe("normalizeDir 分隔符归一(Windows 双 key 幽灵修复)", () => {
     expect(helpers.normalizeDir("D:\\Downloads\\test\\phase3")).toBe("test/phase3")
   })
 })
+// FORK: raw path and encoded tab identity must remain distinct [feat: daily-file-links] 2026-11-14
+test.each(["report%20draft.md", "report#draft.md", "report?draft.md", "report draft.md"])(
+  "preserves the raw filename through tab, read, and repeated normalization: %s",
+  (name) => {
+    const path = createPathHelpers(() => "/project")
+    const tab = path.tab(name)
+    expect(path.pathFromTab(tab)).toBe(name)
+    expect(path.normalize(path.pathFromTab(tab)!)).toBe(name)
+    expect(path.tab(path.pathFromTab(tab)!)).toBe(tab)
+  },
+)
