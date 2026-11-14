@@ -8230,6 +8230,38 @@ export type OfficeToolingProgressResponses = {
 
 export type OfficeToolingProgressResponse = OfficeToolingProgressResponses[keyof OfficeToolingProgressResponses]
 
+export type VcsRefreshRequiredData = {
+  body?: {
+    paths: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/deskfox/vcs/refresh-required"
+}
+
+export type VcsRefreshRequiredErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type VcsRefreshRequiredError = VcsRefreshRequiredErrors[keyof VcsRefreshRequiredErrors]
+
+export type VcsRefreshRequiredResponses = {
+  /**
+   * Success
+   */
+  200: {
+    shouldRefresh: boolean
+  }
+}
+
+export type VcsRefreshRequiredResponse = VcsRefreshRequiredResponses[keyof VcsRefreshRequiredResponses]
+
 export type InstanceDisposeData = {
   body?: never
   path?: never

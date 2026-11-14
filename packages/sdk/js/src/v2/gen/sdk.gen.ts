@@ -403,6 +403,8 @@ import type {
   VcsDiffResponses,
   VcsGetErrors,
   VcsGetResponses,
+  VcsRefreshRequiredErrors,
+  VcsRefreshRequiredResponses,
   VcsStatusErrors,
   VcsStatusResponses,
   WorktreeCreateErrors,
@@ -1995,6 +1997,43 @@ export class Office extends HeyApiClient {
   private _tooling?: Tooling
   get tooling(): Tooling {
     return (this._tooling ??= new Tooling({ client: this.client }))
+  }
+}
+
+export class VcsRefresh extends HeyApiClient {
+  /**
+   * Check whether file events require a VCS refresh
+   */
+  public required<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      paths?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "paths" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<VcsRefreshRequiredResponses, VcsRefreshRequiredErrors, ThrowOnError>({
+      url: "/deskfox/vcs/refresh-required",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -7249,6 +7288,11 @@ export class OpencodeClient extends HeyApiClient {
   private _office?: Office
   get office(): Office {
     return (this._office ??= new Office({ client: this.client }))
+  }
+
+  private _vcsRefresh?: VcsRefresh
+  get vcsRefresh(): VcsRefresh {
+    return (this._vcsRefresh ??= new VcsRefresh({ client: this.client }))
   }
 
   private _instance?: Instance

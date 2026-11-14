@@ -22,7 +22,11 @@ import {
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
-import { debounce } from "@solid-primitives/scheduled"
+// FORK: 合并文件变动触发的差异刷新 [feat: deskfox-vcs-refresh-overload] 2026-11-11
+import { createVcsRefresh } from "@/pages/session/vcs-refresh"
+// FORK: watcher 原始路径按工作区识别 Git 元数据 [feat: deskfox-vcs-refresh-overload] 2026-11-14
+import { vcsEventKind } from "@/pages/session/vcs-event"
+import { createSessionVcsRefreshFilter } from "@/pages/session/vcs-refresh-filter"
 import { useLocal } from "@/context/local"
 import { FileProvider, selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
@@ -807,7 +811,10 @@ export default function Page() {
         : skipToken,
     }
   })
-  const refreshVcs = debounce(() => void queryClient.invalidateQueries({ queryKey: vcsKey() }), 100)
+  // FORK: 已发出的差异请求结束后再合并刷新 [feat: deskfox-vcs-refresh-overload] 2026-11-11
+  const refreshVcs = createVcsRefresh(queryClient, vcsKey, () => vcsQuery.isFetching)
+  // FORK: batch Git-ignore checks without accumulating HTTP requests [feat: deskfox-vcs-refresh-overload] 2026-11-14
+  const filterVcs = createSessionVcsRefreshFilter(sdk, vcsKey, refreshVcs)
   const reviewDiffs = () => {
     if (reviewMode() === "git" || reviewMode() === "branch")
       // avoids suspense
@@ -1065,8 +1072,10 @@ export default function Page() {
         ? (details.properties as Record<string, unknown>)
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
-    if (!file || file.startsWith(".git/")) return
-    refreshVcs()
+    // FORK: 兼容 Mac / Windows 绝对路径 [feat: deskfox-vcs-refresh-overload] 2026-11-14
+    if (!file || vcsEventKind(file, sdk().directory) === "ignore") return
+    if (vcsEventKind(file, sdk().directory) === "head") return refreshVcs()
+    filterVcs(file)
   })
   onCleanup(stopVcs)
 

@@ -87,6 +87,8 @@ import { controlHandlers } from "./handlers/control"
 import { controlPlaneHandlers } from "./handlers/control-plane"
 import { experimentalHandlers } from "./handlers/experimental"
 import { fileHandlers } from "./handlers/file"
+// FORK: bounded Git-ignore classification [feat: deskfox-vcs-refresh-overload] 2026-11-14
+import { vcsRefreshHandlers } from "./handlers/vcs-refresh"
 import { globalHandlers } from "./handlers/global"
 import { instanceHandlers } from "./handlers/instance"
 import { mcpHandlers } from "./handlers/mcp"
@@ -156,6 +158,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
     configHandlers,
     experimentalHandlers,
     fileHandlers,
+    vcsRefreshHandlers, // FORK: shared instance authentication and routing
     instanceHandlers,
     mcpHandlers,
     projectHandlers,
