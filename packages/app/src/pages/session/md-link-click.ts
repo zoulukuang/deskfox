@@ -16,7 +16,11 @@ export function createMdLinkClickHandler(input: {
   /** 相对路径解析基准目录(绝对路径);undefined = 不拦截 */
   baseDir: () => string | undefined
   /** 命中项目内存在的文件 → 开预览 tab */
-  onOpen: (rel: string) => void
+  onOpen: (rel: string, fragment?: string) => void
+  /** Explicit-click, exact-file preview; absent keeps the project boundary. */
+  onOpenOutside?: (absolute: string, fragment: string) => Promise<void>
+  /** Dialogs own their fragment lifecycle instead of the session file tabs. */
+  queueFragment?: boolean
   /** 存在性探测,resolve = 存在(生产传 invoke("get_file_mtime")) */
   checkExists: (root: string, rel: string) => Promise<unknown>
   toast: (t: MdLinkToast) => void
@@ -48,6 +52,17 @@ export function createMdLinkClickHandler(input: {
     const normRoot = root.replace(/\\/g, "/").replace(/\/+$/, "")
     // 越权防护:解析后必须在项目根内
     if (!targetAbs.startsWith(normRoot + "/") && targetAbs !== normRoot) {
+      if (input.onOpenOutside) {
+        event.preventDefault()
+        void input.onOpenOutside(targetAbs, fragment).catch((error) => {
+          input.toast({
+            variant: "error",
+            title: "无法打开文件",
+            description: error instanceof Error ? error.message : String(error),
+          })
+        })
+        return
+      }
       input.toast({ variant: "error", title: "链接超出项目范围", description: targetAbs })
       event.preventDefault()
       return
@@ -61,8 +76,8 @@ export function createMdLinkClickHandler(input: {
       input
         .checkExists(root, rel)
         .then(() => {
-          requestMdFragment(root, rel, fragment)
-          input.onOpen(rel)
+          if (input.queueFragment !== false) requestMdFragment(root, rel, fragment)
+          input.onOpen(rel, fragment)
         })
         .catch(() => {
           input.toast({ variant: "error", title: "文件不存在", description: rel })

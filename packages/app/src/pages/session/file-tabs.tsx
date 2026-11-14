@@ -17,6 +17,8 @@ import { invoke, isDesktopApp, listen } from "@/utils/native"
 import { createMdLinkClickHandler } from "@/pages/session/md-link-click"
 // FORK: delayed cross-document anchor navigation [feat: daily-file-links] 2026-11-14
 import { createMdFragmentNavigation } from "@/pages/session/md-fragment"
+// FORK: exact-file project-external preview [feat: daily-file-links] 2026-11-14
+import { createDocumentLinkOpener } from "@/pages/session/document-link"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useComments } from "@/context/comments"
@@ -1354,6 +1356,7 @@ export function FileTabContent(props: {
   // FORK: REQ-075 — 逻辑提取到 md-link-click.ts 与聊天区共享,此处 baseDir=当前文件所在目录,
   // 行为不变(R1 回归用例守护)[feat: batch-port-edit-mdlink] 2026-07-07
   const handleMdLinkClick = createMdLinkClickHandler({
+    onOpenOutside: createDocumentLinkOpener(),
     root: () => sdk().directory,
     baseDir: () => {
       const root = sdk().directory

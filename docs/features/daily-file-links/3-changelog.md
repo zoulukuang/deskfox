@@ -50,3 +50,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 第一笔单文件 native 能力：新 `desktop/src/main/deskfox/document-preview.ts` 及 IPC 注册，realpath 后先 stat、nonblocking open 后再 fstat；只读普通文件，不授权父目录、不遍历目录、不扩 root。文本2 MiB、PDF/Office50 MiB，按尺寸有界分配；UTF-8 无损校验，HTML/脚本作为文本，Office 只返回已验证 canonical 路径给既有转换器。Office 再打开遵循可变本地文件语义，不承诺快照。
 
 实际临时文件 9 测试/14 断言通过：中文空格、符号链接确切目标、PDF字节、Office元数据、HTML文本、目录/不存在/相对路径、超限、非法编码、真实 FIFO、chmod 无读取权限。FIFO 与 chmod 用例在 Mac 实跑，Windows 下按平台跳过；没有模拟成功代替磁盘读。磁盘离线只覆盖错误映射，不宣称拔盘实测。
+
+第二笔 renderer：独立只读 dialog 复用 PDF viewer；Markdown 解析后以预览专属白名单净化再进入 DOM，禁止自动资源。该新组件放在已声明 DOMPurify 的 session-ui 包，使用现有通配 exports，不新增依赖/lock。来源采用当前 scoped ServerSDK 的 server/scope/url，并校验目录SDK scope；owner 销毁及读取/Office 返回后检查来源，不能把全局 local 状态误当远端会话。
+
+实际 Chromium fixture 使用真实 ServerProvider/GlobalProvider/ServerSDKProvider/SDKProvider + native reader 函数；只替代 Electron IPC transport 和服务端。4 条 B GUI 通过：外部 Markdown 目标章节可见→编码相对HTML链接纯文本；style/localasset、img/srcset、video poster、SVG资源在DOM前移除且没有对应请求；global-local/scoped-remote与WSL都不调用native；真实PDF canvas/textLayer显示内容且Office转换失败明确提示。首轮PDF测试发现 viewer 要求 `{bytes}`，直接 Uint8Array 会错误显示无法预览，已修并保留失败回归。真实 Electron transport、Mac/Windows local 与成功 Office 转换仍待双端验收。
+
+当前相关 app 单元/DOM 85 pass/199断言（含已有路径测试）、native9 pass、C专属9 pass。完整 pre-push 通过29个类型检查和六包测试；新增 GUI 6 pass（A2+B4），无retry。新GUI与真实context fixture已纳入 e2e typecheck；配置明确noEmit并继承 app ambient/Vite 类型以覆盖整个导入链，`bun run typecheck:e2e` 通过。

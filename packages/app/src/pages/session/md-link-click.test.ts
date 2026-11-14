@@ -210,3 +210,28 @@ describe("REQ-152 and REQ-146", () => {
     expect(scrolled).toEqual([heading])
   })
 })
+
+test("REQ-160 delegates only the decoded exact outside file, without changing the project root", async () => {
+  const external: { path: string; fragment: string }[] = []
+  const checked: string[] = []
+  const handler = createMdLinkClickHandler({
+    root: () => "/work/project",
+    baseDir: () => "/work/project",
+    onOpen: () => {
+      throw new Error("must use outside preview")
+    },
+    onOpenOutside: async (path, fragment) => {
+      external.push({ path, fragment })
+    },
+    checkExists: async (root) => {
+      checked.push(root)
+    },
+    toast: () => {},
+  })
+  const click = makeEvent("/Users/name/Downloads/report%20draft.md#section")
+  handler(click.event)
+  await flush()
+  expect(click.wasPrevented()).toBe(true)
+  expect(external).toEqual([{ path: "/Users/name/Downloads/report draft.md", fragment: "section" }])
+  expect(checked).toEqual([])
+})
