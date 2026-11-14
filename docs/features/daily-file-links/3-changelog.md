@@ -56,3 +56,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 实际 Chromium fixture 使用真实 ServerProvider/GlobalProvider/ServerSDKProvider/SDKProvider + native reader 函数；只替代 Electron IPC transport 和服务端。4 条 B GUI 通过：外部 Markdown 目标章节可见→编码相对HTML链接纯文本；style/localasset、img/srcset、video poster、SVG资源在DOM前移除且没有对应请求；global-local/scoped-remote与WSL都不调用native；真实PDF canvas/textLayer显示内容且Office转换失败明确提示。首轮PDF测试发现 viewer 要求 `{bytes}`，直接 Uint8Array 会错误显示无法预览，已修并保留失败回归。真实 Electron transport、Mac/Windows local 与成功 Office 转换仍待双端验收。
 
 当前相关 app 单元/DOM 85 pass/199断言（含已有路径测试）、native9 pass、C专属9 pass。完整 pre-push 通过29个类型检查和六包测试；新增 GUI 6 pass（A2+B4），无retry。新GUI与真实context fixture已纳入 e2e typecheck；配置明确noEmit并继承 app ambient/Vite 类型以覆盖整个导入链，`bun run typecheck:e2e` 通过。
+
+## C：模型文件链接（具体 R4 diff 待审）
+
+新 helper `file-delivery.ts` 保存约定与不可变请求副本包装；`llm/request.ts` 5 行有效注入是唯一黑名单修改。system/messages 均携带同一约定，原始用户/历史消息和工具parts不变；small、compaction、json_schema 统一跳过。3个helper+6个真实prepare用例合计9 pass/32断言，opencode typecheck通过。删去重复的“bridge”命名用例：去除system后用户文本仍含提示是结构断言，不是真实插件桥接验证。
+
+R4 wrapper不可行性、风险、逐文件说明见 `4-r4-review.md`。主agent将具体差异交用户二次确认，未获确认前不提交黑名单代码；本批 B Large 审签不代替 C R4。尚未调用真实模型，不标 C 验收完成。
+
+2026-11-14 R4 用户回执：「批准三组提交与推送」。实施 agent 提交前复核 cached diff SHA256 `49c053338dc79441d7eca3b4a125e66980a0ac939822e4e319760fd30ef2510b` 完全一致；仅补本授权记录，产品代码不变。依批准的 R4 例外提交，暂按主 agent 指定顺序等待完整 push gate；不合 main，不发版。

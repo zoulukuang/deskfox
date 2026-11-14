@@ -14,6 +14,8 @@ import { Effect, Record } from "effect"
 import { jsonSchema, tool as aiTool, type ModelMessage, type Tool } from "ai"
 import type { Plugin } from "@/plugin"
 import { mergeDeep } from "remeda"
+// FORK: shared model file-link contract [feat: daily-file-links] 2026-11-14
+import { FILE_DELIVERY, fileDeliveryEnabled, withFileDelivery } from "./file-delivery"
 
 const USER_AGENT = `opencode/${InstallationVersion}`
 
@@ -60,6 +62,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
       ...input.system,
       ...(input.user.system ? [input.user.system] : []),
+      ...(fileDeliveryEnabled(input) ? [FILE_DELIVERY] : []), // FORK: daily-file-links
     ]
       .filter((x) => x)
       .join("\n"),
@@ -98,9 +101,10 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   }
   if (isOpenaiOauth) options.instructions = system.join("\n")
 
+  const delivery = withFileDelivery(input.messages, !fileDeliveryEnabled(input)) // FORK: daily-file-links
   const messages =
     isOpenaiOauth || input.isWorkflow
-      ? input.messages
+      ? delivery
       : [
           ...system.map(
             (x): ModelMessage => ({
@@ -108,7 +112,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
               content: x,
             }),
           ),
-          ...input.messages,
+          ...delivery,
         ]
 
   const params = yield* input.plugin.trigger(
