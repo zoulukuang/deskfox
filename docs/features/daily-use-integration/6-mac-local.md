@@ -57,7 +57,7 @@
 ## 剩余边界
 
 - MCP 补充修复已获用户批准，父会话提交 `f517fc04b4` 并通过完整闸推送；产品差异与本回执验证的冻结补丁一致。本回执由 native 子 agent 记录，代码由父会话提交。
-- REQ-149 T04 普通聊天 prompt 接受延迟的修前/修后负载对照未做；question reply、健康检查和本轮 watcher 短样本不能替代。
+- REQ-149 T04 在本回执完成时尚未做；随后已以实际普通聊天提交补完，见 [7-mac-vcs-load.md](./7-mac-vcs-load.md)。本回执的 question reply、健康检查或 watcher 短样本仍不作为 T04 替代证据。
 - Windows local 未验。此回执不是完整发布门放行。
 
 完整构建日志：`/tmp/deskfox-daily-local-build.log`、`/tmp/deskfox-daily-local-package-cached.log`。证据根保留更详细的 `native-review.md`、`native-qa.json`、`watcher-check.json`、`seeded-message.json` 与原生 PDF。

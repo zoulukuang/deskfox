@@ -50,4 +50,6 @@ related: ../deskfox-vcs-refresh-overload/1-spec.md ../daily-file-links/1-spec.md
 - [真模型记录](./5-model-smoke.md)：DeepSeek API 真实读写返回有效链接，目标内容已验证；GetBot 401、OpenAI OAuth 未知服务错误分别保留，不算通过。未发现 workflow 真通道，未测试过期 Anthropic。
 - [Mac local 原生回执](./6-mac-local.md)：真实 Electron IPC、CUA 点击、Office 转换、目录跳转、真实 watcher 短样本与 MCP 首次失败/复验，区分所有证据层级。local 启动曾改变默认协议 handler，已恢复 `ai.deskfox.app`；本轮后续启动均立即恢复并保留正式/既有 voice 进程，未把范围外修复并入六项。
 
-六项仍为 in-progress。整批发版前尚需 Windows local、T04 两版本普通聊天提交负载对照、完整已启用模型通道矩阵及其他原 spec 未验项；不把代码集成、浏览器绿或单个真模型样本当作发布验收完成。
+**Mac T04 后续回执（笑南的电脑，2026-11-14）**：精确 `fc96b0b5b5` 修前包与含 `f517fc04b4` 的候选包，六组各执行一次，原始数据及统计经独立复核。候选空闲/ignored/mixed 30 次展开与 30 次普通聊天提交全部 ≤1 秒、全部消息落库；负载后自然清空。基线两种负载各有一次展开及提交 ≥2 秒超时，静默十秒后仍有 21/44 条未完成请求。两版均为实际打包 Electron、真实 watcher/Git/HTTP/SQLite，仅模型使用 loopback stub；CDP 驱动不冒充人工 OS QA。候选实际约 19.34Hz、基线约 19.60–19.63Hz，单轮短测不能外推长期/多机稳定性。逐次数据、依赖/包来源及退出证据见 [7-mac-vcs-load.md](./7-mac-vcs-load.md)。此回执解除前文 Mac T04 待验状态；六轮 QA 应用/后台及假模型均已停止，既有应用保留、默认协议恢复。
+
+六项仍为 in-progress。整批发版前尚需 Windows local（含 T04）、完整已启用模型通道矩阵及其他原 spec 未验项；不把代码集成、浏览器绿或单个真模型样本当作发布验收完成。当前功能提交为 `f517fc04b4`，已批准且正常完整闸推送；后续为验收文档，无新增产品变动，未合 main、未冻结候选、未发布。

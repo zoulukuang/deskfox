@@ -2,6 +2,10 @@ feat-id: deskfox-vcs-refresh-overload
 status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
+## 最新集成回执（笑南的电脑，2026-11-14）
+
+本功能已汇合进 `feat/daily-use-integration`（当前功能头 `f517fc04b4`，亦含其他五项及 MCP 补充修复），正常完整闸推送。精确 `fc96b0b5b5` 的修前 Mac local 与候选完成唯一单轮六组对照：候选 30 次文件树展开、30 次普通聊天提交均 ≤1 秒，负载后自然清空；基线两种负载各有展开/提交超时及持续积压。实际 Electron/真实 watcher、Git、HTTP、SQLite，CDP 仅驱动界面，仅模型为 loopback stub。样本、速率差异、逐次原始结果及独立评审见[Mac T04 回执](../daily-use-integration/7-mac-vcs-load.md)。Windows 新代码仍待验，不能沿用旧合并请求版本的 Windows 记录；本 feat 保持 in-progress，不等于已发版。以下阶段记录保留原样。
+
 # Git 差异刷新占满本地连接
 
 ## Git 忽略过滤实施回执（笑南的电脑，2026-11-14）

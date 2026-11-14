@@ -22,7 +22,7 @@
 | feat-id | 状态 | 简介 |
 |---|---|---|
 | [daily-use-integration](./daily-use-integration/) | in-progress | 2026-11-14 六项日常使用修复整批集成与 Mac local 验证；沿用三个功能 feat 的已批准方案，笑南的电脑 / Codex 主会话接手。分支 `feat/daily-use-integration`，平台与真模型未验项按实留存，尚未冻结发布候选。 |
-| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | in-progress | REQ-149 刷新合并、查询键、元数据及 Git 忽略过滤已实现并推送，完整闸/真实 Git/HTTP/浏览器及 Mac watcher 短样本通过。Mac 修前后负载对照进行中，Windows 新代码待验；整批证据见 daily-use-integration。 |
+| [deskfox-vcs-refresh-overload](./deskfox-vcs-refresh-overload/) | in-progress | REQ-149 已实现并推送，完整闸/真实 Git/HTTP/浏览器及 Mac 精确基线负载对照通过：候选 30 次展开、30 次普通提交均 ≤1 秒且无持续积压。Windows 新代码待验；边界及数据见 daily-use-integration/7-mac-vcs-load.md。 |
 | [mcp-toggle-persistence](./mcp-toggle-persistence/) | in-progress | REQ-153 已实现，Mac local 发现的默认配置覆盖问题补充修复为 `f517fc04b4`，用户批准后经完整闸推至集成分支。177 项后台及实际 Electron 完整重启验证通过；Windows/多窗口未验项见 daily-use-integration。 |
 | [daily-file-links](./daily-file-links/) | in-progress | REQ-152/146/160/162 已实现并推送。浏览器、Mac 真桌面文件/Office/目录点击与 DeepSeek API 最小样本通过；GetBot/OAuth 失败如实留存，Windows和完整模型矩阵待验，详见 daily-use-integration。 |
 | [brand-docs-refresh](./brand-docs-refresh/) | done | 2026-11-14 品牌来源注释与托盘 README 对齐现行三态、平台模式和生成流程；仅说明修改，图片及软件行为不变。 |
