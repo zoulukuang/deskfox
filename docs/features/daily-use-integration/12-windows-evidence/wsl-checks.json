@@ -1,0 +1,73 @@
+[
+  {
+    "id": "req160-wsl-project-file",
+    "ok": true,
+    "ms": 368.5043000000005
+  },
+  {
+    "id": "req160-wsl-linux-pdf",
+    "ok": true,
+    "ms": 80.61130000000048,
+    "details": {
+      "href": "/root/deskfox-qa-outside/%E9%A1%B9%E7%9B%AE%E5%A4%96%20PDF%20%25.pdf",
+      "feedback": "项目外文件预览仅支持本机桌面会话；不会打开远程电脑或 WSL 路径的本机同名文件",
+      "clickMs": 74.4945000000007,
+      "previewRequests": 0
+    }
+  },
+  {
+    "id": "req160-wsl-host-pdf",
+    "ok": true,
+    "ms": 4996.116600000001,
+    "details": {
+      "href": "C:/Users/yuexi/Downloads/DeskFox-daily-win-20261114-QA/%E9%A1%B9%E7%9B%AE%E5%A4%96%20PDF%20%25.pdf",
+      "feedback": "项目外文件预览仅支持本机桌面会话；不会打开远程电脑或 WSL 路径的本机同名文件",
+      "clickMs": 28.370300000002317,
+      "previewRequests": 0
+    }
+  },
+  {
+    "id": "req160-wsl-linux-docx",
+    "ok": true,
+    "ms": 5489.122500000001,
+    "details": {
+      "href": "/root/deskfox-qa-outside/%E9%A1%B9%E7%9B%AE%E5%A4%96%20%E6%96%87%E6%A1%A3.docx",
+      "feedback": "项目外文件预览仅支持本机桌面会话；不会打开远程电脑或 WSL 路径的本机同名文件",
+      "clickMs": 32.2612999999983,
+      "previewRequests": 0
+    }
+  },
+  {
+    "id": "req160-wsl-host-docx",
+    "ok": true,
+    "ms": 5503.556299999997,
+    "details": {
+      "href": "C:/Users/yuexi/Downloads/DeskFox-daily-win-20261114-QA/%E9%A1%B9%E7%9B%AE%E5%A4%96%20%E6%96%87%E6%A1%A3.docx",
+      "feedback": "项目外文件预览仅支持本机桌面会话；不会打开远程电脑或 WSL 路径的本机同名文件",
+      "clickMs": 39.91570000000502,
+      "previewRequests": 0
+    }
+  },
+  {
+    "id": "req160-wsl-host-xlsx",
+    "ok": true,
+    "ms": 5477.476899999994,
+    "details": {
+      "href": "C:/Users/yuexi/Downloads/DeskFox-daily-win-20261114-QA/%E9%A1%B9%E7%9B%AE%E5%A4%96%20%E5%B7%A5%E4%BD%9C%E8%A1%A8%20%25.xlsx",
+      "feedback": "项目外文件预览仅支持本机桌面会话；不会打开远程电脑或 WSL 路径的本机同名文件",
+      "clickMs": 19.36769999999524,
+      "previewRequests": 0
+    }
+  },
+  {
+    "id": "req160-wsl-host-pptx",
+    "ok": true,
+    "ms": 5528.686099999999,
+    "details": {
+      "href": "C:/Users/yuexi/Downloads/DeskFox-daily-win-20261114-QA/%E9%A1%B9%E7%9B%AE%E5%A4%96%20%E6%BC%94%E7%A4%BA%20%25.pptx",
+      "feedback": "项目外文件预览仅支持本机桌面会话；不会打开远程电脑或 WSL 路径的本机同名文件",
+      "clickMs": 47.460900000005495,
+      "previewRequests": 0
+    }
+  }
+]

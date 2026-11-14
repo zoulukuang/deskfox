@@ -102,3 +102,14 @@ HTTP ignored 用例在并行构建时曾触发既有保守刷新，保留失败�
 用户已批准本次 R4 冻结补丁提交与推送。产品提交 `7e14b0e48913b822758d7db37dff003fca7a9e20`，提交 diff 与获批补丁 SHA-256 一致。正常推送至 `feat/daily-use-integration` 时，完整 pre-push 通过。本次未合 main、未发布。
 
 [详细数据、截图、日志和 R4 冻结复核](./11-windows-followup.md)。
+
+## 剩余项补验回执（Windows 电脑，2026-11-14）
+
+独立 worktree 从最新产品分支头 `9890fd8616d3074a90e6711afb922777b93bcc97` 执行 Bun 1.3.14 冻结安装并重打隔离 Windows local 包。exe SHA-256 为 `4d3441636bed0ca7638ec60a02d6bdd3d5793b30bd75bfa351d451d56a8ade5d`，app.asar SHA-256 为 `466b72ae308de0c327cda5da044532b4dbf9ee51c92f5eaefdb684a73e73cb7e`。
+
+| 项目 | 本轮结果 | 实测 |
+| --- | --- | --- |
+| REQ-162 OpenAI OAuth 真模型文件链接 | **未通过** | `openai/gpt-5.6-luna` 经建连重试后实际读取五个文件并写入中文空格文件，分别用时 127.27 / 24.23 秒。回复正确说明错误子目录中的同名文件不存在。六个链接有五个显示正确内容，含生成文件；字面 `%20` 文件的 href 多编码了一个空格，实际点击提示「文件不存在」。 |
+| REQ-160 WSL 项目外预览隔离 | **通过** | 使用实际 WSL 2 Alpine 与 Linux OpenCode sidecar。项目内文本正常显示。点击两条 Linux 项目外 PDF、DOCX 和四条 Windows PDF、DOCX、XLSX、PPTX 路径，全部提示仅支持本机桌面会话，未打开项目外文档，未改变会话。 |
+
+[包哈希、模型原文、逐项截图和日志](./12-windows-oauth-wsl.md)。其余未验通道沿用原状态，Windows 整批尚未签通过。未合 main、未发布。

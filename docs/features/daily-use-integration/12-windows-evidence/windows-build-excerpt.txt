@@ -1,0 +1,4 @@
+[deskfox] electron-builder --dir --win --publish never --config electron-builder.deskfox.config.ts  (绕 Clash 代理直连 npmmirror)…
+[deskfox] post-build verify: 最终包含 soffice.exe + 非空 presets ✓
+[deskfox] OK 构建完成,产物:
+  exe : D:\project\deskfox-win-final\packages\desktop\dist-deskfox\win-unpacked\DeskFox 本地版.exe

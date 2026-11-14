@@ -1,0 +1,75 @@
+[
+  {
+    "id": "oauth-link-1",
+    "ok": true,
+    "ms": 1622.5528999999988,
+    "details": {
+      "filename": "中文 空格.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/%E4%B8%AD%E6%96%87%20%E7%A9%BA%E6%A0%BC.md",
+      "expected": "CN_SPACE",
+      "markerVisible": true,
+      "clickMs": 1610.4127000000008
+    }
+  },
+  {
+    "id": "oauth-link-2",
+    "ok": true,
+    "ms": 70.08560000000216,
+    "details": {
+      "filename": "report%20draft.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/report%2520%20draft.md",
+      "expected": "LITERAL_PERCENT",
+      "markerVisible": false,
+      "feedback": "文件不存在",
+      "clickMs": 51.63509999999951
+    }
+  },
+  {
+    "id": "oauth-link-3",
+    "ok": true,
+    "ms": 649.2615000000005,
+    "details": {
+      "filename": "report draft.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/report%20draft.md",
+      "expected": "REAL_SPACE",
+      "markerVisible": true,
+      "clickMs": 640.8621999999996
+    }
+  },
+  {
+    "id": "oauth-link-4",
+    "ok": true,
+    "ms": 549.9176999999981,
+    "details": {
+      "filename": "report#节.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/report%23%E8%8A%82.md",
+      "expected": "HASH_NAME",
+      "markerVisible": true,
+      "clickMs": 529.1234999999979
+    }
+  },
+  {
+    "id": "oauth-link-5",
+    "ok": true,
+    "ms": 518.9069000000018,
+    "details": {
+      "filename": "100%.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/100%25.md",
+      "expected": "RAW_PERCENT",
+      "markerVisible": true,
+      "clickMs": 510.04409999999916
+    }
+  },
+  {
+    "id": "oauth-link-6",
+    "ok": true,
+    "ms": 538.1473000000005,
+    "details": {
+      "filename": "生成 OpenAI Windows 复验 default.md",
+      "href": "D:/tmp/deskfox-daily-win-20261114/A/%E7%94%9F%E6%88%90%20OpenAI%20Windows%20%E5%A4%8D%E9%AA%8C%20default.md",
+      "expected": "OAUTH_WINDOWS_REPORT_DEFAULT",
+      "markerVisible": true,
+      "clickMs": 528.5470999999998
+    }
+  }
+]

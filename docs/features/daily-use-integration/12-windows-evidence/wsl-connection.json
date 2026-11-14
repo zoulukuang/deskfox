@@ -1,0 +1,15 @@
+{
+  "server": {
+    "id": "wsl:DeskFox-QA-20261114",
+    "distro": "DeskFox-QA-20261114",
+    "kind": "ready",
+    "address": "http://127.0.0.1:6876"
+  },
+  "backendPath": {
+    "home": "/root",
+    "state": "/root/.local/state/opencode",
+    "config": "/root/.config/opencode",
+    "worktree": "/root/deskfox-qa-project",
+    "directory": "/root/deskfox-qa-project"
+  }
+}
