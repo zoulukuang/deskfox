@@ -35,6 +35,8 @@ import { ConfigPlugin } from "./plugin"
 import { ConfigVariable } from "./variable"
 import { Npm } from "@opencode-ai/core/npm"
 import { withTransientReadRetry } from "@/util/effect-http-client"
+// FORK: persist project MCP intent without copying merged credentials [feat: mcp-toggle-persistence] 2026-11-14
+import { saveMcpEnabled } from "./mcp-toggle"
 
 // Custom merge function that concatenates array fields instead of replacing them
 // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
@@ -126,6 +128,8 @@ export interface Interface {
   readonly getGlobal: () => Effect.Effect<Info>
   readonly getConsoleState: () => Effect.Effect<ConsoleState>
   readonly update: (config: Info) => Effect.Effect<void>
+  // FORK: project-scoped toggle with effective-config verification [feat: mcp-toggle-persistence] 2026-11-14
+  readonly setMcpEnabled: (name: string, enabled: boolean) => Effect.Effect<void>
   readonly updateGlobal: (config: Info) => Effect.Effect<{ info: Info; changed: boolean }>
   readonly invalidate: () => Effect.Effect<void>
   readonly directories: () => Effect.Effect<string[]>
@@ -621,6 +625,18 @@ const layer = Layer.effect(
       )
     })
 
+    // FORK-BEGIN: use the actual project config layer and invalidate its cached merge [feat: mcp-toggle-persistence]
+    const setMcpEnabled = Effect.fn("Config.setMcpEnabled")(function* (name: string, enabled: boolean) {
+      if (Flag.OPENCODE_DISABLE_PROJECT_CONFIG) throw new Error("Project configuration is disabled")
+      const directory = yield* InstanceState.directory
+      yield* Effect.promise(() => saveMcpEnabled(directory, name, enabled))
+      yield* InstanceState.invalidate(state)
+      if ((yield* get()).mcp?.[name]?.enabled !== enabled) {
+        throw new Error("A higher-priority configuration overrides this project's MCP switch")
+      }
+    })
+    // FORK-END
+
     const update = Effect.fn("Config.update")(function* (config: Info) {
       const dir = yield* InstanceState.directory
       const file = path.join(dir, "config.json")
@@ -664,6 +680,7 @@ const layer = Layer.effect(
       getGlobal,
       getConsoleState,
       update,
+      setMcpEnabled, // FORK: project MCP intent [feat: mcp-toggle-persistence] 2026-11-14
       updateGlobal,
       invalidate,
       directories,

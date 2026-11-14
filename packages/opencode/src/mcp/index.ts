@@ -26,7 +26,7 @@ import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { TuiEvent } from "@/server/tui-event"
-import { Cause, Effect, Exit, Layer, Context, Schema, Stream } from "effect"
+import { Cause, Effect, Exit, Layer, Context, Schema, Stream, Semaphore } from "effect" // FORK: serialize intent writes [feat: mcp-toggle-persistence] 2026-11-14
 import { EffectBridge } from "@/effect/bridge"
 import { InstanceState } from "@/effect/instance-state"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
@@ -108,7 +108,11 @@ export type Status = Schema.Schema.Type<typeof Status>
 
 // Store transports for OAuth servers to allow finishing auth
 type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
-const pendingOAuthTransports = new Map<string, { transport: TransportWithAuth; provider?: McpOAuthPendingProvider }>()
+// FORK: carry the originating intent through OAuth callbacks [feat: mcp-toggle-persistence] 2026-11-14
+const pendingOAuthTransports = new Map<
+  string,
+  { transport: TransportWithAuth; provider?: McpOAuthPendingProvider; revision?: number }
+>()
 
 // Prompt cache types
 type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
@@ -132,6 +136,7 @@ interface CreateResult {
 }
 
 interface AuthResult {
+  revision: number // FORK: OAuth result belongs to one intent [feat: mcp-toggle-persistence] 2026-11-14
   authorizationUrl: string
   oauthState: string
   client?: MCPClient
@@ -140,6 +145,9 @@ interface AuthResult {
 // --- Effect Service ---
 
 interface State {
+  // FORK: reject superseded connection results [feat: mcp-toggle-persistence] 2026-11-14
+  revision: Record<string, number>
+  toggle: Semaphore.Semaphore
   config: Record<string, ConfigMCPV1.Info>
   status: Record<string, Status>
   clients: Record<string, MCPClient>
@@ -495,6 +503,9 @@ const layer = Layer.effect(
         const bridge = yield* EffectBridge.make()
         const config = cfg.mcp ?? {}
         const s: State = {
+          // FORK: isolate revisions and writes per project instance [feat: mcp-toggle-persistence] 2026-11-14
+          revision: {},
+          toggle: Semaphore.makeUnsafe(1),
           config: {},
           status: {},
           clients: {},
@@ -575,8 +586,16 @@ const layer = Layer.effect(
       listed: MCPToolDef[],
       instructions: string | undefined,
       timeout?: number,
+      revision?: number, // FORK: final publication guard [feat: mcp-toggle-persistence] 2026-11-14
     ) {
       const bridge = yield* EffectBridge.make()
+      // FORK-BEGIN: no yields between the final guard and publishing client/defs [feat: mcp-toggle-persistence]
+      const disabled = (yield* cfgSvc.get()).mcp?.[name]?.enabled === false
+      if (disabled || (revision !== undefined && s.revision[name] !== revision)) {
+        yield* Effect.tryPromise(() => client.close()).pipe(Effect.ignore)
+        return s.status[name] ?? ({ status: "disabled" } as Status)
+      }
+      // FORK-END
       const previous = s.clients[name]
       s.status[name] = { status: "connected" }
       s.clients[name] = client
@@ -624,19 +643,32 @@ const layer = Layer.effect(
         }))
     })
 
-    const createAndStore = Effect.fn("MCP.createAndStore")(function* (name: string, mcp: ConfigMCPV1.Info) {
+    // FORK-BEGIN: saved intent and operation identity guard late connect/OAuth completion [feat: mcp-toggle-persistence]
+    const createAndStore = Effect.fn("MCP.createAndStore")(function* (
+      name: string,
+      mcp: ConfigMCPV1.Info,
+      revision?: number,
+    ) {
       const s = yield* InstanceState.get(state)
+      const current = revision ?? (s.revision[name] = (s.revision[name] ?? 0) + 1)
+      if ((yield* cfgSvc.get()).mcp?.[name]?.enabled === false) return { status: "disabled" } as Status
+      if (s.revision[name] !== current) return s.status[name] ?? ({ status: "disabled" } as Status)
       const result = yield* create(name, mcp)
+      const disabled = (yield* cfgSvc.get()).mcp?.[name]?.enabled === false
+      if (s.revision[name] !== current || disabled) {
+        if (result.mcpClient) yield* Effect.tryPromise(() => result.mcpClient!.close()).pipe(Effect.ignore)
+        return s.status[name] ?? ({ status: "disabled" } as Status)
+      }
 
       s.status[name] = result.status
       if (!result.mcpClient) {
         yield* closeClient(s, name)
-        delete s.clients[name]
         return result.status
       }
 
-      return yield* storeClient(s, name, result.mcpClient, result.defs!, result.instructions, mcp.timeout)
+      return yield* storeClient(s, name, result.mcpClient, result.defs!, result.instructions, mcp.timeout, current)
     })
+    // FORK-END
 
     const add = Effect.fn("MCP.add")(function* (name: string, mcp: ConfigMCPV1.Info) {
       const s = yield* InstanceState.get(state)
@@ -647,15 +679,35 @@ const layer = Layer.effect(
 
     const connect = Effect.fn("MCP.connect")(function* (name: string) {
       const mcp = yield* requireMcpConfig(name)
-      yield* createAndStore(name, { ...mcp, enabled: true })
+      // FORK-BEGIN: save before connecting; newest project intent wins [feat: mcp-toggle-persistence]
+      const s = yield* InstanceState.get(state)
+      const revision = yield* s.toggle.withPermit(
+        Effect.gen(function* () {
+          yield* cfgSvc.setMcpEnabled(name, true)
+          return (s.revision[name] = (s.revision[name] ?? 0) + 1)
+        }),
+      )
+      if (s.revision[name] !== revision) return
+      yield* createAndStore(name, { ...mcp, enabled: true }, revision)
+      yield* events.publish(ToolsChanged, { server: name })
+      // FORK-END
     })
 
     const disconnect = Effect.fn("MCP.disconnect")(function* (name: string) {
       yield* requireMcpConfig(name)
       const s = yield* InstanceState.get(state)
-      yield* closeClient(s, name)
-      delete s.clients[name]
+      // FORK-BEGIN: persisted disable cancels late clients before they can publish tools [feat: mcp-toggle-persistence]
+      const revision = yield* s.toggle.withPermit(
+        Effect.gen(function* () {
+          yield* cfgSvc.setMcpEnabled(name, false)
+          return (s.revision[name] = (s.revision[name] ?? 0) + 1)
+        }),
+      )
+      if (s.revision[name] !== revision) return
       s.status[name] = { status: "disabled" }
+      yield* closeClient(s, name)
+      yield* events.publish(ToolsChanged, { server: name })
+      // FORK-END
     })
 
     function requestTimeout(s: State, name: string, configured: McpEntry | undefined, fallback?: number) {
@@ -805,6 +857,9 @@ const layer = Layer.effect(
 
     const startAuth = Effect.fn("MCP.startAuth")(function* (mcpName: string) {
       const mcpConfig = yield* requireMcpConfig(mcpName)
+      // FORK: authenticate must retain its identity while awaiting the browser [feat: mcp-toggle-persistence] 2026-11-14
+      const s = yield* InstanceState.get(state)
+      const revision = (s.revision[mcpName] = (s.revision[mcpName] ?? 0) + 1)
       if (mcpConfig.type !== "remote") throw new Error(`MCP server ${mcpName} is not a remote server`)
       if (mcpConfig.oauth === false) throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
       const url = remoteURL(mcpConfig.url)
@@ -854,15 +909,19 @@ const layer = Layer.effect(
           const client = createClient(directory)
           return client.connect(transport).then(async () => {
             await authProvider.commit()
-            return { authorizationUrl: "", oauthState, client } satisfies AuthResult
+            return { authorizationUrl: "", oauthState, client, revision } satisfies AuthResult
           })
         },
         catch: (error) => error,
       }).pipe(
         Effect.catch((error) => {
           if (error instanceof UnauthorizedError && capturedUrl) {
-            pendingOAuthTransports.set(mcpName, { transport, provider: authProvider })
-            return Effect.succeed({ authorizationUrl: capturedUrl.toString(), oauthState } satisfies AuthResult)
+            pendingOAuthTransports.set(mcpName, { transport, provider: authProvider, revision })
+            return Effect.succeed({
+              authorizationUrl: capturedUrl.toString(),
+              oauthState,
+              revision,
+            } satisfies AuthResult)
           }
           return Effect.die(error)
         }),
@@ -892,7 +951,16 @@ const layer = Layer.effect(
 
         const s = yield* InstanceState.get(state)
         yield* auth.clearOAuthState(mcpName)
-        return yield* storeClient(s, mcpName, client, listed, client.getInstructions()?.trim(), mcpConfig.timeout)
+        // FORK: direct OAuth success uses the same final guard as connect [feat: mcp-toggle-persistence] 2026-11-14
+        return yield* storeClient(
+          s,
+          mcpName,
+          client,
+          listed,
+          client.getInstructions()?.trim(),
+          mcpConfig.timeout,
+          result.revision,
+        )
       }
 
       const callbackPromise = McpOAuthCallback.waitForCallback(result.oauthState, mcpName)
@@ -938,7 +1006,8 @@ const layer = Layer.effect(
 
       const mcpConfig = yield* requireMcpConfig(mcpName)
 
-      return yield* createAndStore(mcpName, { ...mcpConfig, enabled: true })
+      // FORK: late OAuth completion cannot create a new intent [feat: mcp-toggle-persistence] 2026-11-14
+      return yield* createAndStore(mcpName, { ...mcpConfig, enabled: true }, pending.revision)
     })
 
     const removeAuth = Effect.fn("MCP.removeAuth")(function* (mcpName: string) {

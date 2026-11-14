@@ -744,7 +744,11 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       eventType === "agent.updated"
     )
       queue.push(key)
-    if (eventType === "mcp.status.changed") void queryClient.invalidateQueries(queryOptionsApi.mcp(key))
+    // FORK: v1 publishes tools.changed for saved MCP toggles; refresh every window [feat: mcp-toggle-persistence] 2026-11-14
+    if (eventType === "mcp.status.changed" || eventType === "mcp.tools.changed") {
+      void queryClient.invalidateQueries(queryOptionsApi.mcp(key))
+      void queryClient.invalidateQueries(queryOptionsApi.mcpResources(key))
+    }
     if (eventType === "mcp.resources.changed") void queryClient.invalidateQueries(queryOptionsApi.mcpResources(key))
     const [store, setStore] = existing
     applyDirectoryEvent({
@@ -869,6 +873,14 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
             await queryClient.refetchQueries(queryOptionsApi.mcpResources(key))
           },
         })
+        // FORK: bundled v1 backend guarantees persistence; remote older servers may not [feat: mcp-toggle-persistence] 2026-11-14
+        if (ServerConnection.builtin(serverSDK.server) && (await serverSDK.protocol) === "v1" && status !== "pending" && status !== "needs_auth") {
+          showToast({
+            title: language.locale().startsWith("zh")
+              ? "MCP 开关已保存，仅当前项目生效"
+              : "MCP switch saved for this project only",
+          })
+        }
       },
     },
   }
