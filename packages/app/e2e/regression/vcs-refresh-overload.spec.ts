@@ -44,6 +44,20 @@ test("merges file changes while a Git diff is in flight", async ({ page }) => {
   })
 
   let requests = 0
+  let classifications = 0
+  await page.route("**/deskfox/vcs/refresh-required**", async (route) => {
+    classifications++
+    const paths = route.request().postDataJSON().paths as string[]
+    expect(paths.length).toBeLessThanOrEqual(128)
+    await route.fulfill({
+      status: 200,
+      json: {
+        shouldRefresh: paths.some(
+          (file) => !file.includes("/ignored-cache/") && !file.includes("/data/trade_bridge_real/"),
+        ),
+      },
+    })
+  })
   let hold = false
   const releaseDiff = Promise.withResolvers<void>()
   await page.route("**/vcs/diff**", async (route) => {
@@ -73,9 +87,15 @@ test("merges file changes while a Git diff is in flight", async ({ page }) => {
   try {
     await change(`${directory}/.git/index`)
     expect(requests).toBe(initialRequests)
+    expect(classifications).toBe(0)
+    await change(`${directory}/ignored-cache/asset.json`)
+    await expect.poll(() => classifications).toBe(1)
+    await page.clock.runFor(400)
+    expect(requests).toBe(initialRequests)
     // A detached-HEAD move can change the diff without changing the branch key.
     await change(`${directory}/.git/HEAD`.replaceAll("/", "\\"))
     await expect.poll(() => requests).toBe(initialRequests + 1)
+    expect(classifications).toBe(1) // HEAD bypasses Git-ignore classification.
     await change(`${directory}/tracked.ts`)
     await expect.poll(() => requests).toBe(initialRequests + 1)
     for (let index = 0; index < 8; index++) {

@@ -6,7 +6,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 ## Git 忽略过滤实施回执（笑南的电脑，2026-11-14）
 
-用户明确批准 Large 方案「批准两项施工方案，继续并行推进」后，由 Codex 子 agent `vcs_ignore_design` 在 `ef9904415f` 上实现剩余忽略过滤。标准实例 API、原生 Git + HEAD 保护、有界前端合并与自动生成 SDK 均已落地工作区，尚未提交产品代码；R4 实际 diff 待集中批准。
+用户明确批准 Large 方案「批准两项施工方案，继续并行推进」后，由 Codex 子 agent `vcs_ignore_design` 在 `ef9904415f` 上实现剩余忽略过滤。标准实例 API、原生 Git + HEAD 保护、有界前端合并与自动生成 SDK 均已落地并完成实际 diff 复核。
+
+2026-11-14 用户明确批准「批准三组提交与推送」。提交前 cached binary diff SHA-256 核验为 `478c31c05c1ec8bb1e430ee1a12d8e45961840800ae96d9ca2ef18560b650b93`，与本组已批准的 14 文件冻结补丁完全一致。R4 与 Large 审签已完成；仅以规范允许的 `--no-verify` 越过已批准的提交守卫，commit 标注逐文件报告与 Large/bug-repro 原因，正常 push 继续执行完整闸。未改变已验产品代码，不合 main、不发布。
 
 实际 14 个产品/测试文件 +678/-6；完整文件清单、四个黑名单文件逐项 wrapper 不可替代理由、生成审计、风险与提交方式见 `6-ignore-r4-review.md`。api/server 各仅 3 行 additive 注入；SDK 两文件完全由生成脚本新增 76 行，无手改、无无关同步。
 
