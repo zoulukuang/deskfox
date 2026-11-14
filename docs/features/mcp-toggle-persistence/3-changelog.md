@@ -46,3 +46,7 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 此授权满足上节 R4 逐文件复核后的二次确认。实现提交仅按 R4 黑名单例外使用 `--no-verify`，提交信息保留 override-blacklist / bug-repro / feat 标记；不豁免推送前完整 `.husky/pre-push`，按父会话资源协调等待运行。无 main 合并、版本修改或发布，桌面验收仍按上节未验边界执行。
 
 实现提交：`ddd1940720`。本节及根索引单独 docs-only 提交；实现补丁与获批对象保持逐字一致。
+
+### 推送回执（笑南的电脑，2026-11-14）
+
+`ddd1940720`（实现）和 `142c4179c7`（授权记录）已正常推送 `origin/fix/mcp-toggle-persistence`，完整 pre-push 未跳、退出 0；日志 `/tmp/mcp-persistence-push-approved.log`。已核对本地与远端跟踪引用同为 `142c4179c72440a50c4275376dcedcfea6b5d8d7`。本段为成功后的 docs-only 回执，无产品变更，按 docs-only 例外跳过重复 pre-push；常规 pre-commit 仍执行。功能仍为 in-progress，真实桌面/Windows 验收及合并发布仍待主会话推进。
