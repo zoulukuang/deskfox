@@ -45,7 +45,9 @@ echo "[pre-push] fork 包单测 backstop…"
 #   一旦漏网,发出去的包会把**用户自己正常的新库**判成超前并改名挪走,用户看到的是「历史会话全没了」。
 #   注:src/main/draft-store.test.ts 撞上游顶层 `import "node:sqlite"`(bun 至今 resolve 不了,
 #   见记忆 reference_known_dev_issues #5),属存量、非本仓回归,故按目录跑 deskfox 子集。
-(cd packages/desktop && bun test src/main/deskfox)
+# 显式路径：Bun 1.3.14 裸路径筛选模式下，语音子进程测试收到空输出；
+# 同一测试用 ./ 路径正常执行，保留完整 deskfox 测试范围。[feat: voice-main-integration]
+(cd packages/desktop && bun test ./src/main/deskfox)
 # session-ui:消息流渲染层(工具折叠行 / 引用卡片 / message-part)。
 #   2026-09-17 发版收口批补入 —— 此前 packages/session-ui 既不在 turbo test 任务、也不在本闸内,
 #   而 REQ-131(引用卡片能看到引文原文)与 REQ-128(工具行命中区)的主力改动全落在这个包,

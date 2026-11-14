@@ -15,14 +15,15 @@
 // 已在 2026-08-24 的 voice-lab 实测过(1-spec §4 的 E6/E7),生产复验放真机 QA(TC-M 系列)。
 //
 // ⚠️ **默认跳过**:起一个真 server 要几十秒,不该拖慢每次 `bun test` / pre-push。
-//    按需跑:`VOICE_BRIDGE_ITEST=1 bun test bridge.integration`
+//    按需跑:`VOICE_BRIDGE_ITEST=1 bun test ./src/main/deskfox/voice/bridge/bridge.integration.test.ts`
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { spawn, type ChildProcess } from "node:child_process"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import { createSidecarClient } from "./sidecar"
 
 /** 起真 server 很慢,默认不跑;`VOICE_BRIDGE_ITEST=1` 开 */
 const ENABLED = String(process.env.VOICE_BRIDGE_ITEST ?? "").trim() === "1"
@@ -43,6 +44,30 @@ let projectB = ""
 let voiceDir = ""
 let activeFile = ""
 let server: ChildProcess | null = null
+let modelServer: ReturnType<typeof Bun.serve> | undefined
+let cancelRequested = false
+const CANCEL_TASK = "voice-cancel-itest"
+const REPLY = "voice integration reply"
+const MODEL = { providerID: "voice-test", modelID: "test-model" }
+
+// Only test-owned config and loopback model endpoints reach child processes.
+function isolatedEnv(): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH,
+    SystemRoot: process.env.SystemRoot,
+    TMPDIR: process.env.TMPDIR,
+    HOME: root,
+    OPENCODE_TEST_HOME: root,
+    XDG_DATA_HOME: join(root, "data"),
+    XDG_CONFIG_HOME: join(root, "cfg"),
+    XDG_STATE_HOME: join(root, "state"),
+    XDG_CACHE_HOME: join(root, "cache"),
+    OPENCODE_DISABLE_PROJECT_CONFIG: "1",
+    OPENCODE_DISABLE_DEFAULT_PLUGINS: "1",
+    OPENCODE_DISABLE_MODELS_FETCH: "1",
+    OPENCODE_DISABLE_AUTOUPDATE: "1",
+  }
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -68,7 +93,7 @@ class FakeGateway {
   constructor(extraEnv: Record<string, string> = {}) {
     this.proc = spawn("bun", [BRIDGE], {
       env: {
-        ...process.env,
+        ...isolatedEnv(),
         ACP_DESKFOX_SERVER_URL: BASE,
         ACP_DESKFOX_SERVER_AUTH: AUTH,
         ACP_DESKFOX_VOICE_DIR: voiceDir,
@@ -139,7 +164,12 @@ class FakeGateway {
 
 /** qwen 给 coordinator 的 MCP 描述符形态(第三层不会有这个) */
 const coordinatorMcp = () => [
-  { type: "http", name: "qwen_audio_agent", url: `${BASE}/__fake_mcp`, headers: [{ name: "Authorization", value: "Bearer t" }] },
+  {
+    type: "http",
+    name: "qwen_audio_agent",
+    url: `${BASE}/__fake_mcp`,
+    headers: [{ name: "Authorization", value: "Bearer t" }],
+  },
 ]
 
 beforeAll(async () => {
@@ -154,13 +184,69 @@ beforeAll(async () => {
     execFileSync("git", ["init", "-q"], { cwd: d })
   }
 
+  modelServer = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      if (!new URL(request.url).pathname.endsWith("/chat/completions"))
+        return new Response("not found", { status: 404 })
+      const body = await request.text()
+      // Hold a real model HTTP request until sidecar aborts it; never depend on a sleep race.
+      if (body.includes(CANCEL_TASK)) {
+        cancelRequested = true
+        return new Promise<Response>((resolveResponse) => {
+          if (request.signal.aborted) return resolveResponse(new Response(null, { status: 499 }))
+          request.signal.addEventListener("abort", () => resolveResponse(new Response(null, { status: 499 })), {
+            once: true,
+          })
+        })
+      }
+      const chunks = [
+        {
+          id: "voice-test",
+          object: "chat.completion.chunk",
+          created: 1,
+          model: MODEL.modelID,
+          choices: [{ index: 0, delta: { role: "assistant", content: REPLY }, finish_reason: null }],
+        },
+        {
+          id: "voice-test",
+          object: "chat.completion.chunk",
+          created: 1,
+          model: MODEL.modelID,
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        },
+      ]
+      return new Response(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    },
+  })
+  const config = {
+    model: "voice-test/test-model",
+    small_model: "voice-test/test-model",
+    enabled_providers: ["voice-test"],
+    provider: {
+      "voice-test": {
+        name: "Voice test",
+        npm: "@ai-sdk/openai-compatible",
+        options: { apiKey: "test-only", baseURL: `http://127.0.0.1:${modelServer.port}/v1` },
+        models: {
+          "test-model": { name: "Test", limit: { context: 100000, output: 1000 } },
+          "other-model": { name: "Other", limit: { context: 100000, output: 1000 } },
+        },
+      },
+    },
+  }
+
   server = spawn("bun", [SERVER_ENTRY, "serve", "--port", String(PORT), "--hostname", "127.0.0.1"], {
     env: {
-      ...process.env,
+      ...isolatedEnv(),
       XDG_DATA_HOME: join(root, "data"),
       XDG_CONFIG_HOME: join(root, "cfg"),
       XDG_STATE_HOME: join(root, "state"),
       OPENCODE_SERVER_PASSWORD: PASSWORD,
+      OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
     },
     // ⚠️ 必须 "ignore" 而不是 "pipe":pipe 出来却不读,64KB 管道缓冲写满后
     //    **server 进程会在写日志时阻塞**,整个服务卡死。第一次写这个装置时就是这么挂的 ——
@@ -184,12 +270,13 @@ afterAll(() => {
   try {
     server?.kill("SIGKILL")
   } catch {}
+  modelServer?.stop(true)
   if (root) rmSync(root, { recursive: true, force: true })
 })
 
 /** 把「DeskFox 当前打开的项目」写成桥读的那个文件 */
 function setActiveProject(dir: string): void {
-  Bun.write(activeFile, JSON.stringify({ directory: dir, updatedAt: Date.now() }))
+  writeFileSync(activeFile, JSON.stringify({ directory: dir, updatedAt: Date.now() }))
 }
 
 describe.skipIf(!ENABLED)("TC-E1 全链路:第三层 session 在 sidecar 真实出现", () => {
@@ -210,6 +297,7 @@ describe.skipIf(!ENABLED)("TC-E1 全链路:第三层 session 在 sidecar 真实�
       // sidecar 把 directory 规范成 realpath(macOS 上 /var 是 /private/var 的软链),
       // 所以比 realpath 而不是比原样字符串
       expect(realpathSync(detail.directory)).toBe(realpathSync(projectA))
+      expect(detail.metadata?.deskfoxVoice).toBe(true)
     } finally {
       gw.kill()
     }
@@ -223,7 +311,7 @@ describe.skipIf(!ENABLED)("TC-E1 全链路:第三层 session 在 sidecar 真实�
       const { sessionId } = await gw.request("session/new", { cwd: projectA, mcpServers: [] })
       gw.promptDetached(sessionId, "这是一句测试任务文本")
 
-      // 轮询等 user message 落库(没有配 provider 时后续会失败,但这一步一定发生)
+      // 轮询等 user message 落库；模型由测试专用 loopback HTTP 服务提供。
       const deadline = Date.now() + 30_000
       let messages: any[] = []
       while (Date.now() < deadline) {
@@ -252,22 +340,18 @@ describe.skipIf(!ENABLED)("TC-E1 全链路:第三层 session 在 sidecar 真实�
       const { sessionId } = await gw.request("session/new", { cwd: projectA, mcpServers: [] })
       const pending = gw.promptDetached(sessionId, "回一句话就行")
 
-      const settled = await Promise.race([
-        pending.done,
-        sleep(40_000).then(() => null),
-      ])
+      const settled = await Promise.race([pending.done, sleep(40_000).then(() => null)])
       expect(settled).not.toBeNull()
-      // 测试环境没配 provider,这轮多半以 session.error 收场 —— 那也是终局,
-      // 关键是**桥收到了事件并回了响应**,而不是把请求挂死
+      // 本地模型返回真实 SSE：既验终局，也验桥确实转发了模型文本。
       expect((settled as any).result.stopReason).toBeDefined()
 
-      // 失败也必须"说出来",否则用户对着麦克风只会等到一片安静
+      // 不能只收到兜底错误文案：必须收到本地模型返回的文本。
       const chunks = gw.notifications.filter((n) => n.method === "session/update")
       const spoken = chunks
         .map((n) => n.params?.update?.content?.text)
         .filter((t): t is string => typeof t === "string")
         .join("")
-      expect(spoken.length).toBeGreaterThan(0)
+      expect(spoken).toContain(REPLY)
     } finally {
       gw.kill()
     }
@@ -339,6 +423,32 @@ describe.skipIf(!ENABLED)("TC-E8 切项目", () => {
   }, 60_000)
 })
 
+describe.skipIf(!ENABLED)("当前 sidecar 的模型跟随契约", () => {
+  test("真实会话列表保留模型和语音标记，最近语音任务不会覆盖用户模型", async () => {
+    const client = createSidecarClient({ baseUrl: BASE, authorization: AUTH })
+    const user = await api(`/session?directory=${encodeURIComponent(projectB)}`, {
+      method: "POST",
+      body: JSON.stringify({ title: "user model selection" }),
+    })
+    await api(`/session/${user.id}/message?directory=${encodeURIComponent(projectB)}`, {
+      method: "POST",
+      body: JSON.stringify({ model: MODEL, parts: [{ type: "text", text: "user turn" }] }),
+    })
+    const voice = await client.createSession(projectB)
+    await api(`/session/${voice.id}/message?directory=${encodeURIComponent(projectB)}`, {
+      method: "POST",
+      body: JSON.stringify({
+        model: { ...MODEL, modelID: "other-model" },
+        parts: [{ type: "text", text: "voice turn" }],
+      }),
+    })
+    const list = await client.listSessions(projectB)
+    expect(list.find((s) => s.id === voice.id)?.model?.id).toBe("other-model")
+    expect(list.find((s) => s.id === voice.id)?.metadata?.deskfoxVoice).toBe(true)
+    expect(await client.recentModel(projectB)).toEqual(MODEL)
+  }, 60_000)
+})
+
 describe.skipIf(!ENABLED)("TC-E4 取消", () => {
   test("session/cancel → 桥立刻回 cancelled(不回的话那条 session 会永久锁死)", async () => {
     setActiveProject(projectA)
@@ -346,8 +456,11 @@ describe.skipIf(!ENABLED)("TC-E4 取消", () => {
     try {
       await gw.request("initialize", {})
       const { sessionId } = await gw.request("session/new", { cwd: projectA, mcpServers: [] })
-      const pending = gw.promptDetached(sessionId, "一个会被取消的任务")
-      await sleep(1000)
+      cancelRequested = false
+      const pending = gw.promptDetached(sessionId, CANCEL_TASK)
+      const deadline = Date.now() + 15_000
+      while (!cancelRequested && Date.now() < deadline) await sleep(50)
+      expect(cancelRequested).toBe(true)
 
       gw.notify("session/cancel", { sessionId })
       const result = await Promise.race([
@@ -357,7 +470,12 @@ describe.skipIf(!ENABLED)("TC-E4 取消", () => {
       expect((result as any).result.stopReason).toBe("cancelled")
 
       // sidecar 侧也回到 idle(abort 真发出去了)
-      const status = await api(`/session/status?directory=${encodeURIComponent(projectA)}`)
+      let status = await api(`/session/status?directory=${encodeURIComponent(projectA)}`)
+      const abortDeadline = Date.now() + 5_000
+      while (status[sessionId]?.type === "busy" && Date.now() < abortDeadline) {
+        await sleep(50)
+        status = await api(`/session/status?directory=${encodeURIComponent(projectA)}`)
+      }
       expect(status[sessionId]?.type ?? "idle").toBe("idle")
     } finally {
       gw.kill()
@@ -378,7 +496,11 @@ describe.skipIf(!ENABLED)("resume 的幂等与透明换新(TC-U3 的真机对照
       const staleId = "coord_上次网关留下的"
       // qwen 每轮 prompt 前都会 resume 一次(只为重注入 MCP),所以必须幂等
       for (let i = 0; i < 3; i++) {
-        const r = await gw.request("session/resume", { sessionId: staleId, cwd: projectA, mcpServers: coordinatorMcp() })
+        const r = await gw.request("session/resume", {
+          sessionId: staleId,
+          cwd: projectA,
+          mcpServers: coordinatorMcp(),
+        })
         // result 里没有 sessionId —— qwen 沿用它自己传的那个,这正是透明换新成立的原因
         expect(r.sessionId).toBeUndefined()
       }
