@@ -22,3 +22,11 @@ related: ./1-spec.md ./3-changelog.md
 ## local 隔离补丁
 
 启动前核查发现 `app.setAsDefaultProtocolClient("opencode")` 无条件执行，会让本地版抢正式版的 URL 默认处理权。抽到 fork-only `registerDeskfoxProtocol`，只给打包的发布渠道注册；index.ts 一处调用替换。先按原行为复现 local/未打包两条失败，再加保护，5 条通过；发布三档保持原行为。本地包不抢协议是「不影响正式版」的必要修复，未改变语音产品设计。
+
+## local 构建与运行
+
+- 候选 `b538afd409` 放独立 detached worktree，锁文件安装后直接跑 desktop 构建与 electron-builder `--dir --publish never`，不调用会结束正式版进程的发版包装脚本。未签名/公证/上传。
+- 专用启动器设置 HOME、CFFIXED_USER_HOME、XDG、源码桥路径，私有 `.profile` 保持 shell-env 探测后的隔离环境；qwen-audio-agent 1.11.0 独立副本避免启动时品牌注入改到全局安装。只复制唤醒模型，不迁移正式版凭据。
+- 曾尝试额外 sandbox-exec 文件保护；macOS 拒绝 Electron 子进程再次初始化沙箱，窗口未打开。结束的仅该 local PID 50409，移除额外包装；保留 Electron 原有沙箱，第二次启动成功。失败日志保留，不使用 `--no-sandbox`。
+- 通过 lsof 与实际文件核查 HOME/XDG/userData/数据库隔离。此方案是测试运行目录隔离，不是限制模型访问所有宿主文件的安全沙箱；人工任务限定在两个测试项目。
+- local 使用 `OPENCODE_PURE=1` 关闭静态业务插件，避免飞书等服务与正式版冲突；本轮验证语音核心，不覆盖这些插件。Mac 真机听说体验、长任务和并发播报仍待用户配合。

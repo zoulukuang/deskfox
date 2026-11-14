@@ -57,3 +57,26 @@ related: ./1-spec.md ./2-plan.md
 接手中(笑南的电脑, Codex)。用户已授权准备独立 local 包与可自动检查的运行项，明确不影响正式版、不合 main。
 
 构建在独立 worktree 完成；使用独立 HOME/XDG 的启动器与测试 Git 项目。开工读码发现 `index.ts` 对 local 也无条件注册 opencode 默认协议处理器，先增加 local 渠道保护和回归测试，以满足不影响正式版的约束。候选代码头、包哈希、进程与数据隔离证据完成后追加。
+
+## local 包回执(笑南的电脑，2026-11-14)
+
+本轮准备完成，转待用户真机体验；上面的“未构建”描述属于前一轮。源码候选 `b538afd409`，接手提交 `b959b585d2`；分支仍为 `feat/voice-main-integration`。启动步骤与待验清单见 [4-local-qa.md](./4-local-qa.md)。
+
+- 产物目录：`/Volumes/ExtSSD/software/Codex/artifacts/voice-local-20261114/`。应用 `DeskFox 本地版.app`，arm64、`ai.deskfox.app.local`、2026.12.1，后端 1.18.16，Electron 42.11.15；未写入 /Applications，自动更新实测 disabled。
+- 固定源码与依赖：`/Volumes/ExtSSD/software/Codex/worktrees/voice-local-20261114`，detached 于上述候选。此目录供语音桥使用，验收完成前保留；这是本机自用组合包，不是可单独搬走的分发包。
+- app.asar SHA-256：`38ffabb0b33146f210c3673cb641f1c4ae0c500ea9f65eb49dbfd917d69663b4`。
+- 证据：`/Volumes/ExtSSD/software/Codex/backups/voice-local-20261114/`，含红绿测试、完整开发闸、安装/构建/打包日志、实际包桥接脚本与结果、隔离记录、LOCAL 窗口截图及文件哈希清单。
+
+| 检查 | 结果 |
+|---|---|
+| 默认协议修复红绿测试 | 原行为 2 fail / 3 pass；修复后 5 pass |
+| 完整 pre-push 开发闸 | 29 项类型检查；app 1211 + browser 41、media 148、feishu 796、branding 82、desktop 550、session-ui 125，通过；既有可选 skip 说明同前 |
+| 独立安装、构建、arm64 打包 | 三步 exit 0；worktree 无 tracked 改动 |
+| 实际包后端 + 源码桥 | health、ACP initialize、A/B 两个项目建会话、语音 metadata、列表可见均通过；B 轮仍传旧 cwd A，验证桥读取当前项目后落 B；0 模型调用 |
+| 语音依赖 / LOCAL UI | qwen probe ready；测试项目A 的开启语音按钮可用；未启动麦克风 |
+| 运行数据隔离 | `runtime/data/opencode/opencode-local.db`；userData 位于 `runtime/home/Library/Application Support/ai.deskfox.app.local`；local 进程树无正式版数据文件打开记录 |
+| 正式版保护 | PID 1786 持续存活，app.asar 哈希前后相同；opencode URL handler 仍 ai.deskfox.app |
+
+没有复制正式版 auth；local 的 connectedProviders 为空，需用户在本地版连接 Alibaba (China)。目录中已备好唤醒模型；真实 ASR/TTS、模型权限与网络成功尚未验证。保持麦克风关闭，未代签 TC-M1 / TC-E2 / TC-E3。main `fc96b0b5b5`、原语音头 `334ce3382d`、原 bundle 均保留；没有修改上游远端、合 main 或扩展设置 UI。
+
+回退：只关闭本地版即可停止本轮验证；源码补丁可在集成分支 revert `b538afd409`。不卸载/替换正式版。产物和源码 worktree 保留供复验。
