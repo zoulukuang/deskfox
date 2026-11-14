@@ -4,6 +4,16 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # Git 差异刷新占满本地连接
 
+## Git 忽略过滤实施回执（笑南的电脑，2026-11-14）
+
+用户明确批准 Large 方案「批准两项施工方案，继续并行推进」后，由 Codex 子 agent `vcs_ignore_design` 在 `ef9904415f` 上实现剩余忽略过滤。标准实例 API、原生 Git + HEAD 保护、有界前端合并与自动生成 SDK 均已落地工作区，尚未提交产品代码；R4 实际 diff 待集中批准。
+
+实际 14 个产品/测试文件 +678/-6；完整文件清单、四个黑名单文件逐项 wrapper 不可替代理由、生成审计、风险与提交方式见 `6-ignore-r4-review.md`。api/server 各仅 3 行 additive 注入；SDK 两文件完全由生成脚本新增 76 行，无手改、无无关同步。
+
+验证：真实 Git 5 pass/66 断言、真实 HTTP handler 1 pass/14 断言、前端异步 6 pass/26 断言，相关 Playwright 1 pass（8.7 秒，无重试）；app/e2e/opencode 类型检查与完整 pre-push 均绿。完整闸为 29 项类型检查、app 1228+41、media 140、飞书 792、branding 82 pass/8 既有 skip、desktop 176、session-ui 125，零失败。父 agent 与另一个子 agent 独立复核未见阻断。
+
+边界：Git FIFO 超时/进程终止已在本机真实验证，Windows 不支持该 fixture；e2e 的 mock HTTP/SSE 不是两端 local/真实连接池负载验收。Mac local 与 Windows 验收仍待完成，因此状态保持 in-progress，不合 main、不发布。原始生产日志与用户数据未用于故障注入。
+
 ## 恢复实施与接手（笑南的电脑，Codex，2026-11-14）
 
 接手中（笑南的电脑，Codex，2026-11-14）。用户本轮授权「按这个计划开始推进」，恢复 REQ-149 短期修复；六项范围以 OPENCODE-PLAN `需求计划/2026-11-14.md` 为准。

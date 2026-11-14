@@ -2,6 +2,8 @@
 
 记录：笑南的电脑 / Codex 子 agent，2026-11-14。只读源码与临时 Git 仓实验；本文件是待主 agent 复核的方案，不表示接口已实现或 R4 已获批准。
 
+施工批准（2026-11-14）：用户明确「批准两项施工方案，继续并行推进」。接手中（笑南的电脑，Codex 子 agent `vcs_ignore_design`，2026-11-14）：在原 `fix/deskfox-vcs-refresh-overload`、HEAD 例外修正 `ef9904415f` 之上完成剩余忽略过滤。下文方案已获施工批准；R4 实际 diff 待测试与独立复核后提交用户确认。
+
 ## 整体规模与施工闸
 
 进一步拆解后，完整 Git 忽略过滤很可能令本 feat 超过原 spec 的 Medium 预估。不能按“先做独立 helper”拆阶段规避 Large 审签；本轮因此未新增产品模块或持久化测试文件，仅保留此设计与临时 Git 实验。
@@ -77,7 +79,7 @@
 - 判定期间的新事件合并进下一批；Set 超过 128 路径或 64 KiB 时清空为“需要刷新”标记，不继续保存无限路径，不切成无限待发 HTTP 队列。
 - 判定返回 true、溢出或错误时调用现有 `createVcsRefresh`，继续受“一条 diff 在途、结束补刷一次”保护。全部 ignored 返回 false 时不发 diff。
 - 每批绑定当前查询键内容与工作目录；查询键变化/组件卸载后，迟到判定不刷新新项目。新项目事件单独建批，旧请求取消与清理要测。
-- 保持 `.git/` 过滤 helper 与原文件事件消费者分离。branch 更新依旧由既有 VCS 事件改变 query key，不靠 `.git/HEAD` 文件事件刷新。
+- 保持 `.git/` 过滤 helper 与原文件事件消费者分离。**规范化的根 `.git/HEAD` 事件必须直接进入现有合并刷新，跳过后端忽略判定**：detached HEAD 切换提交时 branch 名仍为 undefined，既有 VCS BranchUpdated 不会发送。不能因 query key 未变就吞掉 HEAD 变化。HEAD 是 Git 元数据而非工作区文件，不送入 `check-ignore`；其余无关 Git 元数据仍过滤。详见 `5-frontend-review.md` 的真实 Git 实验。
 - 验证两类并发分别至多 1：忽略判定 HTTP 与 diff HTTP。不能把总数 2 误报成全应用只有 1 个连接；这也不是通用请求队列或跨多窗口的全局限流。
 
 ## R1 / R4 逐文件理由

@@ -25,3 +25,13 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 文件列表的 ignored 字段由 `handlers/file.ts` 读取项目根 `.gitignore` 和 `.ignore` 后计算，不检查 Git index，也未覆盖嵌套 `.gitignore`、全局 excludes 或 `.git/info/exclude`。用它直接抑制刷新会漏掉已跟踪文件，也会把仅被 `.ignore` 排除的有效 Git 变化漏掉。未知节点保守刷新也不能覆盖未展开的忽略目录。
 
 因此该字段不能作为完整 Git 忽略判定依据。下一步评估 Git 原生批量判定的最小接入点；保留已跟踪文件、失败保守刷新、限制并发与请求规模，避免过滤本身制造新的积压。具体接口及 R4 影响评审后再落地。
+
+## Large 审签与实现（2026-11-14）
+
+整体前后端与测试超过 500 行，先停止过滤施工，整理 `4-ignore-design.md` 后由用户明确「批准两项施工方案，继续并行推进」。之后由笑南的电脑 / Codex 子 agent `vcs_ignore_design` 接手剩余过滤，父 agent 独立审核；此分工获用户明确允许并行 agent。
+
+实际方案采用标准实例 HttpApi `POST /deskfox/vcs/refresh-required`，返回 `shouldRefresh`。Git helper 复用既有 Git.Service 与 Effect，前端经自动生成的 SDK 调用。无隐藏接口、无 Office 入口借用、无新依赖。
+
+实际新增 7 个文件，修改 7 个产品/测试文件，共 +678/-6 行；比预计 625–820 行范围一致。HEAD 保留例外已经由 `ef9904415f` 先行修正；本次只扩为事件分类以便 HEAD 直接刷新、普通文件进入忽略判定。已有 `.git/` 断言未弱化成跳过用例，改为真正区分 HEAD 与无关元数据。
+
+完整实现与自动化已通过，父 agent 与 MCP 子 agent 独立复核未见阻断。四个黑名单文件及生成审计见 `6-ignore-r4-review.md`。R4 实际 diff 未获批准前不提交产品代码；两端 local、真实负载对照和最终发布均仍待完成。
