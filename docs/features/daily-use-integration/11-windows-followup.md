@@ -25,11 +25,11 @@ related: ./3-changelog.md ./4-windows-handoff.md ./10-windows-evidence.md
 | `packages/opencode/src/project/vcs.ts` | 现有 HTTP、分支和 working diff 都走 Vcs 文件组装入口。独立 helper 需要在该入口获取同一份 Git 路径列表并回填现有响应。仅在渲染器或 HTTP 外层包装会遗漏现有调用者，无法复用内部的路径与输出预算。 | 变化集中在多文件未跟踪项。用独立临时索引、对象目录和 NUL 路径，按 Git 输出关联统计和补丁，保留 cap 和文件级回退。回归覆盖 Git 真实补丁、属性、空文件、特殊路径、staged deletion、无 HEAD、嵌套目录和 linked worktree。验证用户索引字节和对象文件列表一致。 |
 | `packages/opencode/test/project/vcs.test.ts` | 在现成的 Vcs 服务和真实 Git 实例夹具上调用生产入口，使用 Git Trace2 跟踪实际子进程。只测 helper 无法发现生产调用继续走逐文件命令的问题。 | 变更限新增用例，Trace2 环境在用例结束时恢复。 |
 
-暂存补丁已通过 Git diff 检查。按 CLAUDE.md R4，黑名单改动正式提交前需要用户对该冻结补丁二次确认。
+用户已按 CLAUDE.md R4 回复「批准提交和推送」。暂存补丁和正式提交 diff 的 SHA-256 与冻结值一致。产品提交 `7e14b0e48913b822758d7db37dff003fca7a9e20` 带 `override-blacklist` 标记，按 R4 例外跳过 pre-commit。推送时完整执行 pre-push，29 个 workspace 类型检查及 6 个包的测试通过。已推送到 `origin/feat/daily-use-integration`。推送日志为 `D:/tmp/deskfox-daily-win-20261114/evidence/followup-approved-push.log`，SHA-256 `50f85c1801fb5a6946303211ee4e3665cc8e504d65f0becd1f48c597f80c64db`。
 
 ## Windows local 包
 
-Bun 1.3.14 冻结安装用时 64.11 秒。在独立 worktree 执行 `pwsh -NoProfile -File packages/branding/scripts/build-deskfox-electron.ps1 -Env local`，最终构建用时 295.43 秒，产物内包含 soffice.exe 和 presets。构建基于上述 HEAD 加冻结产品树，尚无该产品树对应的正式提交。
+Bun 1.3.14 冻结安装用时 64.11 秒。在独立 worktree 执行 `pwsh -NoProfile -File packages/branding/scripts/build-deskfox-electron.ps1 -Env local`，最终构建用时 295.43 秒，产物内包含 soffice.exe 和 presets。构建基于上述 HEAD 加冻结产品树。正式提交与冻结树的非文档路径逐一一致。
 
 - exe 为 `D:/project/deskfox-win-daily/packages/desktop/dist-deskfox/win-unpacked/DeskFox 本地版.exe`，SHA-256 `a7dc5675ca55596e2843642897edf54910ed99ba107156ab80976e1fa7c35d26`。
 - app.asar SHA-256 为 `366d8f52541881d7d131c5d4e77b0b48ae4a2494281bd4a540017377103f3af7`。

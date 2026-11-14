@@ -123,4 +123,4 @@ Windows 电脑（YUEXI）接手本期六项 Windows 验收。接手时远端头 
 
 ## 续办回执（Windows 电脑，2026-11-14）
 
-REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows local 包复验通过。冻结产品树 `36dd62205aeb1bd6aab19689e824c947dbed0e9a` 已进入 R4 提交复核。[追加回执](./3-changelog.md#缺陷复验回执windows-电脑2026-11-14)与[证据](./11-windows-followup.md)记录耗时、截图、日志及待验范围。
+REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows local 包复验通过。用户批准 R4 冻结补丁后，产品提交 `7e14b0e48913b822758d7db37dff003fca7a9e20` 经完整 pre-push 推送至 `feat/daily-use-integration`。[追加回执](./3-changelog.md#缺陷复验回执windows-电脑2026-11-14)与[证据](./11-windows-followup.md)记录耗时、截图、日志及待验范围。
