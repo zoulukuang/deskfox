@@ -64,3 +64,42 @@ test("opens an encoded chat file link and navigates document sections without le
   await expect(page).toHaveURL(sessionURL)
   await expect(viewer.getByText("Correct file contents.", { exact: true })).toBeVisible()
 })
+
+test("opens the literal percent/hash/question filename even when decoded lookalikes exist", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "deskfox", {
+      value: {
+        invoke: (command: string) =>
+          command === "get_file_mtime"
+            ? Promise.resolve(1)
+            : command === "get_file_size"
+              ? Promise.resolve(4096)
+              : Promise.reject(new Error(command)),
+        listen: async () => () => {},
+      },
+    })
+  })
+  const names = ["report%20draft.md", "report#draft.md", "report?draft.md"]
+  await bootstrapContextFlow(page, {
+    directory: "/project",
+    files: [
+      ...names.map((name) => ({ name, content: `# Exact file\n\nContents of ${name}` })),
+      { name: "report draft.md", content: "Wrong decoded file" },
+      { name: "report", content: "Wrong truncated file" },
+    ],
+    messages: [
+      { id: "msg_literal_user", role: "user", text: "Open each file" },
+      {
+        id: "msg_literal_assistant",
+        role: "assistant",
+        text: names.map((name, index) => `[Open ${index}](./${encodeURIComponent(name)})`).join("\n\n"),
+      },
+    ],
+  })
+  for (const [index, name] of names.entries()) {
+    await page.getByRole("link", { name: `Open ${index}`, exact: true }).click()
+    await expect(
+      page.locator('[data-context="file-viewer"]').getByText(`Contents of ${name}`, { exact: true }),
+    ).toBeVisible()
+  }
+})

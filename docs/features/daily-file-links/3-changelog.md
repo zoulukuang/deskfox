@@ -36,3 +36,9 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 首轮 GUI 失败：文件内容正确但章节未进入视口。诊断发现首次 FileTabContent 在 Suspense 中被销毁时，尚未运行的章节 effect 没有接手请求，却被 cleanup 提前取消。改为只有实际等待该请求的查看器可取消。删除诊断日志后该 GUI 用例通过（Chromium，2.3 秒，retries=0），补充首次挂载销毁单测，相关单元/DOM 合计 27 pass / 0 fail（68 断言），`bun run typecheck:e2e` 通过。
 
 测试只在网络/native fixture 上跑真实前端，不能代替两端 local。native fixture 只允许 `guide space.md` 存在性探测；编码错误或片段混入路径不能假阳性。没有 retry 掩盖失败、没有放宽入视口断言。
+
+### A 路径 API 端到端复核
+
+父 review 发现 handler 正确解码后，`file.tab → pathFromTab → loadFile/normalize` 仍把原始文件名当 URL 重复解码/去片段。新增实际 path helper 复现先为 44 pass / 3 fail：`report%20draft.md` 打开成空格同名文件，`#`/`?` 文件名被截断。修为只对 `file://` tab URL 解码与剥 query/hash；普通文件路径保持原文。审计 file context 各 normalize 调用均接原始文件列表、tab 还原路径或显式 file URL。
+
+修后路径 helper 47 pass；Chromium 新用例同时放置 `%20` 与空格同名文件、以及截断名称文件，逐个点击编码链接，断言显示完整真实文件名对应内容。A 两条 GUI 均通过。变更限定 `context/file/path.ts` 的单处小注入、其测试和现有 GUI；该 app 路径不在当前黑名单内。没有用回调前重新编码掩盖重复 normalize。
