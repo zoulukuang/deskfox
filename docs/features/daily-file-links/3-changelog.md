@@ -42,3 +42,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 父 review 发现 handler 正确解码后，`file.tab → pathFromTab → loadFile/normalize` 仍把原始文件名当 URL 重复解码/去片段。新增实际 path helper 复现先为 44 pass / 3 fail：`report%20draft.md` 打开成空格同名文件，`#`/`?` 文件名被截断。修为只对 `file://` tab URL 解码与剥 query/hash；普通文件路径保持原文。审计 file context 各 normalize 调用均接原始文件列表、tab 还原路径或显式 file URL。
 
 修后路径 helper 47 pass；Chromium 新用例同时放置 `%20` 与空格同名文件、以及截断名称文件，逐个点击编码链接，断言显示完整真实文件名对应内容。A 两条 GUI 均通过。变更限定 `context/file/path.ts` 的单处小注入、其测试和现有 GUI；该 app 路径不在当前黑名单内。没有用回调前重新编码掩盖重复 normalize。
+
+## B：项目外内部预览（2026-11-14）
+
+用户原文「批准两项施工方案，继续并行推进」已在 B Large 施工前登记。外部路径交接测试先在旧 handler 复现失败，再增加 onOpenOutside，保持项目根不变。
+
+第一笔单文件 native 能力：新 `desktop/src/main/deskfox/document-preview.ts` 及 IPC 注册，realpath 后先 stat、nonblocking open 后再 fstat；只读普通文件，不授权父目录、不遍历目录、不扩 root。文本2 MiB、PDF/Office50 MiB，按尺寸有界分配；UTF-8 无损校验，HTML/脚本作为文本，Office 只返回已验证 canonical 路径给既有转换器。Office 再打开遵循可变本地文件语义，不承诺快照。
+
+实际临时文件 9 测试/14 断言通过：中文空格、符号链接确切目标、PDF字节、Office元数据、HTML文本、目录/不存在/相对路径、超限、非法编码、真实 FIFO、chmod 无读取权限。FIFO 与 chmod 用例在 Mac 实跑，Windows 下按平台跳过；没有模拟成功代替磁盘读。磁盘离线只覆盖错误映射，不宣称拔盘实测。

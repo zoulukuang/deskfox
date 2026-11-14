@@ -4,6 +4,8 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # 实施顺序
 
+2026-11-14 用户对汇总方案回复「批准两项施工方案，继续并行推进」，B Large 已获施工许可；C 黑名单提交复核见 `4-r4-review.md`，仍须具体 R4 确认。
+
 1. A 部分先写真实共享 handler 的复现测试，再修解码、纯锚点和跨文档片段；只用 fork helper 与小挂接。
 2. B/C 完成接口、用户体验及通道盘点，Large 施工方案交主 agent 汇总审签；有独立 Medium 子项不被后续方案阻塞。
 3. 相关单元/DOM/GUI验证通过后，协调机器资源执行完整 pre-push；Mac/Windows local 和模型实测缺口如实写回执。
