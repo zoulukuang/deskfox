@@ -21,6 +21,8 @@ import { CHANNEL, PRODUCT_NAMES } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 // FORK: DeskFox 原生 IPC [feat: electron-replatform]
 import { registerDeskfoxIpc } from "./deskfox/ipc"
+// FORK: local QA must not replace the installed app's URL handler [feat: voice-main-integration] 2026-11-14
+import { registerDeskfoxProtocol } from "./deskfox/protocol-registration"
 // FORK: 语音桥的 sidecar 连接信息发布点 + 退出时回收语音网关 [feat: voice-acp-bridge]
 import { publishSidecarInfo } from "./deskfox/voice/sidecar-info"
 import { shutdownVoiceGateway } from "./deskfox/voice/gateway"
@@ -392,7 +394,7 @@ const main = Effect.gen(function* () {
       }),
     ),
   )
-  app.setAsDefaultProtocolClient("opencode")
+  registerDeskfoxProtocol(app, CHANNEL) // FORK: preserve release URL ownership during local QA
   registerRendererProtocol()
   setDockIcon()
   const updater = setupAutoUpdater(stopSidecars)

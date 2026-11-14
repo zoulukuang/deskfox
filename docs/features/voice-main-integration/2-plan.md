@@ -18,3 +18,7 @@ related: ./1-spec.md ./3-changelog.md
 - 原集成测试继承整个宿主 env，而且取消测试先睡 1 秒；隔离后无模型的任务早已结束，期望 cancelled 实际 end_turn。改成白名单 env + 临时 HOME/XDG + 仅 loopback 的测试模型；等模型请求确实在途再取消。真实 sidecar 和真实 ACP 桥均保留。
 - 完成事件测试从「任意非空文字(错误也算)」加强为精确包含测试模型回复；增加真实 HTTP 会话模型/metadata 保真与排除语音会话的模型跟随验证。项目状态文件同步写入，避免测试自行制造未等待写盘的竞态。
 - 产品边界保持原样：最近使用模型代理、项目 5 秒轮询、主动关闭取消任务、崩溃后后端任务独立、旧链路回退开关。设置 UI 只保留原有 spec，未开发。
+
+## local 隔离补丁
+
+启动前核查发现 `app.setAsDefaultProtocolClient("opencode")` 无条件执行，会让本地版抢正式版的 URL 默认处理权。抽到 fork-only `registerDeskfoxProtocol`，只给打包的发布渠道注册；index.ts 一处调用替换。先按原行为复现 local/未打包两条失败，再加保护，5 条通过；发布三档保持原行为。本地包不抢协议是「不影响正式版」的必要修复，未改变语音产品设计。
