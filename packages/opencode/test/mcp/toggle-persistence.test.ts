@@ -17,6 +17,125 @@ import { Config } from "../../src/config/config"
 const it = testEffect(LayerNode.compile(LayerNode.group([MCP.node, Config.node, CrossSpawnSpawner.node])))
 const command = [process.execPath, path.join(import.meta.dir, "../fixture/mcp-lifecycle-stdio.ts")]
 
+it.instance("desktop local config directory defaults do not override the current project's MCP switch", () =>
+  Effect.gen(function* () {
+    const mcp = yield* MCP.Service
+    const config = yield* Config.Service
+    const instance = yield* TestInstance
+    const desktop = yield* tmpdirScoped()
+    const file = path.join(desktop, "opencode.json")
+    const previous = process.env.OPENCODE_CONFIG_DIR
+    const marker = process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR
+    const home = path.join(Global.Path.home, ".opencode/opencode.jsonc")
+    const homeBefore = yield* Effect.promise(async () =>
+      (await Bun.file(home).exists()) ? Bun.file(home).text() : undefined,
+    )
+    yield* Effect.promise(() => Bun.write(home, JSON.stringify({ mcp: { fixture: { enabled: true } } })))
+    yield* Effect.addFinalizer(() =>
+      Effect.promise(async () => {
+        if (homeBefore === undefined) await rm(home, { force: true })
+        else await Bun.write(home, homeBefore)
+      }),
+    )
+    yield* Effect.promise(() =>
+      Bun.write(
+        file,
+        JSON.stringify({ username: "desktop", mcp: { fixture: { type: "local", command, enabled: true } } }),
+      ),
+    )
+    yield* Effect.promise(() =>
+      Bun.write(
+        path.join(instance.directory, ".opencode/opencode.jsonc"),
+        JSON.stringify({
+          username: "project",
+          mcp: { fixture: { type: "local", command: ["/not-the-desktop-command"], enabled: true } },
+        }),
+      ),
+    )
+    process.env.OPENCODE_CONFIG_DIR = desktop
+    process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR = desktop
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        if (previous === undefined) delete process.env.OPENCODE_CONFIG_DIR
+        else process.env.OPENCODE_CONFIG_DIR = previous
+        if (marker === undefined) delete process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR
+        else process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR = marker
+      }),
+    )
+    expect((yield* mcp.status()).fixture.status).toBe("connected")
+    yield* mcp.disconnect("fixture")
+    expect((yield* mcp.status()).fixture.status).toBe("disabled")
+    yield* reloadInstance({ directory: instance.directory })
+    expect((yield* mcp.status()).fixture.status).toBe("disabled")
+    expect((yield* config.get()).username).toBe("desktop")
+    expect((yield* config.get()).mcp?.fixture).toEqual({ type: "local", command, enabled: false })
+    const other = yield* tmpdirScoped()
+    expect((yield* mcp.status().pipe(provideInstance(other))).fixture.status).toBe("connected")
+    expect((yield* Effect.promise(() => Bun.file(file).json())).mcp.fixture.enabled).toBe(true)
+    yield* mcp.connect("fixture")
+    yield* reloadInstance({ directory: instance.directory })
+    expect((yield* mcp.status()).fixture.status).toBe("connected")
+  }),
+)
+
+for (const policy of ["unmarked", "mismatch", "content", "managed", "project-disabled"] as const) {
+  it.instance(`desktop MCP switch still respects ${policy} configuration priority`, () =>
+    Effect.gen(function* () {
+      const mcp = yield* MCP.Service
+      const instance = yield* TestInstance
+      const desktop = yield* tmpdirScoped()
+      const managed = yield* tmpdirScoped()
+      const keys = [
+        "OPENCODE_CONFIG_DIR",
+        "DESKFOX_MCP_DEFAULT_CONFIG_DIR",
+        "OPENCODE_CONFIG_CONTENT",
+        "OPENCODE_TEST_MANAGED_CONFIG_DIR",
+        "OPENCODE_DISABLE_PROJECT_CONFIG",
+      ] as const
+      const before = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          for (const key of keys) {
+            if (before[key] === undefined) delete process.env[key]
+            else process.env[key] = before[key]
+          }
+        }),
+      )
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(desktop, "opencode.json"),
+          JSON.stringify({ mcp: { fixture: { type: "local", command, enabled: true } } }),
+        ),
+      )
+      process.env.OPENCODE_CONFIG_DIR = desktop
+      process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR = managed
+      delete process.env.OPENCODE_CONFIG_CONTENT
+      delete process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR
+      delete process.env.OPENCODE_DISABLE_PROJECT_CONFIG
+      if (policy === "mismatch") process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR = managed
+      if (policy === "content" || policy === "managed") process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR = desktop
+      if (policy === "project-disabled") {
+        process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR = desktop
+        process.env.OPENCODE_DISABLE_PROJECT_CONFIG = "true"
+      }
+      if (policy === "content")
+        process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ mcp: { fixture: { enabled: true } } })
+      if (policy === "managed")
+        yield* Effect.promise(() =>
+          Bun.write(path.join(managed, "opencode.json"), JSON.stringify({ mcp: { fixture: { enabled: true } } })),
+        )
+      expect((yield* mcp.status()).fixture.status).toBe("connected")
+      expect(Exit.isFailure(yield* mcp.disconnect("fixture").pipe(Effect.exit))).toBe(true)
+      expect((yield* mcp.status()).fixture.status).toBe("connected")
+      expect((yield* mcp.tools()).fixture_current_directory).toBeDefined()
+      if (policy === "project-disabled")
+        expect(
+          yield* Effect.promise(() => Bun.file(path.join(instance.directory, ".opencode/opencode.jsonc")).exists()),
+        ).toBe(false)
+    }),
+  )
+}
+
 it.instance(
   "disabled MCP survives instance recreation without changing its connection config",
   () =>

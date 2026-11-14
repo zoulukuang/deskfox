@@ -2,6 +2,8 @@
 
 当前身份：笑南的电脑。日期：2026-11-14。工作树 `daily-use-integration`；仅实现、测试和准备评审材料，未暂存、未提交、未推送本次新增改动。
 
+**审签回执（2026-11-14）**：上述为报告制作时状态。用户在复核完整补丁、测试及 Mac 重启结果后明确回复「批准补充修复提交与推送」，范围为 `feat/daily-use-integration`，不含 main 或发布。提交前暂存的 7 文件补丁 SHA256 再次核对为 `ec8a042c6d3b097b600693b655309f97eaff36fb08783e9b68494db591a0b7f1`，与本报告冻结对象完全一致。已获 R4 提交授权，执行普通完整 pre-push 后推送。
+
 ## 原因与最小方案
 
 真实 local 桌面在自动启动 sidecar 时注入 `OPENCODE_CONFIG_DIR`，其中全局 MCP 定义 `enabled: true`。Config 在项目 `.opencode/opencode.jsonc` 之后再次加载该目录，保存项目 false 后读取仍为 true，触发 higher-priority 错误。当前 `Global.Path.config` 固定使用 XDG 默认路径，而不是注释所述的 Flag 覆盖；仅 `Global.make` 返回的服务对象覆盖 config。因此不是同一路径简单去重可以修复的问题。

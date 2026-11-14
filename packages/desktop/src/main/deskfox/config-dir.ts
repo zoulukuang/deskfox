@@ -26,8 +26,9 @@
 // 统一由本模块决定 config 目录,`plugin-install` 与 sidecar env 共用同一个答案:
 //   - 发布渠道(prod/dev/beta):`$XDG_CONFIG_HOME/opencode` —— 即 sidecar 的默认位置,不变
 //   - local:                   `$XDG_CONFIG_HOME/opencode-local` —— 独立目录
-//     并通过上游既有的 `OPENCODE_CONFIG_DIR` env 告诉 sidecar 去读它(见 Global.Path.config:
-//     `config: Flag.OPENCODE_CONFIG_DIR ?? Path.config`),零改上游。
+//     通过 `OPENCODE_CONFIG_DIR` 告诉 sidecar 加载它；自动注入附 MCP 默认来源标记。
+//     注意当前 Global.Path.config 仍为 XDG 默认路径，只有 Global.make 服务对象覆盖 config；
+//     本模块未修复完整配置加载的迁移差异。[feat: mcp-toggle-persistence] 2026-11-14
 //
 // 命名对齐 DB 的 `opencode-local.db`,一眼能看出归属。
 
@@ -39,6 +40,18 @@ export function configDirName(channel: string, packaged: boolean): string {
 /** 是否需要给 sidecar 注入 OPENCODE_CONFIG_DIR(只有偏离默认位置时才需要) */
 export function needsConfigDirEnv(channel: string, packaged: boolean): boolean {
   return configDirName(channel, packaged) !== "opencode"
+}
+
+// Desktop's automatic local directory is a default source, not an operator policy override.
+// Keep the exact directory as provenance so an unrelated explicit CONFIG_DIR never matches.
+export function sidecarConfigDirEnv(inherited: Record<string, string>, directory?: string) {
+  const env = { ...inherited }
+  delete env.DESKFOX_MCP_DEFAULT_CONFIG_DIR
+  if (directory && !env.OPENCODE_CONFIG_DIR) {
+    env.OPENCODE_CONFIG_DIR = directory
+    env.DESKFOX_MCP_DEFAULT_CONFIG_DIR = directory
+  }
+  return env
 }
 
 /**

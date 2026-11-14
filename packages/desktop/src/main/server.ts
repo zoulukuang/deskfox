@@ -4,7 +4,7 @@ import { app, utilityProcess } from "electron"
 import type { Details } from "electron"
 import { CHANNEL } from "./constants"
 // FORK: local 档配置隔离 [feat: local-config-isolation] 2026-08-12
-import { needsConfigDirEnv } from "./deskfox/config-dir"
+import { needsConfigDirEnv, sidecarConfigDirEnv } from "./deskfox/config-dir"
 import { resolveDeskfoxConfigDir } from "./deskfox/config-dir-resolve"
 import { getLogger } from "./logging"
 import { getUserShell, loadShellEnv } from "./shell-env"
@@ -249,13 +249,14 @@ function createSidecarEnv(): Record<string, string> {
   }
   // FORK: local 档配置隔离 —— 让 sidecar 读独立的 opencode-local 配置目录,
   //   与发布渠道的 opencode 目录分家(数据/身份早已隔离,配置是最后一块)。
-  //   走上游既有的 OPENCODE_CONFIG_DIR(Global.Path.config = Flag.OPENCODE_CONFIG_DIR ?? Path.config),
-  //   零改上游。发布渠道不注入 → 保持默认位置不变。
+  //   自动目录通过 OPENCODE_CONFIG_DIR 加载并附 MCP 默认来源标记；显式目录不覆盖、不标记。
+  //   Global.Path.config 仍是 XDG 默认路径，此处不改变完整配置加载顺序；发布渠道不自动注入。
   //   [feat: local-config-isolation] 2026-08-12
-  if (needsConfigDirEnv(CHANNEL, app.isPackaged)) {
-    env.OPENCODE_CONFIG_DIR = resolveDeskfoxConfigDir(app.isPackaged)
-  }
-  return env
+  // FORK: distinguish automatic defaults from explicit operator config [feat: mcp-toggle-persistence]
+  return sidecarConfigDirEnv(
+    env,
+    needsConfigDirEnv(CHANNEL, app.isPackaged) ? resolveDeskfoxConfigDir(app.isPackaged) : undefined,
+  )
 }
 
 function delay(ms: number) {

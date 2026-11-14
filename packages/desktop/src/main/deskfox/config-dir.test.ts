@@ -4,7 +4,25 @@
 //   两者不是同一个文件 → 独占接管/自愈机制长期失效(2026-08-12 实测两份文件内容不同);
 //   ② local 档与发布渠道共享同一份 config,与「local 与正式版互不打扰」的承诺不符]
 import { test, expect, describe } from "bun:test"
-import { configDirName, needsConfigDirEnv, RELEASE_CONFIG_DIR_NAME } from "./config-dir"
+import { configDirName, needsConfigDirEnv, RELEASE_CONFIG_DIR_NAME, sidecarConfigDirEnv } from "./config-dir"
+
+test("automatic sidecar config directory carries exact MCP default provenance", () => {
+  expect(sidecarConfigDirEnv({}, "/isolated/config/opencode-local")).toEqual({
+    OPENCODE_CONFIG_DIR: "/isolated/config/opencode-local",
+    DESKFOX_MCP_DEFAULT_CONFIG_DIR: "/isolated/config/opencode-local",
+  })
+})
+
+test("explicit sidecar directories never inherit default provenance even at the same path", () => {
+  const directory = "/isolated/config/opencode-local"
+  for (const explicit of ["/operator/config", directory]) {
+    expect(
+      sidecarConfigDirEnv({ OPENCODE_CONFIG_DIR: explicit, DESKFOX_MCP_DEFAULT_CONFIG_DIR: explicit }, directory),
+    ).toEqual({ OPENCODE_CONFIG_DIR: explicit })
+  }
+  expect(sidecarConfigDirEnv({ OPENCODE_CONFIG_DIR: "" }, directory)).toEqual(sidecarConfigDirEnv({}, directory))
+  expect(sidecarConfigDirEnv({ DESKFOX_MCP_DEFAULT_CONFIG_DIR: directory })).toEqual({})
+})
 
 describe("configDirName", () => {
   test("发布渠道用默认目录 opencode(与 sidecar 默认位置一致,不需要额外注入)", () => {

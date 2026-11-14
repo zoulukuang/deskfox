@@ -36,7 +36,7 @@ import { ConfigVariable } from "./variable"
 import { Npm } from "@opencode-ai/core/npm"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 // FORK: persist project MCP intent without copying merged credentials [feat: mcp-toggle-persistence] 2026-11-14
-import { saveMcpEnabled } from "./mcp-toggle"
+import { mcpEnabledOverrides, saveMcpEnabled } from "./mcp-toggle"
 
 // Custom merge function that concatenates array fields instead of replacing them
 // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
@@ -467,6 +467,18 @@ const layer = Layer.effect(
           // returns normalized Specs and we only need to attach origin metadata here.
           const list = yield* Effect.promise(() => ConfigPlugin.load(dir))
           yield* mergePluginOrigins(dir, list)
+        }
+
+        // FORK: Desktop's automatic local directory supplies defaults, not forced MCP intent.
+        // Explicit CONFIG_DIR without matching Desktop provenance retains upstream precedence.
+        // [feat: mcp-toggle-persistence]
+        if (
+          !Flag.OPENCODE_DISABLE_PROJECT_CONFIG &&
+          Flag.OPENCODE_CONFIG_DIR &&
+          process.env.DESKFOX_MCP_DEFAULT_CONFIG_DIR === Flag.OPENCODE_CONFIG_DIR
+        ) {
+          const source = path.join(ctx.directory, ".opencode", "opencode.jsonc")
+          yield* merge(source, mcpEnabledOverrides(yield* loadFile(source, authEnv)))
         }
 
         if (process.env.OPENCODE_CONFIG_CONTENT) {

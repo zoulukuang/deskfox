@@ -5,6 +5,19 @@ import { Flock } from "@opencode-ai/core/util/flock"
 import { ConfigParse } from "./parse"
 import { isRecord } from "../util/record"
 
+// Reapply only the project switch leaves after Desktop's automatic local defaults.
+// All other directory settings retain upstream precedence; env/managed policy loads later.
+export function mcpEnabledOverrides(config: unknown) {
+  const mcp = isRecord(config) && isRecord(config.mcp) ? config.mcp : {}
+  return {
+    mcp: Object.fromEntries(
+      Object.entries(mcp).flatMap(([name, value]) =>
+        isRecord(value) && typeof value.enabled === "boolean" ? [[name, { enabled: value.enabled }]] : [],
+      ),
+    ),
+  }
+}
+
 // Project overrides use the existing ConfigV1 merge contract, not a second state store.
 export async function saveMcpEnabled(directory: string, name: string, enabled: boolean) {
   const root = await realpath(directory)

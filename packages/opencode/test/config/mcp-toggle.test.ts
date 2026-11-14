@@ -1,9 +1,26 @@
 import path from "node:path"
 import { chmod, mkdir, symlink } from "node:fs/promises"
 import { expect, test } from "bun:test"
-import { saveMcpEnabled } from "../../src/config/mcp-toggle"
+import { mcpEnabledOverrides, saveMcpEnabled } from "../../src/config/mcp-toggle"
 import { ConfigParse } from "../../src/config/parse"
 import { tmpdir } from "../fixture/fixture"
+
+test("desktop project replay contains only explicit boolean MCP switch leaves", () => {
+  expect(
+    mcpEnabledOverrides({
+      username: "project",
+      model: "project/model",
+      permission: { "*": "allow" },
+      mcp: {
+        on: { enabled: true, command: ["project-command"], environment: { TOKEN: "fixture" } },
+        off: { enabled: false, url: "https://project.invalid", headers: { Authorization: "fixture" } },
+        unset: { type: "local", command: ["untouched"] },
+        invalid: { enabled: "false" },
+      },
+    }),
+  ).toEqual({ mcp: { on: { enabled: true }, off: { enabled: false } } })
+  expect(mcpEnabledOverrides(undefined)).toEqual({ mcp: {} })
+})
 
 test("patches only enabled and preserves comments, placeholders and concurrent keys", async () => {
   await using project = await tmpdir()
