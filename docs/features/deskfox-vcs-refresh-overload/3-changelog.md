@@ -1,8 +1,22 @@
 feat-id: deskfox-vcs-refresh-overload
-status: on-hold
+status: in-progress
 related: ./1-spec.md ./2-plan.md ./3-changelog.md
 
 # Git 差异刷新占满本地连接
+
+## 恢复实施与接手（笑南的电脑，Codex，2026-11-14）
+
+接手中（笑南的电脑，Codex，2026-11-14）。用户本轮授权「按这个计划开始推进」，恢复 REQ-149 短期修复；六项范围以 OPENCODE-PLAN `需求计划/2026-11-14.md` 为准。
+
+- 代码位置：继续 `fix/deskfox-vcs-refresh-overload`，接手头 `da1afba056`；独立 worktree `vcs-refresh-20261114`，原语音工作区保持原状。
+- 基线：本次 fetch 后 `origin/main=fc96b0b5b5`；保留既有分支历史，不强推重写其他电脑已引用的证据提交。实施前将主干合入本修复分支，冲突逐项处理；不改 main。
+- 已验：沿用下文两端现场与 Windows 旧修复证据；本轮尚未运行产品验证。
+- 剩余：先补查询键内容比较的复现与修复，再落实忽略路径和 `.git/` 过滤；按 1-spec 的 T1–T10 验证并补 Mac local 对照。Windows 新代码验收交 Windows 电脑，尚未宣称对方接手。
+- 验收：自动化与两端 local 证据齐备后才可标 done；本次授权不等同合/推 main 或发布。
+
+本笔仅登记接手，改动仅为 Markdown；执行 diff 检查和 pre-commit，按 docs-only 例外跳过全量 pre-push 产品测试。
+
+## 历史调查与验证
 
 2026-11-11，Windows 电脑。2026.12.1 的现场网络日志记录了同一项目 1,300 多次差异请求，目录树和回答提交等待连接超过 8 分钟。连续文件事件反复使差异查询失效，查询层取消旧结果后，已发出的 HTTP 请求仍在等待。
 
