@@ -120,3 +120,7 @@ Windows 电脑（YUEXI）接手本期六项 Windows 验收。接手时远端头 
 ## 接手中(Windows 电脑,Codex,2026-11-14)
 
 续办 Windows 验收发现的 REQ-149 diff 刷新延迟和 REQ-146 跨文档重访。起点为 `d560f527c300f7821e91e88f0696fe85c9cb90fe`。Windows 电脑负责复现、修复和隔离 local 复验。
+
+## 续办回执（Windows 电脑，2026-11-14）
+
+REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows local 包复验通过。冻结产品树 `36dd62205aeb1bd6aab19689e824c947dbed0e9a` 已进入 R4 提交复核。[追加回执](./3-changelog.md#缺陷复验回执windows-电脑2026-11-14)与[证据](./11-windows-followup.md)记录耗时、截图、日志及待验范围。

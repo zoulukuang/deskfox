@@ -1,0 +1,138 @@
+{
+  "id": "user-content-目标章节",
+  "target": {
+    "top": 2330,
+    "bottom": 2354,
+    "height": 24
+  },
+  "innerHeight": 902,
+  "shown": false,
+  "parents": [
+    {
+      "tag": "DIV",
+      "element": null,
+      "cls": "scroll-view__viewport",
+      "scrollTop": 24,
+      "h": 802,
+      "sh": 2992,
+      "overflow": "auto",
+      "rect": {
+        "top": -179.1999969482422,
+        "bottom": 622.4000396728516,
+        "height": 801.6000366210938
+      }
+    },
+    {
+      "tag": "DIV",
+      "element": null,
+      "cls": "scroll-view h-full",
+      "scrollTop": 0,
+      "h": 802,
+      "sh": 802,
+      "overflow": "hidden",
+      "rect": {
+        "top": -179.1999969482422,
+        "bottom": 622.4000396728516,
+        "height": 801.6000366210938
+      }
+    },
+    {
+      "tag": "DIV",
+      "element": "file-viewer",
+      "cls": "mt-3 relative h-full flex flex-col",
+      "scrollTop": 0,
+      "h": 802,
+      "sh": 802,
+      "overflow": "auto",
+      "rect": {
+        "top": -179.1999969482422,
+        "bottom": 622.4000396728516,
+        "height": 801.6000366210938
+      }
+    },
+    {
+      "tag": "DIV",
+      "element": null,
+      "cls": "relative min-w-0 h-full flex-1 overflow-hidden bg-background-base min-w-[320px]",
+      "scrollTop": 0,
+      "h": 862,
+      "sh": 862,
+      "overflow": "hidden",
+      "rect": {
+        "top": -239.1999969482422,
+        "bottom": 622.4000396728516,
+        "height": 861.6000366210938
+      }
+    },
+    {
+      "tag": "ASIDE",
+      "element": null,
+      "cls": "relative min-w-0 flex overflow-hidden bg-background-base h-full shrink-0 md:order-first flex-1 trans",
+      "scrollTop": 0,
+      "h": 862,
+      "sh": 862,
+      "overflow": "hidden",
+      "rect": {
+        "top": -239.1999969482422,
+        "bottom": 622.4000396728516,
+        "height": 861.6000366210938
+      }
+    },
+    {
+      "tag": "DIV",
+      "element": null,
+      "cls": "relative size-full overflow-hidden flex flex-col",
+      "scrollTop": 280,
+      "h": 862,
+      "sh": 1142,
+      "overflow": "hidden",
+      "rect": {
+        "top": 40.79999923706055,
+        "bottom": 902.4000358581543,
+        "height": 861.6000366210938
+      }
+    },
+    {
+      "tag": "MAIN",
+      "element": null,
+      "cls": "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-bas",
+      "scrollTop": 0,
+      "h": 862,
+      "sh": 862,
+      "overflow": "auto",
+      "rect": {
+        "top": 40,
+        "bottom": 902.4000244140625,
+        "height": 862.4000244140625
+      }
+    },
+    {
+      "tag": "DIV",
+      "element": null,
+      "cls": "size-full relative overflow-x-hidden",
+      "scrollTop": 0,
+      "h": 862,
+      "sh": 862,
+      "overflow": "auto",
+      "rect": {
+        "top": 40,
+        "bottom": 902.4000244140625,
+        "height": 862.4000244140625
+      }
+    },
+    {
+      "tag": "BODY",
+      "element": null,
+      "cls": "antialiased overscroll-none text-12-regular overflow-hidden",
+      "scrollTop": 0,
+      "h": 902,
+      "sh": 902,
+      "overflow": "hidden",
+      "rect": {
+        "top": 0,
+        "bottom": 902.4000244140625,
+        "height": 902.4000244140625
+      }
+    }
+  ]
+}
