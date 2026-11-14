@@ -21,6 +21,7 @@
 
 | feat-id | 状态 | 简介 |
 |---|---|---|
+| [daily-file-links](./daily-file-links/) | in-progress | 2026-11-14 六项迭代的文件查看组：REQ-152 编码、REQ-146 锚点、REQ-160 项目外成品、REQ-162 模型文件链接。笑南的电脑 / Codex `file_links` 独占 `fix/daily-file-links`，施工方案与验证进行中。 |
 | [brand-docs-refresh](./brand-docs-refresh/) | done | 2026-11-14 品牌来源注释与托盘 README 对齐现行三态、平台模式和生成流程；仅说明修改，图片及软件行为不变。 |
 | [release-2026.12.1](./release-2026.12.1/) | done | **2026.12.1 双端已上线**(2026-11-10):11.2 基线 + 双站分享 + 供应商断开修复 + updater 禁降级 + 图标修复 + 后台恢复须健康才报就绪 + Electron 42.11.15;tag `ship-mac-prod-2026.12.1` / `ship-prod-2026.12.1` → `e766f06ca`;Intel 版 Rosetta 验证。 |
 | [三端协作-agent接入](./三端协作-agent接入/) | in-progress | 三端协作与 Agent 接入指南 v1.2;第二轮:笑南的电脑已完成(DeskFox / Codex 工具核验 6 格、日志机制入 deskfox-web `b0f4ffe`);交 Windows 电脑:Git 配置、署名、Python 别名、工具核验、代理测试重跑。 |
