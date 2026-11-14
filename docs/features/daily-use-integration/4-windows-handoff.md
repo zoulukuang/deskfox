@@ -140,3 +140,7 @@ REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows loca
 ## 字面百分号链接复验回执（Windows 电脑，2026-11-14）
 
 修复已提交 `a5c91952300bc8d4ccf274db7a0431c30c215cd2`。新 Windows local 包复放旧回复的六条链接均通过，经 HTTP 代理诊断路径的真实 OAuth 新回复六条均通过，默认 WebSocket 全轮未通过。[回执](./3-changelog.md#字面百分号链接复验windows-电脑2026-11-14)和[原始证据索引](./13-windows-oauth-fix.md)。
+
+## 接手中（Windows 电脑，Codex，2026-11-14 22:13:28 +08:00）
+
+续办 REQ-162 默认 OpenAI OAuth WebSocket 在 Windows 代理环境下连接超时。基线 `044c9978c8b2cd49de43a3eabd39bd6151b977a4`。用现有日志和原 local 包复现，修复后重打隔离 local 包并以默认传输复验真实 OAuth 六条链接。
