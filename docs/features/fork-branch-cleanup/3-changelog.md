@@ -78,3 +78,7 @@ GitHub 删除 collab-verification 使用明确旧头的 force-with-lease，防�
 GitHub 为分支清理唯一写入远端，Gitee 按现有镜像机制同步，不手动推 Gitee。最终回读两端 collab-verification 均已不存在，main 和 REQ-149 均保持原头。清理前后全量本地引用对比，除本次明确处理的自有分支及回执分支外均不变；GitHub 其他分支也逐一与清理前引用核对一致。上游、上游 PR 分支和发布标签保持原样。
 
 另在备份内的独立 Git 仓分别从 bundle 检出两个原分支头，应用 tracked.patch 并恢复 draft-files.tar：附件 41 个文件、分享 78 个文件的 SHA-256 及完整 Git status 均与清理前一致。恢复结果保存在 restore-result.txt。
+
+### 主干收口授权（2026-11-14）
+
+用户明确要求将清理回执合入 main 并推送，再删除 feat/fork-branch-cleanup 分支。本节更新上文“待李哲合入”的阶段状态。此次采用 --no-ff 合并保留回执分支边界；仅包含 docs/ 下的回执及索引，按 docs-only 例外不重复运行产品测试，合并提交信息注明。推送成功后删除远端分支、本地干净工作树和本地分支；原主工作树两处品牌说明改动继续保留。

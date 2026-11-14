@@ -9,7 +9,7 @@
 
 | 命名空间 | token | 含义 |
 |---|---|---|
-| [fork-branch-cleanup](./fork-branch-cleanup/) | done | 2026-11-14 自有分支清理：完整备份并归档六个旧工作树，清理七个本地分支；分享/附件草稿已逐项核对，语音与 REQ-149 保留。回执待合并，交李哲。 |
+| [fork-branch-cleanup](./fork-branch-cleanup/) | done | 2026-11-14 自有分支清理：完整备份并归档六个旧工作树，清理七个本地分支；分享/附件草稿已逐项核对，语音与 REQ-149 保留。用户已批准回执合入 main、推送并删除回执分支。 |
 | Git 分支 | `main` | 本仓主分支(原 `dev`,2026-05-21 重命名)|
 | Git 分支 | `feat/<name>` | feat 分支,合 main 即销毁 |
 | Git 分支 | `upstream/dev` | 上游 anomalyco/opencode 主分支(他们仍叫 `dev`)|
