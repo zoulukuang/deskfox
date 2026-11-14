@@ -1,35 +1,46 @@
 # Tray icons — DeskFox 系统托盘图标
 
-四个状态变体(**品牌蓝 #3D63A0 固定色**,与 logo 同色;亮/暗托盘都清晰):
+当前 Electron 托盘显示后台服务健康状态（REQ-099），由 `packages/desktop/src/main/deskfox/tray-status.ts` 映射：
 
-> 2026-06-13 起改为品牌蓝固定色 —— 原纯黑 macOS template 模式在 **Windows 托盘不反色**,浅色托盘上发暗/看不清(user 反馈)。现统一 #3D63A0,不再依赖系统反色。Electron 端 tray.ts 内联 `default.png` 的 base64(非 template,蓝色直显)。
+| 后台状态 | 图标键 | 托盘提示 |
+| --- | --- | --- |
+| `ready` | `ok` | 状态:就绪 |
+| `restarting` | `restarting` | 状态:后台服务重启中… |
+| `gave-up` | `gave-up` | 状态:后台服务已停止,请重启 DeskFox |
 
-| 文件 | 状态 | 触发 |
-|---|---|---|
-| `default.png` | 默认 | 启动 / 飞书未配置 |
-| `connected.png` | 已连接 | 飞书账号绑定 + WSS 长连接活跃 |
-| `offline.png` | 离线 | WSS 断开重连中 |
-| `error.png` | 错误 | OAuth / 鉴权 / 长连接致命错误 |
+每种状态都有彩色和模板两种图，共六张 32×32 RGBA PNG，位于 `status/`。
 
-## v2 fox silhouette(2026-05-09)
+- **Windows / Linux**：使用彩色图，基图为品牌深蓝 `#3D63A0` 狐狸；重启中叠加琥珀色徽标，停止叠加红色感叹号徽标。
+- **macOS**：使用模板图，Electron 设置 `setTemplateImage(true)`，系统根据菜单栏明暗反色。32px 图像以 `scaleFactor: 2` 显示为 16pt。模板只使用 alpha 通道，停止状态的感叹号通过透明挖孔与重启中区分。
 
-四张 PNG 当前都是 fox 头廓形(双耳 + 脸三角)的同一图 — 32x32 **品牌蓝 #3D63A0** + alpha(2026-06-13 前为纯黑 template)。源 SVG 在 `source/icon-tray-template.svg`(`fill=#3D63A0`),从 `OPENCODE-PLAN/品牌设计/SVG/icon-naked.svg` 派生。改 SVG 后用 PIL 按其几何重画即可(本机无 resvg);Electron tray.ts 的内联 base64 需同步 `default.png`。
+## 来源与生成流程
 
-Phase 4 接飞书状态联动时再做 4 张差异化(加 dot / 边框等),代码不需要改动。
+品牌正本位于运营仓 `品牌设计/SVG/`，2026-09-30 从 OPENCODE-PLAN 迁出。本目录的 `source/icon-tray-template.svg` 是从其中 `icon-naked.svg` 派生的历史彩色基图来源。
 
-重新生成 PNG(改 SVG 后):
+现有生成脚本 `packages/branding/scripts/gen-tray-icons.py` 使用 Python 3 和 Pillow，读取两张已经落库的基图：
+
+| 输入 | 用途 |
+| --- | --- |
+| `default.png` | Windows / Linux 彩色基图 |
+| `source/tray-template-mac-32.png` | macOS 模板基图 |
+
+该脚本在基图上合成状态徽标，同时生成：
+
+- `status/{ok,restarting,gave-up}-{color,template}.png`：六张供检查的状态图。
+- `packages/desktop/src/main/deskfox/tray-icons.generated.ts`：相同图像的 base64 常量。
+
+需要更新状态图时，在主仓根目录执行：
+
 ```sh
-cd /Volumes/ExtSSD/OPENCODE-PLAN/品牌设计/_tools && node -e '
-const fs = require("fs");
-const { Resvg } = require("@resvg/resvg-js");
-const svg = fs.readFileSync("../../../opencode-fork/packages/branding/src/assets/tray-icons/source/icon-tray-template.svg");
-const dst = "../../../opencode-fork/packages/branding/src/assets/tray-icons";
-const buf = new Resvg(svg, { fitTo: { mode: "width", value: 32 }, background: "rgba(0,0,0,0)" }).render().asPng();
-for (const name of ["default","connected","offline","error"]) fs.writeFileSync(`${dst}/${name}.png`, buf);
-'
+python3 packages/branding/scripts/gen-tray-icons.py
 ```
 
-要点:
-- 32x32 PNG(macOS HiDPI 自动适配)
-- macOS 用 template 模式(纯黑 alpha 通道 + 透明背景),系统按菜单栏深浅色反色;`tray_handle.set_icon_as_template(true)` 已启用
-- Win / Linux 同图(没 template 概念,直接显示黑色 silhouette)
+脚本会写入上述生成文件，应一起审阅和提交。它不读取或重新渲染 SVG；若修改基图设计，须先更新对应的输入 PNG，再执行生成脚本。
+
+运行时 `packages/desktop/src/main/deskfox/tray.ts` 导入生成的常量，不从磁盘读取本目录图片。更新生成文件后还需重新构建并启动相应桌面版本，才会显示新图标；不要手改 base64 常量。
+
+## 历史文件
+
+根目录的 `connected.png`、`offline.png`、`error.png` 是早期飞书连接状态方案留下的图片，目前与 `default.png` 相同，未用于现有 Electron 健康状态切换。`default.png` 仍是彩色生成流程的输入。
+
+早期的四图重绘命令、统一蓝色托盘口径和 Tauri `tray_handle.set_icon_as_template` 调用不适用于当前实现。维护现有图标应以上述三态、两种平台模式及生成脚本为准。

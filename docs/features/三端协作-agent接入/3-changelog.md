@@ -93,3 +93,7 @@ docs-only;`git diff --check` 无尾随空白;pre-commit 白名单通过(docs/ �
 2. **删除重复分支**:deskfox 的 `collab-verification` 内容与已合入 main 的第二轮回执(`c90ce9d03`)重复,且分支名不带 `feat/` 前缀,不合并,直接删除远端分支。其中多出的验证结论(`f56cf9b0f` 上冻结安装、29 项 typecheck 与六包单测通过)已记在本节,不会丢。
 3. 今后按指南 §四第 6 条,接手前写「接手中」。
 
+
+## 回执（笑南的电脑，2026-11-14，自有分支清理）
+
+用户授权先备份再清理本仓已完成和重复分支。collab-verification 的独有回执已完整备份，按本节交接删除本地及 GitHub 分支；额外验证结论仍保留在上方原交接。完整过程、草稿对账与恢复路径见 ../fork-branch-cleanup/3-changelog.md，回执位于 feat/fork-branch-cleanup，交李哲合入。此次范围仅 DeskFox fork；deskfox-web 的目录去重未在本轮执行，不将整份跨仓交接标为完成。
