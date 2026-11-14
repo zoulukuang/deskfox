@@ -36,3 +36,11 @@ R1：独立 wrapper 可以实现文件补丁，却无法接入私有 Config 缓�
 ## 回退
 
 实现与测试同一提交，独立 revert。具体持久化格式、读写优先级、迁移与回退行为在施工方案确认时补充；不提前改用户配置。
+
+## 2026-11-14 native 验收阻断后的窄修决策
+
+真实 local 桌面自动注入 `OPENCODE_CONFIG_DIR`，该目录在项目配置之后加载，覆盖项目保存的 enabled，导致关闭失败。保持项目作用域契约，限定处理桌面自动默认目录：launcher 清除继承的 `DESKFOX_MCP_DEFAULT_CONFIG_DIR`；已有非空显式 `OPENCODE_CONFIG_DIR` 保留、不打标（即使等于默认目录），空值才自动注入 local 目录及匹配来源标记。后台仅在标记与实际目录一致且项目配置未禁用时，于目录加载后重放**当前实例目录** `.opencode/opencode.jsonc` 中 enabled 布尔叶。
+
+此环境下项目 enabled 高于 home `.opencode` 和自动 local 目录的默认值；command、凭据、username 等其他字段不重放。`OPENCODE_CONFIG_CONTENT`、组织配置、managed 配置仍在其后覆盖；无标记的 CLI/custom DIR 保持原优先级。此修复不改变完整 Global 配置迁移：`Global.Path.config` 仍为 XDG 默认路径，仅 `Global.make` 服务对象覆盖 config；不声称已解决整个 local 配置隔离旧问题。
+
+新增改动仍为 Medium，7 个产品/测试文件，其中 2 个上游文件、1 个黑名单接入点（`config/config.ts`）；`desktop/src/main/server.ts` 属上游白名单，遵循 R1/R2，不触发 R4。测试与具体 R4 补丁见 [4-native-config-review.md](./4-native-config-review.md)。先前批准的实现补丁不覆盖此次新增黑名单改动，仍须本次独立确认才提交。
