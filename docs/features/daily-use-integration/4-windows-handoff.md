@@ -109,3 +109,8 @@ function Load([bool]$mixed) {
 Windows 电脑接手时先追加身份/日期/分支头；完成后在本目录 `3-changelog.md` 写：Windows版本/架构、产品SHA+最终文档头、local exe路径/哈希、夹具与Git/Bun版本、逐项结果、REQ-149两版数据表、截图/录屏/HAR/sidecar日志路径、模型通道和未测原因。模型/配置证据脱敏，不提交凭据或正式数据。
 
 自动化已绿只是起点；Windows未接手、真实Office/模型/负载未跑的项保持待验。Mac只签Mac，Windows只签Windows；此交接单不把feat标done、不沿用旧149回执、不替李哲做版本放行。
+
+
+## 接手中(Windows 电脑,Codex,2026-11-14 19:31:50 +08:00)
+
+Windows 电脑（YUEXI）接手本期六项 Windows 验收。接手时远端头 `0c2b6bbd6e987187fc7f4e0ef8cd07c2fa10ca92`，已核实包含 `f517fc04b4` 与 `48909c6959`。独立 worktree 为 `D:/project/deskfox-win-daily`。
