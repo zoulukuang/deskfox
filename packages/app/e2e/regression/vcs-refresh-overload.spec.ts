@@ -71,6 +71,9 @@ test("merges file changes while a Git diff is in flight", async ({ page }) => {
   }
 
   try {
+    await change(`${directory}/.git/index`)
+    await change(`${directory}/.git/HEAD`.replaceAll("/", "\\"))
+    expect(requests).toBe(initialRequests)
     await change(`${directory}/tracked.ts`)
     await expect.poll(() => requests).toBe(initialRequests + 1)
     for (let index = 0; index < 8; index++) {

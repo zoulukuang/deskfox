@@ -25,6 +25,17 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 - 仅改 fork helper 并新增对应测试，无黑名单文件、无新增依赖；实施计划与 spec 状态同步。本次未顺手改其他逻辑，未使用全仓批量替换。
 - 完整推送闸及桌面验收边界见下一节；本项自动化通过不等于 REQ-149 已完成。
 
+## Git 元数据路径过滤与自动化（笑南的电脑，2026-11-14）
+
+查询键修复提交 `865f66eda4`。本笔新增 `vcs-event.ts` / `.test.ts`，`session.tsx` 仅导入与替换旧过滤谓词并标 FORK；原 e2e 追加两条绝对路径 `.git/` 事件。R1 第 2 级，未触及 R4，未改其他消费者或增加依赖。与预清单一致，无顺手改、无未理解的改动、无全仓批量替换。
+
+- 先将旧 `startsWith(".git/")` 提成可测谓词，15 条中 7 条失败；修复后全部通过。覆盖 Mac/Windows/UNC、目录边界、真实 `%`/`#` 和 Unix 字面反斜杠；原始文件系统路径不做 URL 解码。
+- 两个新单元测试文件合计 **21 pass / 0 fail**。原 VCS Playwright 回归先通过一次；补绝对路径用例后再次执行，**1 pass / 0 fail / 0 retry**，e2e typecheck 通过。验证 `.git/` 不触发 diff，普通文件仍触发，8 次后续事件合并，挂起期间目录展开与回答提交仍成功。
+- Bun **1.3.14** 冻结安装，完整 `.husky/pre-push` 退出 0：**29/29** typecheck；app **1218** 单元 + **41** 浏览器；media-gen **140**；adapter **792**；branding **82 pass / 8 skip**（既有跳过，本次未新增）；desktop **176**；session-ui **125**，均 0 fail。
+- 本机日志：`/tmp/deskfox-req149-pre-push-20261114.log`、`/tmp/deskfox-req149-e2e-final-20261114.log`。浏览器为独立 Chromium/mock API，loopback 4329；运行配置临时使用，未入仓。不是 Mac local 真桌面负载对照。
+
+剩余 Git 忽略判定方案见 `4-ignore-design.md`；该部分及两端新代码 local 对照尚未完成，feat 保持 in-progress。不得把旧 Windows 证据当成这批新代码验收；不合 main、不发布。
+
 ## 历史调查与验证
 
 2026-11-11，Windows 电脑。2026.12.1 的现场网络日志记录了同一项目 1,300 多次差异请求，目录树和回答提交等待连接超过 8 分钟。连续文件事件反复使差异查询失效，查询层取消旧结果后，已发出的 HTTP 请求仍在等待。

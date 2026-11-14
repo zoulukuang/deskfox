@@ -24,6 +24,8 @@ import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 // FORK: 合并文件变动触发的差异刷新 [feat: deskfox-vcs-refresh-overload] 2026-11-11
 import { createVcsRefresh } from "@/pages/session/vcs-refresh"
+// FORK: watcher 原始路径按工作区识别 Git 元数据 [feat: deskfox-vcs-refresh-overload] 2026-11-14
+import { isVcsMetadataPath } from "@/pages/session/vcs-event"
 import { useLocal } from "@/context/local"
 import { FileProvider, selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { createStore } from "solid-js/store"
@@ -1067,7 +1069,8 @@ export default function Page() {
         ? (details.properties as Record<string, unknown>)
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
-    if (!file || file.startsWith(".git/")) return
+    // FORK: 兼容 Mac / Windows 绝对路径 [feat: deskfox-vcs-refresh-overload] 2026-11-14
+    if (!file || isVcsMetadataPath(file, sdk().directory)) return
     refreshVcs()
   })
   onCleanup(stopVcs)
