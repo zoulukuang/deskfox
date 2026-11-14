@@ -148,3 +148,7 @@ REQ-149 diff 延迟和 REQ-146 跨文档重访已在新打的隔离 Windows loca
 ## 默认 OAuth WebSocket 复验回执（Windows 电脑，2026-11-14）
 
 默认配置的真实 OAuth 六条链接均通过，单列握手证据和旧包超时。用户二次确认后，产品补丁以 `09d0615cc77c96d2213832b0475bf01f95855172` 经完整 pre-push 推送功能分支。[Windows 回执](./3-changelog.md#默认-oauth-websocket-复验回执windows-电脑2026-11-14)及[复核材料](./14-windows-oauth-websocket.md)。
+
+## 接手中（Windows 电脑，Codex，2026-11-14 23:19:56 +08:00）
+
+收口六项 Windows 验收。基线 `5fa21778b9b478be3c8e03c0f2afe9db0875a2ae`。按远端头和既有证据逐项核对，在隔离 local 包补测本机可覆盖的缺口。
