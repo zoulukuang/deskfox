@@ -71,3 +71,11 @@ related: ./1-spec.md ./2-plan.md ./3-changelog.md
 ## 回退预案
 
 各项分笔提交，每笔可单独 `git revert`。第 2 项若误判导致审阅面板不更新，先单独回退这一项，保留第 1 项兜底。
+
+## 2026-11-14 施工增补（待审签，仅剩余忽略过滤）
+
+已独立完成查询键与 `.git/` 过滤；准确实现第 2 项时，文件树 ignored 的语义不足以保证不漏刷。具体方案与真实 Git 实验见 `4-ignore-design.md`：前端有界批量合并，后端原生 Git 忽略判断，并检查 HEAD 以保护 staged deletion，所有不确定/超时保守刷新。
+
+完整实现及测试预计 625–820 行，规模由 Medium 升为 **Large**。新增 `POST /deskfox/vcs/refresh-required`，涉及上游 `api.ts` / `server.ts` 两处注册与对应契约生成，预计触发 R4；不改全局 watcher，不提前移植批量 diff 或请求队列。
+
+审签对象为上述具体架构、边界及 `4-ignore-design.md` 的文件预清单/新增测试。按 CLAUDE.md 的 Large 规则，审签前不施工该新增过滤方案；后续 R4 提交仍需提供实际 diff、测试结果和复核报告。当前安全小修的回归结果见 `3-changelog.md`，两端 local 验收仍待完成。
